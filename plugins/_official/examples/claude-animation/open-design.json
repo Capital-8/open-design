@@ -1,0 +1,78 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-claude-animation",
+  "title": "Claude Animation Base",
+  "version": "0.1.0",
+  "description": "Create a 5-second silent hand-painted character cartoon in 16:9.",
+  "description_i18n": {
+    "zh-CN": "制作 5 秒、16:9、无声的手绘角色动画。",
+    "zh-TW": "製作 5 秒、16:9、無聲的手繪角色動畫。"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "OpenDesign"
+  },
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "character-animation",
+    "hand-painted"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "surface": "video",
+    "scenario": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": {
+        "en": "Make a 5-second silent hand-painted cartoon of Clawd meeting a butterfly in a sunny garden. Use Claude Animation Base, landscape 16:9, with an iris opening and closing, a surprised reaction and a happy bounce.",
+        "zh-CN": "用 Claude Animation Base 制作一个 5 秒、16:9、无声的手绘动画：Clawd 在花园里遇到蝴蝶，从惊讶到开心地跳起来，开头和结尾使用圆形转场。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Clawd meets a butterfly"
+        }
+      ]
+    },
+    "context": {
+      "skills": [
+        {
+          "ref": "claude-animation"
+        },
+        {
+          "path": "./SKILL.md"
+        }
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}
