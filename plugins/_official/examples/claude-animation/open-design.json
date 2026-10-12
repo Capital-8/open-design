@@ -17,6 +17,7 @@
     "example",
     "first-party",
     "video",
+    "animation",
     "character-animation",
     "hand-painted"
   ],
@@ -34,8 +35,10 @@
     "surface": "video",
     "scenario": "video",
     "preview": {
-      "type": "html",
-      "entry": "./example.html"
+      "type": "video",
+      "entry": "./example.html",
+      "poster": "./assets/poster.jpg",
+      "video": "./assets/example.mp4"
     },
     "useCase": {
       "query": {

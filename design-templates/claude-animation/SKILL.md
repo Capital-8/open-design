@@ -26,6 +26,7 @@ od:
 - `assets/template.html`: immediately renderable 5-second scene starter.
 - `references/ANIMATION_GUIDE.md`: animation principles, character and painting API.
 - `references/emotions.jpg` and `references/views.jpg`: character reference sheets.
+- `references/checklist.md`: acceptance gates to check before reporting completion.
 - `assets/runtime/`: pinned upstream engine. The daemon loads it automatically.
 
 Read the guide and reference sheets before authoring. Its standalone commands
