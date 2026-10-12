@@ -1,12 +1,38 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>Clawd meets a butterfly</title></head>
+<head><meta charset="utf-8"><title>A little bird meets a butterfly</title></head>
 <body>
 <canvas id="out" width="1920" height="1080"></canvas>
 <script>
-// Open Design injects p5, p5.brush, the character engine and fixed PROJECT.
+// Open Design injects p5, p5.brush, the painting/timeline engine and fixed PROJECT.
 // Replace this scene with the user's story; keep drawing a pure function of t.
 (() => {
+  // Original rounded bird: oval body, two feet, side wings and a yellow beak.
+  // No third-party mascot artwork or character kit is used.
+  function bird(t) {
+    const hop = t > 1.7 && t < 3.2 ? Math.abs(Math.sin((t - 1.7) * Math.PI * 2)) * 65 : 0;
+    const excited = ease(seg(t, 1.1, 1.7));
+    push(); translate(760, 780 - hop);
+    boilSeed('bird-feet');
+    for (const side of [-1, 1]) {
+      inkLine([[side * 45, 115], [side * 45, 150], [side * 70, 150]], 2, PAL.ochre);
+    }
+    boilSeed('bird-body');
+    paint(ellPts(0, 0, 145, 150, 32, 2), { wash: PAL.teal, ink: PAL.ink, sw: .6 });
+    boilSeed('bird-belly');
+    paint(ellPts(0, 55, 86, 80, 24, 1), { wash: PAL.cream, ink: null });
+    for (const side of [-1, 1]) {
+      boilSeed('bird-wing' + side);
+      const wave = excited * Math.sin(t * 7) * 20;
+      paint(ellPts(side * 126, 25 + wave, 31, 67, 20, 1), { wash: PAL.indigo, ink: PAL.ink, sw: .4 });
+      boilSeed('bird-eye' + side);
+      paint(ellPts(side * 49, -43, 29 + excited * 3, 33 + excited * 5, 20, .3), { wash: PAL.cream, ink: PAL.ink, sw: .4 });
+      paint(ellPts(side * 49 + 9, -44, 11, 15, 16, .2), { wash: PAL.ink, ink: null });
+    }
+    boilSeed('bird-beak');
+    paint([[-23, -9], [29, -9], [8, 24]], { wash: PAL.ochre, ink: PAL.ink, sw: .4 });
+    pop();
+  }
   function garden(t) {
     camBegin(960 + 12 * Math.sin(t * .6), 540, 1 + .006 * t);
     boilSeed('sky');
@@ -22,8 +48,7 @@
       inkLine([[x, y + 90], [x + sway, y]], .7, PAL.teal);
       paint(ellPts(x + sway, y, 20, 16, 16), { wash: i % 2 ? PAL.rose : PAL.cream, ink: null });
     }
-    const mood = emotions(t, [[0, 'bored'], [1.1, 'surprised'], [1.7, 'excited'], [3.2, 'love']]);
-    clawd(760, 880, 35, { ...mood, lookX: .6, lookY: -.25 });
+    bird(t);
     boilSeed('butterfly');
     const x = 1360 - 350 * ease(seg(t, .5, 3.2));
     const y = 450 + 70 * Math.sin(t * 2.2);

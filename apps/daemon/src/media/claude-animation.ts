@@ -33,7 +33,7 @@ export async function claudeAnimationDocument(sourceHtml: string, resourceRoot: 
   const scripts = await Promise.all([
     readFile(path.join(p5Root, 'lib', 'p5.min.js'), 'utf8'),
     readFile(brushScript, 'utf8'),
-    ...['core.js', 'clawd.js', 'timeline.js'].map((file) => readFile(path.join(engineRoot, file), 'utf8')),
+    ...['core.js', 'timeline.js'].map((file) => readFile(path.join(engineRoot, file), 'utf8')),
   ]);
   const script = (text: string) => `<script>${text.replace(/<\/script/gi, '<\\/script')}</script>`;
   $('head').prepend(
@@ -42,7 +42,7 @@ export async function claudeAnimationDocument(sourceHtml: string, resourceRoot: 
     + script('const PROJECT = { duration: 5, bpm: 120, offset: 0 };')
     + scripts.slice(2).map(script).join('')
     // Upstream studio has a scrubber. The capture document is canvas-only.
-    + script('devUI = () => {};'),
+    + script('devUI = () => {}; placeholder = () => { throw new Error("Animation must register a scene with shots()"); };'),
   );
   $('head').append('<style>html,body{margin:0;padding:0;width:1920px;height:1080px;overflow:hidden}body>*:not(#out){display:none!important}#out{display:block;width:1920px!important;height:1080px!important}.p5Canvas{display:none!important}</style>');
   $('body').append(script(`

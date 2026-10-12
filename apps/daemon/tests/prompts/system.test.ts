@@ -95,7 +95,7 @@ describe('composeSystemPrompt', () => {
     const prompt = composeSystemPrompt({
       metadata: { kind: 'video', videoModel: 'claude-animation-p5', videoLength: 5, videoAspect: '16:9' },
     });
-    expect(prompt).toContain('Claude Animation Base — agent-authored, daemon-rendered');
+    expect(prompt).toContain('Hand-painted Animation — agent-authored, daemon-rendered');
     expect(prompt).toContain('--model claude-animation-p5 --length 5 --aspect 16:9');
     expect(prompt).toContain('Do not add CDN scripts, npm installs, Chrome launches, audio');
   });

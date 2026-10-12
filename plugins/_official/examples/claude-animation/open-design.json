@@ -2,12 +2,12 @@
   "$schema": "https://open-design.ai/schemas/plugin.v1.json",
   "specVersion": "1.0.0",
   "name": "example-claude-animation",
-  "title": "Claude Animation Base",
+  "title": "Hand-painted character animation",
   "version": "0.1.0",
-  "description": "Create a 5-second silent hand-painted character cartoon in 16:9.",
+  "description": "Create a 5-second silent hand-painted cartoon with an original character. Painting and timeline toolkit by John Heibel; independent OpenDesign integration.",
   "description_i18n": {
-    "zh-CN": "制作 5 秒、16:9、无声的手绘角色动画。",
-    "zh-TW": "製作 5 秒、16:9、無聲的手繪角色動畫。"
+    "zh-CN": "制作 5 秒、16:9、无声的原创角色手绘动画，基于 John Heibel 的开源绘画和时间轴引擎。",
+    "zh-TW": "製作 5 秒、16:9、無聲的原創角色手繪動畫，基於 John Heibel 的開源繪畫和時間軸引擎。"
   },
   "license": "MIT",
   "author": {
@@ -42,13 +42,13 @@
     },
     "useCase": {
       "query": {
-        "en": "Make a 5-second silent hand-painted cartoon of Clawd meeting a butterfly in a sunny garden. Use Claude Animation Base, landscape 16:9, with an iris opening and closing, a surprised reaction and a happy bounce.",
-        "zh-CN": "用 Claude Animation Base 制作一个 5 秒、16:9、无声的手绘动画：Clawd 在花园里遇到蝴蝶，从惊讶到开心地跳起来，开头和结尾使用圆形转场。"
+        "en": "Make a 5-second silent hand-painted cartoon of an original rounded teal bird meeting a butterfly in a sunny garden. Landscape 16:9, with an iris opening and closing, a surprised reaction and a happy bounce.",
+        "zh-CN": "制作一个 5 秒、16:9、无声的手绘动画：一只原创的圆润青色小鸟在花园里遇到蝴蝶，从惊讶到开心地跳起来，开头和结尾使用圆形转场。"
       },
       "exampleOutputs": [
         {
           "path": "./example.html",
-          "title": "Clawd meets a butterfly"
+          "title": "A little bird meets a butterfly"
         }
       ]
     },
@@ -77,5 +77,11 @@
       "prompt:inject",
       "fs:write"
     ]
+  },
+  "title_i18n": {
+    "en": "Hand-painted character animation",
+    "zh-CN": "手绘角色动画",
+    "zh-TW": "手繪角色動畫",
+    "de": "Handgemalte Figurenanimation"
   }
 }

@@ -154,8 +154,8 @@ type LocalizedContentBundle = {
 
 const DE_SKILL_COPY: Record<string, LocalizedSkillCopy> = {
   'claude-animation': {
-    description: 'Erstellen Sie einen fünf Sekunden langen, stummen Zeichentrickfilm im handgemalten Stil mit Claude Animation Base. Ausgabe als MP4 im Querformat 16:9.',
-    examplePrompt: 'Erstellen Sie einen fünf Sekunden langen, stummen Film: Clawd begegnet einem Schmetterling in einem sonnigen Garten. Verwenden Sie eine neugierige Reaktion, einen fröhlichen Sprung und eine Irisblende am Anfang und Ende. Querformat 16:9.',
+    description: 'Erstellen Sie einen fünf Sekunden langen, stummen Zeichentrickfilm im handgemalten Stil mit einer eigenen Figur. Ausgabe als MP4 im Querformat 16:9.',
+    examplePrompt: 'Erstellen Sie einen fünf Sekunden langen, stummen Film: Ein eigener runder Vogel begegnet einem Schmetterling in einem sonnigen Garten. Verwenden Sie eine neugierige Reaktion, einen fröhlichen Sprung und eine Irisblende am Anfang und Ende. Querformat 16:9.',
   },
   'audio-jingle': {
     examplePrompt:
@@ -628,7 +628,7 @@ const DE_PROMPT_TEMPLATE_TAGS: Record<string, string> = {
 
 const DE_PROMPT_TEMPLATE_COPY: Record<string, LocalizedPromptTemplateCopy> = {
   'claude-animation-butterfly': {
-    title: 'Claude Animation Base: Clawd begegnet einem Schmetterling',
+    title: 'Handgemalte Animation: Ein eigener runder Vogel begegnet einem Schmetterling',
     summary: 'Eine fünf Sekunden lange, stumme Figurengeschichte im handgemalten Stil in einem sonnigen Garten. Querformat 16:9.',
   },
   '3d-stone-staircase-evolution-infographic': {

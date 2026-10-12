@@ -4205,9 +4205,6 @@ const EXAMPLE_PRESET_HIDDEN_PLUGIN_IDS = new Set<string>([
 // Keep the five Home recommendations in the selected editorial order;
 // popularity still orders the remaining library and the Community surface.
 const HOME_PRESET_PLUGIN_IDS_BY_CHIP: Partial<Record<string, readonly string[]>> = {
-  video: [
-    'example-claude-animation',
-  ],
   deck: [
     'example-fs-creative-voltage',
     'example-fs-electric-studio',

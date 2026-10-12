@@ -56,11 +56,11 @@ describe('OD Next V2 prompt recipe', () => {
     };
     for (const extra of [{}, { odNextStrategyRecipe: recipe }]) {
       const prompt = composeSystemPrompt({ ...context, ...extra });
-      expect(prompt).toContain('Claude Animation Base — agent-authored, daemon-rendered');
+      expect(prompt).toContain('Hand-painted Animation — agent-authored, daemon-rendered');
       expect(prompt).toContain('--model claude-animation-p5 --length 5 --aspect 16:9');
     }
     expect(composeSystemPrompt({ ...context, sessionMode: 'chat' }))
-      .not.toContain('Claude Animation Base — agent-authored, daemon-rendered');
+      .not.toContain('Hand-painted Animation — agent-authored, daemon-rendered');
   });
   // OPEND-2589. The strategy admits a turn on the project's task type, not on
   // what this turn said, so a greeting or a stray keystroke enters the same
