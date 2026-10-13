@@ -22,7 +22,7 @@ describe('NewProjectPanel media provider badges', () => {
   it('binds Claude Animation to its template and offers only 5s landscape output', async () => {
     const onCreate = vi.fn();
     const animation = {
-      id: 'claude-animation', name: 'Claude Animation Base', description: 'Hand-painted video',
+      id: 'claude-animation', name: 'Hand-painted character animation', description: 'Hand-painted video',
       mode: 'video' as const, surface: 'video' as const, previewType: 'html',
       designSystemRequired: false, defaultFor: [], triggers: [], upstream: null,
       hasBody: true, examplePrompt: 'Clawd meets a butterfly', aggregatesExamples: false,

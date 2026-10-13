@@ -243,10 +243,10 @@ const LIVE_DASHBOARD = {
 
 const CLAUDE_ANIMATION = {
   ...BASE,
-  id: 'example-claude-animation', title: 'Claude Animation Base',
+  id: 'example-claude-animation', title: 'Hand-painted character animation',
   source: '/tmp/claude-animation', fsPath: '/tmp/claude-animation',
   manifest: {
-    name: 'example-claude-animation', title: 'Claude Animation Base', version: '0.1.0',
+    name: 'example-claude-animation', title: 'Hand-painted character animation', version: '0.1.0',
     description: 'A five-second silent character animation.',
     od: { kind: 'scenario', taskKind: 'new-generation', mode: 'video',
       inputs: [], useCase: { query: 'Animate Clawd meeting a butterfly for five seconds.' } },

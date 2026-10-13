@@ -1,6 +1,6 @@
 ---
 name: claude-animation-preset
-description: A five-second silent hand-painted character animation preset based on Claude Animation Base.
+description: A five-second silent hand-painted character animation preset using John Heibel's painting and timeline toolkit.
 ---
 
 # Hand-painted character animation

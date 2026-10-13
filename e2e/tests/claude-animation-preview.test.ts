@@ -14,7 +14,26 @@ const facetsModule = Object.values(import.meta.glob<{
   extractSubcategories: (record: InstalledPluginRecord, category: string) => string[];
 }>('../../apps/web/src/components/plugins-home/facets.ts', { eager: true }))[0]!;
 
-it('shows the bundled Claude Animation sample in Home and the Community video category without a CDN bake', async () => {
+const modelCatalogues = import.meta.glob<{
+  MEDIA_PROVIDERS: { id: string; label: string; hint: string }[];
+  VIDEO_MODELS: { id: string; label: string; hint: string; provider: string }[];
+}>('../../apps/{daemon,web}/src/media/models.ts', { eager: true });
+
+it.each(Object.entries(modelCatalogues))('keeps the public animation name and compatible IDs in %s', async (_path, catalogue) => {
+  const manifest = JSON.parse(await readFile(new URL('../../plugins/_official/examples/claude-animation/open-design.json', import.meta.url), 'utf8'));
+  expect(manifest.title).toBe('Hand-painted character animation');
+  expect(catalogue.MEDIA_PROVIDERS.find(({ id }) => id === 'claude-animation')).toMatchObject({
+    label: manifest.title,
+    hint: 'Local hand-painted character animation · 5s · 16:9 · silent',
+  });
+  expect(catalogue.VIDEO_MODELS.find(({ id }) => id === 'claude-animation-p5')).toMatchObject({
+    label: manifest.title,
+    hint: 'Local hand-painted character animation · 5s · 16:9 · silent',
+    provider: 'claude-animation',
+  });
+});
+
+it('shows the bundled hand-painted animation sample in Home and the Community video category without a CDN bake', async () => {
   const root = fileURLToPath(new URL('../../plugins/_official/examples/claude-animation/', import.meta.url));
   const manifest = JSON.parse(await readFile(path.join(root, 'open-design.json'), 'utf8'));
   const record = { id: manifest.name, title: manifest.title, manifest } as InstalledPluginRecord;
