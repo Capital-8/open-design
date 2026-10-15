@@ -3504,6 +3504,7 @@ export function FileWorkspace({
       filesRefreshKey={filesRefreshKey}
       isDeck={isDeck}
       streaming={streaming}
+      motionPreviewMuted={runInFlight}
       commentQueueOnSend={commentQueueOnSend}
       commentSendDisabled={commentSendDisabled}
       previewComments={previewCommentsByFile.get(file.name) ?? NO_PREVIEW_COMMENTS}

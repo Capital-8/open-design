@@ -54,8 +54,8 @@ function boot(hosted: boolean, playResult: Promise<void> = Promise.resolve(), th
     for (const [type, listener, options] of listeners.mock.calls) window.removeEventListener(type, listener, options);
   };
   const id = (post.mock.calls.find(([data]) => data.type === MOTION_PREVIEW_REQUEST)?.[0] as {id?: string} | undefined)?.id;
-  const activity = (active: boolean, instance = id, source: MessageEventSource | null = window.parent) => {
-    window.dispatchEvent(new MessageEvent('message', {source, data:{type:MOTION_PREVIEW_ACTIVITY, id:instance, active}}));
+  const activity = (active: boolean, instance = id, source: MessageEventSource | null = window.parent, muted = false) => {
+    window.dispatchEvent(new MessageEvent('message', {source, data:{type:MOTION_PREVIEW_ACTIVITY, id:instance, active, muted}}));
   };
   return { audio, timeline, activity, simulateDelayedStart: () => { audioPaused = false; }, player: motionWindow.__odMotionPlayer! };
 }
@@ -235,4 +235,30 @@ it('retains explicit seeking while paused, before metadata, and during another s
   Object.defineProperty(audio, 'seeking', { value: true, configurable: true });
   sync(7, false, true);
   expect(audio.currentTime).toBe(7);
+});
+
+
+it('keeps a generating preview visual-only through reload activation, transport controls and a pending play', async () => {
+  let resolve!: () => void;
+  const pending = new Promise<void>(r => { resolve = r; });
+  const { audio, timeline, activity, player, simulateDelayedStart } = boot(true, pending);
+  activity(true, undefined, window.parent, true);
+  expect(timeline.paused()).toBe(false);
+  expect(audio.muted).toBe(true);
+  expect(audio.paused).toBe(true);
+  expect(audio.play).not.toHaveBeenCalled();
+  player.setMuted(false); player.replay();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(audio.play).not.toHaveBeenCalled();
+  activity(false, undefined, window.parent, true);
+  expect(timeline.paused()).toBe(true);
+  activity(true, undefined, window.parent, true);
+  expect(audio.paused).toBe(true);
+  activity(true);
+  expect(audio.play).toHaveBeenCalledTimes(1);
+  activity(true, undefined, window.parent, true);
+  simulateDelayedStart(); resolve();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(audio.paused).toBe(true);
+  expect(audio.muted).toBe(true);
 });
