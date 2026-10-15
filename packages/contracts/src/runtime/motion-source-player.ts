@@ -22,12 +22,42 @@ window.__odValidateMotionTimeline = function (root, tl) {
 };`;
 
 
+// Embedded verbatim in the portable community examples; the package test keeps
+// those offline copies aligned with project playback.
+export const MOTION_AUDIO_SYNC_RUNTIME = `// A render stall is not a request to seek the soundtrack. Only correct drift
+// after fresh, stable samples; explicit transport actions bypass that filter.
+function createMotionAudioSync(audio) {
+  var sampledAt = null, driftSince = null, previousDrift = 0, correctedAt = -Infinity, align = false;
+  return function (target, moving, force) {
+    var now = performance.now(), gap = sampledAt === null ? Infinity : now - sampledAt;
+    sampledAt = now;
+    if (force) { align = true; driftSince = null; }
+    if (align) {
+      if (audio.readyState > 0) {
+        if (Math.abs(audio.currentTime - target) > .01) audio.currentTime = target;
+        align = false; correctedAt = now;
+      }
+      return;
+    }
+    var drift = target - audio.currentTime;
+    if (!moving || audio.paused || audio.seeking || audio.readyState < 3 || gap > 200 || Math.abs(drift) <= .3 || now - correctedAt < 1500) {
+      driftSince = null; previousDrift = drift; return;
+    }
+    if (driftSince === null || drift * previousDrift <= 0 || Math.abs(drift - previousDrift) > .1) driftSince = now;
+    previousDrift = drift;
+    if (now - driftSince >= 750) {
+      audio.currentTime = target; correctedAt = now; driftSince = null;
+    }
+  };
+}`;
+
 // Shared by URL previews, srcdoc previews and the persisted editable source.
 // The renderer installs its flag before author scripts; it never sees chrome,
 // layout scaling, poster seeking, or wall-clock playback from this runtime.
-const PLAYER = `<script data-od-motion-source-player="6">
+const PLAYER = `<script data-od-motion-source-player="7">
 ${MOTION_TIMELINE_CHECK_SCRIPT}
 (function () {
+${MOTION_AUDIO_SYNC_RUNTIME}
   function boot() {
     if (window.__odMotionRender || window.__odMotionSourcePlayer) return;
     var root = document.querySelector('[data-composition-id][data-duration][data-width][data-height]');
@@ -57,7 +87,7 @@ ${MOTION_TIMELINE_CHECK_SCRIPT}
     window.addEventListener('message', onActivity);
     var tracks = Array.prototype.map.call(document.querySelectorAll('audio[src]'), function (audio) {
       audio.pause(); audio.autoplay = false;
-      return { audio: audio, start: Number(audio.dataset.start || 0), duration: Number(audio.dataset.duration), volume: Number(audio.dataset.volume || 1), pending: false, blocked: false };
+      return { audio: audio, start: Number(audio.dataset.start || 0), duration: Number(audio.dataset.duration), volume: Number(audio.dataset.volume || 1), pending: false, blocked: false, sync: createMotionAudioSync(audio) };
     });
     var muted = thumbnail;
     function syncAudio(time, shouldPlay, force) {
@@ -68,7 +98,7 @@ ${MOTION_TIMELINE_CHECK_SCRIPT}
         audio.volume = Math.max(0, Math.min(1, track.volume)); audio.muted = muted;
         if (!trackActive || !shouldPlay) audio.pause();
         var target = Math.max(0, Math.min(track.duration, local));
-        if (audio.readyState > 0 && (force || Math.abs(audio.currentTime - target) > .2)) audio.currentTime = target;
+        track.sync(target, trackActive && shouldPlay, force || (trackActive && shouldPlay && audio.paused && !track.pending && !track.blocked));
         if (trackActive && shouldPlay && audio.paused && !track.pending && !track.blocked) {
           track.pending = true;
           var promise = audio.play();
@@ -103,14 +133,17 @@ ${MOTION_TIMELINE_CHECK_SCRIPT}
       }
       var timingError = window.__odValidateMotionTimeline(root, tl);
       if (timingError) { tl.pause(); notice(timingError); return; }
-      var duration = tl.duration();
+      var duration = tl.duration(), applied = false;
       applyPlayback = function () {
+        var nextPlaying = active && pageActive && wantsPlay;
+        if (applied && nextPlaying === playing) return;
+        applied = true;
         clearTimeout(updateTimer); updateTimer = null;
-        playing = active && pageActive && wantsPlay;
+        playing = nextPlaying;
         if (playing) {
           if (tl.time() >= duration) tl.seek(0, false);
           tl.play(); syncAudio(tl.time(), true, true); update();
-        } else { tl.pause(); syncAudio(tl.time(), false, true); }
+        } else { tl.pause(); syncAudio(tl.time(), false, false); }
       };
       function play() { wantsPlay = true; applyPlayback(); }
       function pause() { wantsPlay = false; applyPlayback(); }
@@ -163,7 +196,7 @@ export function injectMotionSourcePlayer(html: string): string {
   const existing = findRealTagOffset(html, /<script\b[^>]*\bdata-od-motion-source-player\b/i);
   if (existing >= 0) {
     const script = /^<script\b[^>]*>[\s\S]*?<\/script\s*>/i.exec(html.slice(existing));
-    if (!script || /data-od-motion-source-player="6"/.test(script[0])) return html;
+    if (!script || /data-od-motion-source-player="7"/.test(script[0])) return html;
     return html.slice(0, existing) + PLAYER + html.slice(existing + script[0].length);
   }
   const end = findRealTagOffset(html, HTML_TAG_PATTERNS.bodyClose);
