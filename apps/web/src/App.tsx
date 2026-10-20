@@ -2160,7 +2160,7 @@ function AppInner() {
       window.removeEventListener('focus', onReturnToApp);
       document.removeEventListener('visibilitychange', onReturnToApp);
     };
-  }, [applyAmrLoginStatus, clearAmrAuthRetryContinuation, daemonLive]);
+  }, [applyAmrLoginStatus, clearAmrAuthRetryContinuation, daemonLive, locale]);
 
   useEffect(() => {
     analytics.setUserId(

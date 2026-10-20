@@ -1083,6 +1083,8 @@ export function cancelVelaLogin(
 }
 
 export interface SpawnVelaLoginDeps {
+  /** Notify daemon-local consumers after a successful login child has drained. */
+  onCompleted?: () => void;
   configuredEnv?: Record<string, string>;
   baseEnv?: NodeJS.ProcessEnv;
   attribution?: AmrEntryAttribution | null;
@@ -1442,6 +1444,9 @@ async function spawnVelaLoginAttempt(
   child.once('close', (code, signal) => {
     handleTerminal('exit');
     settleTerminal({ kind: 'exit', code, signal });
+    if (code === 0 && signal === null) {
+      try { deps.onCompleted?.(); } catch { /* An optional warmup cannot fail login. */ }
+    }
   });
   child.once('error', (error) => {
     recordVelaAuthStage(
@@ -1490,6 +1495,7 @@ export async function spawnVelaLoginWithFallback(
 ): Promise<SpawnedVelaLogin> {
   const attempt = beginVelaLoginAttempt(deps.authAttemptId, deps.authRequestId);
   const sharedSpawnDeps: SpawnVelaLoginDeps = {
+    ...(deps.onCompleted ? { onCompleted: deps.onCompleted } : {}),
     ...(deps.configuredEnv ? { configuredEnv: deps.configuredEnv } : {}),
     ...(deps.baseEnv ? { baseEnv: deps.baseEnv } : {}),
     ...(deps.attribution !== undefined ? { attribution: deps.attribution } : {}),
