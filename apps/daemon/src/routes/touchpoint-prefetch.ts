@@ -32,9 +32,10 @@ class WarmResponse extends Writable implements TouchpointProxyResponse {
 
 export const TOUCHPOINT_PREFETCH_BACKOFF_MS = 60_000;
 export const PREFETCH_PLACEMENT = 'opend.home.campaign-modal';
+export const PREFETCH_PLACEMENTS = [PREFETCH_PLACEMENT, 'opend.home.hover-entry', 'opend.home.hover-layer'] as const;
 
 /** One warm attempt per identity/locale; failures may retry only on a later observation after backoff. No timer. */
-export function createTouchpointPrefetch(run: (req: TouchpointProxyRequest, res: TouchpointProxyResponse) => void) {
+function createPlacementPrefetch(placement: string, run: (req: TouchpointProxyRequest, res: TouchpointProxyResponse) => void) {
   let identity: string | null = null;
   let epoch = 0;
   let ready: { key: string; deadline: number; result: CapturedDecision } | null = null;
@@ -49,7 +50,7 @@ export function createTouchpointPrefetch(run: (req: TouchpointProxyRequest, res:
   const initialKey = (scope: string, req: TouchpointProxyRequest): string | null => {
     const url = new URL(req.url, 'http://daemon');
     if (req.method !== 'GET' || req.path !== '/api/touchpoints/production-runtime' ||
-      url.searchParams.get('placementKey') !== PREFETCH_PLACEMENT || url.searchParams.get('emptyResponse') !== '200' ||
+      url.searchParams.get('placementKey') !== placement || url.searchParams.get('emptyResponse') !== '200' ||
       [...url.searchParams.keys()].some(key => !['placementKey', 'locale', 'emptyResponse'].includes(key))) return null;
     return JSON.stringify([scope, url.searchParams.get('locale')]);
   };
@@ -78,7 +79,7 @@ export function createTouchpointPrefetch(run: (req: TouchpointProxyRequest, res:
       });
       const current = { key, epoch, response, result };
       flight = current;
-      const query = new URLSearchParams({ placementKey: PREFETCH_PLACEMENT, locale, emptyResponse: '200' });
+      const query = new URLSearchParams({ placementKey: placement, locale, emptyResponse: '200' });
       const req = Object.assign(new EventEmitter(), { method: 'GET', path: '/api/touchpoints/production-runtime', url: `/api/touchpoints/production-runtime?${query}`, headers: { 'accept-encoding': 'gzip' }, query: {}, body: undefined });
       void result.then(value => {
         if (flight !== current) return;
@@ -100,5 +101,23 @@ export function createTouchpointPrefetch(run: (req: TouchpointProxyRequest, res:
       return value;
     },
     close() { reset(null); },
+  };
+}
+
+/** Fixed home surfaces only. Each retains its own request, handoff and backoff;
+ * the normal host still authorizes and validates the hover pair atomically. */
+export function createTouchpointPrefetch(run: (req: TouchpointProxyRequest, res: TouchpointProxyResponse) => void) {
+  const placements = new Map<string, ReturnType<typeof createPlacementPrefetch>>(
+    PREFETCH_PLACEMENTS.map(placement => [placement, createPlacementPrefetch(placement, run)]),
+  );
+  const forRequest = (req: TouchpointProxyRequest) =>
+    placements.get(new URL(req.url, 'http://daemon').searchParams.get('placementKey') ?? '');
+  return {
+    reset(key: string | null) { for (const state of placements.values()) state.reset(key); },
+    warm(scope: string, locale: string) { for (const state of placements.values()) state.warm(scope, locale); },
+    backingOff(scope: string, req: TouchpointProxyRequest) { return forRequest(req)?.backingOff(scope, req) ?? false; },
+    consumeReady(scope: string, req: TouchpointProxyRequest) { return forRequest(req)?.consumeReady(scope, req) ?? null; },
+    join(scope: string, req: TouchpointProxyRequest) { return forRequest(req)?.join(scope, req) ?? Promise.resolve(null); },
+    close() { for (const state of placements.values()) state.close(); },
   };
 }

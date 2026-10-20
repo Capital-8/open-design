@@ -1572,8 +1572,8 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
           res.setHeader(TOUCHPOINT_LOAD_METRICS_HEADER, touchpointMetricsHeader({ daemon_version: runtimeContext.daemonVersion, cache_hit: true, cache_source: 'offline_fallback', local_response_bytes: bytes.length, local_base64_bytes: sizes.base64, decoded_resource_bytes: sizes.decoded }));
           res.end(bytes); return;
         }
-        const ready = !joined && prefetch.consumeReady(touchpointCacheScope(runtimeContext), req);
-        if (ready) {
+        const ready = joined ?? prefetch.consumeReady(touchpointCacheScope(runtimeContext), req);
+        if (ready?.status === 200 && !ready.headers.has(TOUCHPOINT_OFFLINE_REPLAY_HEADER)) {
           let expected: unknown = null;
           try {
             const raw = decodeProxyBody(ready.body, ready.headers.get('content-encoding') as string | undefined, MAX_BUFFERED_DECISION_BYTES);
@@ -1594,6 +1594,11 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
             } else res.end(bytes);
             return;
           }
+          // A captured online 200 is only a candidate. Refusal, replacement,
+          // failed admission or an exhausted original lease forbids handoff;
+          // another normal request here could revive the refused warm grant.
+          res.status(404).json({ error: 'touchpoint_prefetch_no_longer_authorized' });
+          return;
         }
         if (joined) {
           res.status(joined.status);
