@@ -11,7 +11,7 @@ import { resetDesktopAuthForTests, setDesktopAuthSecret } from '../src/desktop-a
 import type { AppConfigPrefs } from '../src/app-config.js';
 
 const login = vi.hoisted(() => ({ completed: undefined as (() => void) | undefined }));
-const joins = vi.hoisted(() => ({ count: 0 }));
+const joins = vi.hoisted(() => ({ count: 0, after: undefined as ((value: { headers: Map<string, unknown> } | null) => Promise<void>) | undefined }));
 vi.mock('../src/routes/touchpoint-prefetch.js', async original => {
   const actual = await original<typeof import('../src/routes/touchpoint-prefetch.js')>();
   return { ...actual, createTouchpointPrefetch: (...args: Parameters<typeof actual.createTouchpointPrefetch>) => {
@@ -19,7 +19,7 @@ vi.mock('../src/routes/touchpoint-prefetch.js', async original => {
     return { ...prefetch, join: (...input: Parameters<typeof prefetch.join>) => {
       const result = prefetch.join(...input);
       ++joins.count;
-      return result;
+      return result.then(async value => { await joins.after?.(value); return value; });
     } };
   } };
 });
@@ -121,6 +121,7 @@ const decideHover = (key: string) => fetch(`${origin}/api/touchpoints/production
 const untilCalls = async (count: number) => { await vi.waitFor(() => expect(calls).toHaveLength(count)); };
 beforeEach(async () => {
   joins.count = 0;
+  joins.after = undefined;
   resetDesktopAuthForTests();
   Object.assign(identity, { loggedIn: true, sessionState: 'authenticated', user: { id: 'a' } });
   dir = mkdtempSync(path.join(tmpdir(), 'cms-prefetch-'));
@@ -435,4 +436,29 @@ it('preserves joined offline fallback and its schedule lease when the warm upstr
   expect(value.authorizationExpiresAt).toBe(decision.endsAt);
   expect(value.offlineReplay?.reason).toBe('upstream_unavailable');
   expect(calls).toHaveLength(4);
+});
+
+it('rechecks a joined offline grant after a newer refusal reaches the cache', async () => {
+  setDesktopAuthSecret(Buffer.alloc(32, 1));
+  await observe(); await untilCalls(3);
+  const decision = freshDecision();
+  const prime = decide('&activeDecisionId=independent');
+  await untilCalls(4);
+  pending[3]!.end(JSON.stringify(decision));
+  expect((await prime).status).toBe(200);
+  joins.after = async value => {
+    if (!value?.headers.has(TOUCHPOINT_OFFLINE_REPLAY_HEADER)) return;
+    joins.after = undefined;
+    const refusal = decide('&activeDecisionId=newer-refusal');
+    await untilCalls(5);
+    pending[4]!.writeHead(403); pending[4]!.end('{}');
+    expect((await refusal).status).toBe(403);
+  };
+  const response = decide();
+  await vi.waitFor(() => expect(joins.count).toBe(2));
+  pending[0]!.writeHead(503); pending[0]!.end('{}');
+  const result = await response;
+  expect(result.status).toBe(404);
+  expect(await result.json()).toEqual({ error: 'touchpoint_prefetch_no_longer_authorized' });
+  expect(calls).toHaveLength(5);
 });

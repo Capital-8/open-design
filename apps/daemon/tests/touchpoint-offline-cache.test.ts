@@ -700,6 +700,27 @@ describe('startup prefetch online handoff', () => {
 });
 
 describe('prefetch handoff matches the actual warm answer', () => {
+  it('rechecks a captured offline grant without shrinking its schedule lease to the expired online lease', () => {
+    const cache = createTouchpointContentCache(dataDir);
+    cache.remember(MODAL, fullResponse(MODAL.placementKey, 'modal.js', MODAL_ENTRY));
+    const captured = cache.replayOffline(MODAL, 'upstream_unavailable')!;
+    vi.advanceTimersByTime(70_000);
+    expect(cache.replayPrefetched(MODAL)).toBeNull();
+    const handedOff = cache.replayOffline(MODAL, 'upstream_unavailable', captured)!;
+    expect(handedOff.authorizationExpiresAt).toBe(captured.endsAt);
+    expect(Date.parse(String(handedOff.serverTime))).toBeGreaterThanOrEqual(T0 + 70_000);
+    cache.refuseReplay(MODAL, 403);
+    expect(cache.replayOffline(MODAL, 'upstream_unavailable', captured)).toBeNull();
+  });
+  it('requires the exact captured offline package and schedule', () => {
+    const cache = createTouchpointContentCache(dataDir);
+    cache.remember(MODAL, fullResponse(MODAL.placementKey, 'modal.js', MODAL_ENTRY));
+    const captured = cache.replayOffline(MODAL, 'upstream_unavailable')!;
+    expect(cache.replayOffline(MODAL, 'upstream_unavailable', { ...captured, endsAt: iso(T0 + 30_000) })).toBeNull();
+    const content = captured.content as Record<string, unknown>;
+    expect(cache.replayOffline(MODAL, 'upstream_unavailable', { ...captured, content: { ...content, id: 'other-package' } })).toBeNull();
+    expect(cache.replayOffline(MODAL, 'upstream_unavailable', captured)).not.toBeNull();
+  });
   it('cannot substitute an old grant for a newly empty or malformed 200 response', () => {
     const cache = createTouchpointContentCache(dataDir);
     cache.remember(MODAL, fullResponse(MODAL.placementKey, 'modal.js', MODAL_ENTRY));

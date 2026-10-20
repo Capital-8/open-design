@@ -1573,7 +1573,8 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
           res.end(bytes); return;
         }
         const ready = joined ?? prefetch.consumeReady(touchpointCacheScope(runtimeContext), req);
-        if (ready?.status === 200 && !ready.headers.has(TOUCHPOINT_OFFLINE_REPLAY_HEADER)) {
+        if (ready?.status === 200) {
+          const offline = ready.headers.has(TOUCHPOINT_OFFLINE_REPLAY_HEADER);
           let expected: unknown = null;
           try {
             const raw = decodeProxyBody(ready.body, ready.headers.get('content-encoding') as string | undefined, MAX_BUFFERED_DECISION_BYTES);
@@ -1583,12 +1584,17 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
             res.status(200).json(expected); return;
           }
           const key = touchpointContentKeyForRequest(new URL(req.url, 'http://daemon'), touchpointCacheScope(runtimeContext));
-          const local = key && touchpointContentCache.replayPrefetched(key, expected);
+          const replay = expected && typeof expected === 'object' && 'offlineReplay' in expected
+            ? expected.offlineReplay as { reason?: unknown } | null : null;
+          const local = key && (offline
+            ? touchpointContentCache.replayOffline(key, replay?.reason === 'upstream_unreachable' ? 'upstream_unreachable' : 'upstream_unavailable', expected)
+            : touchpointContentCache.replayPrefetched(key, expected));
           if (local) {
             const bytes = Buffer.from(JSON.stringify(local));
             const sizes = touchpointResourceSizes(local);
             res.status(200).setHeader('content-type', 'application/json');
-            res.setHeader(TOUCHPOINT_LOAD_METRICS_HEADER, touchpointMetricsHeader({ daemon_version: runtimeContext.daemonVersion, cache_hit: true, cache_source: 'daemon', local_response_bytes: bytes.length, local_base64_bytes: sizes.base64, decoded_resource_bytes: sizes.decoded }));
+            res.setHeader(TOUCHPOINT_LOAD_METRICS_HEADER, touchpointMetricsHeader({ daemon_version: runtimeContext.daemonVersion, cache_hit: true, cache_source: offline ? 'offline_fallback' : 'daemon', local_response_bytes: bytes.length, local_base64_bytes: sizes.base64, decoded_resource_bytes: sizes.decoded }));
+            if (offline) res.setHeader(TOUCHPOINT_OFFLINE_REPLAY_HEADER, '1');
             if (String(req.headers['accept-encoding']).split(',').some(part => part.trim() === 'gzip')) {
               res.setHeader('content-encoding', 'gzip'); res.end(zlib.gzipSync(bytes));
             } else res.end(bytes);

@@ -133,6 +133,7 @@ export interface TouchpointContentCache {
   replayOffline(
     key: TouchpointContentKey,
     reason: TouchpointOfflineReplayReason,
+    expected?: unknown,
   ): Record<string, unknown> | null;
   /**
    * Act on a 410 the runtime returned for this placement, and report whether
@@ -943,11 +944,22 @@ export function createTouchpointContentCache(runtimeDataDir: string): Touchpoint
     const live = liveRecord(key, true);
     if (!live) return null;
     const { record, schedule, now } = live;
-    if (reason === null && expected !== undefined) {
-      // The warm answer, including its audience and schedule, must be the one
-      // admitted to this record. A 200 alone is not a grant (decision:null).
-      if (!isRecord(expected) || !isRecord(expected.content) ||
-        !isDeepStrictEqual(envelopeOf(expected), record.envelope) ||
+    if (expected !== undefined) {
+      // A captured warm response never overrides the current authority journal.
+      if (!isRecord(expected) || !isRecord(expected.content)) return null;
+      const expectedEnvelope = envelopeOf(expected);
+      const admittedEnvelope = { ...record.envelope };
+      if (reason !== null) {
+        const replay = expected[TOUCHPOINT_OFFLINE_REPLAY_FIELD];
+        if (!isRecord(replay) || replay.cachedServerTime !== schedule.serverTime) return null;
+        // Offline replay rewrites these fields only; compare every other
+        // audience, deployment, decision, schedule and immutable package binding.
+        for (const field of ['serverTime', 'authorizationExpiresAt', TOUCHPOINT_OFFLINE_REPLAY_FIELD]) {
+          delete expectedEnvelope[field];
+          delete admittedEnvelope[field];
+        }
+      }
+      if (!isDeepStrictEqual(expectedEnvelope, admittedEnvelope) ||
         expected.content.id !== record.contentId || expected.content.locale !== record.locale ||
         expected.content.manifestHash !== record.manifestHash || expected.content.entryDigest !== record.entryDigest) return null;
     }
@@ -1057,7 +1069,7 @@ export function createTouchpointContentCache(runtimeDataDir: string): Touchpoint
     },
     finishTicket(ticket) { activeTickets.delete(ticket); },
 
-    replayOffline(key, reason) { return replayAuthorized(key, reason); },
+    replayOffline(key, reason, expected) { return replayAuthorized(key, reason, expected); },
     replayPrefetched(key, expected) { return replayAuthorized(key, null, expected); },
 
     forgetWithdrawn(key, body) {
