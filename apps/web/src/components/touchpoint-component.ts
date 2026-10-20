@@ -278,6 +278,11 @@ const TouchpointElementBase: typeof HTMLElement =
 		? (class {} as typeof HTMLElement)
 		: HTMLElement;
 
+const HOVER_PLACEMENTS: ReadonlySet<string> = new Set(["opend.home.hover-entry", "opend.home.hover-layer"]);
+/** Hover-only intrinsic sizing defaults (OPEND-3323); exported for the layout witness. */
+export const HOVER_HOST_LAYOUT_CSS =
+	" :host > :where(:not(style)) { max-width: 100%; } :where(img, svg, video, canvas) { max-width: 100%; height: auto; } :where(img) { object-fit: contain; }";
+
 export class OpenDesignTouchpointElement extends TouchpointElementBase {
 	private generation = 0;
 	private disposed = true;
@@ -312,6 +317,11 @@ export class OpenDesignTouchpointElement extends TouchpointElementBase {
 			style.dataset.velaTouchpointHost = "";
 			style.textContent =
 				":host { color-scheme: var(--vela-touchpoint-theme); font-family: var(--vela-touchpoint-font-family); color: var(--foreground); background: var(--background); } *, *::before, *::after { box-sizing: border-box; }";
+			if (HOVER_PLACEMENTS.has(context.placementKey))
+				// OPEND-3323: keep authored aspect ratio and fit inside the capped
+				// layer. Zero-specificity, so authored sizes and crops still win;
+				// no card width or font size is imposed here.
+				style.textContent += HOVER_HOST_LAYOUT_CSS;
 			this.shadowRoot.prepend(style);
 		}
 	}
@@ -398,6 +408,8 @@ export class OpenDesignTouchpointElement extends TouchpointElementBase {
 				);
 				if (!this.isCurrent(generation))
 					this.recordDiagnostic({ code: "component_update_expired" });
+				// Material renderers may replace every ShadowRoot child.
+				else this.applyHostContext(nextContext);
 			},
 			(code) => this.recordDiagnostic({ code }),
 		);
@@ -447,6 +459,9 @@ export class OpenDesignTouchpointElement extends TouchpointElementBase {
 				return;
 			}
 			adoptedLateMount = true;
+			// mount() owns the root and may clear the initial host style with
+			// innerHTML/replaceChildren; restore defaults before authored CSS.
+			this.applyHostContext(context);
 			this.module = component;
 			this.instance = instance;
 			if (this.rendererTime && (this.rendererTime.schedule !== context.schedule || this.rendererTime.serverOffsetMs !== context.serverOffsetMs)) await this.updateTime(this.rendererTime);
