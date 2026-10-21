@@ -27,6 +27,7 @@ import {
   type DaemonAgentReconnectState,
   type DaemonAgentRetryState,
   type DaemonReconnectState,
+  type VelaLoginStatus,
   createStrategyTaskBlockedError,
   fetchChatRunStatus,
   GENERIC_DAEMON_DISCONNECT_CODE,
@@ -870,6 +871,7 @@ function ensureConversationPresent(
 
 interface Props {
   project: Project;
+  workspaceQuotaStatus?: Pick<VelaLoginStatus, 'profile' | 'consoleOrigin'> | null;
   /**
    * Exact project-bound Workspace authority resolved by the route gate.
    * Production deep links pass this instead of borrowing the shell's mutable
@@ -2127,6 +2129,7 @@ export function reconcileProjectDetail(
 
 export function ProjectView({
   project,
+  workspaceQuotaStatus,
   workspaceContextOverride,
   initialWorkspaceScope,
   initialProjectDetail,
@@ -3191,7 +3194,8 @@ export function ProjectView({
       setAmrOwnerTopUpFromCard(true);
       return;
     }
-    const fallbackProfile = amrBalanceCardProfile;
+    const fallbackProfile = workspaceQuotaStatus?.profile?.trim() || amrBalanceCardProfile
+      || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null;
     // 自动充值链接对「可读但不可写」的工作区会返回 null(权限位不同,见
     // `workspaceAutoRechargeUrl`)。那时退回 Pricing —— 少一个功能好过一颗死按钮。
     // 落点和上面那个 `intent` 必须问同一份上下文。分支已经按权威身份算过了,
@@ -3202,7 +3206,9 @@ export function ProjectView({
       (intent === 'auto_recharge'
         ? workspaceAutoRechargeUrl(projectRunBillingAuthorityContext, { fallbackProfile })
         : null)
-      ?? workspaceUpgradeUrl(projectRunBillingAuthorityContext, null, { fallbackProfile });
+      ?? workspaceUpgradeUrl(projectRunBillingAuthorityContext, null, {
+        fallbackProfile, consoleOrigin: workspaceQuotaStatus?.consoleOrigin,
+      });
     if (!url) return;
     const entrySource =
       intent === 'auto_recharge'
@@ -3224,6 +3230,9 @@ export function ProjectView({
     );
   }, [
     amrBalanceCardProfile,
+    workspaceQuotaStatus?.profile,
+    workspaceQuotaStatus?.consoleOrigin,
+    config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE,
     analytics.track,
     config.installationId,
     config.telemetry?.metrics,
@@ -8999,11 +9008,12 @@ export function ProjectView({
       // Start the exact member/model read alongside preparation, but a known
       // insufficiency must settle before run persistence or provider dispatch.
       // Unknown/unavailable reads still defer authority to the backend.
-      const fundingIdentityIsCurrent = () => mountedRef.current
+      const modelRequestIdentityIsCurrent = () => mountedRef.current
         && projectIdRef.current === project.id
         && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
         && currentWorkspaceAccountGeneration() === sendAccountGeneration
-        && fundingDialogContextRef.current.isAmr
+        && fundingDialogContextRef.current.isAmr;
+      const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
         && fundingDialogContextRef.current.modelId === fundingModelId;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
         ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
@@ -10233,8 +10243,9 @@ export function ProjectView({
           const requestLimit = limitDetail === 'membership_concurrency_limit'
             || (limitDetail == null && isMembershipConcurrencyLimitFailure(err.message));
           if (!requestLimit) retireHomeRejectionSource();
+          // Link's refusal belongs to the original workspace, even if another model is selected meanwhile.
           if (requestLimit && runMayFinalize && latestRequestSendRef.current.get(runConversationId) === clientRequestId
-            && fundingIdentityIsCurrent()
+            && modelRequestIdentityIsCurrent()
             && messagesConversationIdRef.current === runConversationId) {
             const key = `request-limit:${sendAccountGeneration}:${runConversationId}:${assistantId}`;
             if (!shownFundingFailuresRef.current.has(key)) {
@@ -14622,6 +14633,8 @@ export function ProjectView({
         && config.mode === 'daemon' && config.agentId === 'amr' ? (
         <AmrConcurrencyDialog branch={concurrencyRejection.branch}
           workspaceContext={concurrencyRejection.workspaceContext}
+          profile={workspaceQuotaStatus?.profile?.trim() || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null}
+          consoleOrigin={workspaceQuotaStatus?.consoleOrigin}
           onClose={() => setConcurrencyDialogOpen(false)} />
       ) : null}
       {amrBalanceGateBlock?.dialog === 'ask_owner' || amrOwnerTopUpFromCard ? (

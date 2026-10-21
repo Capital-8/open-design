@@ -9,14 +9,16 @@ import styles from './AmrConcurrencyDialog.module.css';
 
 /** A real Link request rejection, never a local task-slot reservation. Closing
  * or changing plans only dismisses the notice; sending again is always manual. */
-export function AmrConcurrencyDialog({ branch, workspaceContext, onClose }: {
+export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consoleOrigin, onClose }: {
   branch: AmrBalanceBranch;
   workspaceContext: WorkspaceCollabContext | null;
+  profile?: string | null;
+  consoleOrigin?: string | null;
   onClose: () => void;
 }) {
   const t = useT();
-  const upgradeUrl = branch.audience === 'owner' && branch.tier !== 'max'
-    ? workspaceUpgradeUrl(workspaceContext, null) : null;
+  const upgradeUrl = branch.audience === 'owner' && branch.tier !== 'max' && workspaceContext
+    ? workspaceUpgradeUrl(workspaceContext, null, { fallbackProfile: profile, consoleOrigin }) : null;
   const benefits = [
     t('chat.amrConcurrencyGate.benefit1'),
     t('chat.amrConcurrencyGate.benefit2'),

@@ -210,8 +210,9 @@ export function amrPlansUrlForWorkspace(
 export function amrPlansUrlForProfile(
   profile: string | null | undefined,
   workspaceId?: string | null,
+  consoleOrigin?: string | null,
 ): string {
-  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_UPGRADE_INTENT, workspaceId);
+  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_UPGRADE_INTENT, workspaceId, consoleOrigin);
 }
 
 /**
@@ -230,8 +231,9 @@ function amrConsoleUrlWithBillingIntent(
   profile: string | null | undefined,
   intentValue: string,
   workspaceId?: string | null,
+  consoleOrigin?: string | null,
 ): string {
-  const base = amrConsoleUrlForProfile(profile);
+  const base = amrConsoleUrlForProfile(profile, consoleOrigin);
   const workspaceUrl = amrWorkspaceUrl(base, workspaceId, intentValue);
   if (workspaceUrl) return workspaceUrl;
   const intent = `billing=${intentValue}`;

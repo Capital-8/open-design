@@ -1981,6 +1981,8 @@ export function EntryShell({
       {homeConcurrencyBlock && homeConcurrencyBlock.identity === homeFundingIdentity ? (
         <AmrConcurrencyDialog branch={homeConcurrencyBlock.branch}
           workspaceContext={homeConcurrencyBlock.workspaceContext}
+          profile={amrRegistrationStatus?.profile?.trim() || amrProfile}
+          consoleOrigin={amrRegistrationStatus?.consoleOrigin}
           onClose={() => setHomeConcurrencyBlock(null)} />
       ) : null}
       <div

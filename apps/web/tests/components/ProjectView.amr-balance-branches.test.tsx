@@ -935,6 +935,53 @@ describe('Link request concurrency rejection preserves the original send', () =>
     }
   });
 
+  it.each(['empty', 'new-text', 'new-file', 'partial-output', 'workspace-change'] as const)('selected model changes after sending: concurrency rejection preserves %s boundaries', async (draft) => {
+    realChatPane.enabled = true;
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');
+    const agents = [{ id: 'amr', name: 'amr', bin: 'vela', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }, { id: 'deepseek-v4.1-flash', label: 'Flash' }] }] as AgentInfo[];
+    const firstConfig = { ...config, agentModels: { amr: { model: 'glm-5' } } };
+    const props = { project: { ...project(), pendingPrompt: null } as never, agents, config: firstConfig };
+    const view = renderProjectView(props);
+    await flushMounts();
+    await typeAndSettle('original model-independent concurrency draft');
+    act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT,
+      { detail: { attachments: [{ path: 'original.txt', name: 'original.txt', kind: 'file' }] } })));
+    await waitFor(() => expect(screen.getByTestId('chat-send')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const first = mockedStreamViaDaemon.mock.calls[0]![0];
+    expect(first.model).toBe('glm-5');
+    await waitFor(() => expect(composerText().trim()).toBe(''));
+    if (draft === 'new-text') await typeAndSettle('keep the newer draft');
+    if (draft === 'new-file') act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT,
+      { detail: { attachments: [{ path: 'newer.txt', name: 'newer.txt', kind: 'file' }] } })));
+    if (draft === 'partial-output') await act(async () => { first.handlers.onDelta('actual model output'); });
+    if (draft === 'workspace-change') workspaceScopeMocks.ambientContext = { ...callerContext('owner', 'team_pro'),
+      workspaceId: 'different-paying-space', workspaceMemberId: 'different-owner' };
+    view.rerender(projectViewElement({ ...props,
+      config: { ...config, agentModels: { amr: { model: 'deepseek-v4.1-flash' } } } }));
+    await flushMounts();
+    await act(async () => { first.onRunCreated?.('model-changed-limit-run');
+      first.handlers.onAgentEvent({ kind: 'done_key', key: 'model-changed-protocol-only' }); });
+    await flushMounts();
+    await act(async () => { await first.handlers.onError(Object.assign(new Error('actual request concurrency limit'),
+      { failureDetail: 'membership_concurrency_limit' })); });
+    if (draft === 'workspace-change') {
+      expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+      expect(composerText().trim()).toBe('');
+    } else {
+      expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+      expect(composerText().trim()).toBe(draft === 'empty' ? 'original model-independent concurrency draft'
+        : draft === 'new-text' ? 'keep the newer draft' : '');
+      const attachments = within(screen.queryByTestId('staged-attachments') ?? document.createElement('div'));
+      if (draft === 'empty') expect(attachments.getByTitle('original.txt')).toBeTruthy();
+      else expect(attachments.queryByTitle('original.txt')).toBeNull();
+      if (draft === 'new-file') expect(attachments.getByTitle('newer.txt')).toBeTruthy();
+    }
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+  });
+
   it.each(['empty', 'new-text', 'new-file'] as const)('real ProjectView→ChatPane→Composer restores a rejected file turn without replacing %s', async (draft) => {
     realChatPane.enabled = true;
     workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');

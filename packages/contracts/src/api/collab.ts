@@ -400,6 +400,8 @@ export interface WorkspaceCollabContext {
   workspaceId: string;
   workspaceType: WorkspaceType;
   workspaceMemberId: string;
+  /** Active member count from the same authorized workspace snapshot; omitted when unknown. */
+  memberCount?: number;
   role: CollabMemberRole;
   memberStatus: WorkspaceMemberStatus;
   lifecycleState: WorkspaceLifecycleState;
@@ -865,6 +867,14 @@ export interface WorkspaceBillingSnapshot {
     expiresAt: string | null;
     updatedAt: string | null;
   };
+  /** Original backend windows; absence means this producer has no window data. */
+  designPlanWindows?: Array<{
+    kind: '5h' | '7d';
+    windowStart: string | null;
+    resetsAt: string | null;
+    remainingCredits: string;
+    limitCredits: string;
+  }>;
   revisions: {
     billing: string;
     wallet: string;
