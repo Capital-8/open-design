@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { runVelaCommandMock, readVelaControlApiContextMock } = vi.hoisted(() => ({
+const { runVelaCommandMock, readVelaControlApiContextMock, readVelaRuntimeLinkContextMock } = vi.hoisted(() => ({
   runVelaCommandMock: vi.fn(),
+  readVelaRuntimeLinkContextMock: vi.fn(),
   readVelaControlApiContextMock: vi.fn<typeof import('../src/integrations/vela.js').readVelaControlApiContext>(),
 }));
 
@@ -13,10 +14,12 @@ vi.mock('../src/integrations/vela-command.js', async (importOriginal) => ({
 vi.mock('../src/integrations/vela.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/integrations/vela.js')>()),
   readVelaControlApiContext: readVelaControlApiContextMock,
+  readVelaRuntimeLinkContext: readVelaRuntimeLinkContextMock,
 }));
 
 afterEach(() => {
   readVelaControlApiContextMock.mockReset();
+  readVelaRuntimeLinkContextMock.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -180,6 +183,115 @@ describe('read-only Link request concurrency adapter', () => {
   });
 });
 
+
+describe('default CLI request-concurrency capability compatibility', () => {
+  const full = { workspaceId: 'ws', workspaceMemberId: 'member', observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10 };
+  const parentHelp = 'Usage:\n  vela billing [command]\n\nAvailable Commands:\n  preflight Advisory preview\n';
+  const configuredEnv = { VELA_PROFILE: 'local', AMR_HOME: '/isolated/amr' };
+
+  function linkCapability(body: unknown = full, status = 200) {
+    readVelaRuntimeLinkContextMock.mockReturnValue({ profile: 'local', linkUrl: 'http://127.0.0.1:27481', runtimeKey: 'own-runtime' });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    const run = vi.fn(async (_args: string[]) => { throw new Error('unknown command "request-concurrency" for "vela billing"'); });
+    return { run, fetchMock };
+  }
+
+  it('reads the same-profile scoped full Link counter when the stock Cobra command is absent', async () => {
+    const { fetchMock } = linkCapability();
+    const run = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('command exited 1'), { stderr: 'Error: unknown flag: --workspace-id\n' }))
+      .mockResolvedValueOnce(parentHelp);
+    expect(await fetchVelaRequestConcurrency('ws', { run, configuredEnv })).toEqual(full);
+    expect(run.mock.calls.map(([args]) => args)).toEqual([
+      ['request-concurrency', '--workspace-id', 'ws', '--format', 'json'],
+      ['request-concurrency', '--help'],
+    ]);
+    expect(readVelaRuntimeLinkContextMock).toHaveBeenCalledExactlyOnceWith(process.env, configuredEnv);
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(new URL('http://127.0.0.1:27481/billing/request-concurrency'), expect.objectContaining({
+      headers: { authorization: 'Bearer own-runtime', 'x-vela-workspace-id': 'ws' }, signal: expect.any(AbortSignal),
+    }));
+    expect(readVelaControlApiContextMock).not.toHaveBeenCalled();
+  });
+
+  it('recognizes exit-zero parent help while preserving a native CLI result without HTTP', async () => {
+    const { fetchMock } = linkCapability();
+    expect(await fetchVelaRequestConcurrency('ws', { run: async () => parentHelp })).toEqual(full);
+    fetchMock.mockClear();
+    expect(await fetchVelaRequestConcurrency('ws', { run: async () => JSON.stringify(full) })).toEqual(full);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unknown flag: --format', ''],
+    ['unknown flag: --workspace-id', 'Usage:\n  vela billing request-concurrency [flags]\n'],
+    ['unknown flag: --workspace-id', parentHelp + '  request-concurrency Read counter\n'],
+    ['API request failed with status 503', ''], ['command timed out', ''],
+  ])('does not reinterpret other CLI failures as unsupported: %s', async (message, help) => {
+    const { fetchMock } = linkCapability();
+    const run = vi.fn().mockRejectedValueOnce(new Error(message)).mockResolvedValueOnce(help);
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(readVelaRuntimeLinkContextMock).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])('preserves CLI authorization %s without changing transports', async (status) => {
+    const { fetchMock } = linkCapability();
+    await expect(fetchVelaRequestConcurrency('ws', { run: async () => { throw new Error(`API request failed with status ${status}`); } })).rejects.toThrow(String(status));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])('preserves Link authorization %s without another scope or control key', async (status) => {
+    const { run, fetchMock } = linkCapability({ error: 'workspace_not_authorized' }, status);
+    await expect(fetchVelaRequestConcurrency('ws', { run })).rejects.toThrow(String(status));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(readVelaControlApiContextMock).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 503])('keeps Link failure %s unavailable', async (status) => {
+    const { run } = linkCapability({}, status);
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toBeNull();
+  });
+
+  it.each([new TypeError('fetch failed'), new DOMException('deadline', 'TimeoutError')])('keeps Link transport failure unavailable: %s', async (error) => {
+    const { run, fetchMock } = linkCapability();
+    fetchMock.mockRejectedValueOnce(error);
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toBeNull();
+  });
+
+  it.each([
+    { workspaceId: 'other' }, { workspaceMemberId: '' }, { observedAt: 'invalid' },
+    { running: -1 }, { running: 1.5 }, { limit: 0 }, { status: 'available' }, { status: 'unknown' },
+  ])('rejects foreign or invalid Link count: %j', async (change) => {
+    const { run } = linkCapability({ ...full, ...change });
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toBeNull();
+  });
+
+  it('preserves authoritative unknown without inventing a numeric count', async () => {
+    const unknown = { workspaceId: 'ws', workspaceMemberId: 'member', observedAt: full.observedAt, status: 'unknown' };
+    const { run } = linkCapability(unknown);
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toEqual(unknown);
+  });
+
+  it('keeps malformed Link evidence and absent selected credentials unavailable', async () => {
+    const { run, fetchMock } = linkCapability();
+    fetchMock.mockResolvedValueOnce(new Response('{invalid json'));
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toBeNull();
+    fetchMock.mockClear();
+    readVelaRuntimeLinkContextMock.mockReturnValueOnce(null);
+    expect(await fetchVelaRequestConcurrency('ws', { run, configuredEnv })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('bounds the Link hint to the original CLI 400ms request budget', async () => {
+    const { run } = linkCapability();
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      expect(await fetchVelaRequestConcurrency('ws', { run })).toEqual(full);
+      expect(timeout).toHaveBeenCalledWith(400);
+    } finally { timeout.mockRestore(); }
+  });
+});
 
 describe('default CLI funding-check capability compatibility', () => {
   it('reads the authenticated scoped funding hint when Cobra confirms the stock command is absent', async () => {

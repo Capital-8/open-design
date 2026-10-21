@@ -402,6 +402,12 @@ export interface VelaApiContext {
   apiUrl: string;
 }
 
+export interface VelaRuntimeLinkContext {
+  profile: string;
+  linkUrl: string;
+  runtimeKey: string;
+}
+
 interface VelaProfileShape {
   registrationInvite?: unknown;
   controlKey?: string;
@@ -808,6 +814,38 @@ export function readVelaControlApiContext(
     && expiredVelaControlKeys.has(velaControlKeyDigest(context.controlKey))
   ) return null;
   return context;
+}
+
+/** Resolve the CLI runtime identity without borrowing another profile's key. */
+export function readVelaRuntimeLinkContext(
+  env: NodeJS.ProcessEnv = process.env,
+  configuredEnv: Record<string, string> = {},
+): VelaRuntimeLinkContext | null {
+  const revision = readVelaCredentialRevision(env, configuredEnv);
+  if (expiredVelaCredentialRevisions.has(velaCredentialRevisionDigest(revision))) return null;
+  const mergedEnv = mergeVelaEnv(env, configuredEnv);
+  const profile = resolveAmrProfile(mergedEnv);
+  const envRuntimeKey = mergedEnv.VELA_RUNTIME_KEY?.trim();
+  const envLinkUrl = mergedEnv.VELA_LINK_URL?.trim();
+  const snapshot = envRuntimeKey && envLinkUrl ? null : readVelaProfileConfigSnapshot(env, configuredEnv);
+  const runtimeKey = envRuntimeKey || snapshot?.stored?.runtimeKey?.trim();
+  if (!runtimeKey) return null;
+  // These are the CLI's built-in Link profiles, used only when neither the
+  // explicit environment nor the selected saved profile provides an endpoint.
+  const defaultLinkUrls = {
+    prod: 'https://amr-link.open-design.ai',
+    test: 'https://vela-link.powerformer.net',
+    'feature-test': 'https://amr-feature-link.powerformer.net',
+    local: 'http://localhost:18081',
+  };
+  const linkUrl = envLinkUrl || snapshot?.stored?.linkUrl?.trim() || defaultLinkUrls[profile];
+  try {
+    const url = new URL(linkUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+  } catch {
+    return null;
+  }
+  return { profile, linkUrl, runtimeKey };
 }
 
 function readRawVelaControlApiContext(
