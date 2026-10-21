@@ -15,6 +15,7 @@ import {
   AMR_PERSONAL_WORKSPACE_HEADERS,
   AMR_PERSONAL_WORKSPACE_ITEM,
   createProjectViaApi,
+  expectWorkspaceReady,
   gotoEntryHome,
   gotoProject,
   openSettingsDialog,
@@ -262,6 +263,7 @@ test('[P0] @critical AMR project preflight retains text and files, rejects other
   expect(written.ok(), await written.text()).toBeTruthy();
   await gotoProject(page, amr.projectId);
   await page.goto(`/projects/${amr.projectId}/files/existing-output.html`, { waitUntil: 'domcontentloaded' });
+  await expectWorkspaceReady(page);
   const existingOutput = artifactPreviewFrame(page).getByRole('heading', { name: 'Existing project output stays intact' });
   await expect(existingOutput).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/projects/${amr.projectId}/conversations/[^/]+/files/existing-output.html`));
