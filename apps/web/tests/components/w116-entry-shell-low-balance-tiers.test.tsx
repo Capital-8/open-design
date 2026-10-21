@@ -202,6 +202,19 @@ describe('T53 / T66 · 首页非硬拦档一律静默放行', () => {
       if (url.endsWith('/api/workspace/context')) {
         return jsonResponse({ context: workspace });
       }
+      if (url.includes('/api/workspace/billing/preflight?')) {
+        // This suite owns the later balance-gate outcome. Supply the current
+        // fresh funding contract so its legacy fixture can reach that gate;
+        // the dedicated current-funding suite covers insufficiency here.
+        return jsonResponse({ preflight: {
+          schemaVersion: 1, workspaceId: workspace.workspaceId,
+          workspaceMemberId: workspace.workspaceMemberId, modelId: 'glm-5',
+          generatedAt: new Date().toISOString(), balanceUsd: REPORTED_BALANCE,
+          modelCovered: null, funding: 'gateway', fundingCheck: 'available',
+          codingPlan: { workspaceId: workspace.workspaceId, generatedAt: new Date().toISOString(),
+            eligible: false, tier: null, windows: [] },
+        } });
+      }
       if (url.includes('/api/workspace/billing?')) {
         return jsonResponse({ summary: null, workspaceBalance: null });
       }

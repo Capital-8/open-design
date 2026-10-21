@@ -1523,6 +1523,16 @@ export function EntryShell({
       const hintIdentity = homeFundingIdentityRef.current;
       const hintAccountGeneration = currentWorkspaceAccountGeneration();
       homeConcurrencyPendingRef.current = true;
+      const fundingIsCurrent = () => isSubmitCurrent() && hintEpoch === homeConcurrencyEpochRef.current
+        && hintIdentity === homeFundingIdentityRef.current
+        && hintAccountGeneration === currentWorkspaceAccountGeneration();
+      // Both reads are side-effect free. Start fresh funds proof
+      // now, but never wait for it when the counter already proves full.
+      // Consume late failures even if an identity change or full counter exits.
+      const fundingEvidence = scope
+        ? readFreshAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent)
+          .catch(() => ({ kind: 'unknown' as const, preflight: null }))
+        : null;
       const hint = await readAmrRequestConcurrency(scope);
       homeConcurrencyPendingRef.current = false;
       // A workspace, model, identity, route change or unmount while reading must
@@ -1545,10 +1555,7 @@ export function EntryShell({
       // independent of the immediately expirable concurrency hint above.
       let cachedBlock: AmrWalletSnapshot | null = null;
       if (scope) {
-        const fundingIsCurrent = () => isSubmitCurrent() && hintEpoch === homeConcurrencyEpochRef.current
-          && hintIdentity === homeFundingIdentityRef.current
-          && hintAccountGeneration === currentWorkspaceAccountGeneration();
-        const evidence = await readFreshAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent);
+        const evidence = await fundingEvidence!;
         if (!fundingIsCurrent()) return 'blocked' as const;
         if (evidence.kind === 'unknown' || !evidence.preflight) throw new Error(t('home.amrGateUnavailable'));
         if (evidence.kind === 'insufficient') {
