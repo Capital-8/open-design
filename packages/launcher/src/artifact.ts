@@ -2,7 +2,7 @@ import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
-  LAUNCHER_SCHEMA_VERSION, LAUNCHER_HOST_CONTRACT_VERSION, resolveLauncherVersionPaths,
+  LAUNCHER_SCHEMA_VERSION, resolveLauncherVersionPaths,
   validateLauncherApplicationArtifact, validateLauncherHostEnvironment,
   type LauncherHostEnvironment, type LauncherHostRunningCode, type LauncherPaths,
 } from "@open-design/launcher-proto";
@@ -29,8 +29,7 @@ export function resolvePayload(paths: LauncherPaths, version: string, environmen
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("candidate root is not a plain directory");
   const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== LAUNCHER_SCHEMA_VERSION || manifest.platform !== environment.platform ||
-      manifest.channel !== paths.channel || manifest.namespace !== paths.namespace || manifest.version !== version ||
-      manifest.electronVersion !== environment.electronVersion || manifest.launcherHostContract !== LAUNCHER_HOST_CONTRACT_VERSION) {
+      manifest.channel !== paths.channel || manifest.namespace !== paths.namespace || manifest.version !== version) {
     throw new Error(`payload ${version} is not compatible with this installed launcher; update the installer`);
   }
   const artifact = validateLauncherApplicationArtifact(manifest.host, environment);
@@ -41,7 +40,7 @@ export function resolvePayload(paths: LauncherPaths, version: string, environmen
   if (!within(appRoot, main) || !within(realpathSync(appRoot), realpathSync(main)) ||
       !statSync(main).isFile() || !statSync(executablePath).isFile()) throw new Error("payload entry is incomplete");
   const config = JSON.parse(readFileSync(join(resourcesPath, "open-design-config.json"), "utf8"));
-  if (config.appVersion !== version || config.launcherHostContract !== LAUNCHER_HOST_CONTRACT_VERSION) throw new Error("payload host metadata mismatch");
+  if (config.appVersion !== version) throw new Error("payload host metadata mismatch");
   validateLauncherHostEnvironment(config.launcherHost, environment);
   return { entry: pathToFileURL(main).href, running: { appRoot, resourcesPath, executablePath, source: "payload", version } };
 }

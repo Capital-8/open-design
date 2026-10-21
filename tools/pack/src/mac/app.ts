@@ -170,7 +170,6 @@ export function renderMacPackagedConfig(options: {
     {
       ...(options.config.amrProfile == null ? {} : { amrProfile: options.config.amrProfile }),
       appVersion: options.appVersion,
-      launcherHostContract: 1,
       launcherHost: buildLauncherHostEnvironment({ platform: "darwin", arch: process.arch, electronVersion: options.config.electronVersion }),
       ...(options.usePrebundledStandaloneWeb ? { daemonCliEntryRelative: MAC_PREBUNDLED_DAEMON_CLI_RELATIVE_PATH } : {}),
       ...(options.usePrebundledStandaloneWeb

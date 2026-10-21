@@ -14,10 +14,6 @@ export type LauncherHostRunningCode = Readonly<{
   resourcesPath: string;
   executablePath: string;
 }>;
-export type LauncherLifecycleStatus = Readonly<{
-  phase: "starting" | "ready" | "relaunch-pending";
-  candidateVersion: string | null;
-}>;
 export type LauncherHostIdentity = Readonly<{
   contractVersion: typeof LAUNCHER_HOST_CONTRACT_VERSION;
   installedAppPath: string;
@@ -30,10 +26,9 @@ export type LauncherHostIdentity = Readonly<{
 /** Application-facing intentions; journal and OS operations stay private to the host. */
 export interface LauncherLifecycle {
   snapshot(): LauncherRuntimeDescriptor;
-  status(): LauncherLifecycleStatus;
   reportReady(): Promise<void>;
   /** Validate prepared bytes without changing the next-start pointer. */
-  prepareCandidate(version: string, artifactRoot?: string): Promise<void>;
+  validateCandidate(version: string, artifactRoot?: string): Promise<void>;
   /** Select a validated candidate for the next start; does not restart this process. */
   activateCandidate(version: string): Promise<LauncherRuntimeDescriptor>;
   /** Explicit user recovery action; normal readiness must never erase failure evidence. */

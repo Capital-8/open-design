@@ -133,13 +133,16 @@ runtime: installed Electron -> launcher lifecycle -> selected application entry
                                platform adapter       ready / candidate / relaunch intents
 ```
 
-- Preparing a candidate validates bytes without changing runtime pointers.
+- `validateCandidate` checks staged or promoted bytes without changing runtime
+  pointers or maintaining a second candidate-state machine. The updater owns
+  download/extraction/promotion; the launcher owns compatibility and activation.
 - Activating a candidate selects and pre-arms the next start; it does not replace
   the currently running code or restart the process.
 - A relaunch request uses the host's own PID and selected pointer. The platform
   adapter validates and opens the installed carrier after predecessor exit.
 - Readiness confirms only the running generation, is idempotent, and never
-  confirms a failed successor. Headless readiness does not require a window.
+  confirms a failed successor. Confirmation remains retryable if either runtime
+  persistence or attempt removal fails. Headless readiness does not require a window.
 - Cold start recovers from an unconfirmed attempt using last-good or bundled
   code inside the installed host. Only explicit manual recovery resets failure
   evidence; cleanup asks the host whether resources are still in use.
@@ -154,3 +157,13 @@ assembly, state handling and executable handoff. An old outer receiving a new
 payload remains legacy, while same-version installer replacement claims the new
 host contract and retains a newer compatible payload. Electron and the installer
 version floor are unchanged.
+
+Review the hosted path in this order: `tools/pack/src/mac/{app,payload,prebundle}.ts`
+assembles the shared contract; `launcher/src/lifecycle.ts` resolves installation,
+claims the instance, adopts the installer, selects code, and publishes lifecycle
+operations; `launcher/src/platforms/macos/` implements OS actions; desktop and
+packaged consume that interface. `launcherHost` in installed config and `host` in
+payload manifests are the authoritative host compatibility metadata. The legacy
+manifest's platform/version/channel/namespace/executable entry retains its old
+meaning. Runtime and packaging resolve channels through the same release-domain
+rules, including preview versions and release namespaces.

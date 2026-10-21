@@ -49,8 +49,8 @@ async function addPayload(f: Awaited<ReturnType<typeof fixture>>, version: strin
  await mkdir(join(root,"prebundled"),{recursive:true}); await mkdir(join(bundle,"Contents","MacOS"),{recursive:true});
  await writeFile(join(bundle,"Contents","MacOS","Open Design"),"binary");
  await writeFile(join(root,"prebundled","packaged-main.mjs"),"export const version = '"+version+"';");
- await writeFile(join(resources,"open-design-config.json"),JSON.stringify({appVersion:version,namespace:"default",namespaceBaseRoot:f.base,launcherHostContract:1,launcherHost:environment}));
- await writeFile(join(versionRoot,"manifest.json"),JSON.stringify({schemaVersion:1,platform:"darwin",channel:"stable",namespace:"default",version,electronVersion:"41.3.0",launcherHostContract:1,host:{...environment,appRoot:`payload/Open Design.app/Contents/Resources/app`,resourcesPath:`payload/Open Design.app/Contents/Resources`,entry:`payload/Open Design.app/Contents/Resources/app/prebundled/packaged-main.mjs`},entry:{cwd:"payload/Open Design.app",executable:"payload/Open Design.app/Contents/MacOS/Open Design"},...overrides}));
+ await writeFile(join(resources,"open-design-config.json"),JSON.stringify({appVersion:version,namespace:"default",namespaceBaseRoot:f.base,launcherHost:environment}));
+ await writeFile(join(versionRoot,"manifest.json"),JSON.stringify({schemaVersion:1,platform:"darwin",channel:"stable",namespace:"default",version,host:{...environment,appRoot:`payload/Open Design.app/Contents/Resources/app`,resourcesPath:`payload/Open Design.app/Contents/Resources`,entry:`payload/Open Design.app/Contents/Resources/app/prebundled/packaged-main.mjs`},entry:{cwd:"payload/Open Design.app",executable:"payload/Open Design.app/Contents/MacOS/Open Design"},...overrides}));
  return {root,resources,versionRoot};
 }
 async function boot(f: Awaited<ReturnType<typeof fixture>>, argv: string[] = []) {
@@ -83,7 +83,7 @@ it("keeps a physical newer compatible payload when a same-version installer is a
  const host=await boot(f);expect(host.running.version).toBe("1.2.0");expect(host.snapshot().lastSuccessful?.version).toBe("1.0.0");
 });
 it("rejects incompatible payload activation before changing the active journal",async()=>{
- const f=await fixture();const host=await boot(f);await host.reportReady();await addPayload(f,"1.1.0",{electronVersion:"42.0.0"});
+ const f=await fixture();const host=await boot(f);await host.reportReady();await addPayload(f,"1.1.0",{host:{...environment,electronVersion:"42.0.0"}});
  const before=await readFile(join(f.launcher,"runtime.json"),"utf8");
  await expect(host.activateCandidate("1.1.0")).rejects.toThrow("not compatible");
  expect(await readFile(join(f.launcher,"runtime.json"),"utf8")).toBe(before);
@@ -100,7 +100,7 @@ it("redirects a directly opened cached app only after a new installer owns that 
  const f=await fixture();const cached=await addPayload(f,"1.1.0"); const open=vi.fn(async()=>{});
  const options={...f.options,appRoot:cached.root,resourcesPath:cached.resources,executablePath:join(cached.resources,"..","MacOS","Open Design"),adapter:{...createMacLauncherPlatform("41.3.0",process.arch),openInstalled:open}};
  expect(await startLauncher(options)).toMatchObject({source:"legacy"});expect(open).not.toHaveBeenCalled();
- await writeFile(join(f.resources,"open-design-config.json"),JSON.stringify({appVersion:"1.0.0",namespace:"default",namespaceBaseRoot:f.base,launcherHostContract:1,launcherHost:environment}));
+ await writeFile(join(f.resources,"open-design-config.json"),JSON.stringify({appVersion:"1.0.0",namespace:"default",namespaceBaseRoot:f.base,launcherHost:environment}));
  await boot(f);
  expect(await startLauncher({...options,env:{OD_PACKAGED_NAMESPACE_BASE_ROOT:f.base},argv:["opendesign://workspace/open"]})).toBeNull();
  expect(open).toHaveBeenCalledWith(join(f.root,"Open Design.app"),["opendesign://workspace/open"]);

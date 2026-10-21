@@ -177,7 +177,7 @@ export async function assertPreparedLauncherPayloadRelease(input: {
 }): Promise<string> {
   const host = readLauncherHost();
   if (host != null) {
-    await host.prepareCandidate(input.version, input.root);
+    await host.validateCandidate(input.version, input.root);
     return host.installedAppPath;
   }
   const manifest = validateLauncherPayloadManifest(await readJsonStrict<unknown>(join(input.root, "manifest.json")), {
@@ -298,7 +298,7 @@ export async function prepareLauncherPayloadRelease(input: {
     await rm(versionPaths.versionRoot, { force: true, recursive: true });
     await rename(stagingRoot, versionPaths.versionRoot);
     promoted = true;
-    await host?.prepareCandidate(input.activeRelease.ref.version);
+    await host?.validateCandidate(input.activeRelease.ref.version);
     await cleanupLauncherPayloadRoots({
       config: input.config,
       currentRuntime,

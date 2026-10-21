@@ -3,11 +3,12 @@ import { dirname, join } from "node:path";
 
 import {
   LAUNCHER_SCHEMA_VERSION,
+  validateLauncherApplicationArtifact,
   type LauncherApplicationArtifact,
   resolveLauncherVersionPaths,
 } from "@open-design/launcher-proto";
 
-import { buildLauncherApplicationArtifact, buildLauncherHostEnvironment } from "../launcher/artifacts.js";
+import { buildLauncherHostEnvironment } from "../launcher/artifacts.js";
 import { shouldUseMacStandalonePrebundle } from "./prebundle.js";
 import type { ToolPackConfig } from "../config/index.js";
 import {
@@ -31,8 +32,6 @@ export type MacLauncherPayloadManifest = {
   platform: "darwin";
   schemaVersion: typeof LAUNCHER_SCHEMA_VERSION;
   version: string;
-  electronVersion?: string;
-  launcherHostContract?: number;
   host?: LauncherApplicationArtifact;
 };
 
@@ -47,15 +46,14 @@ export function buildMacLauncherPayloadManifest(input: {
   prebundled?: boolean;
 }): MacLauncherPayloadManifest {
   const appRoot = `payload/${input.publicAppBundleName}/Contents/Resources/app`;
-  return {
+  const manifest: MacLauncherPayloadManifest = {
     appBundleName: input.publicAppBundleName,
     ...(input.electronVersion == null ? {} : {
-      electronVersion: input.electronVersion, launcherHostContract: 1,
-      host: buildLauncherApplicationArtifact({
+      host: {
         ...buildLauncherHostEnvironment({ platform: "darwin", arch: input.arch ?? process.arch, electronVersion: input.electronVersion }),
         appRoot, resourcesPath: `payload/${input.publicAppBundleName}/Contents/Resources`,
         entry: input.prebundled === false ? `${appRoot}/node_modules/@open-design/packaged/dist/index.mjs` : `${appRoot}/prebundled/packaged-main.mjs`,
-      }),
+      } satisfies LauncherApplicationArtifact,
     }),
     channel: input.channel,
     entry: {
@@ -68,6 +66,8 @@ export function buildMacLauncherPayloadManifest(input: {
     schemaVersion: LAUNCHER_SCHEMA_VERSION,
     version: input.version,
   };
+  if (manifest.host != null) validateLauncherApplicationArtifact(manifest.host, manifest.host);
+  return manifest;
 }
 
 export async function createMacLauncherPayloadArchive(
