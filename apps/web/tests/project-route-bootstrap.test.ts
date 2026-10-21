@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   bootstrapFirstOpenTeamProjectRoute,
   bootstrapProjectRoute,
 } from '../src/state/projects';
 import { resetCoalescedGet } from '../src/lib/coalesced-get';
+import * as workspaceContextModule from '../src/collab/useWorkspaceContext';
 import { workspaceContextFixture } from './helpers/workspace-context';
 
 const PROJECT_ID = 'project-a';
@@ -49,12 +50,43 @@ const PROJECT_A = {
   workspaceId: CONTEXT_A.workspaceId,
 };
 
+beforeEach(() => {
+  vi.spyOn(workspaceContextModule, 'resolveBoundProjectWorkspaceContext')
+    .mockImplementation(async (id) => id === CONTEXT_A.workspaceId ? CONTEXT_A : CONTEXT_B);
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   resetCoalescedGet();
 });
 
 describe('bootstrapProjectRoute', () => {
+  it('does not read cached project content when the current account lost its workspace membership', async () => {
+    vi.mocked(workspaceContextModule.resolveBoundProjectWorkspaceContext).mockResolvedValue(null);
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({ scope: {
+      kind: 'team', projectId: PROJECT_ID, workspaceId: CONTEXT_A.workspaceId,
+      visibility: 'personal', context: SCOPE_CONTEXT_A,
+    } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(bootstrapProjectRoute(PROJECT_ID, { accountGeneration: 901 }))
+      .resolves.toEqual({ kind: 'forbidden' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/workspace-scope');
+  });
+
+  it('keeps a directory outage unavailable rather than reading through a persisted creator', async () => {
+    vi.mocked(workspaceContextModule.resolveBoundProjectWorkspaceContext).mockRejectedValue(new Error('offline'));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({ scope: {
+      kind: 'team', projectId: PROJECT_ID, workspaceId: CONTEXT_A.workspaceId,
+      visibility: 'team', context: SCOPE_CONTEXT_A,
+    } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(bootstrapProjectRoute(PROJECT_ID, { accountGeneration: 902 }))
+      .resolves.toEqual({ kind: 'unavailable' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('revalidates a headerless team discovery with exact scope and detail reads', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

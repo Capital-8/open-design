@@ -163,6 +163,8 @@ export interface WorkspaceInviteAcceptResponse {
 
 /** One invited teammate: an email plus the role to grant (never owner). */
 export interface WorkspaceInviteCreateItem {
+  /** Stable per unchanged row across explicit delivery retries. */
+  idempotencyKey?: string;
   email: string;
   role: WorkspaceInviteRole;
 }

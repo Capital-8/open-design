@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EntryShell } from '../../src/components/EntryShell';
-import { resetWorkspaceDirectoryCache } from '../../src/components/EntryNavRail';
+import { resetWorkspaceDirectoryCache, WorkspaceTopRightAccountCluster } from '../../src/components/EntryNavRail';
 import { RAIL_OPEN_STORAGE_KEY } from '../../src/components/entryRailBridge';
 import { resetTeamProjectsCache, resetWorkspaceBillingCache, resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext';
 import { resetCoalescedGet } from '../../src/lib/coalesced-get';
@@ -103,4 +103,35 @@ it('SAFE-004 without a status snapshot the existing CLI local fallback still wor
   render(shell(null, 'local'));
   await openQuota();
   expectLinks(origin);
+});
+
+function projectQuota(snapshot: VelaLoginStatus | null) {
+  return <I18nProvider initial="zh-CN"><WorkspaceTopRightAccountCluster
+    workspaceContextOverride={context} amrLoggedIn amrAccountPlan="plus"
+    workspaceQuotaStatus={snapshot}
+  /></I18nProvider>;
+}
+
+it.each(['local', 'test', 'feature-test'])('SAFE-004 project wrapper keeps %s quota links on the daemon origin', async profile => {
+  render(projectQuota({ ...status, profile }));
+  await openQuota();
+  expectLinks(origin);
+});
+
+it('SAFE-004 project wrapper follows daemon status updates and keeps prod pinned', async () => {
+  const mounted = render(projectQuota(status));
+  await openQuota();
+  expectLinks(origin);
+  mounted.rerender(projectQuota({ ...status, profile: 'feature-test', consoleOrigin: 'https://next.example.invalid' }));
+  await openQuota();
+  expectLinks('https://next.example.invalid');
+  mounted.rerender(projectQuota({ ...status, profile: 'prod' }));
+  await openQuota();
+  expectLinks('https://open-design.ai/cloud');
+});
+
+it('SAFE-004 project wrapper without a daemon snapshot keeps the production fallback', async () => {
+  render(projectQuota(null));
+  await openQuota();
+  expectLinks('https://open-design.ai/cloud');
 });

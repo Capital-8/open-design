@@ -90,6 +90,8 @@ import { MessageCenter } from './MessageCenter';
 import type { EntrySettingsSection } from './EntrySettingsMenu';
 import type { Project } from '../types';
 import { isRtlLocale, useI18n } from '../i18n';
+import { communityForLocale } from '../lib/community-links';
+import { FeishuIcon } from './chat/support-brand-icons';
 import { useDismissOnOutsideInteraction } from '../hooks/useDismissOnOutsideInteraction';
 import {
   beginWorkspaceScopedRead,
@@ -146,7 +148,6 @@ const ACCOUNT_MENU_MIN_HEIGHT = 200;
 const REPO_URL = 'https://github.com/nexu-io/open-design';
 const GITHUB_HELP_URL = `${REPO_URL}/issues/new`;
 const GITHUB_FEATURE_URL = `${REPO_URL}/pulls`;
-const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
 const X_URL = 'https://x.com/OpenDesignHQ';
 const CONTACT_EMAIL_URL = 'mailto:support@open-design.ai';
 const externalLinkProps = { target: '_blank', rel: 'noreferrer noopener' } as const;
@@ -838,7 +839,7 @@ function formatWalletBalance(raw: string | null | undefined): string | null {
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
   billing: WorkspaceBillingSummary | null | undefined,
-  options: { fallbackProfile: string | null | undefined },
+  options: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null;
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
@@ -847,13 +848,15 @@ export function workspaceUpgradeUrl(
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
   _billing: WorkspaceBillingSummary | null | undefined,
-  options?: { fallbackProfile: string | null | undefined },
+  options?: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null {
   // Missing context can use the caller's fallback profile because there is no
   // workspace identity to authorize yet.
   if (context && !canReachWorkspaceBillingEntrance(context)) return null;
   if (!context && !options) return null;
-  return amrPlansUrlForProfile(options?.fallbackProfile, context?.workspaceId);
+  // Explicit runtime callers wait for a profile rather than guessing production.
+  if (options && !options.fallbackProfile?.trim()) return null;
+  return amrPlansUrlForProfile(options?.fallbackProfile, context?.workspaceId, options?.consoleOrigin);
 }
 
 /**
@@ -882,6 +885,9 @@ export function workspaceAutoRechargeUrl(
     context?.workspaceId,
     AMR_CONSOLE_AUTO_RECHARGE_INTENT,
   ) ?? teamConsoleUrl(settingsUrl, 'auto-recharge');
+  // A resolved workspace URL above remains authoritative. Without it, wait for
+  // the runtime profile just as the plan entrance does; null cannot pick prod.
+  if (!options.fallbackProfile?.trim()) return null;
   return amrAutoRechargeUrlForProfile(options.fallbackProfile, context?.workspaceId);
 }
 
@@ -965,6 +971,7 @@ function formatBillingTier(tier: string, t: ReturnType<typeof useI18n>['t']): st
 }
 
 interface EntryTopRightClusterProps {
+  amrProfile?: string | null;
   /** Analytics page the cluster reports from: the entry views map through
    *  `entryViewToTracking`, the workspace mount reports 'project'. */
   page: TrackingWorkspacePage;
@@ -1012,6 +1019,7 @@ interface EntryTopRightClusterProps {
  * mutually exclusive.
  */
 export function EntryTopRightCluster({
+  amrProfile,
   page,
   context,
   billing,
@@ -1262,7 +1270,10 @@ export function EntryTopRightCluster({
 
   // One public comparison destination shared with the rail's invite dialog.
   // Pricing owns plan choice; only a selected card hands off to checkout.
-  const upgradeUrl = workspaceUpgradeUrl(context, billing);
+  const upgradeUrl = workspaceUpgradeUrl(context, billing, {
+    fallbackProfile: workspaceQuotaStatus?.profile?.trim() || amrProfile,
+    consoleOrigin: workspaceQuotaStatus?.consoleOrigin,
+  });
   const billingUpgradeUrl =
     context?.billingRecovery?.recoveryUrl?.trim() || upgradeUrl;
   // #62: the 积分 row links straight OUT to B's console dashboard (usage detail
@@ -1740,6 +1751,8 @@ export function EntryTopRightCluster({
  * authority explicitly; an unbound local project deliberately falls back to
  * the shell's ambient account context. */
 export function WorkspaceTopRightAccountCluster({
+  amrProfile,
+  workspaceQuotaStatus,
   onOpenSettings,
   onSignedOut,
   updaterSlot,
@@ -1751,6 +1764,8 @@ export function WorkspaceTopRightAccountCluster({
   metricsConsent = false,
   installationId,
 }: {
+  amrProfile?: string | null;
+  workspaceQuotaStatus?: Pick<VelaLoginStatus, 'profile' | 'consoleOrigin'> | null;
   onOpenSettings?: (section?: EntrySettingsSection) => void;
   onSignedOut?: () => void | Promise<void>;
   /** Keep the project-detail account cluster on the same updater surface as Home. */
@@ -1800,7 +1815,9 @@ export function WorkspaceTopRightAccountCluster({
       : deepSeekCampaignAudience;
   return (
     <EntryTopRightCluster
+      amrProfile={amrProfile}
       page="project"
+      workspaceQuotaStatus={workspaceQuotaStatus}
       context={context}
       billing={billing}
       billingResponse={billingResponse}
@@ -1881,7 +1898,8 @@ function RailSocialRow({
   // tooltip: the bubble is the only place the icons say what they do, so
   // the copy leads with the payoff (Discord hands out credits) rather
   // than naming the destination.
-  const communityLabel = t('entry.discordAria');
+  const community = communityForLocale(locale);
+  const communityLabel = t('entry.communityAria');
   const xLabel = t('entry.xAria');
   const mailLabel = t('entry.mailAria');
   const btnClass = 'entry-nav-rail__menu-social-btn od-tooltip';
@@ -1904,14 +1922,17 @@ function RailSocialRow({
     <div className="entry-nav-rail__menu-social" data-testid="entry-nav-rail-social">
       <a
         className={btnClass}
-        href={DISCORD_URL}
+        href={community.href}
         {...externalLinkProps}
         aria-label={communityLabel}
         {...hint(communityLabel)}
         data-testid="entry-nav-rail-discord"
-        onClick={() => track('discord')}
+        data-community-platform={community.platform}
+        onClick={() => track(community.platform)}
       >
-        <Icon name="discord" size={glyph} />
+        {community.platform === 'feishu'
+          ? <FeishuIcon monochrome width={glyph} height={glyph} />
+          : <Icon name="discord" size={glyph} />}
       </a>
       <a
         className={btnClass}
@@ -2710,6 +2731,7 @@ export function EntryNavRail({
           project route can mount the same cluster without the rail (see
           `EntryTopRightCluster`). */}
       <EntryTopRightCluster
+        amrProfile={priorityAnnouncementAmrProfile}
         page={analyticsPage}
         context={context}
         billing={billing}

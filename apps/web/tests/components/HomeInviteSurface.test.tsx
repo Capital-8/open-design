@@ -5,8 +5,12 @@ import { buildWorkspacePermissions, type WorkspaceCollabContext } from '@open-de
 import { I18nProvider } from '../../src/i18n';
 import { HomeInviteSurface, HomeInviteTrigger, WORKSPACE_INVITES_SENT } from '../../src/components/HomeInviteSurface';
 
-vi.mock('../../src/components/InviteDialog', () => ({ InviteDialog: () => null }));
-afterEach(() => { cleanup(); window.localStorage.clear(); vi.useRealTimers(); });
+const login = vi.hoisted(() => ({ begin: vi.fn(), success: undefined as (() => void) | undefined }));
+vi.mock('../../src/components/use-cloud-sign-in', () => ({ useCloudSignIn: ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
+  login.success = onLoginSuccess; return { state: 'idle', status: null, begin: login.begin, cancel: vi.fn() };
+} }));
+vi.mock('../../src/components/InviteDialog', () => ({ InviteDialog: () => <div role="dialog" aria-label="邀请成员" /> }));
+afterEach(() => { cleanup(); window.localStorage.clear(); login.begin.mockClear(); vi.useRealTimers(); });
 const context = {
   workspaceId: 'one', workspaceMemberId: 'member-one', workspaceType: 'team', role: 'member',
   lifecycleState: 'active', memberStatus: 'active',
@@ -73,6 +77,21 @@ describe('home invitation entry', () => {
     fireEvent.click(toast.querySelector('button')!);
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByRole('region')).toBeNull();
+  });
+  it('offers both signed-out invite entries through authentication and waits for current workspace identity', () => {
+    const local = (signedOut: boolean, ready: boolean) => <I18nProvider initial="zh-CN"><HomeInviteTrigger context={signedOut ? null : context} signedOut={signedOut} /><HomeInviteSurface accountId={signedOut ? null : 'account-one'} context={signedOut ? null : context} active signedOut={signedOut} identityReady={ready} /></I18nProvider>;
+    const result = render(local(true, false));
+    expect(screen.getByRole('region', { name: '邀请' })).toBeTruthy();
+    const entries = screen.getAllByRole('button', { name: '邀请' });
+    expect(entries).toHaveLength(2);
+    fireEvent.click(entries[0]!); fireEvent.click(entries[1]!);
+    expect(login.begin).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    act(() => login.success?.());
+    result.rerender(local(false, false));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    result.rerender(local(false, true));
+    expect(screen.getByRole('dialog', { name: '邀请成员' })).toBeTruthy();
   });
   it('does not show an invitation surface while signed out or revoked', () => {
     const result = render(<I18nProvider initial="zh-CN"><HomeInviteSurface accountId={null} context={null} active /></I18nProvider>);

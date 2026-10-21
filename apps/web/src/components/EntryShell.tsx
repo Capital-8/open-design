@@ -25,6 +25,7 @@ import {
 import {
   automaticStrategyTaskProfileForProjectMetadata,
   defaultScenarioPluginIdForProjectMetadata,
+  type AmrWalletSnapshot,
   type ChatSessionMode,
   type ConnectorDetail,
   type CreateProjectExampleReference,
@@ -113,6 +114,8 @@ import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
 import { DeepSeekHarnessSetupDialog } from './DeepSeekHarnessSetupDialog';
 import type { HomeAmrBalanceGateBlock } from './HomeAmrBalanceGateDialogs';
+import { AmrConcurrencyDialog } from './AmrConcurrencyDialog';
+import { readAmrRequestConcurrency } from '../runtime/amr-request-concurrency';
 import {
   amrBalanceBlockedDialog,
   amrBalanceDialogUpgradeIntent,
@@ -120,13 +123,12 @@ import {
 } from '../runtime/amr-balance-branch';
 import { installDeepSeekHarnessCompanion } from '../providers/agent-companion';
 import {
-  amrBalanceGateFromMemory,
   amrBalanceGateScopeForWorkspaceContext,
   checkAmrBalanceGate,
   retryUnavailableAmrBalanceGate,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback } from '../runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback, readFreshAmrFundingEvidence } from '../runtime/amr-funding-feedback';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { HomeInviteSurface, HomeInviteTrigger } from './HomeInviteSurface';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
@@ -771,10 +773,21 @@ export function EntryShell({
   const homeFundingIdentityRef = useRef(homeFundingIdentity);
   homeFundingIdentityRef.current = homeFundingIdentity;
   const cancelHomeFundingDialogRef = useRef<(() => void) | null>(null);
+  const homeConcurrencyPendingRef = useRef(false);
+  const homeConcurrencyEpochRef = useRef(0);
+  const [homeConcurrencyBlock, setHomeConcurrencyBlock] = useState<{
+    identity: string | null;
+    branch: ReturnType<typeof resolveAmrBalanceBranch>;
+    workspaceContext: ReturnType<typeof workspaceResourceReadContext>;
+  } | null>(null);
+  useEffect(() => {
+    homeConcurrencyEpochRef.current++;
+    return () => { homeConcurrencyEpochRef.current++; };
+  }, [homeFundingIdentity]);
   useEffect(() => {
     if (!homeFundingIdentity) return;
-    // Warm once per Home/account/member/model selection. Never poll or wait
-    // for this read on a cache miss in the submit path.
+    // Warm for display/recovery only. Home sends still require their own
+    // uncached evidence before handing the draft to project creation.
     void checkAmrFundingFeedback(homeFundingScope, homeFundingModelId);
     const invalidate = () => invalidateAmrFundingFeedback();
     window.addEventListener(WORKSPACE_BILLING_REFRESH_EVENT, invalidate);
@@ -1490,7 +1503,7 @@ export function EntryShell({
   // submits now arrive with the hidden od-default router plugin and
   // projectKind='other', so the agent infers the task type and asks only
   // when the brief cannot be routed reliably.
-  async function handlePluginLoopSubmit(payload: PluginLoopSubmit) {
+  async function handlePluginLoopSubmit(payload: PluginLoopSubmit, isSubmitCurrent: () => boolean = () => true) {
     if (amrAuthRequired) {
       navigate({ kind: 'home', view: 'onboarding' }, { replace: true });
       return 'blocked' as const;
@@ -1508,14 +1521,50 @@ export function EntryShell({
         workspaceContextStateRef.current.failure === 'unsupported'
           ? null : workspaceResourceReadContext(workspaceContextStateRef.current),
       );
-      // Restore #8240's pre-handoff memory gate using both the wallet and
-      // Coding Plan projection. The existing billing stream/fallback refreshes
-      // this projection; confirmed backend insufficiency survives cache refreshes.
-      const memoryBlock = amrBalanceGateFromMemory(
-        workspaceBillingBalanceUsd(workspaceBillingResponse, homeFundingContext),
-        { scope, modelId: amrModelId, preflight: workspaceBillingResponse?.preflight, profile: amrProfile },
-      );
-      const cachedBlock = cachedHomeAmrFundingBlock(scope, amrModelId ?? null, memoryBlock?.snapshot);
+      if (!scope && (workspaceContextStateRef.current.loading || workspaceContextStateRef.current.failure === 'unavailable')) {
+        throw new Error(t('home.amrGateUnavailable'));
+      }
+      if (homeConcurrencyPendingRef.current) return 'blocked' as const;
+      const hintEpoch = homeConcurrencyEpochRef.current;
+      const hintIdentity = homeFundingIdentityRef.current;
+      const hintAccountGeneration = currentWorkspaceAccountGeneration();
+      homeConcurrencyPendingRef.current = true;
+      const hint = await readAmrRequestConcurrency(scope);
+      homeConcurrencyPendingRef.current = false;
+      // A workspace, model, identity, route change or unmount while reading must
+      // never dispatch the earlier payload under the new principal.
+      if (!isSubmitCurrent() || hintEpoch !== homeConcurrencyEpochRef.current || hintIdentity !== homeFundingIdentityRef.current
+        || hintAccountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
+      if (hint?.status === 'full') {
+        setHomeConcurrencyBlock({
+          identity: hintIdentity,
+          branch: resolveAmrBalanceBranch({ context: homeFundingContext, billing: workspaceBilling }),
+          workspaceContext: homeFundingContext,
+        });
+        return 'blocked' as const;
+      }
+      // Unknown is not proof of an available slot. Preserve the existing real
+      // Link request path and named-rejection fallback rather than inventing a
+      // client quota or blocking legitimate old CLI deployments.
+      // client VIEW-015/RUN-003: a current scoped Home draft must not create
+      // even an optimistic project while its funds remain unconfirmed. This is
+      // independent of the immediately expirable concurrency hint above.
+      let cachedBlock: AmrWalletSnapshot | null = null;
+      if (scope) {
+        const fundingIsCurrent = () => isSubmitCurrent() && hintEpoch === homeConcurrencyEpochRef.current
+          && hintIdentity === homeFundingIdentityRef.current
+          && hintAccountGeneration === currentWorkspaceAccountGeneration();
+        const evidence = await readFreshAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent);
+        if (!fundingIsCurrent()) return 'blocked' as const;
+        if (evidence.kind === 'unknown' || !evidence.preflight) throw new Error(t('home.amrGateUnavailable'));
+        if (evidence.kind === 'insufficient') {
+          cachedBlock = {
+            status: 'available', profile: amrProfile ?? 'default', user: null,
+            balanceUsd: evidence.preflight.balanceUsd, updatedAt: evidence.preflight.generatedAt,
+            fetchedAt: new Date().toISOString(), stale: false, source: 'daemon_cache',
+          };
+        }
+      }
       if (cachedBlock) {
         const identity = homeFundingIdentityRef.current;
         const accountGeneration = currentWorkspaceAccountGeneration();
@@ -1541,18 +1590,20 @@ export function EntryShell({
           });
         });
         onAmrBalanceGateBlockChange(null);
-        if (decision === 'dismiss' || identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
+        if (!isSubmitCurrent() || decision === 'dismiss' || identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
         invalidateAmrFundingFeedback();
       }
     }
-    // Without known negative evidence, the project frame opens on the click tick,
-    // before any admission check. Everything below runs behind that frame —
+    // A scoped AMR Home send reaches this point only after fresh funds proof;
+    // other local creation/legacy paths keep their existing handoff. Everything
+    // below runs behind that frame —
     // this shell is unmounted the moment the hand-off navigates, so nothing
     // after this line may rely on this instance's state or DOM. App owns the
     // hand-off and the way back.
+    if (!isSubmitCurrent()) return 'blocked' as const;
     const handoff = onBeginProjectCreation(createInput);
-    // Confirm sign-in behind the pending frame. Workspace billing is not a
-    // send prerequisite: Link admits funding when the run starts, and
+    // Confirm sign-in behind the pending frame. The earlier Home observation
+    // can expire: Link still admits funding when the run starts, and
     // ProjectView presents any live funding rejection without waiting on a
     // display-wallet read. Dismissing a sign-in block restores the Home draft.
     let amrGatePrecheckWitness: AmrBalanceGateScope | undefined;
@@ -1809,16 +1860,23 @@ export function EntryShell({
   // carries a redundant one.
 
 
-  const [registrationInviteExit, setRegistrationInviteExit] = useState<{ count: number; context: import('@open-design/contracts').WorkspaceCollabContext; accountId: string; credentialRevision: string | undefined; profile: string | undefined } | null>(null);
+  const [registrationSkipNotice, setRegistrationSkipNotice] = useState<{ count: number; accountId: string; workspaceId: string; workspaceMemberId: string; credentialRevision: string | undefined; profile: string | undefined } | null>(null);
+  const [registrationEntryFade, setRegistrationEntryFade] = useState(false);
+  useEffect(() => {
+    if (!registrationEntryFade) return;
+    const timer = window.setTimeout(() => setRegistrationEntryFade(false), 200);
+    return () => window.clearTimeout(timer);
+  }, [registrationEntryFade]);
   const registrationInvite = useRegistrationInvite({
     status: amrRegistrationStatus, accountId: amrAccountId, configuredProfile: amrProfile?.trim() || config.agentCliEnv?.amr?.VELA_PROFILE?.trim() || amrRegistrationStatus?.profile || 'prod', context: railWorkspaceContext,
     identityReady: !workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure,
     identityUnavailable: Boolean(workspaceContextState.failure && !workspaceContextState.loading && !workspaceContextState.identityChangePending),
     onRetryIdentity: () => notifyWorkspaceContextRefresh(),
     allowHost: view !== 'onboarding' || (config.mode === 'daemon' && config.agentId === 'amr'),
-    onExit: (count, context) => {
+    onExit: (count, context, completion) => {
       if (!amrAccountId) return;
-      setRegistrationInviteExit({ count, context, accountId: amrAccountId, credentialRevision: amrRegistrationStatus?.credentialRevision, profile: amrRegistrationStatus?.profile });
+      if (completion === 'skipped' && count > 0) setRegistrationSkipNotice({ count, accountId: amrAccountId, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId, credentialRevision: amrRegistrationStatus?.credentialRevision, profile: amrRegistrationStatus?.profile });
+      setRegistrationEntryFade(true);
       finishOnboarding();
     },
   });
@@ -1828,21 +1886,17 @@ export function EntryShell({
     return () => onRegistrationInviteActiveChange?.(false);
   }, [registrationInviteActive, onRegistrationInviteActiveChange]);
   useEffect(() => {
-    if (!registrationInviteExit || view !== 'home' || registrationInvite) return;
-    const completed = registrationInviteExit;
-    if (completed.accountId === amrAccountId && (workspaceContextState.loading || workspaceContextState.identityChangePending)) return;
-    setRegistrationInviteExit(null);
-    if (completed.count > 0 && completed.accountId === amrAccountId
-      && amrRegistrationStatus?.sessionState === 'authenticated'
-      && completed.credentialRevision === amrRegistrationStatus.credentialRevision && completed.profile === amrRegistrationStatus.profile
-      && completed.context.workspaceId === railWorkspaceContext?.workspaceId
-      && completed.context.workspaceMemberId === railWorkspaceContext?.workspaceMemberId) {
-      window.dispatchEvent(new CustomEvent('od:workspace-invites-sent', { detail: {
-        workspaceId: completed.context.workspaceId, workspaceMemberId: completed.context.workspaceMemberId,
-        count: completed.count, totalCount: completed.count,
-      } }));
-    }
-  }, [registrationInviteExit, view, registrationInvite, amrAccountId, amrRegistrationStatus, railWorkspaceContext, workspaceContextState.loading, workspaceContextState.identityChangePending]);
+    if (!registrationSkipNotice || registrationInvite || view !== 'home') return;
+    if (workspaceContextState.loading || workspaceContextState.identityChangePending) return;
+    const completed = registrationSkipNotice;
+    setRegistrationSkipNotice(null);
+    if (completed.accountId !== amrAccountId || amrRegistrationStatus?.sessionState !== 'authenticated'
+      || completed.credentialRevision !== amrRegistrationStatus.credentialRevision || completed.profile !== amrRegistrationStatus.profile
+      || completed.workspaceId !== railWorkspaceContext?.workspaceId || completed.workspaceMemberId !== railWorkspaceContext?.workspaceMemberId) return;
+    window.dispatchEvent(new CustomEvent('od:workspace-invites-sent', { detail: {
+      workspaceId: completed.workspaceId, workspaceMemberId: completed.workspaceMemberId, count: completed.count, totalCount: completed.count,
+    } }));
+  }, [registrationSkipNotice, registrationInvite, view, workspaceContextState.loading, workspaceContextState.identityChangePending, amrAccountId, amrRegistrationStatus, railWorkspaceContext]);
   if (registrationInvite) return registrationInvite;
 
   if (view === 'onboarding') {
@@ -1900,6 +1954,7 @@ export function EntryShell({
     designSystemsLoading,
     defaultDesignSystemId,
     onSubmit: handlePluginLoopSubmit,
+    onSubmitWithDraftGuard: handlePluginLoopSubmit,
     onOpenProject,
     // The Add menu's "Add plugin" row lands on the plugins page.
     onBrowseRegistry: () => changeView('plugins'),
@@ -1923,6 +1978,13 @@ export function EntryShell({
 
   return (
     <div className={`entry-shell entry-shell--no-header${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
+      {homeConcurrencyBlock && homeConcurrencyBlock.identity === homeFundingIdentity ? (
+        <AmrConcurrencyDialog branch={homeConcurrencyBlock.branch}
+          workspaceContext={homeConcurrencyBlock.workspaceContext}
+          profile={amrRegistrationStatus?.profile?.trim() || amrProfile}
+          consoleOrigin={amrRegistrationStatus?.consoleOrigin}
+          onClose={() => setHomeConcurrencyBlock(null)} />
+      ) : null}
       <div
         className={`entry${railOpen ? ' entry--rail-open' : ''}`}
         // The team/local shell is a labeled Manus-style rail, so widen the rail
@@ -1943,7 +2005,7 @@ export function EntryShell({
           onOpenSearch={() => setProjectSearchOpen(true)}
           open={railOpen}
           topRightSlot={<>
-            <HomeInviteTrigger context={railWorkspaceContext} />
+            <HomeInviteTrigger signedOut={amrLoggedIn === false} context={railWorkspaceContext} />
             {topRightCampaignAudience || (homeCampaignHostsVisible && amrLoggedIn === true) ? (
             <>
               {topRightCampaignAudience ? (
@@ -2014,7 +2076,7 @@ export function EntryShell({
             onClose={() => setProjectSearchOpen(false)}
           />
         ) : null}
-        <main className="entry-main entry-main--scroll" ref={entryMainScrollRef}>
+        <main className={`entry-main entry-main--scroll${registrationEntryFade ? ' entry-main--registration-entry' : ''}`} ref={entryMainScrollRef}>
           {/* #5517: no entry topbar. The rail toggle is the pinned Home tab in
               the workspace tabs bar (entryRailBridge), the updater popup host
               lives in the rail footer, and everything below is fixed-position
@@ -2032,7 +2094,7 @@ export function EntryShell({
               <HomeView
                 {...homeViewProps}
                 isActive={view === 'home'}
-                inviteSurface={<HomeInviteSurface accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} />}
+                inviteSurface={<HomeInviteSurface signedOut={amrLoggedIn === false} identityReady={!workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure} accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} />}
                 /* Home is the one composer in the shell and consumes the page
                    handoff. The community view used to dock a second HomeView
                    (`variant="dock"`) with a handoff of its own; that mount

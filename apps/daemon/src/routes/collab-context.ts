@@ -46,6 +46,7 @@ import {
   fetchVelaBillingCatalog,
   fetchVelaBillingPreflight,
   fetchVelaBillingFundingCheck,
+  fetchVelaRequestConcurrency,
   isVelaWorkspaceAuthorizationError,
   fetchVelaWorkspaceBillingProjection,
   fetchVelaBillingSummary,
@@ -149,6 +150,7 @@ export interface RegisterCollabContextRoutesDeps {
   createInvite?: (input: CreateWorkspaceInviteInput) => Promise<CreateInviteOutcome>;
   /** Injectable for tests; defaults to the vela billing CLI 收口. */
   fetchBilling?: () => Promise<WorkspaceBillingSummary | null>;
+  fetchRequestConcurrency?: typeof fetchVelaRequestConcurrency;
   fetchBillingFundingCheck?: (workspaceId: string, modelId: string | null) => Promise<WorkspaceBillingPreflight | null>;
   fetchBillingPreflight?: (workspaceId: string, modelId: string | null) => Promise<WorkspaceBillingPreflight | null>;
   /** Capability and gap-free upstream health for the currently verified identity. */
@@ -297,17 +299,17 @@ function workspaceGroupProperties(
  */
 function parseInviteCreateItems(
   body: unknown,
-): Array<{ email: string; role: WorkspaceInviteRole }> {
+): Array<{ email: string; role: WorkspaceInviteRole; idempotencyKey?: string }> {
   const raw = body as { invites?: unknown; email?: unknown; role?: unknown } | null;
   const source: unknown[] = Array.isArray(raw?.invites)
     ? raw!.invites
     : raw && typeof raw === 'object' && typeof raw.email === 'string'
       ? [raw]
       : [];
-  const items: Array<{ email: string; role: WorkspaceInviteRole }> = [];
+  const items: Array<{ email: string; role: WorkspaceInviteRole; idempotencyKey?: string }> = [];
   for (const entry of source) {
     if (!entry || typeof entry !== 'object') continue;
-    const rec = entry as { email?: unknown; role?: unknown };
+    const rec = entry as { email?: unknown; role?: unknown; idempotencyKey?: unknown };
     if (typeof rec.email !== 'string') continue;
     const email = rec.email.trim();
     if (!email) continue;
@@ -315,7 +317,7 @@ function parseInviteCreateItems(
       typeof rec.role === 'string' && ASSIGNABLE_ROLES.has(rec.role as WorkspaceInviteRole)
         ? (rec.role as WorkspaceInviteRole)
         : 'member';
-    items.push({ email, role });
+    items.push({ email, role, ...(typeof rec.idempotencyKey === 'string' && rec.idempotencyKey.trim() && rec.idempotencyKey.length <= 256 ? { idempotencyKey: rec.idempotencyKey.trim() } : {}) });
   }
   return items;
 }
@@ -442,7 +444,7 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
 
     const results: WorkspaceInviteCreateResult[] = [];
     for (const [index, item] of items.entries()) {
-      const outcome = await createInvite({ email: item.email, role: item.role, workspaceId }, requestEnv);
+      const outcome = await createInvite({ ...item, workspaceId }, requestEnv);
       if (!outcome.ok && outcome.error === 'no_session') {
         // Preserve the legacy unauthenticated response before any row completes.
         // A session can disappear between rows; do not discard confirmed results
@@ -887,6 +889,21 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
 
   // This upstream call authorizes the current member itself. It must not wait
   // for the display-billing projection or spawn an agent run.
+  app.get('/api/workspace/billing/request-concurrency', async (req, res) => {
+    const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId.trim() : '';
+    if (!workspaceId) return res.status(400).json({ error: 'invalid_billing_scope' });
+    try {
+      // Link's actual runtime authentication authorizes the exact workspace/member.
+      const hint = await (deps.fetchRequestConcurrency ?? fetchVelaRequestConcurrency)(workspaceId, { configuredEnv: configuredEnv() });
+      if (!hint || hint.workspaceId !== workspaceId) return res.status(503).json({ error: 'request_concurrency_unavailable' });
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.json({ requestConcurrencyHint: hint });
+    } catch (error) {
+      if (isVelaWorkspaceAuthorizationError(error)) return res.status(403).json({ error: 'workspace_not_authorized' });
+      return res.status(503).json({ error: 'request_concurrency_unavailable' });
+    }
+  });
+
   app.get('/api/workspace/billing/preflight', async (req, res) => {
     const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId.trim() : '';
     const modelId = typeof req.query.modelId === 'string' ? req.query.modelId.trim() || null : null;

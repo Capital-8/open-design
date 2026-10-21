@@ -1,4 +1,4 @@
-import type { AmrWalletSnapshot, WorkspaceBillingPreflightResponse } from '@open-design/contracts';
+import type { AmrWalletSnapshot, WorkspaceBillingPreflight, WorkspaceBillingPreflightResponse } from '@open-design/contracts';
 import { currentWorkspaceAccountGeneration } from '../collab/workspace-identity';
 import type { AmrBalanceGateScope } from './amr-balance-gate';
 
@@ -38,6 +38,39 @@ export function invalidateAmrFundingFeedback(): void {
   positive = null;
 }
 
+/** One uncached, exact-member/model funding observation. Home uses this
+ * before project creation; display-wallet state and a previous positive cannot
+ * authorize handing off a new Home draft. Link still owns final admission. */
+export async function readFreshAmrFundingEvidence(
+  scope: AmrBalanceGateScope,
+  modelId: string | null,
+  isCurrent: () => boolean = () => true,
+): Promise<{ kind: FundingFeedback; preflight: WorkspaceBillingPreflight | null }> {
+  const unknown = { kind: 'unknown' as const, preflight: null };
+  if (!isCurrent()) return unknown;
+  const generation = currentWorkspaceAccountGeneration();
+  try {
+    const query = new URLSearchParams({ workspaceId: scope.workspaceId });
+    if (modelId) query.set('modelId', modelId);
+    const response = await fetch(`/api/workspace/billing/preflight?${query}`, {
+      cache: 'no-store', signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) return unknown;
+    const { preflight } = await response.json() as WorkspaceBillingPreflightResponse;
+    const age = Date.now() - Date.parse(preflight?.generatedAt);
+    if (!isCurrent() || generation !== currentWorkspaceAccountGeneration() || !preflight
+      || preflight.schemaVersion !== 1 || preflight.workspaceId !== scope.workspaceId
+      || preflight.workspaceMemberId !== scope.workspaceMemberId || preflight.modelId !== modelId
+      || !Number.isFinite(age) || age < -5_000 || age > 30_000) return unknown;
+    if (preflight.fundingCheck === 'available' || preflight.fundingCheck === 'insufficient') {
+      return { kind: preflight.fundingCheck, preflight };
+    }
+    return unknown;
+  } catch {
+    return unknown;
+  }
+}
+
 /** Project sends always re-read negative evidence. Home retains the block
  * while confirming it; only a fresh available response removes that block. */
 export function checkAmrFundingFeedback(
@@ -60,18 +93,10 @@ export function checkAmrFundingFeedback(
   }
   const request = (async (): Promise<FundingFeedback> => {
     try {
-      const query = new URLSearchParams({ workspaceId: scope.workspaceId });
-      if (modelId) query.set('modelId', modelId);
-      const response = await fetch(`/api/workspace/billing/preflight?${query}`, {
-        cache: 'no-store', signal: AbortSignal.timeout(5_000),
-      });
-      if (!response.ok) return 'unknown';
-      const { preflight } = await response.json() as WorkspaceBillingPreflightResponse;
-      const age = Date.now() - Date.parse(preflight?.generatedAt);
-      if (!isCurrent() || generation !== currentWorkspaceAccountGeneration() || requestGeneration !== cacheGeneration || !preflight ||
-        preflight.schemaVersion !== 1 || preflight.workspaceId !== scope.workspaceId ||
-        preflight.workspaceMemberId !== scope.workspaceMemberId || preflight.modelId !== modelId ||
-        !Number.isFinite(age) || age < -5_000 || age > 30_000) return 'unknown';
+      const evidence = await readFreshAmrFundingEvidence(scope, modelId, () =>
+        isCurrent() && generation === currentWorkspaceAccountGeneration() && requestGeneration === cacheGeneration);
+      const preflight = evidence.preflight;
+      if (!preflight) return 'unknown';
       if (preflight.fundingCheck === 'available') {
         homeBlocks.delete(key);
         positive = { key, expiresAt: Date.now() + 5_000 };

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useCloudSignIn } from './use-cloud-sign-in';
 import { createPortal } from 'react-dom';
 import { Button } from '@open-design/components';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
@@ -11,10 +12,10 @@ import styles from './HomeInviteSurface.module.css';
 export const WORKSPACE_INVITES_SENT = 'od:workspace-invites-sent';
 const OPEN_INVITE = 'od:workspace-invite-open';
 
-export function HomeInviteTrigger({ context }: { context: WorkspaceCollabContext | null }) {
+export function HomeInviteTrigger({ context, signedOut = false }: { context: WorkspaceCollabContext | null; signedOut?: boolean }) {
   const { t } = useI18n();
-  if (!context || !context.permissions.canInviteMembers || context.memberStatus !== 'active' || context.lifecycleState !== 'active') return null;
-  return <Button variant="ghost" className={styles.trigger} onClick={() => window.dispatchEvent(new CustomEvent(OPEN_INVITE, { detail: { workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId } }))}><InvitePersonIcon /> {t('homeInvite.invite')}</Button>;
+  if (!signedOut && (!context || !context.permissions.canInviteMembers || context.memberStatus !== 'active' || context.lifecycleState !== 'active')) return null;
+  return <Button variant="ghost" className={styles.trigger} onClick={() => window.dispatchEvent(new CustomEvent(OPEN_INVITE, { detail: signedOut ? { signedOut: true } : { workspaceId: context?.workspaceId, workspaceMemberId: context?.workspaceMemberId } }))}><InvitePersonIcon /> {t('homeInvite.invite')}</Button>;
 }
 
 function InvitePersonIcon() {
@@ -25,17 +26,21 @@ interface Props {
   accountId: string | null;
   context: WorkspaceCollabContext | null;
   active: boolean;
+  signedOut?: boolean;
+  identityReady?: boolean;
 }
 
 /** Account-scoped dismissal survives workspace changes without sharing it with
  * another account. Workspace membership IDs intentionally are not account IDs. */
-export function HomeInviteSurface({ accountId, context, active }: Props) {
+export function HomeInviteSurface({ accountId, context, active, signedOut = false, identityReady = true }: Props) {
   const { t } = useI18n();
-  const storageKey = accountId ? `od.invitation-banner.dismissed:${encodeURIComponent(accountId)}` : null;
+  const storageKey = accountId ? `od.invitation-banner.dismissed:${encodeURIComponent(accountId)}` : signedOut ? 'od.invitation-banner.dismissed:local' : null;
   const [dismissal, setDismissal] = useState<string | null>(() => {
     try { return storageKey && window.localStorage.getItem(storageKey) === '1' ? storageKey : null; } catch { return null; }
   });
   const [open, setOpen] = useState(false);
+  const [pendingSignInInvite, setPendingSignInInvite] = useState(false);
+  const { state: signInState, status: signInStatus, begin, cancel } = useCloudSignIn({ onLoginSuccess: () => setPendingSignInInvite(true) });
   const [sent, setSent] = useState(0);
   const [sentGeneration, setSentGeneration] = useState(0);
   const principal = context ? `${context.workspaceId}:${context.workspaceMemberId}` : '';
@@ -44,13 +49,20 @@ export function HomeInviteSurface({ accountId, context, active }: Props) {
     setSent(0);
   }, [principal, accountId]);
   useEffect(() => {
+    if (!pendingSignInInvite || signedOut || !accountId || !identityReady || !context) return;
+    setPendingSignInInvite(false);
+    if (context.memberStatus === 'active' && context.lifecycleState === 'active' && context.permissions.canInviteMembers) setOpen(true);
+  }, [pendingSignInInvite, signedOut, accountId, identityReady, context]);
+
+  useEffect(() => {
     function onOpen(event: Event) {
       const detail = (event as CustomEvent).detail;
+      if (signedOut && detail?.signedOut) { void begin(); return; }
       if (context && detail?.workspaceId === context.workspaceId && detail?.workspaceMemberId === context.workspaceMemberId) setOpen(true);
     }
     window.addEventListener(OPEN_INVITE, onOpen);
     return () => window.removeEventListener(OPEN_INVITE, onOpen);
-  }, [context]);
+  }, [context, signedOut, begin]);
   useEffect(() => {
     if (!storageKey) return;
     try {
@@ -80,19 +92,21 @@ export function HomeInviteSurface({ accountId, context, active }: Props) {
     window.addEventListener(WORKSPACE_INVITES_SENT, onSent);
     return () => window.removeEventListener(WORKSPACE_INVITES_SENT, onSent);
   }, [active, context, storageKey]);
-  if (!context || context.memberStatus !== 'active'
-    || context.lifecycleState !== 'active' || !context.permissions.canInviteMembers) return null;
+  if (!signedOut && (!context || context.memberStatus !== 'active'
+    || context.lifecycleState !== 'active' || !context.permissions.canInviteMembers)) return null;
   return (
     <>
       {active && storageKey && dismissal !== storageKey ? (
         <div className={styles.banner} role="region" aria-label={t('homeInvite.invite')}>
           <span className={styles.copy}>{t('homeInvite.banner')}</span>
-          <Button variant="ghost" className={styles.invite} onClick={() => setOpen(true)}>{t('homeInvite.invite')}</Button>
+          <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => signedOut ? void begin() : setOpen(true)}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
           <Button variant="ghost" className={styles.close} aria-label={t('homeInvite.dismiss')} onClick={dismiss}><Icon name="close" size={12} /></Button>
         </div>
       ) : null}
+      {signedOut && signInState === 'error' ? <p role="alert">{t('settings.amrLoginErrorCompact')}</p> : null}
+      {signedOut && signInState === 'signing' ? <div role="status">{signInStatus?.activationUrl ? <a href={signInStatus.activationUrl} target="_blank" rel="noopener noreferrer">{t('settings.amrActivationOpen')}</a> : null}<Button onClick={() => void cancel()}>{t('settings.amrCancelSignIn')}</Button></div> : null}
       {sent ? <Toast key={sentGeneration} message={t('homeInvite.sent', { n: sent })} tone="success" placement="top" portalToBody ttlMs={4000} onDismiss={() => setSent(0)} /> : null}
-      {open ? createPortal(<InviteDialog open={open} onClose={() => setOpen(false)} workspaceContext={context} canAssignRoles={context.role === 'owner'} />, document.body) : null}
+      {open && !signedOut && context ? createPortal(<InviteDialog open={open} onClose={() => setOpen(false)} workspaceContext={context} canAssignRoles={context.role === 'owner'} />, document.body) : null}
     </>
   );
 }

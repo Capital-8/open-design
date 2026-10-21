@@ -52,6 +52,7 @@ import {
 } from '../collab/workspace-identity';
 import {
   currentWorkspaceAccountGeneration,
+  resolveBoundProjectWorkspaceContext,
   currentWorkspaceContextRequestToken,
 } from '../collab/useWorkspaceContext';
 import type { WorkspaceResourceReadIdentity } from '../collab/workspace-identity';
@@ -454,6 +455,12 @@ export async function bootstrapProjectRoute(
           return { kind: 'forbidden' };
         }
       } else if (context) {
+        // Local scope describes the persisted creator, not the signed-in
+        // account's current membership. Resolve the exact caller before any
+        // project content read; a removed workspace must never fall back to
+        // its cached creator or to the ambient workspace.
+        const caller = await resolveBoundProjectWorkspaceContext(context.workspaceId);
+        if (!caller) return { kind: 'forbidden' };
         // Headerless scope is discovery only. Once it names the exact persisted
         // Workspace/member pair, prove that claim through the ordinary
         // fail-closed authorization lane before trusting it as ProjectView's
@@ -463,7 +470,7 @@ export async function bootstrapProjectRoute(
           `/api/projects/${encodeURIComponent(projectId)}/workspace-scope`,
           {
             cache: 'no-store',
-            headers: workspaceProjectHeaders(context),
+            headers: workspaceProjectHeaders(caller),
           },
         );
         if (!exactScopeResponse.ok) {
@@ -477,8 +484,8 @@ export async function bootstrapProjectRoute(
           !exactBody.scope
           || exactBody.scope.projectId !== projectId
           || !exactContext
-          || exactBody.scope.workspaceId !== context.workspaceId
-          || workspaceIdentityCacheKey(exactContext) !== workspaceIdentityCacheKey(context)
+          || exactBody.scope.workspaceId !== caller.workspaceId
+          || !isSameWorkspacePrincipal(exactContext, caller)
         ) {
           return { kind: 'forbidden' };
         }

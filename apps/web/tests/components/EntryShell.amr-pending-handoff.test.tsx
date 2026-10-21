@@ -1,15 +1,11 @@
 // @vitest-environment jsdom
 //
-// OPEND-2614 · a Home send hands off to the project frame BEFORE the AMR
-// balance gate is consulted, and the gate's verdict then lands behind that
-// frame: allow → the create reuses the optimistic id; a dismissed hard block or
-// an unreadable wallet → the hand-off is rolled back (with a notice only where
-// no dialog explained the outcome) and nothing is created. The local-agent
-// path never sees the gate but takes the same hand-off.
-//
-// The Playwright case `e2e/ui/home-amr-pending.test.ts` pins the visible
-// behaviour (pending frame within one animation frame of the click); this
-// file pins the contract between EntryShell and App that makes it possible.
+// OPEND-2614's sign-in/retry handoff still belongs to App. gen53/r824
+// (client VIEW-015/RUN-003) adds a separate prerequisite: current scoped
+// funding is confirmed on Home before any project frame is created. Once
+// available, the remaining sign-in gate may run behind that pending frame.
+// Local agents retain their original direct handoff. A display-wallet cache
+// alone is never funding authorization for a Home send.
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
@@ -52,10 +48,13 @@ vi.mock('../../src/collab/workspace-events', async (importOriginal) => {
 });
 
 vi.mock('../../src/components/AmrBalanceDialog', () => ({
-  AmrBalanceDialog: ({ onClose }: { onClose: () => void }) => (
+  AmrBalanceDialog: ({ onClose, onResolved }: { onClose: () => void; onResolved: () => void }) => (
     <div data-testid="amr-balance-dialog">
       <button type="button" data-testid="amr-balance-dialog-dismiss" onClick={onClose}>
         later
+      </button>
+      <button type="button" data-testid="amr-balance-dialog-funded" onClick={onResolved}>
+        authoritative wallet recovery
       </button>
     </div>
   ),
@@ -68,6 +67,9 @@ let testAccountSequence = 0;
 beforeEach(() => {
   testAccountSequence++;
 });
+
+const submitCaptureCleanups: Array<() => void> = [];
+afterEach(() => { for (const cleanup of submitCaptureCleanups.splice(0)) cleanup(); });
 
 const originalFetch = globalThis.fetch;
 const originalResizeObserver = globalThis.ResizeObserver;
@@ -123,6 +125,21 @@ function config(agentId: string): AppConfig {
   };
 }
 
+// gen53 supersedes wallet-cache-only Home admission. These older sign-in /
+// handoff tests separately prove funds for this exact member and selected model.
+function homeFunding(context: WorkspaceCollabContext, fundingCheck: 'available' | 'insufficient' = 'available') {
+  return {
+    schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+    modelId: 'default', generatedAt: new Date(Date.now()).toISOString(), balanceUsd: '0', fundingCheck,
+    funding: 'coding_plan', modelCovered: true,
+    codingPlan: { workspaceId: context.workspaceId, generatedAt: new Date(Date.now()).toISOString(),
+      eligible: true, tier: 'pro', windows: [{ policyId: 'fixture-5h', durationSeconds: 18000,
+        resetMode: 'anchored_recurring', usedCredits: fundingCheck === 'available' ? '0' : '100',
+        limitCredits: '100', remainingCredits: fundingCheck === 'available' ? '100' : '0',
+        windowStart: new Date(Date.now() - 1000).toISOString(), resetsAt: new Date(Date.now() + 18000_000).toISOString() }] },
+  };
+}
+
 function emptyWallet(): AmrWalletSnapshot {
   return {
     status: 'available',
@@ -137,7 +154,7 @@ function emptyWallet(): AmrWalletSnapshot {
 }
 
 /** Records the ORDER in which the shell touches the App-owned hooks. */
-function harness(agentId: string) {
+function harness(agentId: string, profile?: string) {
   const calls: string[] = [];
   const rollback = vi.fn((options?: { notice?: string }) => {
     calls.push(`rollback:${options?.notice ?? ''}`);
@@ -171,7 +188,7 @@ function harness(agentId: string) {
         defaultDesignSystemId={null}
         connectors={[]}
         connectorsLoading={false}
-        config={config(agentId)}
+        config={{ ...config(agentId), ...(profile ? { agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: profile } } } : {}) }}
         agents={[agent(agentId)]}
         daemonLive
         onModeChange={vi.fn()}
@@ -206,7 +223,7 @@ async function submitHome(prompt: string) {
   fireEvent.click(await screen.findByTestId('home-hero-submit'));
 }
 
-describe('OPEND-2614 · Home send hands off before the AMR gate', () => {
+describe('OPEND-2614 · funded Home handoff precedes the remaining AMR sign-in gate', () => {
   beforeEach(() => {
     globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
     window.sessionStorage.clear();
@@ -221,6 +238,7 @@ describe('OPEND-2614 · Home send hands off before the AMR gate', () => {
         return jsonResponse(workspaceDirectoryFixture([workspace]));
       }
       if (url.endsWith('/api/workspace/context')) return jsonResponse({ context: workspace });
+      if (url.includes('/billing/preflight?')) return jsonResponse({ preflight: homeFunding(workspace) });
       if (url.includes('/api/workspace/billing?')) {
         return jsonResponse({ summary: null, workspaceBalance: null });
       }
@@ -242,6 +260,112 @@ describe('OPEND-2614 · Home send hands off before the AMR gate', () => {
     resetWorkspaceContextCache();
     resetWorkspaceBillingCache();
     resetTeamProjectsCache();
+  });
+
+  it('keeps exact attachments and only a fresh manual Send retries after real counter release', async () => {
+    const context = personalContext();
+    const previous = globalThis.fetch;
+    let full = true;
+    let reads = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/billing/request-concurrency?')) {
+        reads++;
+        return jsonResponse({ requestConcurrencyHint: {
+          workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+          observedAt: new Date().toISOString(), status: full ? 'full' : 'available', running: full ? 10 : 0, limit: 10,
+        } });
+      }
+      return previous(input, init);
+    }) as typeof fetch;
+    const h = harness('amr');
+    await screen.findByTestId('home-hero-input');
+    const attachment = new File(['original complete bytes'], 'brief.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('home-hero-file-input'), { target: { files: [attachment] } });
+    await submitHome('Never auto send this draft');
+    await screen.findByTestId('amr-concurrency-dialog');
+    full = false;
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(reads).toBe(1);
+    fireEvent.click(screen.getByTestId('home-hero-submit'));
+    await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+    expect(h.onCreateProject.mock.calls[0]![0]).toMatchObject({ pendingPrompt: 'Never auto send this draft', pendingFiles: [attachment] });
+    expect(reads).toBe(2);
+  });
+
+  it.each([
+    ['local', 'http://localhost:5173'],
+    ['test', 'https://open-design.powerformer.net'],
+    ['prod', 'https://open-design.ai'],
+  ] as const)('Home concurrency upgrade preserves %s profile and rejected workspace', async (profile, origin) => {
+    const context = personalContext();
+    const previous = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/billing/request-concurrency?')) return jsonResponse({ requestConcurrencyHint: {
+        workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+        observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+      } });
+      return previous(input, init);
+    }) as typeof fetch;
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const h = harness('amr', profile);
+    await submitHome('Keep this draft in its original workspace');
+    fireEvent.click(await screen.findByTestId('amr-concurrency-upgrade'));
+    const target = new URL(String(open.mock.calls[0]![0]));
+    expect(target.origin).toBe(origin);
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this draft in its original workspace');
+    open.mockRestore();
+  });
+
+  it('a pending read cannot dispatch after the account identity changes', async () => {
+    const context = personalContext();
+    const previous = globalThis.fetch;
+    let release!: (response: Response) => void;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/billing/request-concurrency?')) return new Promise<Response>((resolve) => { release = resolve; });
+      return previous(input, init);
+    }) as typeof fetch;
+    const h = harness('amr');
+    await submitHome('Identity-fenced original prompt');
+    await waitFor(() => expect(release).toBeTypeOf('function'));
+    await act(async () => {
+      advanceWorkspaceAccountGeneration('hint-account-switch');
+      release(jsonResponse({ requestConcurrencyHint: { workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+        observedAt: new Date().toISOString(), status: 'available', running: 0, limit: 10 } }));
+    });
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Identity-fenced original prompt');
+  });
+
+  it.each(['owner', 'admin', 'member'] as const)('real Link full hint holds %s on Home without creating or clearing the prompt', async (role) => {
+    const context = { ...personalContext(), role,
+      permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }) };
+    const previous = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/workspace/directory')) return jsonResponse(workspaceDirectoryFixture([context]));
+      if (url.endsWith('/api/workspace/context')) return jsonResponse({ context });
+      if (url.includes('/billing/request-concurrency?')) return jsonResponse({ requestConcurrencyHint: {
+        workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+        observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+      } });
+      return previous(input, init);
+    }) as typeof fetch;
+    const { onBeginProjectCreation, onCreateProject } = harness('amr');
+    const started = performance.now();
+    await submitHome('Keep this original Home prompt');
+    await screen.findByTestId('amr-concurrency-dialog');
+    const elapsedMs = performance.now() - started;
+    process.stdout.write(JSON.stringify({ evidence: 'controlled-home-hint-latency', role, elapsedMs, thresholdMs: 500 }) + '\n');
+    expect(elapsedMs).toBeLessThanOrEqual(500);
+    expect(onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input').textContent).toContain('Keep this original Home prompt');
   });
 
   it('allow: begin → gate → create, and the create reuses the optimistic id with the gate witness', async () => {
@@ -329,6 +453,7 @@ describe('Home memory funding gate', () => {
         return jsonResponse(workspaceDirectoryFixture([workspace]));
       }
       if (url.endsWith('/api/workspace/context')) return jsonResponse({ context: workspace });
+      if (url.includes('/billing/preflight?')) return jsonResponse({ preflight: homeFunding(workspace) });
       if (url.includes('/api/workspace/billing?')) {
         billingReads += 1;
         // The projection the rail shows: this member's wallet is at $0.
@@ -377,26 +502,46 @@ describe('Home memory funding gate', () => {
     const context = personalContext();
     const original = globalThis.fetch;
     let reads = 0;
-    let finishConfirmation!: (response: Response | Error) => void;
-    const preflight = {
-      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
-      modelId: 'default', generatedAt: new Date().toISOString(), balanceUsd: '0', fundingCheck: 'insufficient',
+    let nextExplicitSend = false;
+    let serverVerdict: 'available' | 'insufficient' = 'insufficient';
+    const confirmations: Array<{ resolve: (response: Response) => void; reject: (error: Error) => void }> = [];
+    // A real click determines when this fixture answers the new per-send read.
+    // Background recovery remains explicitly controlled and never sends for us.
+    const captureSend = (event: MouseEvent) => {
+      if ((event.target as Element).closest?.('[data-testid="home-hero-submit"]')) nextExplicitSend = true;
     };
+    document.addEventListener('click', captureSend, true);
+    submitCaptureCleanups.push(() => document.removeEventListener('click', captureSend, true));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).includes('/api/workspace/billing/preflight?')) {
+        const query = new URL(String(input), 'http://localhost').searchParams;
+        expect(query.get('workspaceId')).toBe(context.workspaceId);
+        expect(query.get('modelId')).toBe('default');
         reads++;
-        if (reads > 1) return new Promise<Response>((resolve, reject) => {
-          finishConfirmation = (response) => response instanceof Error ? reject(response) : resolve(response);
-        });
-        return jsonResponse({ preflight });
+        if (reads === 1 || nextExplicitSend) {
+          nextExplicitSend = false;
+          return jsonResponse({ preflight: homeFunding(context, serverVerdict) });
+        }
+        return new Promise<Response>((resolve, reject) => confirmations.push({ resolve, reject }));
       }
       return original(input, init);
     });
+    invalidateAmrFundingFeedback();
     await checkAmrFundingFeedback(context, 'default');
+    const confirmResponse = (response: Response | Error) => {
+      expect(confirmations.length, 'a real background confirmation must be pending').toBeGreaterThan(0);
+      for (const pending of confirmations.splice(0)) {
+        if (response instanceof Response) pending.resolve(response.clone());
+        else pending.reject(response);
+      }
+    };
     return { ...h,
       fundingReads: () => reads,
-      confirm: (fundingCheck: string) => finishConfirmation(jsonResponse({ preflight: { ...preflight, fundingCheck } })),
-      confirmResponse: (response: Response | Error) => finishConfirmation(response),
+      confirm: (fundingCheck: string) => {
+        if (fundingCheck === 'available' || fundingCheck === 'insufficient') serverVerdict = fundingCheck;
+        confirmResponse(jsonResponse({ preflight: { ...homeFunding(context, serverVerdict), fundingCheck } }));
+      },
+      confirmResponse,
     };
   }
 
@@ -441,7 +586,7 @@ describe('Home memory funding gate', () => {
     } finally { now.mockRestore(); }
   });
 
-  it('restores #8240 from the displayed wallet and plan without an independent hint', async () => {
+  it('keeps #8240 on Home while current funds are loading, then shows actual insufficiency', async () => {
     const context = personalContext();
     memoryPreflight = {
       schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
@@ -457,10 +602,11 @@ describe('Home memory funding gate', () => {
       ? new Promise<Response>((resolve) => { finish = resolve; }) : original(input, init));
     await submitHome('Restore the in-memory Home gate.');
     expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
-    expect(await screen.findByTestId('amr-balance-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
     expect(h.onCreateProject).not.toHaveBeenCalled();
-    await act(async () => { finish(jsonResponse({ preflight: null })); });
-    expect(screen.getByTestId('amr-balance-dialog')).toBeTruthy();
+    await waitFor(() => expect(typeof finish).toBe('function'));
+    await act(async () => { finish(jsonResponse({ preflight: homeFunding(context, 'insufficient') })); });
+    expect(await screen.findByTestId('amr-balance-dialog')).toBeTruthy();
     expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
     expect(h.onCreateProject).not.toHaveBeenCalled();
   });
@@ -494,6 +640,41 @@ describe('Home memory funding gate', () => {
     await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
     expect(h.calls).toEqual(['begin', 'gate', 'create']);
     expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+  });
+
+  it('a post-recharge dialog resolution restores the original Home draft/file and creates nothing until a new manual Send', async () => {
+    const h = await primeHomeFunding();
+    const attachment = new File(['original bytes'], 'brief.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('home-hero-file-input'), { target: { files: [attachment] } });
+    await submitHome('Keep this exact draft and attachment.');
+    await screen.findByTestId('amr-balance-dialog');
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    await act(async () => { h.confirm('available'); });
+    // Simulates the real dialog's authenticated funding-watch callback, not a
+    // second user Send. Background availability must never become consent.
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-funded'));
+    await waitFor(() => expect(screen.getByTestId('home-hero-submit')).toBeEnabled());
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this exact draft and attachment.');
+    expect(screen.getAllByText('brief.txt').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByTestId('home-hero-submit'));
+    await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+    expect(h.onCreateProject.mock.calls[0]![0]).toMatchObject({ pendingFiles: [attachment] });
+  });
+
+  it('still rechecks sign-in and continues the pending submit when authentication completes', async () => {
+    const h = harness('amr');
+    await waitForWalletInMemory();
+    h.setGate({ kind: 'hard', reason: 'signed_out', snapshot: emptyWallet() });
+    await submitHome('Continue only after sign-in.');
+    await screen.findByTestId('amr-balance-dialog');
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    h.setGate({ kind: 'allow' });
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-funded'));
+    await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+    expect(h.calls).toEqual(['begin', 'gate', 'gate', 'create']);
+    expect(h.rollback).not.toHaveBeenCalled();
   });
 
   it.each(['unknown', 'missing', 'unavailable', 'timeout'] as const)('keeps Home blocked after %s confirmation and permits a fresh retry', async (result) => {
@@ -689,6 +870,7 @@ describe('OPEND-3300 · local Team authority on a $0 Home send', () => {
             role: headers.get('x-od-workspace-role') === 'admin' ? 'admin' : 'member',
           } });
         }
+        if (url.includes('/billing/preflight?')) return jsonResponse({ preflight: homeFunding(workspace) });
         if (url.includes('/api/workspace/billing?')) {
           billingReads += 1;
           return jsonResponse({

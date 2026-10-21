@@ -400,6 +400,8 @@ export interface WorkspaceCollabContext {
   workspaceId: string;
   workspaceType: WorkspaceType;
   workspaceMemberId: string;
+  /** Active member count from the same authorized workspace snapshot; omitted when unknown. */
+  memberCount?: number;
   role: CollabMemberRole;
   memberStatus: WorkspaceMemberStatus;
   lifecycleState: WorkspaceLifecycleState;
@@ -453,6 +455,7 @@ export interface WorkspaceContextResponse {
 
 /** A workspace visible to the signed-in Vela identity. Mirrors B's directory item. */
 export interface WorkspaceDirectoryItem {
+  memberCount?: number;
   /** Verified owner default supplied by the upstream account directory. */
   isDefault?: boolean;
   workspaceId: string;
@@ -863,6 +866,14 @@ export interface WorkspaceBillingSnapshot {
     expiresAt: string | null;
     updatedAt: string | null;
   };
+  /** Original backend windows; absence means this producer has no window data. */
+  designPlanWindows?: Array<{
+    kind: '5h' | '7d';
+    windowStart: string | null;
+    resetsAt: string | null;
+    remainingCredits: string;
+    limitCredits: string;
+  }>;
   revisions: {
     billing: string;
     wallet: string;
@@ -1033,6 +1044,21 @@ export interface WorkspaceBillingResponse {
    * observed for the exact workspace/member in this response.
    */
   authoritativeWorkspaceRead?: WorkspaceBillingAuthoritativeRead;
+}
+
+/** Immediately expirable Link read; it does not reserve or authorize a request. */
+export type WorkspaceRequestConcurrencyHint = {
+  workspaceId: string;
+  workspaceMemberId: string;
+  observedAt: string;
+} & (
+  | { status: 'available' | 'full'; running: number; limit: number }
+  | { status: 'unknown'; running?: never; limit?: never }
+);
+
+export interface WorkspaceRequestConcurrencyResponse {
+  /** Absent/null includes old CLI or an unavailable read; never implies idle. */
+  requestConcurrencyHint?: WorkspaceRequestConcurrencyHint | null;
 }
 
 export interface WorkspaceBillingPreflight {

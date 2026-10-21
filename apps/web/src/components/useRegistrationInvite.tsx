@@ -29,7 +29,7 @@ interface Props {
   identityUnavailable: boolean;
   onRetryIdentity: () => void;
   allowHost: boolean;
-  onExit: (count: number, context: WorkspaceCollabContext) => void;
+  onExit: (count: number, context: WorkspaceCollabContext, completion: 'sent' | 'skipped') => void;
 }
 /** Registration eligibility comes exclusively from the AMR-issued claim. Local
  * storage only records completion; it never manufactures registration status. */
@@ -52,6 +52,7 @@ export function useRegistrationInvite(props: Props) {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const finishing = useRef(false);
   const pendingCount = useRef<number | null>(null);
+  const pendingCompletion = useRef<'sent' | 'skipped'>('skipped');
   useEffect(() => {
     let disposed = false;
     setCandidate(null); setErrorFor(''); pendingCount.current = null; finishing.current = false;
@@ -80,10 +81,10 @@ export function useRegistrationInvite(props: Props) {
     })();
     return () => { disposed = true; };
   }, [principal, attempt]);
-  async function finish(count: number) {
+  async function finish(count: number, completion: 'sent' | 'skipped') {
     const captured = candidate;
     if (!mounted.current || !captured || finishing.current || latest.current.principal !== captured.principal) return;
-    finishing.current = true; pendingCount.current = count; setErrorFor('');
+    finishing.current = true; pendingCount.current = count; pendingCompletion.current = completion; setErrorFor('');
     try {
       const fresh = await fetchVelaLoginStatus({ refresh: true });
       if (!mounted.current) return;
@@ -96,7 +97,7 @@ export function useRegistrationInvite(props: Props) {
       if (count > 0) window.localStorage.setItem(`od.invitation-banner.dismissed:${encodeURIComponent(fresh.user!.id)}`, '1');
       window.localStorage.setItem(key, '1');
       setCandidate(null);
-      latest.current.props.onExit(count, captured.context);
+      latest.current.props.onExit(count, captured.context, completion);
     } catch { if (mounted.current && latest.current.principal === captured.principal) setErrorFor(captured.principal); }
     finally { finishing.current = false; }
   }
@@ -106,7 +107,7 @@ export function useRegistrationInvite(props: Props) {
   if (principal && !alreadyComplete && !visible && errorFor !== principal && settledFor !== principal) return <div className={styles.loading}><CenteredLoader label={t('entry.loadingWorkspace')} /></div>;
   if (!visible && (!principal || errorFor !== principal)) return null;
   return <>
-    {visible ? <OnboardingInviteView key={principal} workspaceContext={candidate.context} onFinish={count => void finish(count)} /> : null}
-    {principal && errorFor === principal ? <div className={styles.recovery} role="alert"><p>{t('invite.error.generic')}</p><Button onClick={() => pendingCount.current === null ? setAttempt(n => n + 1) : void finish(pendingCount.current)}>{t('invite.error.retry')}</Button></div> : null}
+    {visible ? <OnboardingInviteView key={principal} workspaceContext={candidate.context} onFinish={(count, completion) => void finish(count, completion)} /> : null}
+    {principal && errorFor === principal ? <div className={styles.recovery} role="alert"><p>{t('invite.error.generic')}</p><Button onClick={() => pendingCount.current === null ? setAttempt(n => n + 1) : void finish(pendingCount.current, pendingCompletion.current)}>{t('invite.error.retry')}</Button></div> : null}
   </>;
 }

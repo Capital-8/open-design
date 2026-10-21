@@ -922,7 +922,7 @@ describe('App project list across a workspace switch', () => {
     expect(screen.getByTestId(`entry-project-${boundProjectB.id}`)).toBeTruthy();
   });
 
-  it('starts and mounts an exact deep-link bootstrap while health, directory, and project list stay pending', async () => {
+  it('waits for directory authority before mounting a deep link while health and project list stay pending', async () => {
     const boundProjectA: Project = {
       ...WORKSPACE_A_PROJECT,
       workspaceId: 'ws-a',
@@ -934,7 +934,7 @@ describe('App project list across a workspace switch', () => {
     vi.mocked(daemonIsLive).mockReturnValue(health.promise);
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const pathname = new URL(String(input), 'http://d.local').pathname;
-      if (pathname === '/api/workspace/directory') return directory.promise;
+      if (pathname === '/api/workspace/directory') return directory.promise.then((response) => response.clone());
       if (pathname === `/api/projects/${boundProjectA.id}/workspace-scope`) {
         scopeReads += 1;
         return new Response(JSON.stringify({
@@ -972,6 +972,13 @@ describe('App project list across a workspace switch', () => {
     window.history.replaceState(null, '', `/projects/${boundProjectA.id}`);
 
     render(<App />);
+
+    await waitFor(() => expect(scopeReads).toBe(1));
+    expect(detailReads).toBe(0);
+    expect(screen.queryByTestId('project-view')).toBeNull();
+    await act(async () => {
+      directory.resolve(new Response(JSON.stringify(workspaceDirectoryFixture([workspaceContext('ws-a')]))));
+    });
 
     await waitFor(() => {
       expect(scopeReads).toBe(2);
@@ -1013,7 +1020,7 @@ describe('App project list across a workspace switch', () => {
     ).toBe(false);
   });
 
-  it('adopts a newly completed bootstrap after an earlier workspace refresh while directory stays pending', async () => {
+  it('adopts a completed bootstrap after workspace refresh and directory authority settle', async () => {
     const boundProjectA: Project = {
       ...WORKSPACE_A_PROJECT,
       workspaceId: 'ws-a',
@@ -1026,7 +1033,7 @@ describe('App project list across a workspace switch', () => {
     vi.mocked(daemonIsLive).mockReturnValue(health.promise);
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const pathname = new URL(String(input), 'http://d.local').pathname;
-      if (pathname === '/api/workspace/directory') return directory.promise;
+      if (pathname === '/api/workspace/directory') return directory.promise.then((response) => response.clone());
       if (pathname === `/api/projects/${boundProjectA.id}/workspace-scope`) {
         scopeReads += 1;
         if (scopeReads === 1) return scopeResponse.promise;
@@ -1088,6 +1095,13 @@ describe('App project list across a workspace switch', () => {
         headers: { 'content-type': 'application/json' },
       }));
       await scopeResponse.promise;
+    });
+
+    await waitFor(() => expect(scopeReads).toBe(1));
+    expect(detailReads).toBe(0);
+    expect(screen.queryByTestId('project-view')).toBeNull();
+    await act(async () => {
+      directory.resolve(new Response(JSON.stringify(workspaceDirectoryFixture([workspaceContext('ws-a')]))));
     });
 
     await waitFor(() => {

@@ -41,7 +41,7 @@ async function upstream() {
     calls.push({ method: req.method, path: req.path, authorization: req.get('authorization'), body: req.body });
     if (req.method === 'GET' && req.path === '/api/v1/workspaces') return res.json({ items: [member] });
     if (req.path.endsWith('/consume')) return res.json({ workspaceMemberId: member.workspaceMemberId, currentWorkspaceContext: member });
-    return res.status(201).json({ id: 'selected-invite' });
+    return res.status(201).json({ id: 'selected-invite', deliveryStatus: 'sent' });
   });
   return { url: await listen(app), calls };
 }

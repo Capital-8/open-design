@@ -163,3 +163,9 @@ describe('createWorkspaceInvite', () => {
     expect(out).toEqual({ ok: false, status: 502, error: 'create_unreachable' });
   });
 });
+
+it('forwards the unchanged invitation operation key for explicit delivery retries', async () => {
+ const fetcher=vi.fn(async()=>jsonResponse(200,{id:'invite',deliveryStatus:'sent'}));
+ await createWorkspaceInvite({email:'new@example.test',role:'member',workspaceId:'workspace',idempotencyKey:'stable-row-operation'}, {fetch:fetcher as typeof fetch,readSession:()=>SESSION});
+ expect((fetcher.mock.calls[0] as unknown as [unknown,RequestInit])[1].headers).toMatchObject({'Idempotency-Key':'stable-row-operation'});
+});

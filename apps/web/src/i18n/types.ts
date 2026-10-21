@@ -94,6 +94,7 @@ export interface Dict {
   'workspaceInvite.onboardingBody2': string;
   'workspaceInvite.onboardingEmailLabel': string;
   'workspaceInvite.batchSent': string;
+  'workspaceInvite.enterWorkspace': string;
   'workspaceInvite.skip': string;
   'workspaceInvite.cancel': string;
   'workspaceInvite.helpLabel': string;
@@ -1195,8 +1196,8 @@ export interface Dict {
   'entry.tabVideoTemplates': string;
   'entry.openSettingsTitle': string;
   'entry.openSettingsAria': string;
-  'entry.discordLabel': string;
-  'entry.discordAria': string;
+  'entry.communityLabel': string;
+  'entry.communityAria': string;
   'entry.discordAriaWithOnline': string;
   'entry.discordOnlineLabel': string;
   'entry.xAria': string;
@@ -1372,6 +1373,7 @@ export interface Dict {
 
   // Entry home
   'homeHero.title': string;
+  'homeHero.titleUnselected': string;
   'homeHero.titleWords': string;
   'homeHero.subtitle': string;
   'homeHero.startWithTemplate': string;
@@ -2935,6 +2937,12 @@ export interface Dict {
   'chat.amrError.balanceMessage': string;
   'chat.amrError.authorizeCta': string;
   'chat.amrError.rechargeCta': string;
+  'chat.amrConcurrencyGate.title': string;
+  'chat.amrConcurrencyGate.message': string;
+  'chat.amrConcurrencyGate.benefit1': string;
+  'chat.amrConcurrencyGate.benefit2': string;
+  'chat.amrConcurrencyGate.benefit3': string;
+  'chat.amrConcurrencyGate.benefit4': string;
   'chat.amrBalanceGate.title': string;
   'chat.amrBalanceGate.message': string;
   'chat.amrBalanceGate.benefitsTitle': string;
@@ -2948,6 +2956,7 @@ export interface Dict {
   'chat.amrBalanceGate.signedOutMessage': string;
   'chat.amrBalanceGate.signInCta': string;
   'chat.amrBalanceGate.watchingWallet': string;
+  'chat.amrBalanceGate.watchingWalletManual': string;
   'chat.amrArtifactUpgrade.title': string;
   'chat.amrArtifactUpgrade.message': string;
   'chat.amrArtifactUpgrade.benefit1': string;
@@ -3046,6 +3055,7 @@ export interface Dict {
   'chat.runError.modelWindowLimitMessageNoTime': string;
   'chat.runError.membershipConcurrencyLimitMessage': string;
   'chat.runError.membershipConcurrencyLimitMessageNoTime': string;
+  'chat.runError.membershipConcurrencyLimitOwnerMessage': string;
   'chat.runError.upstreamUnavailableMessage': string;
   'chat.runError.toolLoopMessage': string;
   'chat.runError.outputInvalidMessage': string;

@@ -30,21 +30,24 @@
 // ProjectView 交给它的那个回调来断言的;真卡把这个回调接到按钮上这件事,
 // 由 `tests/components/chat/ChatPane.wired-cards.test.tsx` 从真实 ChatPane 保证。
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   buildWorkspacePermissions,
   buildWorkspaceSeatSummary,
   type AmrWalletSnapshot,
   type WorkspaceCollabContext,
 } from '@open-design/contracts';
-import type { ComponentProps, ReactNode } from 'react';
+import { StrictMode, type ComponentProps, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { composerText, flushMounts, typeAndSettle } from '../helpers/lexical-composer';
+import { STAGE_ATTACHMENT_EVENT } from '../../src/components/ChatComposer';
 import { ProjectView } from '../../src/components/ProjectView';
 import type { ProjectWorkspaceScopeState } from '../../src/collab/useProjectWorkspaceScope';
 import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext';
 import { streamViaDaemon } from '../../src/providers/daemon';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
+import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
 import {
   createConversation,
   listConversations,
@@ -77,7 +80,7 @@ const SEED_PROMPT = 'ignored — the branch tests send manually';
  * `planId` 决定订阅档。四种分支就是这两位的四种组合。
  */
 function callerContext(
-  role: 'owner' | 'member',
+  role: 'owner' | 'admin' | 'member',
   planId: string | null,
   extra: Partial<WorkspaceCollabContext> = {},
 ): WorkspaceCollabContext {
@@ -105,6 +108,7 @@ const workspaceScopeMocks = vi.hoisted(() => ({
   billingResponse: null as unknown,
 }));
 const chatPaneSpy = vi.hoisted(() => vi.fn());
+const realChatPane = vi.hoisted(() => ({ enabled: false }));
 const resourceContextObservations = vi.hoisted(
   () => [] as Array<WorkspaceCollabContext | null>,
 );
@@ -113,10 +117,14 @@ const projectCollabMocks = vi.hoisted(() => ({
   viewerOnly: false,
 }));
 
-vi.mock('../../src/i18n', () => ({
-  useI18n: () => ({ locale: 'zh-CN', setLocale: () => undefined, t: (key: string) => key }),
-  useT: () => (key: string) => key,
-}));
+vi.mock('../../src/i18n', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/i18n')>();
+  return {
+    ...actual,
+    useI18n: () => ({ locale: 'zh-CN', setLocale: () => undefined, t: (key: string) => key }),
+    useT: () => localizedOwnerCopy.enabled ? actual.tForLanguageTag('en')! : (key: string) => key,
+  };
+});
 
 vi.mock('../../src/router', () => ({ navigate: vi.fn() }));
 
@@ -157,7 +165,8 @@ vi.mock('../../src/collab/useProjectCollab', async (importOriginal) => ({
   }),
 }));
 
-vi.mock('../../src/providers/daemon', () => ({
+vi.mock('../../src/providers/daemon', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/providers/daemon')>()),
   fetchChatRunStatus: vi.fn(),
   listActiveChatRuns: vi.fn().mockResolvedValue([]),
   listProjectRuns: vi.fn().mockResolvedValue([]),
@@ -288,8 +297,9 @@ vi.mock('../../src/components/FileWorkspace', async () => {
 vi.mock('../../src/components/Loading', () => ({
   CenteredLoader: () => <div data-testid="loader" />,
 }));
-vi.mock('../../src/components/ChatPane', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/components/ChatPane')>()),
+vi.mock('../../src/components/ChatPane', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/components/ChatPane')>();
+  return { ...actual,
   ChatPane: (props: {
     activeConversationId?: string | null;
     conversations?: Conversation[];
@@ -310,6 +320,7 @@ vi.mock('../../src/components/ChatPane', async (importOriginal) => ({
     ) => unknown;
   }) => {
     chatPaneSpy(props);
+    if (realChatPane.enabled) return <actual.ChatPane {...props as ComponentProps<typeof actual.ChatPane>} />;
     return (
       <div>
         <div data-testid="active-conversation">{props.activeConversationId ?? ''}</div>
@@ -337,7 +348,7 @@ vi.mock('../../src/components/ChatPane', async (importOriginal) => ({
       </div>
     );
   },
-}));
+}; });
 
 const mockedStreamViaDaemon = vi.mocked(streamViaDaemon);
 const mockedCheckAmrBalanceGate = vi.mocked(checkAmrBalanceGate);
@@ -351,6 +362,7 @@ const mockedFetchBrands = vi.mocked(fetchBrands);
 
 /** AMR on a daemon runtime — the reported configuration. */
 const config: AppConfig = {
+  agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'local' } },
   mode: 'daemon',
   apiProtocol: 'openai',
   apiKey: '',
@@ -477,6 +489,7 @@ const snapshot = (balanceUsd: string): AmrWalletSnapshot => ({
 });
 
 
+const localizedOwnerCopy = vi.hoisted(() => ({ enabled: false }));
 const mockedWindowOpen = vi.fn();
 
 const EMPTY_WALLET = {
@@ -487,7 +500,9 @@ const EMPTY_WALLET = {
 
 describe('余额不足:身份 × 订阅的四种分支', () => {
   beforeEach(() => {
+    realChatPane.enabled = false;
     resourceContextObservations.length = 0;
+    localizedOwnerCopy.enabled = false;
     window.sessionStorage.clear();
     window.localStorage.clear();
     resetWorkspaceContextCache();
@@ -536,6 +551,18 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
   function cardBalance(): string {
     return screen.getByTestId('amr-balance-card-prop').textContent ?? '';
   }
+
+  it.each(['free', 'go', 'plus', 'pro', 'max'].flatMap((tier) =>
+    (['admin', 'member'] as const).map((role) => ({ tier, role }))))('$tier / $role contacts Owner without exposing a payment action', async ({ tier, role }) => {
+    localizedOwnerCopy.enabled = true;
+    await sendAs(callerContext(role, tier === 'free' ? null : `team_${tier}`), EMPTY_WALLET);
+    const dialog = await screen.findByTestId('amr-balance-owner-dialog');
+    expect(dialog).toHaveTextContent('workspace Owner');
+    expect(dialog).not.toHaveTextContent('team admin');
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+    expect(mockedWindowOpen).not.toHaveBeenCalled();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+  });
 
   // 反向对照(T58 的对照组)。这一格**没有变**:同一张弹窗、主按钮仍然落在
   // 套餐页。少了它,把两格合并成「都跳自动充值」也会全绿。
@@ -714,6 +741,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
 
 describe('死胡同:没有账单权限的成员必须拿到一条前进的路', () => {
   beforeEach(() => {
+    realChatPane.enabled = false;
     resourceContextObservations.length = 0;
     window.sessionStorage.clear();
     window.localStorage.clear();
@@ -773,6 +801,7 @@ describe('死胡同:没有账单权限的成员必须拿到一条前进的路', 
 
 describe('守卫:判定放行时四种分支一个都不许冒出来', () => {
   beforeEach(() => {
+    realChatPane.enabled = false;
     resourceContextObservations.length = 0;
     window.sessionStorage.clear();
     window.localStorage.clear();
@@ -825,4 +854,298 @@ describe('守卫:判定放行时四种分支一个都不许冒出来', () => {
     expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
     expect(screen.queryByTestId('amr-balance-owner-dialog')).toBeNull();
   });
+});
+
+
+describe('Link request concurrency rejection preserves the original send', () => {
+  beforeEach(() => {
+    invalidateAmrFundingFeedback();
+    realChatPane.enabled = false;
+    localizedOwnerCopy.enabled = false;
+    window.localStorage.clear(); window.sessionStorage.clear(); resetWorkspaceContextCache(); stubFetch();
+    vi.stubGlobal('open', mockedWindowOpen);
+    mockedListConversations.mockImplementation(async (id: string) => [conversation(id)]);
+    mockedCreateConversation.mockImplementation(async (id: string) => conversation(id));
+    mockedListMessages.mockResolvedValue([]); mockedFetchPreviewComments.mockResolvedValue([]);
+    mockedFetchProjectFiles.mockResolvedValue([]); mockedFetchBrands.mockResolvedValue([]);
+    mockedLoadTabs.mockResolvedValue({ tabs: [], active: null });
+    mockedCheckAmrBalanceGate.mockResolvedValue({ kind: 'allow' });
+    workspaceScopeMocks.projectScope = { loading: true, scope: null };
+    workspaceScopeMocks.billingResponse = null; projectCollabMocks.writerAuthority = 'allowed'; projectCollabMocks.viewerOnly = false;
+    mockedStreamViaDaemon.mockResolvedValue(undefined);
+  });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); });
+
+  it('StrictMode funding rejection retracts the provisional turn without replacing existing output', async () => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const existing: ChatMessage = {
+      id: 'completed-existing-output', role: 'assistant', content: 'Existing completed project output',
+      runId: 'existing-run', runStatus: 'succeeded', createdAt: 1,
+      producedFiles: [{ name: 'existing-output.html', size: 100, mtime: 1, kind: 'html', mime: 'text/html' }],
+    };
+    mockedListMessages.mockResolvedValue([existing]);
+    const originalFetch = globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const fundingRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/preflight?') ? fundingRead() : originalFetch(input, init)));
+    render(projectViewElement({ project: { ...project(), pendingPrompt: null } as never }), { wrapper: StrictMode });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    act(() => { outcome = chatPaneSpy.mock.calls.at(-1)![0].onSend('Retain the preflight draft',
+      [{ path: 'strict-brief.txt', name: 'strict-brief.txt', kind: 'file' }], []); });
+    await waitFor(() => expect(fundingRead).toHaveBeenCalledOnce());
+    await act(async () => { finish(new Response(JSON.stringify({ preflight: {
+      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      modelId: null, generatedAt: new Date().toISOString(), fundingCheck: 'insufficient', balanceUsd: '0',
+    } }))); });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    await waitFor(() => expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toEqual([existing]));
+  });
+
+  it.each(['available', 'insufficient'] as const)('a model selection round trip invalidates the pending %s preflight', async (fundingCheck) => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const agents = [{ id: 'amr', name: 'amr', bin: 'vela', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }, { id: 'deepseek-v4.1-flash', label: 'Flash' }] }] as AgentInfo[];
+    const firstConfig = { ...config, agentModels: { amr: { model: 'glm-5' } } };
+    let finish!: (response: Response) => void;
+    const originalFetch = globalThis.fetch;
+    const fundingRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/preflight?') ? fundingRead() : originalFetch(input, init)));
+    const props = { project: { ...project(), pendingPrompt: null } as never, agents, config: firstConfig };
+    const view = renderProjectView(props);
+    await flushMounts();
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    act(() => { outcome = chatPaneSpy.mock.calls.at(-1)![0].onSend('Retain the unsent model selection draft', [{ path: 'scope.txt', name: 'scope.txt', kind: 'file' }], []); });
+    await waitFor(() => expect(fundingRead).toHaveBeenCalledOnce());
+    view.rerender(projectViewElement({ ...props,
+      config: { ...config, agentModels: { amr: { model: 'deepseek-v4.1-flash' } } } }));
+    await flushMounts();
+    view.rerender(projectViewElement(props));
+    await flushMounts();
+    await act(async () => { finish(new Response(JSON.stringify({ preflight: {
+      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      modelId: 'glm-5', generatedAt: new Date().toISOString(), fundingCheck, balanceUsd: '0',
+    } }))); });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+  });
+
+  it.each(['owner', 'admin', 'member'] as const)('%s sees a real request-limit dialog, retains text/files and retries only manually', async (role) => {
+    workspaceScopeMocks.ambientContext = callerContext(role, 'team_pro');
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect((screen.getByTestId('normal-send') as HTMLButtonElement).disabled).toBe(false));
+    const attachments = [{ name: 'brief.txt', path: 'brief.txt', kind: 'file' }];
+    await act(async () => { await chatPaneSpy.mock.calls.at(-1)![0].onSend('keep exact draft', attachments, []); });
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1));
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('limit-run');
+      await options.handlers.onError(Object.assign(new Error('[code=tier_limit_exceeded] membership concurrency limit exceeded'), {
+        code: 'AGENT_EXECUTION_FAILED', failureDetail: 'membership_concurrency_limit',
+      }));
+    });
+    const dialog = await screen.findByTestId('amr-concurrency-dialog');
+    expect(dialog).toBeTruthy();
+    const props = chatPaneSpy.mock.calls.at(-1)![0];
+    expect(props.rejectedComposerSend).toMatchObject({ text: 'keep exact draft', attachments });
+    expect(screen.queryByTestId('amr-concurrency-upgrade') !== null).toBe(role === 'owner');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2));
+  });
+  it.each([
+    ['local', 'http://localhost:5173'],
+    ['test', 'https://open-design.powerformer.net'],
+    ['prod', 'https://open-design.ai'],
+  ] as const)('Project concurrency upgrade preserves %s profile and the rejected payer', async (profile, origin) => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: profile } } } });
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('profile-limit-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link concurrency rejection'), {
+        failureDetail: 'membership_concurrency_limit',
+      }));
+    });
+    fireEvent.click(await screen.findByTestId('amr-concurrency-upgrade'));
+    const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+    expect(target.origin).toBe(origin);
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+  });
+  it.each(['partial', 'thinking', 'tool', 'artifact', 'disconnect', 'late'] as const)('does not restore or reopen from %s work', async (mode) => {
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_max');
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1));
+    const first = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      first.onRunCreated?.('first-limit-run');
+      if (mode === 'partial') first.handlers.onDelta('already delivered part');
+      if (mode === 'thinking') first.handlers.onAgentEvent({ kind: 'thinking', text: 'Reviewing the current document.' });
+      if (mode === 'tool') first.handlers.onAgentEvent({ kind: 'tool_use', id: 'read-existing', name: 'Read', input: { file_path: 'index.html' } });
+      if (mode === 'artifact') first.handlers.onAgentEvent({ kind: 'artifact_focus', open: 'index.html' });
+      if (mode === 'late') first.handlers.onDone('finished');
+    });
+    // Preserve an already committed artifact/event frame just as a real
+    // streamed response would, before the later request-limit rejection.
+    await flushMounts();
+    if (mode !== 'late') await act(async () => {
+      await first.handlers.onError(mode === 'disconnect' ? new Error('daemon disconnected') : Object.assign(new Error('named request limit'), { failureDetail: 'membership_concurrency_limit' }));
+    });
+    if (['partial', 'thinking', 'tool', 'artifact'].includes(mode)) {
+      expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+      expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+      expect(chatPaneSpy.mock.calls.at(-1)![0].rejectedComposerSend).toBeUndefined();
+    } else if (mode === 'disconnect') {
+      expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+      expect(chatPaneSpy.mock.calls.at(-1)![0].rejectedComposerSend).toBeUndefined();
+    } else {
+      await clickSendWhenReady();
+      await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2));
+      await act(async () => { await first.handlers.onError(Object.assign(new Error('old rejected request'), { failureDetail: 'membership_concurrency_limit' })); });
+      expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+      expect(chatPaneSpy.mock.calls.at(-1)![0].rejectedComposerSend).toBeUndefined();
+    }
+  });
+
+  it.each(['empty', 'new-text', 'new-file', 'partial-output', 'workspace-change'] as const)('selected model changes after sending: concurrency rejection preserves %s boundaries', async (draft) => {
+    realChatPane.enabled = true;
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');
+    const agents = [{ id: 'amr', name: 'amr', bin: 'vela', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }, { id: 'deepseek-v4.1-flash', label: 'Flash' }] }] as AgentInfo[];
+    const firstConfig = { ...config, agentModels: { amr: { model: 'glm-5' } } };
+    const props = { project: { ...project(), pendingPrompt: null } as never, agents, config: firstConfig };
+    const view = renderProjectView(props);
+    await flushMounts();
+    await typeAndSettle('original model-independent concurrency draft');
+    act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT,
+      { detail: { attachments: [{ path: 'original.txt', name: 'original.txt', kind: 'file' }] } })));
+    await waitFor(() => expect(screen.getByTestId('chat-send')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const first = mockedStreamViaDaemon.mock.calls[0]![0];
+    expect(first.model).toBe('glm-5');
+    await waitFor(() => expect(composerText().trim()).toBe(''));
+    if (draft === 'new-text') await typeAndSettle('keep the newer draft');
+    if (draft === 'new-file') act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT,
+      { detail: { attachments: [{ path: 'newer.txt', name: 'newer.txt', kind: 'file' }] } })));
+    if (draft === 'partial-output') await act(async () => { first.handlers.onDelta('actual model output'); });
+    if (draft === 'workspace-change') workspaceScopeMocks.ambientContext = { ...callerContext('owner', 'team_pro'),
+      workspaceId: 'different-paying-space', workspaceMemberId: 'different-owner' };
+    view.rerender(projectViewElement({ ...props,
+      config: { ...config, agentModels: { amr: { model: 'deepseek-v4.1-flash' } } } }));
+    await flushMounts();
+    await act(async () => { first.onRunCreated?.('model-changed-limit-run');
+      first.handlers.onAgentEvent({ kind: 'done_key', key: 'model-changed-protocol-only' }); });
+    await flushMounts();
+    await act(async () => { await first.handlers.onError(Object.assign(new Error('actual request concurrency limit'),
+      { failureDetail: 'membership_concurrency_limit' })); });
+    if (draft === 'workspace-change') {
+      expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+      expect(composerText().trim()).toBe('');
+    } else {
+      expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+      expect(composerText().trim()).toBe(draft === 'empty' ? 'original model-independent concurrency draft'
+        : draft === 'new-text' ? 'keep the newer draft' : '');
+      const attachments = within(screen.queryByTestId('staged-attachments') ?? document.createElement('div'));
+      if (draft === 'empty') expect(attachments.getByTitle('original.txt')).toBeTruthy();
+      else expect(attachments.queryByTitle('original.txt')).toBeNull();
+      if (draft === 'new-file') expect(attachments.getByTitle('newer.txt')).toBeTruthy();
+    }
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+  });
+
+  it.each(['empty', 'new-text', 'new-file'] as const)('real ProjectView→ChatPane→Composer restores a rejected file turn without replacing %s', async (draft) => {
+    realChatPane.enabled = true;
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await flushMounts();
+    await typeAndSettle('original detailed brief');
+    act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT, { detail: { attachments: [{ path: 'brief.png', name: 'brief.png', kind: 'image' }] } })));
+    await waitFor(() => expect((screen.getByTestId('chat-send') as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(composerText().trim()).toBe(''));
+    if (draft === 'new-text') await typeAndSettle('new unsent idea');
+    if (draft === 'new-file') act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT, { detail: { attachments: [{ path: 'next.png', name: 'next.png', kind: 'image' }] } })));
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('real-file-limit-run');
+      // Real daemon /api/runs/:id/events emits this before any model output.
+      // A protocol nonce is not evidence that the original draft was consumed.
+      options.handlers.onAgentEvent({ kind: 'done_key', key: 'server-issued-test-run-key' });
+    });
+    // The nonce frame arrives before the child starts; the later Link refusal
+    // is a separate network turn, after React has stored that event.
+    await flushMounts();
+    await act(async () => {
+      await options.handlers.onError(Object.assign(new Error('[code=tier_limit_exceeded] membership concurrency limit exceeded'), { failureDetail: 'membership_concurrency_limit' }));
+    });
+    expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+    await flushMounts();
+    if (draft === 'empty') {
+      expect(composerText()).toBe('original detailed brief');
+      expect(within(screen.getByTestId('staged-attachments')).getByTitle('brief.png')).toBeTruthy();
+    } else if (draft === 'new-text') {
+      expect(composerText()).toBe('new unsent idea');
+      expect(within(screen.queryByTestId('staged-attachments') ?? document.createElement('div')).queryByTitle('brief.png')).toBeNull();
+    } else {
+      expect(composerText().trim()).toBe('');
+      expect(within(screen.getByTestId('staged-attachments')).getByTitle('next.png')).toBeTruthy();
+      expect(within(screen.queryByTestId('staged-attachments') ?? document.createElement('div')).queryByTitle('brief.png')).toBeNull();
+    }
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])('Home auto-send only requests a route recovery after an empty actual composer witness (new text=%s)', async (typed) => {
+    realChatPane.enabled = true;
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');
+    window.sessionStorage.setItem(`od:auto-send-first:${PROJECT_ID}`, '1');
+    window.sessionStorage.setItem(`od:auto-send-prompt:${PROJECT_ID}`, 'original Home prompt');
+    window.sessionStorage.setItem(`od:auto-send-attachments:${PROJECT_ID}`, JSON.stringify([{ path: 'home.png', name: 'home.png', kind: 'image' }]));
+    const onRejected = vi.fn().mockReturnValue(true);
+    renderProjectView({ project: { ...project(), pendingPrompt: 'original Home prompt' } as never,
+      onInitialHomeRequestConcurrencyRejected: onRejected });
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1));
+    await flushMounts();
+    if (typed) await typeAndSettle('new project draft');
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('home-first-request');
+      options.handlers.onAgentEvent({ kind: 'done_key', key: 'server-home-run-key' });
+    });
+    await flushMounts();
+    await act(async () => {
+      await options.handlers.onError(Object.assign(new Error('actual request limit'), { failureDetail: 'membership_concurrency_limit' }));
+    });
+    await flushMounts();
+    if (typed) {
+      expect(onRejected).not.toHaveBeenCalled();
+      expect(composerText()).toBe('new project draft');
+    } else {
+      expect(onRejected).toHaveBeenCalledOnce();
+      expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ projectId: PROJECT_ID,
+        clientRequestId: options.clientRequestId }));
+      expect(composerText()).toBe('original Home prompt');
+      expect(within(screen.getByTestId('staged-attachments')).getByTitle('home.png')).toBeTruthy();
+    }
+  });
+
 });

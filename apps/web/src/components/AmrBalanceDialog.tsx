@@ -30,6 +30,8 @@ export const WALLET_WATCH_TIMEOUT_MS = 10 * 60_000;
 interface Props {
   /** Backend funding rejection, or a pre-send sign-in block. */
   reason: 'insufficient' | 'signed_out';
+  /** Funding recovery may dismiss the prompt without authorizing a send. */
+  manualSendOnRecovery?: boolean;
   modelId?: string | null;
   fundingScope?: AmrBalanceGateScope;
   /**
@@ -113,6 +115,7 @@ interface Props {
 // to retry explicitly. Local cached amounts never trigger this dialog.
 export function AmrBalanceDialog({
   reason,
+  manualSendOnRecovery = false,
   modelId,
   fundingScope,
   profile,
@@ -325,7 +328,7 @@ export function AmrBalanceDialog({
       </div>
       {watchingWallet ? (
         <p className={styles.watchingHint} data-testid="amr-balance-dialog-watching">
-          {t('chat.amrBalanceGate.watchingWallet')}
+          {t(manualSendOnRecovery ? 'chat.amrBalanceGate.watchingWalletManual' : 'chat.amrBalanceGate.watchingWallet')}
         </p>
       ) : null}
     </Dialog>

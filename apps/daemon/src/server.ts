@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { observeDiscoveryEvent } from './strategies/od-next/discovery-observation.js';
 import { assertCommentFileNotPending } from './collab/comment-file-retirements.js';
 import { captureJsonBodySize } from './http/json-body-size.js';
 
@@ -1268,6 +1269,7 @@ import {
 import { openBrowser } from './browser/index.js';
 import { EmptyTranscriptError, synthesizeHandoffPrompt } from './design/index.js';
 import { readVelaControlApiContext } from './integrations/vela.js';
+import { initializeAmrEndpointBinding } from './integrations/amr-endpoint-binding.js';
 
 /**
  * `OD_PROJECT_CREATE_PREPARATION_TIMEOUT_MS` shortens the POST /api/projects
@@ -1414,6 +1416,7 @@ const SANDBOX_MODE_ENABLED = isSandboxModeEnabled(process.env);
 const RUNTIME_DATA_DIR = resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT, {
   requireExplicit: SANDBOX_MODE_ENABLED,
 });
+initializeAmrEndpointBinding(RUNTIME_DATA_DIR);
 configureDiagnosticsEvidence(RUNTIME_DATA_DIR);
 const SANDBOX_RUNTIME = resolveSandboxRuntimeConfig(SANDBOX_MODE_ENABLED, RUNTIME_DATA_DIR);
 ensureSandboxRuntimeDirs(SANDBOX_RUNTIME);
@@ -2583,8 +2586,8 @@ export function createFinalizedMessageTelemetryReporter({
   return reportFinalized;
 }
 
-export function shouldReportRunCompletionTelemetryFallbackStatus(status: unknown): boolean {
-  return status === 'failed' || status === 'canceled';
+export function shouldReportRunCompletionTelemetryFallbackStatus(status: unknown, taskOwned = false): boolean {
+  return status === 'failed' || status === 'canceled' || (status === 'succeeded' && taskOwned);
 }
 
 const PROJECT_PREVIEW_SCOPE_TTL_MS = 60 * 60 * 1000;
@@ -8475,7 +8478,10 @@ export async function startServer({
     run: any;
     status: string;
   }) => {
-    if (!shouldReportRunCompletionTelemetryFallbackStatus(status)) return;
+    // Headless Task consumers do not save a final assistant message. Keep the UI
+    // grace period and durable delivery gates, but also settle successful Tasks.
+    const taskOwned = status === 'succeeded' && Boolean(getStrategyTaskExecutionByRunId(db, run.id));
+    if (!shouldReportRunCompletionTelemetryFallbackStatus(status, taskOwned)) return;
     const timer = setTimeout(() => {
       terminalTelemetryFallbackTimers.delete(timer);
       if (reportedRuns.has(run.id)) return;
@@ -8528,6 +8534,7 @@ export async function startServer({
   const runAnalyticsLifecycle = createRunAnalyticsLifecycle({
     db,
     design,
+    workspaceContext: collab.workspaceContext,
     paths: { PROJECTS_DIR, RUNTIME_DATA_DIR },
     agents: { detectAgents },
     telemetry: {
@@ -11127,7 +11134,8 @@ export async function startServer({
       && freeformDeckSignal === true;
     const isOdNextDeckRequest = odNextStrategyRecipe?.taskType === 'ppt'
       || odNextDeckIntent;
-    const hasSelectedDeckSeed = odNextStrategyRecipe?.taskType === 'ppt' && Boolean(
+    const inspectDeckScaffold = isOdNextDeckRequest || odNextStrategyRecipe?.taskType === 'discovery';
+    const hasSelectedDeckSeed = inspectDeckScaffold && Boolean(
       template?.files?.some((file) => /\.html?$/i.test(file.name))
       || /(?:^|\/)assets\/template\.html\b/i.test(skillBody ?? '')
       || frozenSkillPackage?.selections?.some((selection) =>
@@ -11137,7 +11145,7 @@ export async function startServer({
     );
     let hasExistingDeckArtifact = false;
     if (
-      odNextStrategyRecipe?.taskType === 'ppt'
+      inspectDeckScaffold
       && typeof projectId === 'string'
       && projectId
     ) {
@@ -11170,7 +11178,9 @@ export async function startServer({
           // resolves to null and adds no bytes.
           planToolNote: planToolNoteForRuntime(agentId, streamFormat),
           executionProfile: executionProfileFromStreamFormat(streamFormat),
-          deckIntent: odNextDeckIntent,
+          // Discovery reads the staged framework through the selected PPT Skill.
+          // Suppress the stable-context renderer's eager deck-intent fallback too.
+          deckIntent: odNextStrategyRecipe.taskType !== 'discovery' && odNextDeckIntent,
           deckFrameworkMode: odNextDeckFrameworkMode,
           metadata,
           template,
@@ -11454,6 +11464,17 @@ export async function startServer({
     }
     let persistedStrategyFinalText = strategyRunMapping?.finalText.text ?? null;
     const isOdNextInitialRun = Boolean(strategyTaskAtStart && isInitialStrategyTaskRun(strategyTaskAtStart, run.id));
+    let discoveryPromptRecorded = false;
+    const recordDiscoveryPromptDelivered = () => {
+      if (discoveryPromptRecorded || !strategyTaskAtStart?.promptBundle.text.includes('skill_name="discovery"')) return;
+      discoveryPromptRecorded = true;
+      const data = { type: 'skill_discovery_policy', skillId: 'deliverable-discovery',
+        injected: persistedStrategyFinalText?.includes('skill_name="discovery"') === true,
+        skillRoot: path.join(BUNDLED_PLUGINS_DIR, 'scenarios/od-next-strategy/assets/task-profiles'),
+        source: isOdNextInitialRun ? 'request' : 'production_continuation' };
+      observeDiscoveryEvent(run, { event: 'diagnostic', data });
+      design.runs.emit(run, 'diagnostic', data);
+    };
     const hasExplicitCurrentPrompt = Object.prototype.hasOwnProperty.call(
       chatBody,
       'currentPrompt',
@@ -13101,6 +13122,10 @@ export async function startServer({
       }
     };
     const send = (event, data) => {
+      recordRunTelemetry('skill discovery', () => {
+        if (event === 'agent') recordDiscoveryPromptDelivered();
+        observeDiscoveryEvent(run, { event, data });
+      });
       if (event === 'agent' && data?.type === 'usage') {
         physicalSessionUsage.observe(event, data);
       }
@@ -16421,7 +16446,7 @@ export async function startServer({
           lifecycle.mark('model_call_start');
           lifecycle.mark('stdin_write_start');
         },
-        onPromptSendEnd: () => lifecycle.mark('stdin_write_end'),
+        onPromptSendEnd: () => { lifecycle.mark('stdin_write_end'); recordRunTelemetry('discovery prompt', recordDiscoveryPromptDelivered); },
         onTurnComplete: () => clearFirstOutputWatchdog(),
       });
       acpSession = codexSession;
@@ -17210,6 +17235,7 @@ export async function startServer({
         await resolveRunArtifactOutcomeBeforeFinishAsync();
         const deliverableFinalization = await finalizeSuccessfulRunDeliverable({
           allowIndependentOutput: Boolean(strategyTaskAtStart),
+          allowMultipleOutputCandidates: run.strategyRolloutDecision?.taskType === 'discovery',
           ...(run.artifactOutcome?.diff && baselineEntryFile ? { baselineEntryFile } : {}),
           projectsRoot: PROJECTS_DIR,
           projectId: run.projectId ?? null,
@@ -17547,7 +17573,7 @@ export async function startServer({
       // The complete plain-text prompt became the child's stdin at spawn
       // (runtimes/agent-process.ts), so there is nothing left to write. A
       // spawn that failed (no PID) never received it.
-      if (typeof child.pid === 'number') recordPromptDeliveredAtSpawn(run, lifecycle);
+      if (typeof child.pid === 'number') { recordPromptDeliveredAtSpawn(run, lifecycle); recordRunTelemetry('discovery prompt', recordDiscoveryPromptDelivered); }
     } else if (writePromptToChildStdin && child.stdin) {
       const promptInputFormat = def.promptInputFormat ?? 'text';
       lifecycle.mark('model_call_start');
@@ -17555,6 +17581,7 @@ export async function startServer({
       const markStdinWriteEnd = (err?: Error | null) => {
         if (err) return;
         lifecycle.mark('stdin_write_end');
+        recordRunTelemetry('discovery prompt', recordDiscoveryPromptDelivered);
       };
       // Plain-text prompts never get here: they are delivered at spawn.
       // stream-json is the one prompt still pumped through a live pipe; a
@@ -17811,6 +17838,7 @@ export async function startServer({
       },
     },
     telemetry: {
+      taskTelemetryForRun: (runId) => taskObservationRollout.telemetryForRun(runId),
       reportRunCompletionTelemetryFallback,
       resolveRunProjectKindForAnalytics,
       runArtifactBaselines,

@@ -172,6 +172,7 @@ import {
 import {
   ChatComposer,
   type ChatComposerHandle,
+  type RejectedComposerSend,
   type ChatSendOutcome,
   type ChatSendMeta,
 } from './ChatComposer';
@@ -890,6 +891,8 @@ interface Props {
   // Bumped by the parent to push a draft into the composer (used by the
   // "Import repo" CTA). The nonce lets the same text fire more than once.
   composerDraftSignal?: { text: string; nonce: number };
+  rejectedComposerSend?: RejectedComposerSend;
+  onRejectedComposerSendRestored?: (nonce: string, restored: boolean) => void;
   // Optional pet wiring forwarded straight through to ChatComposer's
   // /pet button. When omitted the composer hides the button entirely.
   petConfig?: AppConfig['pet'];
@@ -1122,11 +1125,9 @@ export function foldStrategyTaskTurns(messages: ChatMessage[]): FoldedChatMessag
       // internal step, not the turn ending.
       runId: message.runId ?? head.runId,
       runStatus: message.runStatus ?? head.runStatus,
-      // Likewise the task verdict: only the final Run of the chain carries it,
-      // and the folded turn is what the pinned todo card reads.
-      ...(message.strategyTaskDelivered
-        ? { strategyTaskDelivered: message.strategyTaskDelivered }
-        : {}),
+      // Completion belongs to the final physical Run, including false or
+      // absent legacy values. Never inherit the planning Run's verdict.
+      strategyTaskDelivered: message.strategyTaskDelivered,
       ...(message.endedAt ? { endedAt: message.endedAt } : {}),
       ...(message.resultDeliveryState
         ? { resultDeliveryState: message.resultDeliveryState }
@@ -1436,6 +1437,8 @@ export function ChatPane({
   onCreateDesignSystemFromProject,
   createDesignSystemFromProjectBusy,
   composerDraftSignal,
+  rejectedComposerSend,
+  onRejectedComposerSendRestored,
   petConfig,
   onAdoptPet,
   onTogglePet,
@@ -2792,6 +2795,16 @@ export function ChatPane({
     lastDraftSignalNonceRef.current = composerDraftSignal.nonce;
     composerRef.current?.setDraft(composerDraftSignal.text);
   }, [composerDraftSignal]);
+
+  const lastRejectedSendRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!rejectedComposerSend || lastRejectedSendRef.current === rejectedComposerSend.nonce) return;
+    lastRejectedSendRef.current = rejectedComposerSend.nonce;
+    const restored = composerRef.current?.restoreDraft({
+      ...rejectedComposerSend, quotes: rejectedComposerSend.meta?.quotes ?? [], onlyIfEmpty: true,
+    }) === true;
+    onRejectedComposerSendRestored?.(rejectedComposerSend.nonce, restored);
+  }, [rejectedComposerSend, onRejectedComposerSendRestored]);
 
   // Library "optimize design system" hand-off: when the user pushed selected
   // assets into this project's design system from the Library, pre-fill the

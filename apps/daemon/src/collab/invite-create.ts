@@ -24,6 +24,7 @@ function createInvitePath(workspaceId: string): string {
 
 export interface CreateWorkspaceInviteInput {
   email: string;
+  idempotencyKey?: string;
   role: WorkspaceInviteRole;
   /** The workspace the invite is scoped to (derived from the caller's context). */
   workspaceId: string;
@@ -77,6 +78,7 @@ export async function createWorkspaceInvite(
       headers: {
         authorization: `Bearer ${session.controlKey}`,
         'content-type': 'application/json',
+        ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
       },
       body: JSON.stringify({ invitedEmail: email, role: input.role }),
       signal: controller.signal,

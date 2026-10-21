@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InviteDialog } from '../../src/components/InviteDialog';
 import { workspaceContextFixture } from '../helpers/workspace-context';
@@ -38,6 +38,11 @@ describe('member-line invitation states', () => {
     const { container } = render(<InviteDialog open workspaceContext={{ ...owner, seatSummary: { ...owner.seatSummary, usedSeats: 77 } }} onClose={() => {}} />);
     expect(container.querySelector('p')?.textContent).toBe('Design team');
   });
+  it('shows the explicit authoritative member count rather than seat usage', () => {
+    render(<InviteDialog open workspaceContext={{ ...owner, memberCount: 5, seatSummary: { ...owner.seatSummary, usedSeats: 77 } }} onClose={() => {}} />);
+    expect(screen.getByText(/5 (members|位成员|名成员|个成员)/i)).toBeTruthy();
+    expect(screen.queryByText(/77/)).toBeNull();
+  });
   it.each(['admin', 'member'] as const)('does not allow %s to assign administrators even if the host requests a role menu', (role) => {
     render(<InviteDialog open workspaceContext={{ ...owner, role }} canAssignRoles onClose={() => {}} />);
     expect(screen.queryByRole('button', { name: /分配角色|assign role|^角色$|^role$/i })).toBeNull();
@@ -69,7 +74,8 @@ describe('member-line invitation states', () => {
     expect(submit).not.toHaveBeenCalled();
     email('corrected@example.com'); fireEvent.click(sendButton()); await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
     expect(dispatch.mock.calls.map(([event]) => event).filter(event => event.type === 'od:workspace-invites-sent').map(event => (event as CustomEvent).detail.totalCount)).toEqual([1, 2]);
-    expect(JSON.parse(fetcher.mock.calls[1]![1].body)).toEqual({ invites: [{ email: 'corrected@example.com', role: 'member' }] });
+    expect(JSON.parse(fetcher.mock.calls[1]![1].body).invites[0].idempotencyKey).not.toBe(JSON.parse(fetcher.mock.calls[0]![1].body).invites[1].idempotencyKey);
+    expect(JSON.parse(fetcher.mock.calls[1]![1].body)).toEqual({ invites: [{ email: 'corrected@example.com', role: 'member', idempotencyKey: expect.any(String) }] });
   });
   it('retries only unsent rows unchanged after a partial no-session result', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response([
@@ -86,18 +92,19 @@ describe('member-line invitation states', () => {
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('unsent@example.com');
     fireEvent.click(sendButton());
     await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(fetcher.mock.calls[1]![1].body)).toEqual({ invites: [{ email: 'unsent@example.com', role: 'member' }] });
+    expect(JSON.parse(fetcher.mock.calls[1]![1].body).invites[0].idempotencyKey).toBe(JSON.parse(fetcher.mock.calls[0]![1].body).invites[1].idempotencyKey);
+    expect(JSON.parse(fetcher.mock.calls[1]![1].body)).toEqual({ invites: [{ email: 'unsent@example.com', role: 'member', idempotencyKey: expect.any(String) }] });
   });
-  it.each(['transport', 'server', 'upstream'] as const)('shows ordinary %s failures in a native top error toast and preserves all rows for retry', async (kind) => {
-    const fetcher = vi.fn().mockImplementationOnce(() => kind === 'transport' ? Promise.reject(new TypeError('offline')) : Promise.resolve(kind === 'server' ? new Response('{}', { status: 503 }) : response([{ email: 'one@example.com', ok: false, error: 'create_unreachable' }, { email: 'two@example.com', ok: false, error: 'create_unreachable' }]))).mockResolvedValueOnce(response([{ email: 'one@example.com', ok: true }, { email: 'two@example.com', ok: true }]));
+  it.each(['transport', 'server', 'upstream', 'delivery'] as const)('shows ordinary %s failures inline in the form without a global toast and preserves rows for retry', async (kind) => {
+    const fetcher = vi.fn().mockImplementationOnce(() => kind === 'transport' ? Promise.reject(new TypeError('offline')) : Promise.resolve(kind === 'server' ? new Response('{}', { status: 503 }) : response([{ email: 'one@example.com', ok: false, error: kind === 'delivery' ? 'delivery_failed' : 'create_unreachable' }, { email: 'two@example.com', ok: false, error: kind === 'delivery' ? 'delivery_failed' : 'create_unreachable' }]))).mockResolvedValueOnce(response([{ email: 'one@example.com', ok: true }, { email: 'two@example.com', ok: true }]));
     vi.stubGlobal('fetch', vi.fn((url, init) => String(url) === '/api/workspace/invite' ? fetcher(url, init) : Promise.resolve(new Response('{}', { status: 200 })))); const close = vi.fn();
     render(<InviteDialog open workspaceContext={owner} onClose={close} />);
     email('one@example.com'); fireEvent.click(screen.getByRole('button', { name: /添加成员|add member/i })); email('two@example.com', 1); fireEvent.click(sendButton());
-    const toast = await screen.findByRole('alert');
-    expect(toast.classList.contains('od-toast')).toBe(true);
-    expect(toast.classList.contains('placement-top')).toBe(true);
-    expect(toast.classList.contains('tone-error')).toBe(true);
-    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole('dialog').querySelector('form > p[role="alert"]')).toHaveTextContent('Failed to send invitations'));
+    const toast = screen.getByRole('dialog').querySelector('form > p[role="alert"]')!;
+    expect(toast.classList.contains('od-toast')).toBe(false);
+    expect(document.querySelector('.od-toast')).toBeNull();
+    expect(screen.getAllByRole('alert')).toHaveLength(kind === 'delivery' ? 3 : 1);
     expect(screen.getAllByRole('textbox').map(node => (node as HTMLInputElement).value)).toEqual(['one@example.com', 'two@example.com']);
     fireEvent.click(sendButton()); await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
   });
@@ -117,4 +124,32 @@ describe('member-line invitation states', () => {
     reject(new TypeError('offline')); await screen.findByRole('alert');
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('member@example.com');
   });
+});
+
+
+describe('same-frame invitation submissions', () => {
+  it.each(['dialog', 'onboarding'] as const)('%s submits once and permits retry after a failed request', async variant => {
+    let reject!: (reason: unknown) => void;
+    const requests = vi.fn(() => new Promise<Response>((_resolve, fail) => { reject = fail; }));
+    vi.stubGlobal('fetch', vi.fn((url, init) => String(url) === '/api/workspace/invite' ? requests() : Promise.resolve(new Response('{}'))));
+    render(<InviteDialog variant={variant} open workspaceContext={owner} onClose={() => {}} />);
+    email('one@example.com');
+    const button = sendButton();
+    act(() => { for (let i = 0; i < 5; i++) button.click(); });
+    expect(requests).toHaveBeenCalledTimes(1);
+    await act(async () => { reject(new TypeError('offline')); });
+    await screen.findByRole('alert');
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('one@example.com');
+    fireEvent.click(sendButton());
+    expect(requests).toHaveBeenCalledTimes(2);
+  });
+});
+
+it('keeps the same operation when only normalized email casing changes after delivery failure', async () => {
+ const fetcher=vi.fn().mockResolvedValueOnce(response([{email:'retry@example.com',ok:false,error:'delivery_failed'}])).mockResolvedValueOnce(response([{email:'RETRY@example.com',ok:true}]));
+ vi.stubGlobal('fetch',fetcher);const close=vi.fn();render(<InviteDialog open workspaceContext={owner} onClose={close}/>);
+ email('retry@example.com');fireEvent.click(sendButton());await waitFor(()=>expect(screen.getAllByRole('alert').length).toBeGreaterThan(0));
+ email('RETRY@example.com');fireEvent.click(sendButton());await waitFor(()=>expect(close).toHaveBeenCalledOnce());
+ const first=JSON.parse(fetcher.mock.calls[0]![1].body).invites[0],second=JSON.parse(fetcher.mock.calls[1]![1].body).invites[0];
+ expect(first.idempotencyKey).toBeTruthy();expect(second.idempotencyKey).toBe(first.idempotencyKey);
 });

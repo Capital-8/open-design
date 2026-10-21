@@ -156,6 +156,7 @@ let billingRead = false;
 function stubFetch(
   context: WorkspaceCollabContext,
   billing: ReturnType<typeof accountBilling>,
+  fundingCheck: 'available' | 'insufficient' = 'insufficient',
 ) {
   billingRead = false;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -165,6 +166,22 @@ function stubFetch(
     }
     if (url.endsWith('/api/workspace/context')) {
       return jsonResponse({ context });
+    }
+    // gen53: current Home funding is confirmed before project handoff. The
+    // display/role fixture remains independent; no empty response authorizes it.
+    if (url.includes('/billing/preflight?')) {
+      const query = new URL(url, 'http://localhost').searchParams;
+      expect(query.get('workspaceId')).toBe(context.workspaceId);
+      expect(query.get('modelId')).toBe('glm-5');
+      return jsonResponse({ preflight: {
+        schemaVersion: 1, workspaceId: context.workspaceId,
+        workspaceMemberId: context.workspaceMemberId, modelId: 'glm-5',
+        generatedAt: new Date().toISOString(), balanceUsd: '0', fundingCheck,
+        funding: fundingCheck === 'available' ? 'coding_plan' : 'gateway',
+        modelCovered: fundingCheck === 'available',
+        codingPlan: { workspaceId: context.workspaceId, generatedAt: new Date().toISOString(),
+          eligible: fundingCheck === 'available', tier: null, windows: [] },
+      } });
     }
     if (url.includes('/api/workspace/billing?')) {
       billingRead = true;
@@ -333,7 +350,7 @@ describe('T58 · 首页余额耗尽的身份 × 订阅四格', () => {
   // ⚠️ 没有这一组,把整段余额闸门从首页删掉、或把弹窗改成无条件渲染,
   // 上面四条里的「出弹窗」那半边照样能绿。
   it('反向对照 · 判定放行时一张弹窗都不许出,而且照常跑起来', async () => {
-    stubFetch(workspace('owner', 'personal'), accountBilling('max'));
+    stubFetch(workspace('owner', 'personal'), accountBilling('max'), 'available');
     mockedCheckAmrBalanceGate.mockResolvedValue({ kind: 'allow' });
     const onCreateProject = vi.fn(async () => true);
     renderHome(onCreateProject);

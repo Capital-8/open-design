@@ -150,3 +150,5 @@ Alignment status: READY（合并规则已确认，验证结果见下）
 - 飞书同一报告已更新并回读：https://powerformer.feishu.cn/wiki/KtUzwuvi3ikmbBkM6VXccCUYnhg ，revision16，33组66图全部上传绑定。总分保持撤回；真实剩余差异包括普通邀请顶栏遮罩、B12约1px/角色字形、缺权威人数、示例/宿主外观和H01权限卸载。不能把功能绿写成整页视觉通过。
 - 本地同报告：/private/tmp/od-members-visual-evidence/registration-acceptance-report.html；66图由Chromium验证无破图且有原图入口。证据哈希与采图时间：report-repair-20261020/evidence-manifest.json。未改用户原始HTML，SHA保持46becf5cbb0ca9747d44df0a9ccdf95956f2ac5989c447df372b8d43da3a85b6。
 - 排除共享账务；不伪造成员人数，不移除现有团队功能，不合并main、不发布、不发送通知。
+
+最终独立逐图复核补记：B20非选中说明换行、B26额外成功Toast、C12/H04推荐区横排与参考竖排、H12输入/推荐状态仍不同，均纳入同一飞书报告真实待办；不是数据差异的项目不笼统归为数据差异。A组背景取样全部相等；整页视觉结论仍未通过。
