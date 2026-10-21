@@ -775,8 +775,11 @@ test('[P1] Settings AMR upgrade opens the attributed plans URL for the active pr
 
   await expect.poll(() => openedUrl).toBeTruthy();
   const url = new URL(openedUrl);
-  expect(url.pathname).toBe('/pricing/');
-  expect(url.searchParams.get('billing')).toBeNull();
+  // T54: generic Upgrade uses this profile's console plan surface.
+  expect(url.origin).toBe('https://open-design.powerformer.net');
+  expect(url.pathname).toBe('/cloud/dashboard');
+  expect(url.searchParams.get('billing')).toBe('plan');
+  expect(url.searchParams.get('workspaceId')).toBe(AMR_PERSONAL_WORKSPACE_ITEM.workspaceId);
   expect(url.searchParams.get('od_origin')).toBe('open_design');
   expect(url.searchParams.get('od_entry_source')).toBe('settings_amr_upgrade');
   expect(url.searchParams.get('od_entry_id')).toBeTruthy();
