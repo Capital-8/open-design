@@ -3571,13 +3571,20 @@ export function ProjectView({
   // model/workspace would let A's first, delayed preflight authorize or block
   // the later A draft. Gateway feedback remains owned by its admitted run.
   const fundingSelectionKey = JSON.stringify([
-    project.id, projectRunAuthorityKey, config.mode, config.agentId,
+    project.id,
+    projectRunAuthorityKey,
+    config.mode,
+    config.agentId,
     fundingDialogContext.modelId,
   ]);
-  const fundingSelectionRef = useRef({ key: fundingSelectionKey, generation: 0 });
+  const fundingSelectionRef = useRef({
+    key: fundingSelectionKey,
+    generation: 0,
+  });
   if (fundingSelectionRef.current.key !== fundingSelectionKey) {
     fundingSelectionRef.current = {
-      key: fundingSelectionKey, generation: fundingSelectionRef.current.generation + 1,
+      key: fundingSelectionKey,
+      generation: fundingSelectionRef.current.generation + 1,
     };
   }
 
