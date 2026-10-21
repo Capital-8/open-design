@@ -1,4 +1,5 @@
 import { homeAutoSendIdentity, stableIdentityDigest, type HomeRequestConcurrencyRejection } from '../runtime/home-auto-send-identity';
+import { readAmrRequestConcurrency } from '../runtime/amr-request-concurrency';
 import { readRetriedErrorSurface, retriedErrorSurfaceKey, writeRetriedErrorSurface } from '../runtime/chat/retried-error-surface';
 import {
   startTransition,
@@ -3218,6 +3219,9 @@ export function ProjectView({
   // arrive during the check queue instead of racing a duplicate run through
   // the not-yet-busy window the gate's await opens.
   const amrGateInFlightConversationsRef = useRef<Set<string>>(new Set());
+  // A hint read is not an accepted/queued send. Repeated submissions wait for
+  // another explicit user action rather than queueing behind this advisory read.
+  const amrConcurrencyReadsRef = useRef(new Set<string>());
   // Conversations whose queue auto-drain is paused because the balance gate
   // blocked a send. Without the pause, every unrelated re-run of the drain
   // effect would re-hit the wallet endpoint and re-pop the dialog. Lifted by
@@ -3590,6 +3594,14 @@ export function ProjectView({
     fundingSelectionRef.current = {
       key: fundingSelectionKey,
       generation: fundingSelectionRef.current.generation + 1,
+    };
+  }
+
+  const concurrencyIntentKey = JSON.stringify([fundingSelectionKey, activeConversationId]);
+  const concurrencyIntentRef = useRef({ key: concurrencyIntentKey, generation: 0 });
+  if (concurrencyIntentRef.current.key !== concurrencyIntentKey) {
+    concurrencyIntentRef.current = {
+      key: concurrencyIntentKey, generation: concurrencyIntentRef.current.generation + 1,
     };
   }
 
@@ -8760,6 +8772,49 @@ export function ProjectView({
         return meta?.acceptDurableQueue === true;
       }
       const runConversationId = activeConversationId;
+      if (amrGateApplies) {
+        const restoreComposer = () => {
+          if (meta?.composerOwnedDraft) amrGateBlockedRequestRef.current = clientRequestId;
+          return false;
+        };
+        if (amrConcurrencyReadsRef.current.has(runConversationId)) return restoreComposer();
+        const intentGeneration = concurrencyIntentRef.current.generation;
+        amrConcurrencyReadsRef.current.add(runConversationId);
+        let hint;
+        try {
+          hint = await readAmrRequestConcurrency(amrBalanceGateScopeForWorkspaceContext(projectRunPreflightContext));
+        } finally {
+          amrConcurrencyReadsRef.current.delete(runConversationId);
+        }
+        if (!mountedRef.current || projectIdRef.current !== project.id
+          || projectRunAuthorityKeyRef.current !== projectRunAuthorityKey
+          || currentWorkspaceAccountGeneration() !== sendAccountGeneration
+          || concurrencyIntentRef.current.generation !== intentGeneration
+          || activeConversationIdRef.current !== runConversationId
+          || messagesConversationIdRef.current !== runConversationId
+          || !fundingDialogContextRef.current.isAmr) return restoreComposer();
+        if (hint?.status === 'full') {
+          amrGatePausedQueueConversationsRef.current.add(runConversationId);
+          setConcurrencyRejection({
+            conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
+            accountGeneration: sendAccountGeneration,
+            branch: amrBalanceBranchRef.current,
+            workspaceContext: fundingDialogContextRef.current.workspaceContext,
+            initialHomeSend: meta?.initialHomeSend === true,
+            draft: meta?.initialHomeSend ? {
+              nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
+              commentAttachments, meta,
+            } : null,
+          });
+          setConcurrencyDialogOpen(true);
+          // Consume a Home handoff only into its restored draft, never into an
+          // automatic retry when a slot later becomes available.
+          if (meta?.initialHomeSend) return true;
+          return restoreComposer();
+        }
+        // Unsupported/unavailable is not evidence of a slot. Keep the real
+        // Link admission/refusal path as the final authority, without a lease.
+      }
       latestRequestSendRef.current.set(runConversationId, clientRequestId);
       setConcurrencyDialogOpen(false);
       setConcurrencyRejection(null);

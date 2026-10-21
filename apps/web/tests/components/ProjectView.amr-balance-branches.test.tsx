@@ -45,6 +45,7 @@ import { STAGE_ATTACHMENT_EVENT } from '../../src/components/ChatComposer';
 import { ProjectView } from '../../src/components/ProjectView';
 import type { ProjectWorkspaceScopeState } from '../../src/collab/useProjectWorkspaceScope';
 import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext';
+import { advanceWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 import { streamViaDaemon } from '../../src/providers/daemon';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
@@ -54,6 +55,7 @@ import {
   listConversations,
   listMessages,
   loadTabs,
+  saveMessage,
 } from '../../src/state/projects';
 import {
   fetchPreviewComments,
@@ -890,6 +892,192 @@ describe('Link request concurrency rejection preserves the original send', () =>
     mockedStreamViaDaemon.mockResolvedValue(undefined);
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); setRuntimeAmrConsoleOrigin(null); });
+
+  it.each(['owner', 'admin', 'member'] as const)('%s reads a full counter before creating project messages or a run', async (role) => {
+    const context = callerContext(role, 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+    } })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    await act(async () => { outcome = await chatPaneSpy.mock.calls.at(-1)![0].onSend('exact full counter draft',
+      [{ path: 'counter-brief.txt', name: 'counter-brief.txt', kind: 'file' }], []); });
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(outcome).toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toEqual([]);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('amr-concurrency-upgrade') !== null).toBe(role === 'owner');
+  });
+
+  it('keeps a full-counter draft and files in the real composer, and sends only after one new manual action', async () => {
+    realChatPane.enabled = true;
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    let status = 'full';
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status, running: status === 'full' ? 10 : 0, limit: 10,
+    } })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    const props = { project: { ...project(), pendingPrompt: null } as never };
+    const view = renderProjectView(props);
+    await flushMounts();
+    await typeAndSettle('retain this full counter project draft');
+    act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT, { detail: {
+      attachments: [{ path: 'brief.txt', name: 'brief.txt', kind: 'file' }, { path: 'reference.html', name: 'reference.html', kind: 'file' }],
+    } })));
+    await waitFor(() => expect(screen.getByTestId('chat-send')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await screen.findByTestId('amr-concurrency-dialog');
+    await waitFor(() => expect(composerText()).toBe('retain this full counter project draft'));
+    expect(within(screen.getByTestId('staged-attachments')).getByTitle('brief.txt')).toBeTruthy();
+    expect(within(screen.getByTestId('staged-attachments')).getByTitle('reference.html')).toBeTruthy();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toEqual([]);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    status = 'available';
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    view.rerender(projectViewElement(props));
+    await flushMounts();
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    expect(counterRead).toHaveBeenCalledTimes(2);
+    await flushMounts();
+    const sent = mockedStreamViaDaemon.mock.calls[0]![0];
+    expect(sent.history.at(-1)?.content).toBe('retain this full counter project draft');
+    expect(sent.attachments).toEqual(['brief.txt', 'reference.html']);
+  });
+
+  it('leaves unavailable counter reads to real Link admission', async () => {
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_go');
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response('{}', { status: 503 }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+  });
+
+  it('does not queue a second submission while the first counter read is pending', async () => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const counterRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let first: unknown;
+    act(() => { first = chatPaneSpy.mock.calls.at(-1)![0].onSend('first full draft', [], []); });
+    await waitFor(() => expect(counterRead).toHaveBeenCalledOnce());
+    let second: unknown;
+    await act(async () => { second = await chatPaneSpy.mock.calls.at(-1)![0].onSend('second full draft', [], []); });
+    expect(second).toBe('restore-draft');
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    await act(async () => { finish(new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+    } }))); });
+    await expect(first).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+  });
+
+  it.each(['scope', 'model', 'conversation', 'account', 'unmount'] as const)('discards pending full counter evidence across a %s boundary', async (boundary) => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const secondConversation = { ...conversation(PROJECT_ID), id: 'second-counter-conversation' };
+    mockedListConversations.mockResolvedValue([conversation(PROJECT_ID), secondConversation]);
+    const agents = [{ id: 'amr', name: 'amr', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }, { id: 'deepseek-v4.1-flash', label: 'Flash' }] }] as AgentInfo[];
+    const props = { project: { ...project(), pendingPrompt: null } as never, agents,
+      config: { ...config, agentModels: { amr: { model: 'glm-5' } } }, routeConversationId: conversation(PROJECT_ID).id };
+    const originalFetch = globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const counterRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    const view = renderProjectView(props);
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    act(() => { outcome = chatPaneSpy.mock.calls.at(-1)![0].onSend('old counter draft', [], []); });
+    await waitFor(() => expect(counterRead).toHaveBeenCalledOnce());
+    if (boundary === 'account') advanceWorkspaceAccountGeneration('counter-account-boundary');
+    else if (boundary === 'unmount') view.unmount();
+    else {
+      let changed: Partial<ComponentProps<typeof ProjectView>>;
+      if (boundary === 'model') changed = { config: { ...config, agentModels: { amr: { model: 'deepseek-v4.1-flash' } } } };
+      else if (boundary === 'scope') changed = { project: { ...project(), pendingPrompt: null, workspaceId: 'other-counter-space' } as never };
+      else changed = { routeConversationId: secondConversation.id };
+      view.rerender(projectViewElement({ ...props, ...changed }));
+      await flushMounts();
+      view.rerender(projectViewElement(props));
+      await flushMounts();
+    }
+    await act(async () => { finish(new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+    } }))); });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+  });
+
+  it('restores a full-counter Home handoff once without auto-sending when a slot later frees', async () => {
+    realChatPane.enabled = true;
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    window.sessionStorage.setItem(`od:auto-send-first:${PROJECT_ID}`, '1');
+    window.sessionStorage.setItem(`od:auto-send-prompt:${PROJECT_ID}`, 'original Home full prompt');
+    window.sessionStorage.setItem(`od:auto-send-attachments:${PROJECT_ID}`, JSON.stringify([{ path: 'home.txt', name: 'home.txt', kind: 'file' }]));
+    let status = 'full';
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status, running: status === 'full' ? 10 : 0, limit: 10,
+    } })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    const onRejected = vi.fn().mockReturnValue(true);
+    const props = { project: { ...project(), pendingPrompt: 'original Home full prompt' } as never,
+      onInitialHomeRequestConcurrencyRejected: onRejected };
+    const view = renderProjectView(props);
+    await screen.findByTestId('amr-concurrency-dialog');
+    await waitFor(() => expect(onRejected).toHaveBeenCalledOnce());
+    expect(composerText()).toBe('original Home full prompt');
+    expect(within(screen.getByTestId('staged-attachments')).getByTitle('home.txt')).toBeTruthy();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    status = 'available';
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    view.rerender(projectViewElement(props));
+    await flushMounts();
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(onRejected).toHaveBeenCalledOnce();
+  });
 
   it('StrictMode funding rejection retracts the provisional turn without replacing existing output', async () => {
     const context = callerContext('owner', 'team_go');
