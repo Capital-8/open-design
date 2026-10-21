@@ -74,11 +74,11 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
       {view.loading ? (
         // Header stays; no spinner, hint, error or retry text.
         <div aria-busy="true" data-testid="workspace-quota-skeleton">
-          {durations.map(duration => <div className={quota.block} key={duration} data-testid="workspace-quota-window-skeleton" aria-hidden="true">
+          <div className={quota.block} data-testid="workspace-quota-window-skeleton" aria-hidden="true">
             <div className={quota.row}><span className={quota.bone} /><span className={`${quota.bone} ${quota.boneEnd}`} /></div>
             <span className={`${quota.bone} ${quota.boneTrack}`} />
-          </div>)}
-          <div className={`${quota.wallet} ${durations.length ? quota.walletWithQuota : ''}`} aria-hidden="true" data-testid="workspace-quota-wallet-skeleton">
+          </div>
+          <div className={`${quota.wallet} ${quota.walletWithQuota}`} aria-hidden="true" data-testid="workspace-quota-wallet-skeleton">
             <span className={quota.bone} /><span className={`${quota.bone} ${quota.boneEnd}`} />
           </div>
         </div>
