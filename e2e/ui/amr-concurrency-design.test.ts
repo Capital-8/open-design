@@ -55,6 +55,14 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await page.getByTestId('chat-send').click();
   const dialog = page.getByTestId('amr-concurrency-dialog');
   await expect(dialog).toBeVisible({ timeout: T.long });
+  // The frozen F04 frame uses normal line-height and a neutral palette;
+  // inherited app typography compressed the title and shifted all content up.
+  await expect(dialog.locator('h2')).toHaveCSS('line-height', 'normal');
+  await expect(dialog).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.getByTestId('amr-concurrency-close')).toHaveCSS('font-size', '13.5px');
+  // This offer is deliberately neutral even when app appearance uses a color.
+  await page.locator('html').evaluate(element => element.style.setProperty('--accent', '#1A74FF'));
+  await expect(page.getByTestId('amr-concurrency-upgrade')).toHaveCSS('background-color', 'rgb(53, 53, 53)');
   await expect(dialog).toContainText('当前并发不足，请升级套餐后再试。');
   await expect(dialog.locator('li')).toHaveCount(4);
   await expect(dialog.locator('li')).toHaveText([
@@ -70,8 +78,6 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await dialog.evaluate(async element => {
     await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => undefined)));
   });
-  await testInfo.attach('f04-viewport-1280x720', { body: await page.screenshot(), contentType: 'image/png' });
-  await testInfo.attach('f04-dialog', { body: await dialog.screenshot(), contentType: 'image/png' });
   // Capture the actual window.open destination while preventing external navigation.
   await page.evaluate(() => { window.open = ((url: string | URL | undefined) => {
     document.documentElement.dataset.f04Upgrade = String(url); return null;
@@ -81,6 +87,25 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
   expect(target.searchParams.get('billing')).toBe('plan');
   expect(runs.bodies).toHaveLength(1);
+  // The original send button can retain a focus tooltip behind the modal.
+  // Capture after the native dialog interaction, without hiding that DOM.
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole('tooltip')).toBeHidden();
+  await testInfo.attach('f04-viewport-1280x720', { body: await page.screenshot(), contentType: 'image/png' });
+  await testInfo.attach('f04-dialog', { body: await dialog.screenshot(), contentType: 'image/png' });
+  await testInfo.attach('f04-geometry', { body: JSON.stringify(await dialog.evaluate(element =>
+    [element, ...element.querySelectorAll('h2,p,ul,li,button')].map(node => {
+      const rect = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return { tag: node.tagName, text: node.textContent, x: rect.x, y: rect.y,
+        width: rect.width, height: rect.height, font: style.font, lineHeight: style.lineHeight,
+        background: style.backgroundColor, color: style.color, padding: style.padding, margin: style.margin };
+    })), null, 2), contentType: 'application/json' });
+  // The current app deliberately stays light on a dark OS. F04 must follow
+  // that existing appearance policy without adding a separate theme surface.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(dialog).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await page.getByTestId('amr-concurrency-close').click();
   await expect(dialog).toHaveCount(0);
   expect(runs.bodies).toHaveLength(1);

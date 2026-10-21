@@ -54,7 +54,7 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, onClos
         </ul>
       </div> : null}
       <div className={upgradeUrl ? frame.actions : styles.actions}>
-        <Button variant={upgradeUrl ? 'ghost' : 'secondary'} className={upgradeUrl ? frame.later : undefined}
+        <Button variant={upgradeUrl ? 'ghost' : 'secondary'} className={upgradeUrl ? `${frame.later} ${styles.laterButton}` : undefined}
           onClick={onClose} data-testid="amr-concurrency-close">
           {t(upgradeUrl ? 'chat.amrBalanceGate.laterCta' : 'common.close')}
         </Button>
