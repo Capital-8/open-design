@@ -7,6 +7,7 @@ import { useWorkspaceTabsDockRef } from './workspaceTabsDock';
 import { useI18n } from '../i18n';
 import { formatAttachmentSize, splitFileName } from '../runtime/chat/attachment';
 import { looksLikeImageName } from '../runtime/chat/staged-attachment';
+import { messageEnterAttribute } from '../runtime/chat/settled-entrance';
 import { agentDisplayName, agentIconId } from '../utils/agentLabels';
 import {
   projectSplitStyle,
@@ -68,6 +69,12 @@ interface ChatProps {
   /** The files the user staged on Home. Still local `File` objects here. */
   files?: readonly File[];
   agentId?: string | null;
+  /**
+   * OPEND-3922 · this card takes over from one already on screen (the pending
+   * frame's), so its rows must not replay `msg-enter`. ProjectView sets it;
+   * the pending frame — the first surface to show the turn — leaves it off.
+   */
+  settled?: boolean;
 }
 
 /**
@@ -86,7 +93,9 @@ export function ProjectCreationPendingChat({
   prompt,
   files,
   agentId,
+  settled = false,
 }: ChatProps) {
+  const enter = messageEnterAttribute(settled);
   const { t } = useI18n();
   const agentName = agentDisplayName(agentId) ?? t('assistant.role');
   const iconId = agentIconId(agentId);
@@ -134,7 +143,7 @@ export function ProjectCreationPendingChat({
       <div className="chat-log-wrap">
         <div className="chat-log" aria-busy="true">
           {prompt || cards.length > 0 ? (
-            <div className="msg user">
+            <div className="msg user" data-enter={enter}>
               {/* Attachments above, bubble below, right edges aligned —
                   the same `.msg-stack` the transcript uses. */}
               <div className="msg-stack">
@@ -175,7 +184,7 @@ export function ProjectCreationPendingChat({
               </div>
             </div>
           ) : null}
-          <div className="msg assistant">
+          <div className="msg assistant" data-enter={enter}>
             <div className="role">
               <AgentIcon id={iconId} size={20} className="role-agent-icon" />
               <span className="role-name">{agentName}</span>

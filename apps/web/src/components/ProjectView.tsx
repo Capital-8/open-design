@@ -14330,6 +14330,7 @@ export function ProjectView({
               prompt={creationHandoff.prompt}
               files={creationHandoff.files}
               agentId={config.agentId}
+              settled
             />
           ) : null}
         </div>

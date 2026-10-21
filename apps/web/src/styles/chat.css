@@ -541,6 +541,13 @@
    `<html>` 上;不设开关就没有这个属性,这条规则一个字都不生效。
    开关怎么开、开了会失去什么,见那个模块顶部的 docblock。 */
 :root[data-od-msg-enter-disabled] .msg { animation: none; }
+/* OPEND-3922 · 已经在屏幕上的消息不再重放入场。
+   新建项目的交接里,同一条消息会先后由三个组件画出来(过渡页的卡 →
+   ProjectView 里接手的卡 → 真正的 ChatPane)。`msg-enter` 是挂载即播的,
+   每换一次画它的组件就从透明重来一次,用户看到的就是对话区连闪两下。
+   画的一方确认「这一条用户已经看过了」时挂 `data-enter="skip"`,
+   之后才到的新消息不带这个属性,入场照常。 */
+.msg[data-enter='skip'] { animation: none; }
 .msg.user {
   align-self: flex-end;
   display: flex;

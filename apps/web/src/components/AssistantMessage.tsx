@@ -116,6 +116,7 @@ import type {
   SkillSummary,
 } from "../types";
 import type { ProjectMediaTask } from '@open-design/contracts';
+import { messageEnterAttribute } from '../runtime/chat/settled-entrance';
 
 type TranslateFn = (
   key: keyof Dict,
@@ -163,6 +164,8 @@ function textNeedsBrandBrowserAssistFallback(content: string): boolean {
 interface Props {
   message: ChatMessage;
   streaming: boolean;
+  /** OPEND-3922 · already shown by the creation hand-off card; do not replay `msg-enter`. */
+  skipEnter?: boolean;
   projectId?: string | null;
   // Analytics context for the assistant_feedback_* events. Defaults
   // applied at the call site keep AssistantMessage usable in tests
@@ -294,6 +297,7 @@ interface Props {
 const ASSISTANT_MESSAGE_COMPARED_PROPS: Array<keyof Props> = [
   'message',
   'streaming',
+  'skipEnter',
   'projectId',
   'projectKind',
   'conversationId',
@@ -402,6 +406,7 @@ function useTickingNow(active: boolean, runId?: string): StreamClock {
 function AssistantMessageImpl({
   message,
   streaming,
+  skipEnter = false,
   projectId = null,
   projectKind = null,
   conversationId = null,
@@ -1306,6 +1311,7 @@ function AssistantMessageImpl({
       /* 「接上一条,不再重复报名字」是状态,不是样式的私事 —— 给它自己的出口 */
       data-continuation={showRole ? 'false' : 'true'}
       data-assistant-message-id={message.id}
+      data-enter={messageEnterAttribute(skipEnter)}
     >
       {showRole ? (
         <div className="role" data-testid="assistant-role">

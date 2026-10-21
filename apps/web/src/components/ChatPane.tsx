@@ -1,4 +1,5 @@
 import { reportExperienceEvent } from '../observability/experience-diagnostics';
+import { messageEnterAttribute, rememberParkedMessageIds } from '../runtime/chat/settled-entrance';
 import { conversationMetaLabel } from '../runtime/chat/conversation-time';
 export { conversationMetaLabel } from '../runtime/chat/conversation-time';
 import { QuoteBar } from './chat/QuoteBar';
@@ -1494,6 +1495,19 @@ export function ChatPane({
    * 只是此刻长得一样。见 `buildChatRenderItems` 的注释。
    */
   const chatRenderItems = useMemo(() => buildChatRenderItems(displayMessages), [displayMessages]);
+  /**
+   * OPEND-3922 · rows this pane rendered while parked under the creation
+   * hand-off card (`composerLayerHidden`). The card was already showing that
+   * turn, so when it comes down these rows must appear settled rather than
+   * replay `msg-enter`. See `runtime/chat/settled-entrance.ts`.
+   */
+  const settledMessageIdsRef = useRef<ReadonlySet<string>>(new Set());
+  settledMessageIdsRef.current = rememberParkedMessageIds(
+    settledMessageIdsRef.current,
+    composerLayerHidden,
+    displayMessages.map((message) => message.id),
+  );
+  const settledMessageIds = settledMessageIdsRef.current;
   /** Live handle on the chat-health surface, for the effects that feed it. */
   const chatSurfaceRef = useRef<ChatSurfaceHandle | null>(null);
   const chatVirtualized = isChatVirtualized(chatRenderItems);
@@ -4479,6 +4493,7 @@ export function ChatPane({
                 <ChatRows
                   items={chatRenderItems}
                   messages={displayMessages}
+                  settledMessageIds={settledMessageIds}
                   streaming={streaming}
                   lowBalanceTurnCards={lowBalanceTurnCards}
                   lowBalanceTurnCardAudience={amrBalanceAudience}
@@ -5243,6 +5258,7 @@ function ChatConversationLoading({ t }: { t: TranslateFn }) {
 function ChatRows({
   items,
   messages,
+  settledMessageIds,
   streaming,
   lowBalanceTurnCards,
   lowBalanceTurnCardAudience = 'owner',
@@ -5317,6 +5333,11 @@ function ChatRows({
    * 「上一轮宣布过哪些待办」和「助手换没换人」数的是真实回合,不是画出来的行。
    */
   messages: ChatMessage[];
+  /**
+   * OPEND-3922 · message ids already shown to the user by the creation
+   * hand-off card; their rows skip `msg-enter` (see `settled-entrance.ts`).
+   */
+  settledMessageIds: ReadonlySet<string>;
   /**
    * 每一轮各自那张升级卡:key = 那一轮助手消息的 id,value = 那一轮结束时的余额。
    *
@@ -5456,6 +5477,7 @@ function ChatRows({
           t={t}
           highlighted={highlightedUserMessageId === m.id}
           onResend={onResendUserMessage}
+          skipEnter={settledMessageIds.has(m.id)}
         />
       );
     }
@@ -5469,6 +5491,7 @@ function ChatRows({
       <AssistantMessage
         message={m}
         streaming={messageStreaming}
+        skipEnter={settledMessageIds.has(m.id)}
         projectId={projectId}
         projectKind={projectKindForTracking}
         conversationId={activeConversationId}
@@ -6678,8 +6701,11 @@ const UserMessage = memo(UserMessageImpl);
   t,
   highlighted,
   onResend,
+  skipEnter = false,
 }: {
   message: ChatMessage;
+  /** OPEND-3922 · already shown by the creation hand-off card; do not replay `msg-enter`. */
+  skipEnter?: boolean;
   projectId: string | null;
   projectFileNames?: Set<string>;
   onRequestOpenFile?: (name: string) => void;
@@ -6744,6 +6770,7 @@ const UserMessage = memo(UserMessageImpl);
       className={`msg user${highlighted ? ' is-chat-rail-highlighted' : ''}`}
       data-testid="user-message"
       data-chat-message-id={message.id}
+      data-enter={messageEnterAttribute(skipEnter)}
     >
       <span className="sr-only">{t('chat.you')}</span>
       {/* CURRENT workspace targets and applied plugin/scenario snapshots still
