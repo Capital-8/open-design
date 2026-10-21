@@ -18,6 +18,8 @@ import {
 } from '../../src/providers/registry';
 import { fetchAmrModels, fetchVelaLoginStatus } from '../../src/providers/daemon';
 import { listProjects, listTemplates } from '../../src/state/projects';
+import { notifyWorkspaceContextRefresh, resetWorkspaceContextCache, resetWorkspaceBillingCache } from '../../src/collab/useWorkspaceContext';
+import { workspaceContextFixture } from '../helpers/workspace-context';
 
 // Settings is now a full-page route (`/settings`): App.openSettings navigates
 // instead of toggling a modal flag, so the router mock must feed navigate()
@@ -242,6 +244,8 @@ async function advanceTestClock(ms: number): Promise<void> {
 describe('App AMR polling', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    resetWorkspaceContextCache();
+    resetWorkspaceBillingCache();
     useRouteMock.mockReturnValue(homeRouteMock);
     mockedDaemonIsLive.mockResolvedValue(true);
     mockedFetchAgentsStream.mockResolvedValue([
@@ -264,6 +268,7 @@ describe('App AMR polling', () => {
     mockedLoadConfig.mockReturnValue({ ...baseConfig });
     mockedMergeDaemonConfig.mockImplementation((local) => local);
     mockedFetchDaemonConfig.mockResolvedValue({});
+    mockedFetchAmrModels.mockReset();
     mockedFetchAmrModels
       .mockResolvedValueOnce({
         source: 'preset',
@@ -291,9 +296,58 @@ describe('App AMR polling', () => {
 
   afterEach(() => {
     cleanup();
+    resetWorkspaceContextCache();
+    resetWorkspaceBillingCache();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+  });
+
+  it('refreshes catalog entitlements for the selected A to B to A workspace principal', async () => {
+    const a = workspaceContextFixture({ workspaceId: 'free-a', workspaceMemberId: 'member-a' });
+    const b = workspaceContextFixture({ workspaceId: 'go-b', workspaceMemberId: 'member-b' });
+    mockedFetchAmrModels.mockReset();
+    mockedFetchAmrModels
+      .mockResolvedValueOnce({ source: 'remote', models: [{ id: 'free-a-flash', label: 'Flash', enabled: true }] })
+      .mockResolvedValueOnce({ source: 'remote', models: [{ id: 'go-b-pro', label: 'Pro', enabled: true }] })
+      .mockResolvedValueOnce({ source: 'remote', models: [{ id: 'free-a-flash', label: 'Flash', enabled: true }] });
+    notifyWorkspaceContextRefresh({ context: a });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('amr-model').textContent).toBe('free-a-flash'));
+    expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(a);
+
+    act(() => notifyWorkspaceContextRefresh({ context: b }));
+    await waitFor(() => expect(screen.getByTestId('amr-model').textContent).toBe('go-b-pro'));
+    expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(b);
+
+    act(() => notifyWorkspaceContextRefresh({ context: a }));
+    await waitFor(() => expect(screen.getByTestId('amr-model').textContent).toBe('free-a-flash'));
+    expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(a);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not borrow an unscoped agent catalog or a late prior-workspace catalog', async () => {
+    const a = workspaceContextFixture({ workspaceId: 'free-a', workspaceMemberId: 'member-a' });
+    const b = workspaceContextFixture({ workspaceId: 'go-b', workspaceMemberId: 'member-b' });
+    const lateA = deferred<Awaited<ReturnType<typeof fetchAmrModels>>>();
+    const pendingB = deferred<Awaited<ReturnType<typeof fetchAmrModels>>>();
+    mockedFetchAmrModels.mockReset();
+    mockedFetchAmrModels.mockReturnValueOnce(lateA.promise).mockReturnValueOnce(pendingB.promise);
+    mockedFetchAgentsStream.mockResolvedValue([{
+      id: 'amr', name: 'AMR', bin: 'vela', available: true, version: '1.0.0',
+      models: [{ id: 'ambient-pro', label: 'Ambient Pro', enabled: true }],
+    }]);
+    notifyWorkspaceContextRefresh({ context: a });
+    render(<App />);
+    await waitFor(() => expect(mockedFetchAgentsStream).toHaveBeenCalled());
+    expect(screen.getByTestId('amr-model').textContent).toBe('none');
+
+    act(() => notifyWorkspaceContextRefresh({ context: b }));
+    await waitFor(() => expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2));
+    await act(async () => { lateA.resolve({ source: 'remote', models: [{ id: 'late-a-pro', label: 'A Pro', enabled: true }] }); });
+    expect(screen.getByTestId('amr-model').textContent).toBe('none');
+    await act(async () => { pendingB.resolve({ source: 'remote', models: [{ id: 'b-pro', label: 'B Pro', enabled: true }] }); });
+    expect(screen.getByTestId('amr-model').textContent).toBe('b-pro');
   });
 
   it('keeps polling AMR models until the remote catalog replaces the preset list', async () => {

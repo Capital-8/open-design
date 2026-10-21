@@ -3622,3 +3622,38 @@ describe('parseAmrEntryAnalyticsPayload — entry sources added in this PR', () 
     ).toBeNull();
   });
 });
+
+// Model entitlements must use the request's verified selection, never the
+// daemon's ambient CLI workspace or a different tab's current selection.
+describe('GET /api/amr/models explicit workspace authority', () => {
+  it('rejects a denied selected principal before reading a model catalog', async () => {
+    const app = express();
+    const verifyWorkspaceReadAuthority = vi.fn(async () => ({
+      ok: false as const,
+      status: 403 as const,
+      code: 'WORKSPACE_ACCESS_DENIED' as const,
+      message: 'the requested workspace is not available to this member',
+    }));
+    const lifecycle = registerVelaRoutes(app, {
+      paths: { RUNTIME_DATA_DIR: process.env.OD_DATA_DIR as string },
+      appConfig: { readAppConfig },
+      http: {},
+      env: process.env,
+      verifyWorkspaceReadAuthority,
+    });
+    const scopedServer = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => scopedServer.once('listening', resolve));
+    try {
+      const address = scopedServer.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/amr/models`, {
+        headers: { 'x-od-workspace-id': 'free-a', 'x-od-workspace-member-id': 'foreign-member' },
+      });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: 'WORKSPACE_ACCESS_DENIED' });
+      expect(verifyWorkspaceReadAuthority).toHaveBeenCalledTimes(1);
+    } finally {
+      await lifecycle.close();
+      await new Promise<void>((resolve) => scopedServer.close(() => resolve()));
+    }
+  });
+});
