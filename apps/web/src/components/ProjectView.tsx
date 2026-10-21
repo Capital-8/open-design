@@ -1,4 +1,5 @@
 import { homeAutoSendIdentity, stableIdentityDigest, type HomeRequestConcurrencyRejection } from '../runtime/home-auto-send-identity';
+import { withLiveArtifactDeliveries } from '../runtime/live-artifact-delivery';
 import { readRetriedErrorSurface, retriedErrorSurfaceKey, writeRetriedErrorSurface } from '../runtime/chat/retried-error-surface';
 import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './share/observed-public-share-link';
 import type { ShareLoginReturn } from './share/share-login-return';
@@ -708,13 +709,9 @@ function mergeServerMessageWithLocal(
     if ((local.content?.length ?? 0) > (server.content?.length ?? 0)) {
       merged.content = local.content;
     }
-    if (
-      !(server.strategyTaskBlocked === false && local.strategyTaskBlocked === true)
-      && (
-        (local.events?.length ?? 0) > (server.events?.length ?? 0)
-        || localThinkingExtendsServerSnapshot(server, local)
-      )
-    ) {
+    if (!(server.strategyTaskBlocked === false && local.strategyTaskBlocked === true)
+      && ((local.events?.length ?? 0) > (server.events?.length ?? 0)
+        || localThinkingExtendsServerSnapshot(server, local))) {
       merged.events = local.events;
     }
   }
@@ -3595,6 +3592,27 @@ export function ProjectView({
   };
   const fundingDialogContextRef = useRef(fundingDialogContext);
   fundingDialogContextRef.current = fundingDialogContext;
+  // A → B → A is still a new selection intent. Comparing only the current
+  // model/workspace would let A's first, delayed preflight authorize or block
+  // the later A draft. Gateway feedback remains owned by its admitted run.
+  const fundingSelectionKey = JSON.stringify([
+    project.id,
+    projectRunAuthorityKey,
+    config.mode,
+    config.agentId,
+    fundingDialogContext.modelId,
+  ]);
+  const fundingSelectionRef = useRef({
+    key: fundingSelectionKey,
+    generation: 0,
+  });
+  if (fundingSelectionRef.current.key !== fundingSelectionKey) {
+    fundingSelectionRef.current = {
+      key: fundingSelectionKey,
+      generation: fundingSelectionRef.current.generation + 1,
+    };
+  }
+
   // AMR funding feedback owns one dialog in its original conversation/account.
   // Display-wallet reads and historical replays cannot open or reopen it.
   const showAmrFundingFailure = useCallback((input: {
@@ -6836,6 +6854,8 @@ export function ProjectView({
           ?? await fetchChatRunStatus(runId, projectRunWorkspaceContext);
         if (cancelled) return;
         if (!physicalStatus) {
+          // A missing status response cannot invalidate persisted success.
+          if (message.runStatus === 'succeeded') continue;
           // A local retry seal is not a daemon terminal verdict. Keep this
           // run's receipts for the existing manual reconnect action.
           // `fetchChatRunStatus` returns null on ANY non-OK response or fetch
@@ -7191,7 +7211,7 @@ export function ProjectView({
             // OPEND-2588 (2026-09-04): a turn that finishes while we are
             // replaying it opens ALL of its primary artifacts, same as a live
             // completion — the user cannot tell the two apart.
-            const turnArtifacts = selectAutoOpenTurnArtifacts(produced, nextFiles, {
+            const turnArtifacts = withLiveArtifactDeliveries(selectAutoOpenTurnArtifacts(produced, nextFiles, {
               ...autoOpenArtifactOptions,
               preTurnFileNames: beforeFileNames,
               turnStartedAt: status.createdAt || message.startedAt || message.createdAt || null,
@@ -7202,7 +7222,7 @@ export function ProjectView({
                 project.id,
                 projectDetail.resolvedDir,
               ),
-            });
+            }), message.events);
             if (turnArtifacts.focused && !userTookOverPreviewRef.current) {
               requestOpenTurnArtifacts(turnArtifacts.open, turnArtifacts.focused);
             }
@@ -7728,7 +7748,7 @@ export function ProjectView({
                 );
                 // OPEND-2588 (2026-09-04): see the replay path above — a run
                 // that lands while reattached is still a turn finishing.
-                const turnArtifacts = selectAutoOpenTurnArtifacts(produced, nextFiles, {
+                const turnArtifacts = withLiveArtifactDeliveries(selectAutoOpenTurnArtifacts(produced, nextFiles, {
                   ...autoOpenArtifactOptions,
                   preTurnFileNames: beforeFileNames,
                   turnStartedAt: status.createdAt || message.startedAt || message.createdAt || null,
@@ -7742,7 +7762,7 @@ export function ProjectView({
                     project.id,
                     projectDetail.resolvedDir,
                   ),
-                });
+                }), needsFullReplay ? replayedEvents : message.events);
                 if (turnArtifacts.focused && !userTookOverPreviewRef.current) {
                   requestOpenTurnArtifacts(turnArtifacts.open, turnArtifacts.focused);
                 }
@@ -9013,8 +9033,10 @@ export function ProjectView({
         && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
         && currentWorkspaceAccountGeneration() === sendAccountGeneration
         && fundingDialogContextRef.current.isAmr;
+      const fundingSelectionGeneration = fundingSelectionRef.current.generation;
       const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
-        && fundingDialogContextRef.current.modelId === fundingModelId;
+        && fundingDialogContextRef.current.modelId === fundingModelId
+        && fundingSelectionRef.current.generation === fundingSelectionGeneration;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
         ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
         : Promise.resolve('unknown' as const);
@@ -9032,10 +9054,19 @@ export function ProjectView({
         // A cached verdict can settle before React flushes the paint updater.
         // Queue the rollback behind it so that its original transcript exists.
         setMessages((current) => {
-          const restore = paintedFrom.messages;
-          paintedFrom.messages = null;
-          return messagesConversationIdRef.current === runConversationId
-            ? restore ?? current : current;
+          if (messagesConversationIdRef.current !== runConversationId) return current;
+          // React can replay this updater. Keep the snapshot reusable and
+          // remove only this send's provisional rows; preserve transcript
+          // updates and messages that arrived while the preflight was pending.
+          const restore = paintedFrom.messages ?? [];
+          const originalIds = new Set(restore.map((message) => message.id));
+          const currentById = new Map(current.map((message) => [message.id, message]));
+          return [
+            ...restore.map((message) => message.id === userMsg.id || message.id === assistantId
+              ? message : currentById.get(message.id) ?? message),
+            ...current.filter((message) => !originalIds.has(message.id)
+              && message.id !== userMsg.id && message.id !== assistantId),
+          ];
         });
       };
       // A Home witness skips only the duplicate sign-in read. Every actual
@@ -9647,7 +9678,10 @@ export function ProjectView({
         if (ev.kind === 'live_artifact') {
           setLiveArtifactEvents((prev) => appendLiveArtifactEventItem(prev, ev));
           void refreshLiveArtifacts().then(() => {
-            if (ev.action !== 'deleted') requestOpenFile(liveArtifactTabId(ev.artifactId));
+            if (ev.action !== 'deleted' && !userTookOverPreviewRef.current) {
+              completionSelectedAutoOpen = true;
+              requestOpenFile(liveArtifactTabId(ev.artifactId));
+            }
           });
           onProjectsRefresh();
           return;
@@ -10112,7 +10146,7 @@ export function ProjectView({
               // `turnArtifacts.focused` is byte-for-byte the old
               // `selectAutoOpenTurnArtifact` answer, so the focused tab below
               // is decided exactly as it was before; only `.open` is new.
-              const turnArtifacts = selectAutoOpenTurnArtifacts(produced, nextFiles, {
+              const turnArtifacts = withLiveArtifactDeliveries(selectAutoOpenTurnArtifacts(produced, nextFiles, {
                 ...autoOpenArtifactOptions,
                 preTurnFileNames: beforeFileNames,
                 turnStartedAt: startedAt,
@@ -10126,9 +10160,11 @@ export function ProjectView({
                   project.id,
                   projectDetail.resolvedDir,
                 ),
-              });
+              }), latestAssistantMsg.events);
               const turnArtifactToOpen = turnArtifacts.focused;
-              const producedArtifactToOpen = selectAutoOpenProducedArtifact(
+              const producedArtifactToOpen = turnArtifactToOpen && isLiveArtifactTabId(turnArtifactToOpen)
+                ? turnArtifactToOpen
+                : selectAutoOpenProducedArtifact(
                 [
                   ...provenTraceTouchedFiles(),
                   ...(turnArtifactToOpen

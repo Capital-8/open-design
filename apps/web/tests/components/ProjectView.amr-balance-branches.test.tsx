@@ -37,7 +37,7 @@ import {
   type AmrWalletSnapshot,
   type WorkspaceCollabContext,
 } from '@open-design/contracts';
-import type { ComponentProps, ReactNode } from 'react';
+import { StrictMode, type ComponentProps, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { composerText, flushMounts, typeAndSettle } from '../helpers/lexical-composer';
@@ -47,6 +47,7 @@ import type { ProjectWorkspaceScopeState } from '../../src/collab/useProjectWork
 import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext';
 import { streamViaDaemon } from '../../src/providers/daemon';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
+import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
 import {
   createConversation,
   listConversations,
@@ -858,6 +859,7 @@ describe('守卫:判定放行时四种分支一个都不许冒出来', () => {
 
 describe('Link request concurrency rejection preserves the original send', () => {
   beforeEach(() => {
+    invalidateAmrFundingFeedback();
     realChatPane.enabled = false;
     localizedOwnerCopy.enabled = false;
     window.localStorage.clear(); window.sessionStorage.clear(); resetWorkspaceContextCache(); stubFetch();
@@ -873,6 +875,67 @@ describe('Link request concurrency rejection preserves the original send', () =>
     mockedStreamViaDaemon.mockResolvedValue(undefined);
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); });
+
+  it('StrictMode funding rejection retracts the provisional turn without replacing existing output', async () => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const existing: ChatMessage = {
+      id: 'completed-existing-output', role: 'assistant', content: 'Existing completed project output',
+      runId: 'existing-run', runStatus: 'succeeded', createdAt: 1,
+      producedFiles: [{ name: 'existing-output.html', size: 100, mtime: 1, kind: 'html', mime: 'text/html' }],
+    };
+    mockedListMessages.mockResolvedValue([existing]);
+    const originalFetch = globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const fundingRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/preflight?') ? fundingRead() : originalFetch(input, init)));
+    render(projectViewElement({ project: { ...project(), pendingPrompt: null } as never }), { wrapper: StrictMode });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    act(() => { outcome = chatPaneSpy.mock.calls.at(-1)![0].onSend('Retain the preflight draft',
+      [{ path: 'strict-brief.txt', name: 'strict-brief.txt', kind: 'file' }], []); });
+    await waitFor(() => expect(fundingRead).toHaveBeenCalledOnce());
+    await act(async () => { finish(new Response(JSON.stringify({ preflight: {
+      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      modelId: null, generatedAt: new Date().toISOString(), fundingCheck: 'insufficient', balanceUsd: '0',
+    } }))); });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    await waitFor(() => expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toEqual([existing]));
+  });
+
+  it.each(['available', 'insufficient'] as const)('a model selection round trip invalidates the pending %s preflight', async (fundingCheck) => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const agents = [{ id: 'amr', name: 'amr', bin: 'vela', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }, { id: 'deepseek-v4.1-flash', label: 'Flash' }] }] as AgentInfo[];
+    const firstConfig = { ...config, agentModels: { amr: { model: 'glm-5' } } };
+    let finish!: (response: Response) => void;
+    const originalFetch = globalThis.fetch;
+    const fundingRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/preflight?') ? fundingRead() : originalFetch(input, init)));
+    const props = { project: { ...project(), pendingPrompt: null } as never, agents, config: firstConfig };
+    const view = renderProjectView(props);
+    await flushMounts();
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    act(() => { outcome = chatPaneSpy.mock.calls.at(-1)![0].onSend('Retain the unsent model selection draft', [{ path: 'scope.txt', name: 'scope.txt', kind: 'file' }], []); });
+    await waitFor(() => expect(fundingRead).toHaveBeenCalledOnce());
+    view.rerender(projectViewElement({ ...props,
+      config: { ...config, agentModels: { amr: { model: 'deepseek-v4.1-flash' } } } }));
+    await flushMounts();
+    view.rerender(projectViewElement(props));
+    await flushMounts();
+    await act(async () => { finish(new Response(JSON.stringify({ preflight: {
+      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      modelId: 'glm-5', generatedAt: new Date().toISOString(), fundingCheck, balanceUsd: '0',
+    } }))); });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+  });
 
   it.each(['owner', 'admin', 'member'] as const)('%s sees a real request-limit dialog, retains text/files and retries only manually', async (role) => {
     workspaceScopeMocks.ambientContext = callerContext(role, 'team_pro');
