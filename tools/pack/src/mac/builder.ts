@@ -139,7 +139,7 @@ export async function runElectronBuilder(
       identity: config.signed ? undefined : null,
       // The afterSign hook owns notarization, retries, and stapling. Leaving
       // this unset also enables electron-builder's credential-driven notarization.
-      notarize: false,
+      notarize: config.macNotarize ? undefined : false,
       target: targets,
     },
     // Register the workspace-invite deeplink scheme so macOS routes

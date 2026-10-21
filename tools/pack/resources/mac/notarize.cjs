@@ -106,6 +106,8 @@ async function stapleApp(appPath) {
 }
 
 async function notarizeApp(appPath, credentials) {
+  const started = Date.now();
+  console.warn(`[notary-measure] custom hook start ${new Date().toISOString()}`);
   const tempDir = await mkdtemp(path.join(tmpdir(), "open-design-notarize-"));
   try {
     const filePath = path.join(tempDir, `${path.parse(appPath).name}.zip`);
@@ -116,8 +118,12 @@ async function notarizeApp(appPath, credentials) {
       throw new Error(`Failed to zip app for notarization:\n\n${zipResult.output.trim()}`);
     }
 
+    console.warn(`[notary-measure] zip ready elapsedMs=${Date.now() - started}`);
+    const submitted = Date.now();
     await submitNotarization(filePath, credentials);
+    console.warn(`[notary-measure] submit accepted elapsedMs=${Date.now() - submitted}`);
     await stapleApp(appPath);
+    console.warn(`[notary-measure] custom hook complete elapsedMs=${Date.now() - started}`);
   } finally {
     await rm(tempDir, { force: true, recursive: true });
   }
