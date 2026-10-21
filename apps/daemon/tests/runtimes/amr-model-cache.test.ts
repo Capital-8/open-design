@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildAmrModelCacheKey } from '../../src/runtimes/amr-model-probe.js';
 import { AmrModelLoadingCache } from '../../src/runtimes/amr-model-cache.js';
 
 const preset = [{ id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' }];
@@ -60,5 +61,31 @@ describe('AmrModelLoadingCache.getAuthoritative', () => {
     const pending = cache.getAuthoritative('k', fetchers, 1_000);
     await vi.advanceTimersByTimeAsync(300);
     await expect(pending).resolves.toMatchObject({ source: 'remote', models: remote });
+  });
+});
+
+// A remote catalog's enabled flags are workspace entitlements, even when two
+// workspaces share the same account, credentials and installed CLI binary.
+describe('AMR model catalog workspace partition', () => {
+  it('never reuses one workspace entitlement catalog for another workspace', () => {
+    const shared = {
+      launchPath: '/fixture/vela',
+      credentialRevision: {
+        authSource: 'file' as const,
+        profile: 'local',
+        loggedIn: true,
+        userId: 'same-user',
+        userEmail: 'same@example.test',
+        configMtimeMs: 1,
+        credentialFingerprint: 'same-credential',
+      },
+    };
+    const keyFor = (workspaceId: string) => buildAmrModelCacheKey({
+      ...shared,
+      env: { VELA_WORKSPACE_ID: workspaceId },
+    });
+
+    expect(keyFor('free-a')).not.toBe(keyFor('go-b'));
+    expect(keyFor('free-a')).toBe(keyFor('free-a'));
   });
 });
