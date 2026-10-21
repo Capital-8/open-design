@@ -40,6 +40,25 @@ afterEach(() => {
 });
 
 describe('AmrBalanceDialog', () => {
+  it('shows four F07 benefits including free invitations and shared allowance', () => {
+    render(<AmrBalanceDialog
+      reason="insufficient"
+      balanceUsd="0.00"
+      profile="local"
+      entrySource="home_balance_gate_upgrade"
+      workspaceContext={workspaceContextFixture({
+        workspaceId: 'f07-free-space', workspaceMemberId: 'f07-owner',
+        workspaceType: 'team', role: 'owner', planId: null,
+      })}
+      metricsConsent={false}
+      installationId={null}
+      onClose={vi.fn()}
+      onResolved={vi.fn()}
+    />);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Invite members for free and share allowance');
+  });
+
   it('dismisses from the corner close button', () => {
     const onClose = vi.fn();
 
