@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 
 import { T } from "@/timeouts";
 
@@ -2441,8 +2442,9 @@ process.stdin.on("end", () => {
     const betaWinJob = sectionBetween(releaseBetaWorkflow, "  build_win_x64:", "  build_linux_x64:");
     expect(betaWinJob).not.toContain("tools\\release\\scripts\\build-platform.ps1");
     expect(betaWinJob).toContain("uses: actions/cache/restore@v5");
-    expect(betaWinJob).toContain("uses: actions/cache/save@v5");
-    expect(betaWinJob).toContain("tools-pack-win-v1-beta-$env:RUNNER_OS-");
+    expect(betaWinJob).not.toContain("uses: actions/cache/save@v5");
+    expect(betaWinJob).toContain("uses: ./.github/actions/defer-pack-cache");
+    expect(betaWinJob).toContain("tools-pack-win-v2-slim-beta-$env:RUNNER_OS-");
     expect(betaWinJob).toContain('"tools-pack", "win", "build"');
     expect(betaWinJob).toContain("tools-pack win validate-payload");
     expect(betaWinJob).toContain("pnpm exec tsx scripts/release-smoke.ts win specs/win.spec.ts");
@@ -4295,3 +4297,45 @@ ZyGlUhPCUbKdTiBJuCGaDKzeEAlC8dsar2zjg9CVue7w3CaamQpjnV0d2IHJiVAH
 QONQvdtLnZ6GeNPe06oBrq7R9SL5/tkqgSq8lCrDE6jFZnfXNMdDmZY3wTcFcdyG
 yW/DsIUs5ZzcHza5rw==
 -----END CERTIFICATE-----`;
+
+
+describe("packaging optimization workflow boundaries", () => {
+  it("persists Windows caches in an independent workflow after artifacts are published", async () => {
+    for (const [file, job] of [[releaseBetaWorkflowPath, "build_win_x64"], [releasePrereleaseWorkflowPath, "build_win"], [releaseStableWorkflowPath, "build_win"]] as const) {
+      const workflow = parseYaml(await readFile(file, "utf8"));
+      const steps = workflow.jobs[job].steps;
+      expect(steps.some((step: { uses?: string }) => step.uses === "actions/cache/save@v5")).toBe(false);
+      const deferred = steps.findIndex((step: { uses?: string }) => step.uses === "./.github/actions/defer-pack-cache");
+      expect(deferred).toBe(steps.length - 1);
+      expect(steps[deferred]["continue-on-error"]).toBe(true);
+      expect(steps[deferred].if).toContain("success()");
+      expect(JSON.stringify(workflow.jobs.publish.needs)).not.toContain("cache");
+    }
+    const maintenance = parseYaml(await readFile(join(workspaceRoot, ".github/workflows/cache-maintenance.yml"), "utf8"));
+    const saver = maintenance.jobs["save-windows-pack"];
+    expect(saver.concurrency.group).not.toContain("release");
+    expect(saver.steps.findIndex((step: { name: string }) => step.name === "Validate source run"))
+      .toBeLessThan(saver.steps.findIndex((step: { uses?: string }) => step.uses === "actions/download-artifact@v8"));
+    const validate = saver.steps.find((step: { name: string }) => step.name === "Validate source run").with.script;
+    expect(validate).toContain("run.head_sha !== context.sha");
+    expect(validate).toContain("run.head_repository.full_name");
+    expect(validate).toContain("run.head_branch !== context.ref");
+    const composite = await readFile(join(workspaceRoot, ".github/actions/defer-pack-cache/action.yml"), "utf8");
+    expect(composite).toContain("handoff.py artifact-name pack-cache windows");
+    expect(composite).toContain("gh workflow run cache-maintenance.yml");
+    expect(composite).toContain("compression-level: 0");
+  });
+
+  it("checks the exact beta build commit independently without changing prerelease delivery gates", async () => {
+    const beta = parseYaml(await readFile(releaseBetaWorkflowPath, "utf8"));
+    expect(beta.jobs.typecheck.steps[0].with.ref).toBe("${{ needs.metadata.outputs.commit }}");
+    expect(beta.jobs.typecheck.steps.some((step: { run?: string }) => step.run === "pnpm --filter @open-design/web typecheck")).toBe(true);
+    for (const id of ["build_mac_arm64", "build_mac_x64", "build_win_x64", "publish"]) {
+      expect(JSON.stringify(beta.jobs[id].needs)).not.toContain("typecheck");
+    }
+    const prerelease = parseYaml(await readFile(releasePrereleaseWorkflowPath, "utf8"));
+    expect(prerelease.jobs.build_win.needs).toBe("metadata");
+    expect(prerelease.jobs.build_mac.needs).toBe("metadata");
+    expect(Object.keys(prerelease.jobs).some((id) => id.includes("cache"))).toBe(false);
+  });
+});
