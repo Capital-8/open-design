@@ -28,7 +28,7 @@
  * `tests/styles/w126-tooltip-design-parity.test.ts` 里读源文件字节。
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TooltipLayer } from '../../src/components/TooltipLayer';
@@ -156,5 +156,56 @@ describe('读屏 —— 隐藏态不许被念出来', () => {
 
     expect(bubble().getAttribute('aria-hidden')).toBe('true');
     expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+});
+
+describe('modal lifecycle', () => {
+  it('keeps tooltips inside the top modal and restores the outer modal after closing it', async () => {
+    const content = (nested: boolean) => <>
+      <div role="dialog" aria-modal="true" aria-label="Outer">
+        <button className="od-tooltip" data-tooltip="Outer help">Outer action</button>
+      </div>
+      {nested && <div role="alertdialog" aria-modal="true" aria-label="Inner">
+        <button className="od-tooltip" data-tooltip="Inner help">Inner action</button>
+      </div>}
+      <TooltipLayer />
+    </>;
+    const view = render(content(false));
+    const outer = screen.getByRole('button', { name: 'Outer action' });
+    fireEvent.pointerOver(outer);
+    expect(screen.getByRole('tooltip').textContent).toBe('Outer help');
+    view.rerender(content(true));
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
+    fireEvent.pointerOver(outer);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.pointerOver(screen.getByRole('button', { name: 'Inner action' }));
+    expect(screen.getByRole('tooltip').textContent).toBe('Inner help');
+    view.rerender(content(false));
+    fireEvent.pointerOver(outer);
+    expect(screen.getByRole('tooltip').textContent).toBe('Outer help');
+  });
+
+  it('immediately dismisses an existing background tooltip when a modal appears', async () => {
+    const content = (open: boolean) => <>
+      <button className="od-tooltip" data-tooltip="Stop">Run control</button>
+      {open && <div role="dialog" aria-modal="true" aria-label="Rejected">
+        <button className="od-tooltip" data-tooltip="Help">Modal help</button>
+      </div>}
+      <TooltipLayer />
+    </>;
+    const view = render(content(false));
+    const control = screen.getByRole('button', { name: 'Run control' });
+    fireEvent.pointerOver(control);
+    expect(screen.getByRole('tooltip').textContent).toBe('Stop');
+    view.rerender(content(true));
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
+    expect(bubble().style.visibility).toBe('hidden');
+    fireEvent.pointerOver(control);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.pointerOver(screen.getByRole('button', { name: 'Modal help' }));
+    expect(screen.getByRole('tooltip').textContent).toBe('Help');
+    view.rerender(content(false));
+    fireEvent.pointerOver(control);
+    expect(screen.getByRole('tooltip').textContent).toBe('Stop');
   });
 });
