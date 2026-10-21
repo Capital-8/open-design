@@ -274,6 +274,7 @@ import {
 } from './runtimes/plain-stream.js';
 import {
   readVelaLoginStatus,
+  readVelaCredentialRevision,
   resolveAmrProfile,
 } from './integrations/vela.js';
 import { isAbortedOperationError } from './integrations/aborted-error.js';
@@ -1153,7 +1154,7 @@ import {
   bindProjectToPersistedAutomationWorkspace,
   normalizePersistedAutomationWorkspaceScope,
 } from './automations/workspace-scope.js';
-import { resolveAmrModelProbe } from './runtimes/amr-model-probe.js';
+import { amrModelScope, resolveAmrModelProbe } from './runtimes/amr-model-probe.js';
 import { createPluginInstallationHelpers, normalizeProjectPluginFolderPath, resolveProjectChildDirectory } from './services/plugin-installation.js';
 import { createPluginShareTaskStore } from './services/plugin-share-tasks.js';
 import { getRouteRegistrationInventory, installRouteRegistrationGuard } from './route-registration-guard.js';
@@ -9879,6 +9880,7 @@ export async function startServer({
     http: { getPublicBaseUrl },
     env: process.env,
     onCredentialStateObserved: refreshWorkspaceHubAccountIdentity,
+    verifyWorkspaceReadAuthority,
   });
 
   const allowScopedPluginReplace = (
@@ -12519,13 +12521,30 @@ export async function startServer({
     } catch {
       configuredAgentEnv = {};
     }
-    const requestedLiveModelScope = def.id === 'amr'
-      ? resolveAmrProfile({
+    const requestedAmrModelActor = def.id === 'amr'
+      ? authenticatedRunActor(process.env, configuredAgentEnv)
+      : null;
+    let requestedLiveModelScope = def.id === 'amr'
+      ? amrModelScope({
           ...process.env,
           ...(def.env || {}),
           ...configuredAgentEnv,
-        })
+          ...(run.workspaceScope ? { VELA_WORKSPACE_ID: run.workspaceScope.workspaceId } : {}),
+        }, readVelaCredentialRevision(process.env, configuredAgentEnv))
       : null;
+    // Normal device-login token rotation preserves the actor. Opaque key
+    // overrides have no actor proof, so only their unchanged revision is safe
+    // during preparation. This guard never terminates an already-spawned run.
+    const amrModelIdentityMatches = (env, configuredEnv = {}) => {
+      const currentActor = authenticatedRunActor(env, configuredEnv);
+      if (requestedAmrModelActor && currentActor) return requestedAmrModelActor === currentActor;
+      return amrModelScope({
+        ...env,
+        ...configuredEnv,
+        ...(run.workspaceScope ? { VELA_WORKSPACE_ID: run.workspaceScope.workspaceId } : {}),
+      }, readVelaCredentialRevision(env, configuredEnv)) === requestedLiveModelScope;
+    };
+    const amrModelIdentityChangedMessage = 'AMR sign-in changed during run setup. Retry with the current account.';
     const configuredModel =
       typeof appConfigForRun?.agentModels?.[def.id]?.model === 'string'
         ? appConfigForRun.agentModels[def.id].model
@@ -12574,7 +12593,11 @@ export async function startServer({
       // same rewrite before spawn; keeping this earlier copy aligned prevents
       // stored concrete session models from comparing against raw `default`.
       try {
-        const resumeProbe = await resolveAmrModelProbe({ dataDir: RUNTIME_DATA_DIR, env: process.env, readAppConfig });
+        const resumeProbe = await resolveAmrModelProbe({ dataDir: RUNTIME_DATA_DIR, env: process.env, readAppConfig, workspaceId: run.workspaceScope?.workspaceId });
+        if (!amrModelIdentityMatches(resumeProbe.env, resumeProbe.configuredEnv)) {
+          throw new Error(amrModelIdentityChangedMessage);
+        }
+        requestedLiveModelScope = resumeProbe.modelScope;
         const askedForDefault =
           typeof model !== 'string' || !model.trim() || model.trim().toLowerCase() === 'default';
         const resumeFetchers = {
@@ -12604,8 +12627,10 @@ export async function startServer({
           agentOptions.model = safeModel;
         }
       } catch {
-        // Degrade silently: keep the requested value. The preflight below records
-        // the probe failure and applies the identical fallback.
+        // Same-actor catalog failures retain the normal fallback below.
+      }
+      if (!amrModelIdentityMatches(process.env, configuredAgentEnv)) {
+        return failRun('AMR_AUTH_REQUIRED', amrModelIdentityChangedMessage);
       }
     }
     const previousMarkerTask = isOdNextInitialRun && strategyTaskAtStart?.continuedFromTaskExecutionId
@@ -14026,7 +14051,7 @@ export async function startServer({
             agentLaunch,
           )
         : null;
-      const amrModelScope = resolveAmrProfile(modelProbeEnv ?? process.env);
+      let liveAmrModelScope = requestedLiveModelScope;
       // Resolve the AMR model catalog through the SAME shared cache the UI's
       // `/api/amr/models` endpoint serves (AmrModelLoadingCache): a cached
       // authoritative `vela model list` when it is hot, otherwise the offline
@@ -14049,7 +14074,12 @@ export async function startServer({
         model.trim().toLowerCase() === 'default';
       let liveModels = [];
       try {
-        const probe = await resolveAmrModelProbe({ dataDir: RUNTIME_DATA_DIR, env: process.env, readAppConfig });
+        const probe = await resolveAmrModelProbe({ dataDir: RUNTIME_DATA_DIR, env: process.env, readAppConfig, workspaceId: run.workspaceScope?.workspaceId });
+        if (!amrModelIdentityMatches(probe.env, probe.configuredEnv)) {
+          throw new Error(amrModelIdentityChangedMessage);
+        }
+        requestedLiveModelScope = probe.modelScope;
+        liveAmrModelScope = probe.modelScope;
         const fetchers = {
           fetchPreset: () => fetchVelaPresetModels(probe.launchPath, probe.env),
           fetchRemote: () => fetchVelaRemoteModelsWithRetry(probe.launchPath, probe.env),
@@ -14057,14 +14087,20 @@ export async function startServer({
         const catalog = userAskedForDefault && !hasDefaultModelEnvOverride
           ? await amrModelLoadingCache.getAuthoritative(probe.cacheKey, fetchers, AMR_DEFAULT_MODEL_CATALOG_WAIT_MS)
           : await amrModelLoadingCache.get(probe.cacheKey, fetchers);
-        liveModels = amrRunModels(def.id, amrModelScope, catalog);
+        liveModels = amrRunModels(def.id, liveAmrModelScope, catalog);
       } catch (error) {
         // Do not swallow silently: a probe failure here is exactly what made
         // the packaged AMR breakage undiagnosable (the old `catch {}` left no
         // trace in any log or diagnostics bundle). Record it and degrade to the
         // remembered catalog below.
         console.warn('[amr] model catalog preflight probe failed', error);
-        liveModels = getRememberedLiveModels(def.id, amrModelScope);
+        if (amrModelIdentityMatches(process.env, configuredAgentEnv)) {
+          liveModels = getRememberedLiveModels(def.id, liveAmrModelScope);
+        }
+      }
+      if (!amrModelIdentityMatches(process.env, configuredAgentEnv)) {
+        sendAmrAccountFailure({ code: 'AMR_AUTH_REQUIRED', message: amrModelIdentityChangedMessage, action: 'relogin' });
+        return finishStrategyAwarePhysicalRun('failed', 1, null);
       }
       const liveModelIds = new Set(
         liveModels.map((candidate) => candidate?.id).filter(Boolean),
@@ -15064,6 +15100,14 @@ export async function startServer({
         } catch (error) {
           console.warn('[opencode] optional tool previews unavailable:', error instanceof Error ? error.message : String(error));
         }
+      }
+      if (def.id === 'amr' && !amrModelIdentityMatches(env)) {
+        cleanupPromptFile();
+        revokeToolToken('child_exit');
+        unregisterChatAgentEventSink();
+        cleanupOdNextRunInputProjection();
+        sendAmrAccountFailure({ code: 'AMR_AUTH_REQUIRED', message: amrModelIdentityChangedMessage, action: 'relogin' });
+        return finishStrategyAwarePhysicalRun('failed', 1, null);
       }
       // Re-read the actual launch session without re-pinning this Run. A
       // profile/account change during setup cannot charge a different actor.

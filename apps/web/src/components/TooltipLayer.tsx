@@ -273,10 +273,13 @@ export function TooltipLayer() {
     });
   }, [updatePosition]);
 
+  // A route can remove the trigger in the same commit without changing this
+  // portal's state. Recheck every host commit before paint; the body observer
+  // remains responsible for DOM changes outside React's commit lifecycle.
   useLayoutEffect(() => {
     if (!state?.visible) return;
     updatePosition();
-  }, [state?.target, state?.text, state?.placement, state?.visible, updatePosition]);
+  });
 
   useEffect(() => {
     return () => {

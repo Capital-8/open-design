@@ -48,6 +48,7 @@ import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext
 import { streamViaDaemon } from '../../src/providers/daemon';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
+import { setRuntimeAmrConsoleOrigin } from '../../src/runtime/amr-guidance';
 import {
   createConversation,
   listConversations,
@@ -506,6 +507,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     window.sessionStorage.clear();
     window.localStorage.clear();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
     stubFetch();
     vi.stubGlobal('open', mockedWindowOpen);
     mockedListConversations.mockImplementation(async (projectId: string) => [
@@ -534,6 +536,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /** 用给定身份发一条,并把余额门钉在给定判定上。 */
@@ -589,6 +592,17 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     const dialogUrl = String(mockedWindowOpen.mock.calls[1]?.[0]);
     expect(dialogUrl).toContain('billing=plan');
     expect(dialogUrl).not.toContain('billing=auto-recharge');
+  });
+
+  it('wallet snapshot profile takes priority over the authenticated fallback', async () => {
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');
+    mockedCheckAmrBalanceGate.mockResolvedValue(EMPTY_WALLET as never);
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never, amrProfile: 'local' });
+    await clickSendWhenReady();
+    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+    expect(new URL(String(mockedWindowOpen.mock.calls[0]![0])).origin).toBe('https://open-design.ai');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
   });
 
   it('非 Max · 非 owner:卡 + 找所有者充值弹窗,不外跳', async () => {
@@ -770,6 +784,7 @@ describe('死胡同:没有账单权限的成员必须拿到一条前进的路', 
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /**
@@ -830,6 +845,7 @@ describe('守卫:判定放行时四种分支一个都不许冒出来', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /**
@@ -874,7 +890,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
     workspaceScopeMocks.billingResponse = null; projectCollabMocks.writerAuthority = 'allowed'; projectCollabMocks.viewerOnly = false;
     mockedStreamViaDaemon.mockResolvedValue(undefined);
   });
-  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); setRuntimeAmrConsoleOrigin(null); });
 
   it('StrictMode funding rejection retracts the provisional turn without replacing existing output', async () => {
     const context = callerContext('owner', 'team_go');
@@ -963,6 +979,78 @@ describe('Link request concurrency rejection preserves the original send', () =>
     await clickSendWhenReady();
     await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2));
   });
+  it.each([
+    ['local', 'http://127.0.0.1:49195'],
+    ['test', 'http://127.0.0.1:49195'],
+    ['prod', 'https://open-design.ai'],
+    ['unrecognized', 'https://open-design.ai'],
+    [null, null],
+  ] as const)('snapshot-less funding failure freezes supplied %s profile and payer', async (profile, origin) => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    const props = { project: { ...project(), pendingPrompt: null } as never, amrProfile: profile,
+      config: { ...config, agentCliEnv: {} } };
+    const view = renderProjectView(props);
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('profile-funding-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link insufficient funding'), {
+        code: 'AMR_INSUFFICIENT_BALANCE',
+      }));
+    });
+    await screen.findByTestId('amr-balance-dialog');
+    // A later status/profile render cannot change the failure's billing link.
+    view.rerender(projectViewElement({ ...props, amrProfile: profile === 'prod' ? 'local' : 'prod' }));
+    if (origin === null) {
+      // Integration's existing explicit-unknown contract waits for a runtime
+      // profile; it must not guess production, even after a later render.
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+      expect(mockedWindowOpen).not.toHaveBeenCalled();
+    } else {
+      fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+      const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+      expect(target.origin).toBe(origin);
+      expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+      expect(target.searchParams.get('billing')).toBe('plan');
+    }
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+    setRuntimeAmrConsoleOrigin(null);
+  });
+
+
+  it('freezes the authenticated status profile and origin ahead of stale configuration', async () => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    const props = { project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'prod' } } },
+      amrProfile: 'prod',
+      workspaceQuotaStatus: { profile: 'test', consoleOrigin: 'http://127.0.0.1:49196' } };
+    const view = renderProjectView(props);
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('status-funding-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link insufficient funding'), {
+        code: 'AMR_INSUFFICIENT_BALANCE',
+      }));
+    });
+    await screen.findByTestId('amr-balance-dialog-plans');
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49197');
+    view.rerender(projectViewElement({ ...props,
+      workspaceQuotaStatus: { profile: 'prod', consoleOrigin: 'https://open-design.ai' } }));
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-plans'));
+    const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+    expect(target.origin).toBe('http://127.0.0.1:49196');
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ['local', 'http://localhost:5173'],
     ['test', 'https://open-design.powerformer.net'],

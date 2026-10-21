@@ -70,7 +70,7 @@ function billing(overrides: Partial<WorkspaceBillingSummary> = {}): WorkspaceBil
 function renderRail(props: {
   context: WorkspaceCollabContext;
   billing: WorkspaceBillingSummary | null;
-  amrProfile?: string;
+  priorityAnnouncementAmrProfile?: string;
 }) {
   return render(
     <I18nProvider initial="zh-CN">
@@ -81,7 +81,7 @@ function renderRail(props: {
         open
         context={props.context}
         billing={props.billing}
-        amrProfile={props.amrProfile}
+        priorityAnnouncementAmrProfile={props.priorityAnnouncementAmrProfile}
         balanceUsd="210"
       />
     </I18nProvider>,
@@ -192,7 +192,7 @@ describe('account menu billing card — 升级 at the top plan tier', () => {
   ] as const)('keeps the %s billing-card upgrade on the current workspace', (amrProfile, origin) => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     renderRail({ context: context({ workspaceId: 'payer-space-b', planId: 'team_pro' }),
-      billing: billing({ membershipTier: 'team_pro' }), amrProfile });
+      billing: billing({ membershipTier: 'team_pro' }), priorityAnnouncementAmrProfile: amrProfile });
     fireEvent.click(billingCard().getByRole('button', { name: '升级' }));
     const url = new URL(String(open.mock.calls[0]![0]));
     expect(url.origin).toBe(origin);

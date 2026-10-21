@@ -869,6 +869,8 @@ function ensureConversationPresent(
 interface Props {
   project: Project;
   workspaceQuotaStatus?: Pick<VelaLoginStatus, 'profile' | 'consoleOrigin'> | null;
+  /** Authenticated daemon profile (or explicit runtime configuration), independent of wallet availability. */
+  amrProfile?: string | null;
   /**
    * Exact project-bound Workspace authority resolved by the route gate.
    * Production deep links pass this instead of borrowing the shell's mutable
@@ -2127,6 +2129,7 @@ export function reconcileProjectDetail(
 export function ProjectView({
   project,
   workspaceQuotaStatus,
+  amrProfile,
   workspaceContextOverride,
   initialWorkspaceScope,
   initialProjectDetail,
@@ -2950,6 +2953,8 @@ export function ProjectView({
        */
       upgradeIntent: 'pricing' | 'auto_recharge';
       snapshot: AmrWalletSnapshot | null;
+      profile?: string | null;
+      consoleOrigin?: string | null;
       conversationId: string;
       /** Live gateway rejections do not wait for a wallet display read. */
       failureAuthorityKey?: string;
@@ -3585,6 +3590,9 @@ export function ProjectView({
   const shownFundingFailuresRef = useRef(new Set<string>());
   const fundingDialogContext = {
     isAmr: config.mode === 'daemon' && config.agentId === 'amr',
+    profile: workspaceQuotaStatus?.profile?.trim() || (amrProfile !== undefined
+      ? amrProfile : config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null),
+    consoleOrigin: workspaceQuotaStatus?.consoleOrigin,
     branch: amrBalanceBranch,
     scope: amrBalanceCardScope,
     workspaceContext: projectRunBillingAuthorityContext,
@@ -3643,12 +3651,14 @@ export function ProjectView({
       return;
     }
     shownFundingFailuresRef.current.add(key);
-    const { branch, scope, workspaceContext, modelId } = fundingDialogContextRef.current;
+    const { branch, scope, workspaceContext, modelId, profile, consoleOrigin } = fundingDialogContextRef.current;
     setAmrBalanceGateBlock({
       reason: 'insufficient',
       dialog: amrBalanceBlockedDialog(branch),
       upgradeIntent: amrBalanceDialogUpgradeIntent(branch),
       snapshot: null,
+      profile,
+      consoleOrigin,
       modelId,
       fundingScope: scope,
       workspaceContext,
@@ -14693,10 +14703,12 @@ export function ProjectView({
           modelId={amrBalanceGateBlock.modelId}
           fundingScope={amrBalanceGateBlock.fundingScope}
           balanceUsd={amrBalanceGateBlock.snapshot?.balanceUsd ?? null}
-          profile={amrBalanceGateBlock.snapshot?.profile
-            || workspaceQuotaStatus?.profile?.trim()
-            || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE
-            || null}
+          profile={amrBalanceGateBlock.snapshot?.profile ?? (amrBalanceGateBlock.profile !== undefined
+            ? amrBalanceGateBlock.profile
+            : workspaceQuotaStatus?.profile?.trim() || amrProfile
+              || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null)}
+          consoleOrigin={amrBalanceGateBlock.profile !== undefined
+            ? amrBalanceGateBlock.consoleOrigin : workspaceQuotaStatus?.consoleOrigin}
           entrySource="chat_balance_gate_upgrade"
           upgradeIntent={amrBalanceGateBlock.upgradeIntent}
           // 弹窗和卡上那颗必须从**同一份**上下文算落点。默认那条(环境里选中

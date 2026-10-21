@@ -876,7 +876,7 @@ export function workspaceUpgradeUrl(
  */
 export function workspaceAutoRechargeUrl(
   context: WorkspaceCollabContext | null | undefined,
-  options: { fallbackProfile: string | null | undefined },
+  options: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null {
   if (context && context.permissions?.canManageAutoRecharge !== true) return null;
   const settingsUrl = context?.workspaceSettingsUrl?.trim() || null;
@@ -888,7 +888,7 @@ export function workspaceAutoRechargeUrl(
   // A resolved workspace URL above remains authoritative. Without it, wait for
   // the runtime profile just as the plan entrance does; null cannot pick prod.
   if (!options.fallbackProfile?.trim()) return null;
-  return amrAutoRechargeUrlForProfile(options.fallbackProfile, context?.workspaceId);
+  return amrAutoRechargeUrlForProfile(options.fallbackProfile, context?.workspaceId, options.consoleOrigin);
 }
 
 export type WorkspaceInviteTarget =

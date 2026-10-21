@@ -18,6 +18,9 @@ import {
 } from '../../src/providers/registry';
 import { fetchAmrModels, fetchVelaLoginStatus } from '../../src/providers/daemon';
 import { listProjects, listTemplates } from '../../src/state/projects';
+import * as workspaceContextModule from '../../src/collab/useWorkspaceContext';
+import { resetWorkspaceContextCache, resetWorkspaceBillingCache } from '../../src/collab/useWorkspaceContext';
+import { workspaceContextFixture } from '../helpers/workspace-context';
 
 // Settings is now a full-page route (`/settings`): App.openSettings navigates
 // instead of toggling a modal flag, so the router mock must feed navigate()
@@ -75,7 +78,7 @@ vi.mock('../../src/components/EntryView', () => ({
 }));
 
 vi.mock('../../src/components/ProjectView', () => ({
-  ProjectView: () => <div>Project view</div>,
+  ProjectView: ({ amrProfile }: { amrProfile?: string | null }) => <div data-testid="project-amr-profile">{amrProfile ?? 'none'}</div>,
 }));
 
 vi.mock('../../src/components/pet/PetOverlay', () => ({
@@ -242,6 +245,8 @@ async function advanceTestClock(ms: number): Promise<void> {
 describe('App AMR polling', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    resetWorkspaceContextCache();
+    resetWorkspaceBillingCache();
     useRouteMock.mockReturnValue(homeRouteMock);
     mockedDaemonIsLive.mockResolvedValue(true);
     mockedFetchAgentsStream.mockResolvedValue([
@@ -264,6 +269,7 @@ describe('App AMR polling', () => {
     mockedLoadConfig.mockReturnValue({ ...baseConfig });
     mockedMergeDaemonConfig.mockImplementation((local) => local);
     mockedFetchDaemonConfig.mockResolvedValue({});
+    mockedFetchAmrModels.mockReset();
     mockedFetchAmrModels
       .mockResolvedValueOnce({
         source: 'preset',
@@ -282,18 +288,77 @@ describe('App AMR polling', () => {
       });
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
+      vi.fn(async (url: string) => ({
+        // These existing polling cases exercise the supported legacy default
+        // catalog, without a workspace-capable daemon. Scoped cases below
+        // supply their context provider explicitly.
+        ok: !url.startsWith('/api/workspace'),
+        status: url.startsWith('/api/workspace') ? 404 : 200,
         json: async () => ({}),
-      }),
+      })),
     );
   });
 
   afterEach(() => {
     cleanup();
+    resetWorkspaceContextCache();
+    resetWorkspaceBillingCache();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
+  });
+
+  it('refreshes catalog entitlements for the selected A to B to A workspace principal', async () => {
+    const a = workspaceContextFixture({ workspaceId: 'free-a', workspaceMemberId: 'member-a' });
+    const b = workspaceContextFixture({ workspaceId: 'go-b', workspaceMemberId: 'member-b' });
+    mockedFetchAmrModels.mockReset();
+    mockedFetchAmrModels
+      .mockResolvedValueOnce({ source: 'remote', refreshing: false, models: [{ id: 'free-a-flash', label: 'Flash', enabled: true }] })
+      .mockResolvedValueOnce({ source: 'remote', refreshing: false, models: [{ id: 'go-b-pro', label: 'Pro', enabled: true }] })
+      .mockResolvedValueOnce({ source: 'remote', refreshing: false, models: [{ id: 'free-a-flash', label: 'Flash', enabled: true }] });
+    let selected = a;
+    vi.spyOn(workspaceContextModule, 'useWorkspaceContext').mockImplementation(() => ({ context: selected, loading: false }));
+    const view = render(<App />);
+    await waitFor(() => expect(screen.getByTestId('amr-model').textContent).toBe('free-a-flash'));
+    expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(a);
+
+    selected = b;
+    view.rerender(<App />);
+    await waitFor(() => expect(screen.getByTestId('amr-model').textContent).toBe('go-b-pro'));
+    expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(b);
+
+    selected = a;
+    view.rerender(<App />);
+    await waitFor(() => expect(screen.getByTestId('amr-model').textContent).toBe('free-a-flash'));
+    expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(a);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not borrow an unscoped agent catalog or a late prior-workspace catalog', async () => {
+    const a = workspaceContextFixture({ workspaceId: 'free-a', workspaceMemberId: 'member-a' });
+    const b = workspaceContextFixture({ workspaceId: 'go-b', workspaceMemberId: 'member-b' });
+    const lateA = deferred<Awaited<ReturnType<typeof fetchAmrModels>>>();
+    const pendingB = deferred<Awaited<ReturnType<typeof fetchAmrModels>>>();
+    mockedFetchAmrModels.mockReset();
+    mockedFetchAmrModels.mockReturnValueOnce(lateA.promise).mockReturnValueOnce(pendingB.promise);
+    mockedFetchAgentsStream.mockResolvedValue([{
+      id: 'amr', name: 'AMR', bin: 'vela', available: true, version: '1.0.0',
+      models: [{ id: 'ambient-pro', label: 'Ambient Pro', enabled: true }],
+    }]);
+    let selected = a;
+    vi.spyOn(workspaceContextModule, 'useWorkspaceContext').mockImplementation(() => ({ context: selected, loading: false }));
+    const view = render(<App />);
+    await waitFor(() => expect(mockedFetchAgentsStream).toHaveBeenCalled());
+    expect(screen.getByTestId('amr-model').textContent).toBe('none');
+
+    selected = b;
+    view.rerender(<App />);
+    await waitFor(() => expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2));
+    await act(async () => { lateA.resolve({ source: 'remote', refreshing: false, models: [{ id: 'late-a-pro', label: 'A Pro', enabled: true }] }); });
+    expect(screen.getByTestId('amr-model').textContent).toBe('none');
+    await act(async () => { pendingB.resolve({ source: 'remote', refreshing: false, models: [{ id: 'b-pro', label: 'B Pro', enabled: true }] }); });
+    expect(screen.getByTestId('amr-model').textContent).toBe('b-pro');
   });
 
   it('keeps polling AMR models until the remote catalog replaces the preset list', async () => {
@@ -349,6 +414,21 @@ describe('App AMR polling', () => {
       expect(screen.getByTestId('amr-model').textContent).toBe('unlocked-model');
     });
     expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands the authenticated daemon profile to a project when Settings has no override', async () => {
+    const project = { id: 'profile-project', name: 'Profile project', skillId: null,
+      designSystemId: null, customInstructions: '', createdAt: 1, updatedAt: 1 };
+    useRouteMock.mockReturnValue({ kind: 'project', projectId: project.id, conversationId: null, fileName: null });
+    mockedListProjects.mockResolvedValue([project]);
+    mockedLoadConfig.mockReturnValue({ ...baseConfig, mode: 'daemon', agentId: 'amr', agentCliEnv: {} });
+    mockedFetchVelaLoginStatus.mockResolvedValue({
+      loggedIn: true, loginInFlight: false, profile: 'local',
+      sessionState: 'authenticated', user: { id: 'profile-user', email: 'profile@example.test' },
+      configPath: '/isolated/amr/config.json',
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('project-amr-profile').textContent).toBe('local'));
   });
 
   it('returns every authenticated surface to onboarding when Cloud auth definitively expires', async () => {
