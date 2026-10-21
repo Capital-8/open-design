@@ -1,7 +1,8 @@
 import { expect, test } from '@/playwright/suite';
 import {
+  AMR_PERSONAL_WORKSPACE_CONTEXT,
+  createProjectViaApi,
   gotoEntryHome,
-  mockAmrPersonalWorkspace,
   seedBrowserConfig,
 } from '@/playwright/amr';
 import { routeAgents } from '@/playwright/mock-factory';
@@ -38,23 +39,57 @@ test('[P1] home Flash model remains clickable below workspace chrome', async ({ 
     ],
   }]);
   await mockSignedInVelaAccount(page, { balanceUsd: '20.00' });
-  await mockAmrPersonalWorkspace(page, undefined, { accountBalanceUsd: '20.00' });
+  // Guarantee the worker-carryover precondition even when run by itself. Only
+  // this test's isolated daemon receives the project, through its real API.
+  await createProjectViaApi(page, `menu-existing-${Date.now()}`, 'Model menu worker history', {
+    accountBalanceUsd: '20.00',
+  });
+  const projectReads: Array<{ path: string; view: string | null; actualCount: number; fixtureCount: number }> = [];
+  const projectsPath = `/api/workspaces/${AMR_PERSONAL_WORKSPACE_CONTEXT.workspaceId}/projects`;
+  await page.route((url) => url.pathname === projectsPath, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    const body = await response.json();
+    projectReads.push({ path: projectsPath, view: new URL(route.request().url()).searchParams.get('view'),
+      actualCount: body.projects?.length ?? 0, fixtureCount: 0 });
+    await route.fulfill({ json: { projects: [] } });
+  });
+  const pluginReads: Array<{ status: number; count: number }> = [];
   let releasePlugins!: () => void;
   const pluginsReady = new Promise<void>((resolve) => { releasePlugins = resolve; });
   await page.route('**/api/plugins', async (route) => {
     const response = await route.fetch();
+    const body = await response.json();
+    pluginReads.push({ status: response.status(), count: body.plugins?.length ?? 0 });
     await pluginsReady;
     await route.fulfill({ response });
   });
   await gotoEntryHome(page);
+  const home = page.getByTestId('home-view');
+  // This source predicate is !projectsLoading && projects.length === 0.
+  // Wait for the exact scoped list to settle, not gotoEntryHome's best effort.
+  await expect.poll(() => projectReads.some((read) => read.view === 'recent')).toBe(true);
+  await expect(home).toHaveClass(/home-view--centered/);
+  await expect(page.getByTestId('home-hero-plugin-presets')).toHaveCount(0);
   const chip = page.getByTestId('inline-model-switcher-chip');
   const menu = page.getByTestId('inline-model-switcher-popover');
   const flash = page.getByTestId('inline-model-switcher-compact-model-deepseek-v4.1-flash');
   await chip.click();
   await expect(flash).toBeVisible();
   const initialChip = await chip.boundingBox();
+  const initialHome = await home.evaluate((element) => ({
+    className: element.className, box: element.getBoundingClientRect().toJSON(),
+  }));
   releasePlugins();
   await expect(page.locator('.home-hero__plugin-presets-wrap')).toBeVisible();
+  await testInfo.attach('home-layout-fixture.json', { body: JSON.stringify({ projectReads, pluginReads,
+    initialHome, initialChip, afterChip: await chip.boundingBox(),
+    afterHome: await home.evaluate((element) => ({ className: element.className, box: element.getBoundingClientRect().toJSON() })),
+    initialProjectsLoading: false, initialProjectsEmpty: true,
+    projectionEvidence: 'HomeView centered class requires !projectsLoading && projects.length === 0',
+    presets: await page.getByTestId('home-hero-plugin-presets').innerText(),
+  }, null, 2), contentType: 'application/json' });
   await expect.poll(async () => (await chip.boundingBox())?.y ?? Infinity,
     { message: 'the arriving Home examples move the composer while its menu stays open' })
     .toBeLessThan(initialChip!.y - 50);
