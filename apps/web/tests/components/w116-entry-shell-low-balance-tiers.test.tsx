@@ -202,6 +202,11 @@ describe('T53 / T66 · 首页非硬拦档一律静默放行', () => {
       if (url.endsWith('/api/workspace/context')) {
         return jsonResponse({ context: workspace });
       }
+      if (url.includes('/api/workspace/billing/preflight?')) {
+        return jsonResponse({ preflight: { schemaVersion: 1, workspaceId: workspace.workspaceId,
+          workspaceMemberId: workspace.workspaceMemberId, modelId: 'glm-5',
+          generatedAt: new Date().toISOString(), fundingCheck: 'available' } });
+      }
       if (url.includes('/api/workspace/billing?')) {
         return jsonResponse({ summary: null, workspaceBalance: null });
       }

@@ -408,7 +408,6 @@ export interface WorkspaceCollabContext {
   billingState: WorkspaceBillingState;
   planId: string | null;
   providerMode: WorkspaceProviderMode;
-  memberCount?: number;
   seatSummary: WorkspaceSeatSummary;
   permissions: WorkspacePermissions;
   billingRecovery?: WorkspaceBillingRecovery;

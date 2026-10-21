@@ -14657,7 +14657,10 @@ export function ProjectView({
           modelId={amrBalanceGateBlock.modelId}
           fundingScope={amrBalanceGateBlock.fundingScope}
           balanceUsd={amrBalanceGateBlock.snapshot?.balanceUsd ?? null}
-          profile={amrBalanceGateBlock.snapshot?.profile ?? null}
+          profile={amrBalanceGateBlock.snapshot?.profile
+            || workspaceQuotaStatus?.profile?.trim()
+            || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE
+            || null}
           entrySource="chat_balance_gate_upgrade"
           upgradeIntent={amrBalanceGateBlock.upgradeIntent}
           // 弹窗和卡上那颗必须从**同一份**上下文算落点。默认那条(环境里选中

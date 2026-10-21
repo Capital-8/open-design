@@ -229,7 +229,7 @@ test('[P0] @critical AMR insufficient-balance failures open a dialog and preserv
     .toBeTruthy();
 });
 
-test('[P0] @critical AMR preflight opens before agent startup and never cancels a successful run', async ({ page }, testInfo) => {
+test('[P0] @critical AMR preflight rejects before startup and recovers only after manual send', async ({ page }, testInfo) => {
   await stubRuntimeAgents(page);
   await page.route('**/api/integrations/vela/status', (route) => route.fulfill({ json: {
     loggedIn: true, profile: 'local',
@@ -240,43 +240,38 @@ test('[P0] @critical AMR preflight opens before agent startup and never cancels 
     assistantText: 'The gateway admitted this run.',
   });
   await gotoProject(page, amr.projectId);
-  // Hold the real run POST, while the independent daemon -> Vela preflight
-  // remains live. No agent process can start before we release this request.
-  let releaseRun!: () => void;
-  const heldRun = new Promise<void>((resolve) => { releaseRun = resolve; });
-  let runForwarded = false;
+  let createRequests = 0;
   let cancellations = 0;
   page.on('request', (request) => {
     if (/\/api\/runs\/[^/]+\/cancel/.test(request.url())) cancellations++;
-  });
-  await page.route('**/api/runs', async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
-    await heldRun;
-    runForwarded = true;
-    await route.continue();
+    if (new URL(request.url()).pathname === '/api/runs' && request.method() === 'POST') createRequests++;
   });
   const input = page.getByTestId('chat-composer-input');
-  await input.fill('Check funding independently of agent startup');
+  const prompt = 'Check funding independently of agent startup';
+  await input.fill(prompt);
   await expect(page.getByTestId('chat-send')).toBeEnabled();
-  const startedAt = Date.now();
-  try {
-    await input.press('Enter');
-    const dialog = page.getByTestId('amr-balance-dialog');
-    await expect(dialog).toBeVisible({ timeout: T.long });
-    expect(runForwarded).toBe(false);
-    await testInfo.attach('independent-preflight-timing', { contentType: 'application/json',
-      body: JSON.stringify({ elapsedMs: Date.now() - startedAt, runForwarded, source: 'local fake Vela preflight; real daemon and browser' }) });
-    await testInfo.attach('independent-preflight-before-agent', {
-      body: await page.screenshot(), contentType: 'image/png',
-    });
-    await expect(page.getByTestId('chat-upgrade-card')).toHaveCount(0);
-    releaseRun();
-    await expect(page.getByText('The gateway admitted this run.').first()).toBeVisible({ timeout: T.long });
-    await expect(dialog).toBeHidden();
-    expect(cancellations).toBe(0);
-  } finally {
-    releaseRun();
-  }
+  await input.press('Enter');
+  const dialog = page.getByTestId('amr-balance-dialog');
+  await expect(dialog).toBeVisible({ timeout: T.long });
+  expect(createRequests).toBe(0);
+  expect(cancellations).toBe(0);
+  await testInfo.attach('independent-preflight-before-agent', {
+    body: await page.screenshot(), contentType: 'image/png',
+  });
+  await expect(page.getByTestId('chat-upgrade-card')).toHaveCount(0);
+  // A successful funding observation never resubmits the rejected draft.
+  await writeFakeVelaBin(join(amr.root, 'bin'), {
+    fundingCheck: { status: 'available', workspaceMemberId: AMR_PERSONAL_WORKSPACE_ITEM.workspaceMemberId },
+    assistantText: 'The gateway admitted this run.',
+  });
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(input).toHaveText(prompt);
+  expect(createRequests).toBe(0);
+  await input.press('Enter');
+  await expect(page.getByText('The gateway admitted this run.').first()).toBeVisible({ timeout: T.long });
+  expect(createRequests).toBe(1);
+  expect(cancellations).toBe(0);
 });
 
 test('[P0] @critical AMR auth failures return to the existing sign-in gate without auto-retry', async ({ page }) => {

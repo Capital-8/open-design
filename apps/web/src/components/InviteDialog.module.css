@@ -1,11 +1,11 @@
 /* Local invitation tokens copied from the final HTML console invitation cascade. */
 .root,.menu { --invite-ink:#202020;--invite-text:#333;--invite-tooltip:#292929;--invite-surface:#fff;--invite-muted:#888;--invite-note:#777;--invite-faint:#999;--invite-secondary:#666;--invite-label:#555;--invite-option:#444;--invite-border:#dedede;--invite-menu-border:#e8e8e8;--invite-error-border:#cf6868;--invite-error:#c54c4c;--invite-error-bg:#fffafa;--invite-secondary-bg:#f3f3f3;--invite-selected:#f5f5f5; }
-.root { position:fixed;inset:0;z-index:1000;display:grid;place-items:center;font-family:inherit;color:var(--invite-ink);font-size:13px;font-weight:400; }
+.root { position:fixed;inset:0;z-index:1000;display:grid;place-items:center;font-family:inherit;color:var(--invite-ink);font-size:13px;font-weight:500; }
 .backdrop { position:absolute;inset:0;background:rgb(0 0 0 / 38%); }
 .panel { position:relative;box-sizing:border-box;width:560px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 48px);overflow:auto;padding:24px;border-radius:16px;background:var(--invite-surface);box-shadow:0 24px 72px rgb(0 0 0 / 12%); }
 .heading { position:relative;display:flex;align-items:center;gap:7px;min-height:24px;margin-bottom:0;padding-right:32px; }
 .heading h2 { margin:0;font-size:16px;font-weight:600;line-height:24px; }
-.close { position:absolute!important;right:-4px;top:-4px;width:28px;min-width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:8px;background:none;box-shadow:none;font-size:20px;font-weight:400;line-height:20px; }
+.close { position:absolute!important;right:-4px;top:-4px;width:28px;min-width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:8px;background:none;box-shadow:none;font-size:20px;font-weight:500;line-height:20px; }
 .context { margin:14px 0 20px;font-size:12px;line-height:20px;color:var(--invite-muted); }
 .labels,.row { display:grid;grid-template-columns:minmax(0,1fr) 112px 24px;column-gap:12px;align-items:center; }
 .single { grid-template-columns:minmax(0,1fr) 112px; }
@@ -13,7 +13,7 @@
 .rows { max-height:240px;overflow-y:auto; }
 .row { margin-bottom:8px; }
 .row:last-child { margin-bottom:0; }
-.input,.role { box-sizing:border-box;width:100%;min-width:0;height:38px;min-height:38px;border:1px solid var(--invite-border);border-radius:8px;background:var(--invite-surface);padding:0 12px;color:var(--invite-text);font-family:inherit;font-size:13px;font-weight:400;line-height:20px;box-shadow:none; }
+.input,.role { box-sizing:border-box;width:100%;min-width:0;height:38px;min-height:38px;border:1px solid var(--invite-border);border-radius:8px;background:var(--invite-surface);padding:0 12px;color:var(--invite-text);font-family:inherit;font-size:13px;font-weight:500;line-height:20px;box-shadow:none; }
 .input:focus,.role:focus-visible { outline:none;border-color:var(--invite-faint); }
 .input[aria-invalid=true] { border-color:var(--invite-error-border);background:var(--invite-error-bg); }
 .role { display:flex;align-items:center;justify-content:space-between;gap:8px; }
@@ -21,7 +21,7 @@
 .remove { width:24px;min-width:24px;height:28px;min-height:28px;padding:0;border:0;background:transparent;box-shadow:none;color:var(--invite-muted); }
 .lineError,.error { margin:8px 0 0;font-size:12px;line-height:20px;color:var(--invite-error); }
 .lineError { grid-column:1/-1; }
-.add { display:flex;align-items:center;gap:5px;width:max-content;height:28px;min-height:28px;margin-top:8px;padding:0;border:0;border-radius:0;background:transparent;color:var(--invite-label);font-size:12px;font-weight:400;box-shadow:none; }
+.add { display:flex;align-items:center;gap:5px;width:max-content;height:28px;min-height:28px;margin-top:8px;padding:0;border:0;border-radius:0;background:transparent;color:var(--invite-label);font-size:12px;font-weight:500;box-shadow:none; }
 .footer { display:flex;justify-content:flex-end;gap:8px;min-height:36px;margin-top:20px; }
 .cancel,.submit { min-width:64px;height:36px;min-height:36px;padding:0 16px;border:0;border-radius:10px;font-size:14px;font-weight:500;line-height:20px;box-shadow:none; }
 .cancel { background:var(--invite-secondary-bg);color:var(--invite-text); }
@@ -33,9 +33,9 @@
 .tooltip { position:absolute;left:-6px;top:calc(100% + 10px);z-index:2;box-sizing:border-box;width:300px;max-width:70vw;padding:10px 12px;border-radius:8px;background:var(--invite-tooltip);color:var(--invite-surface);font-size:12px;line-height:20px;opacity:0;visibility:hidden;pointer-events:none; }
 .help:hover .tooltip,.help:focus-within .tooltip { opacity:1;visibility:visible; }
 .menu { position:fixed;z-index:1100;box-sizing:border-box;max-width:calc(100vw - 24px);max-height:min(320px,calc(100dvh - 24px));overflow:auto;padding:4px;border:1px solid var(--invite-menu-border);border-radius:8px;background:var(--invite-surface);box-shadow:0 4px 12px rgb(0 0 0 / 4%);font-family:inherit; }
-.option { display:flex;align-items:flex-start;justify-content:space-between;gap:8px;box-sizing:border-box;width:100%;height:auto;min-height:32px;padding:6px 10px;border:0;border-radius:4px;background:transparent;text-align:left;font-size:12px;font-weight:400;line-height:20px;color:var(--invite-option);white-space:normal;box-shadow:none; }
+.option { display:flex;align-items:flex-start;justify-content:space-between;gap:8px;box-sizing:border-box;width:100%;height:auto;min-height:32px;padding:6px 10px;border:0;border-radius:4px;background:transparent;text-align:left;font-size:12px;font-weight:500;line-height:20px;color:var(--invite-option);white-space:normal;box-shadow:none; }
 .option[aria-selected=true],.option:hover,.option:focus-visible { background:var(--invite-selected);color:var(--invite-text);outline:none; }
-.option small { display:block;margin-top:4px;font-size:11px;line-height:1.6;font-weight:400;color:var(--invite-note);white-space:normal; }
+.option small { display:block;margin-top:4px;font-size:11px;line-height:1.6;font-weight:500;color:var(--invite-note);white-space:normal; }
 /* Keep the domain palette when shared Button hover/active selectors apply. */
 .root .submit:is(:hover,:active):not(:disabled) { background:var(--invite-ink);color:var(--invite-surface); }
 .root .cancel:is(:hover,:active):not(:disabled) { background:var(--invite-secondary-bg);color:var(--invite-text); }
