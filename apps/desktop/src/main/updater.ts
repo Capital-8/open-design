@@ -1,3 +1,4 @@
+import { readLauncherHost } from "@open-design/launcher-proto";
 import { recordUpdateLifecycle, type UpdateLifecycleObservation } from "./update-lifecycle-observations.js";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -584,7 +585,12 @@ export function createDesktopUpdater(
   async function restoreStoreState(): Promise<DesktopUpdateStatusSnapshot | null> {
     const opened = await openStore();
     if (!opened.ok) return opened.status;
-    const restoredMetadata = await clearInterruptedIncomingDownload(opened.root, opened.metadata, logger);
+    let restoredMetadata = await clearInterruptedIncomingDownload(opened.root, opened.metadata, logger);
+    const failedHostedVersion = readLauncherHost()?.rolledBackFromVersion;
+    if (failedHostedVersion != null && restoredMetadata.active?.artifact.type === "payload" && restoredMetadata.active.version === failedHostedVersion) {
+      restoredMetadata = { ...restoredMetadata, active: undefined, incoming: undefined, installFrozen: undefined, installResult: undefined };
+      await writeStoreMetadata(opened.root, restoredMetadata);
+    }
     const storedActive = restoredMetadata.active;
     const launcherPayloadContextValid = storedActive != null
       && storedActive.artifact.type === "installer"
@@ -773,6 +779,11 @@ export function createDesktopUpdater(
         return selected.state === DESKTOP_UPDATE_STATES.ERROR
           ? setFailurePreservingActive(selected.error)
           : setState(selected.state, selected.error);
+      }
+      if (selected.candidate.artifact.type === "payload" && selected.candidate.version === readLauncherHost()?.rolledBackFromVersion) {
+        logUpdateEvent("check-not-available", { candidateVersion: selected.candidate.version, skippedReason: "rolled-back" });
+        candidate = null;
+        return setState(DESKTOP_UPDATE_STATES.NOT_AVAILABLE);
       }
       // Same-version installer reinstall (disaster posture): when the installed
       // outer is below min, the installer must be offered even with no newer
@@ -1104,7 +1115,8 @@ export function createDesktopUpdater(
     try {
       await access(launchPath);
       const launcherTarget = await lstat(launchPath);
-      if (launcherTarget.isSymbolicLink() || !launcherTarget.isFile()) {
+      const hostedBundle = config.platform === "darwin" && readLauncherHost()?.installedAppPath === launchPath;
+      if (launcherTarget.isSymbolicLink() || !(hostedBundle ? launcherTarget.isDirectory() : launcherTarget.isFile())) {
         return { error: `launcher payload executable is not a plain file: ${launchPath}` };
       }
     } catch (launchPathError) {

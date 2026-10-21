@@ -1,3 +1,4 @@
+import { MAC_THIN_LAUNCHER_FILE } from "./thin-launcher.js";
 import { renderPackagedMainEntry } from "../launcher/packaged-entry.js";
 import { readFile } from "node:fs/promises";
 
@@ -159,5 +160,11 @@ export async function assertMacPrebundleMetafile(options: {
 }
 
 export function renderMacPackagedMainEntry(usePrebundle: boolean): string {
-  return renderPackagedMainEntry(usePrebundle);
+  const bundledEntry = usePrebundle ? "./prebundled/packaged-main.mjs" : "@open-design/packaged";
+  const select = `Promise.resolve().then(() => require("./${MAC_THIN_LAUNCHER_FILE}").selectAppEntry({
+    app: require("electron").app, appRoot: __dirname, bundledEntry: ${JSON.stringify(bundledEntry)}
+  })).then(selected => selected == null ? undefined : import(selected.entry))`;
+  // Keep the dependency-free recovery handler; never fall back after acquiring
+  // the hosted lock or mutating its journal.
+  return renderPackagedMainEntry(usePrebundle).replace(`import(${JSON.stringify(bundledEntry)})`, select);
 }

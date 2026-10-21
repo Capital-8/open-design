@@ -94,3 +94,25 @@ spec (`e2e/specs/mac.spec.ts` / `win.spec.ts` via `release-smoke.ts`),
   daemon bridge is unit-tested and the win spec covers the legacy-executable
   identity variant.
 - Linux ships no packaged auto-update (AppImage manual) by design.
+
+## H. macOS installed launcher host (contract 1)
+
+The installer owns the Electron process and imports compatible payload code in
+that process. Older installed launchers retain their subprocess behavior when
+receiving these payloads. This migration does not change the installer version
+floor or Electron version.
+
+| Node | Coverage | Owning tests |
+| --- | --- | --- |
+| Namespace lock precedes state writes; same-version cover install adopts host | U | launcher `hosted-launcher.test.ts` |
+| Hosted selection, delegated confirm, missing/corrupt entry fallback, later release recovery | U | launcher `hosted-launcher.test.ts` |
+| Manifest Electron/host compatibility and canonical path containment | U | launcher `hosted-launcher.test.ts` |
+| Headless duplicate-instance restore and unchanged installed identity | U, P, M | launcher + packaged managed-headless tests; mac full spec real LaunchServices headless restore; signed Dock acceptance required |
+| Adopted sidecar discovery, convergence, stop, monitor-loss exit | U (real subprocess) | sidecar `adopted-lifecycle.test.ts`, `adoption.test.ts` |
+| Running hosted resources survive pointer changes and cleanup | U | desktop `hosted-payload.test.ts` |
+| Persistent/recent Dock entry repair and namespace-scoped LaunchServices cleanup | U, M | packaged `mac-dock-entry.test.ts`, `mac-launch-services.test.ts`; signed macOS acceptance required |
+| Installed physical executable with payload logical identity across update/cold start | P | mac full spec checks both identities |
+
+Developer ID signing/notarization, Dock behavior across login/reboot and
+Background Task Management on affected macOS versions remain release gates.
+Unsigned local artifacts alone do not satisfy those gates.

@@ -28,6 +28,8 @@ export type MacLauncherPayloadManifest = {
   platform: "darwin";
   schemaVersion: typeof LAUNCHER_SCHEMA_VERSION;
   version: string;
+  electronVersion?: string;
+  launcherHostContract?: number;
 };
 
 export function buildMacLauncherPayloadManifest(input: {
@@ -36,9 +38,11 @@ export function buildMacLauncherPayloadManifest(input: {
   namespace: string;
   publicAppBundleName: string;
   version: string;
+  electronVersion?: string;
 }): MacLauncherPayloadManifest {
   return {
     appBundleName: input.publicAppBundleName,
+    ...(input.electronVersion == null ? {} : { electronVersion: input.electronVersion, launcherHostContract: 1 }),
     channel: input.channel,
     entry: {
       cwd: `payload/${input.publicAppBundleName}`,
@@ -76,6 +80,7 @@ export async function createMacLauncherPayloadArchive(
     namespace: config.namespace,
     publicAppBundleName: identity.publicAppBundleName,
     version: packagedVersion,
+    electronVersion: config.electronVersion,
   });
 
   await rm(stageRoot, { force: true, recursive: true });

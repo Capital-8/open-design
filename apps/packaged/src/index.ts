@@ -6,11 +6,13 @@ import {
   type SidecarSource,
 } from "@open-design/sidecar-proto";
 import {
+  readLauncherHost,
   parseLauncherAfterQuitArgs,
   parseLauncherDelegatedArgs,
   parseLauncherHandoffResumeArgs,
 } from "@open-design/launcher-proto";
 import {
+  adoptSidecarProcess,
   bootstrapSidecarProcess,
   isCurrentSidecarLauncher,
   readCurrentSidecarStamp,
@@ -30,7 +32,7 @@ import {
   type DesktopMainHandle,
 } from "@open-design/desktop/main";
 import { releaseChannelFromNamespace, releaseChannelFromVersion } from "@open-design/release";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { app, dialog } from "electron";
 
 import { readPackagedConfig } from "./config.js";
@@ -75,9 +77,11 @@ import {
 } from "./managed-headless.js";
 import { findPackagedDeeplinkArg, launchPackagedPayloadDesktop } from "./payload-desktop-launch.js";
 import { packagedEntryUrl, registerOdProtocol } from "./protocol.js";
-import { startPackagedSidecars } from "./sidecars.js";
+import { resolvePackagedElectronNodeCommand, startPackagedSidecars } from "./sidecars.js";
 import { reportStartupFailure, resolveStartupDistinctId } from "./startup-telemetry.js";
 import { resolvePackagedWindowTitle } from "./window-title.js";
+import { repairMacDockEntries } from "./mac-dock-entry.js";
+import { refreshMacApplicationRegistration } from "./mac-launch-services.js";
 import { syncWindowsUninstallDisplayVersion } from "./windows-lifecycle.js";
 
 let packagedLogger: PackagedDesktopLogger | null = null;
@@ -216,12 +220,22 @@ async function main(): Promise<void> {
   if (exitPackagedLauncherForExistingDesktop(oppositeDesktop, (code) => app.exit(code))) {
     return;
   }
-  if (await bootstrapSidecarProcess(launchStamp, {
+  const launcherHost = readLauncherHost();
+  const generationResources = {
     dataRoot: initialPaths.dataRoot,
     ownerPid: null,
     port: 0,
     runtimeRoot: initialPaths.runtimeRoot,
-  })) {
+  };
+  // A launcher-hosted process IS the app for the whole session: adopt it
+  // as the generation target instead of spawning a second process. A deferred
+  // headless (MCP) runtime is adopted too, so restoring its window later happens
+  // in this same LaunchServices process.
+  if (launcherHost != null && (!headlessRequest.headless || supportsDeferredHeadlessDesktop(headlessRequest))) {
+    const command = await resolvePackagedElectronNodeCommand();
+    if (command === process.execPath) throw new Error("hosted launcher requires a background Electron helper");
+    await adoptSidecarProcess(launchStamp, generationResources, { command });
+  } else if (await bootstrapSidecarProcess(launchStamp, generationResources)) {
     app.exit(0);
     return;
   }
@@ -244,6 +258,8 @@ async function main(): Promise<void> {
     return;
   }
   const launcherRuntime = await resolvePackagedLauncherRuntime(namespaceConfig, initialPaths, {
+    // A hosting launcher's selection is authoritative for this process.
+    host: launcherHost,
     delegated,
     resume: handoffResume,
   });
@@ -256,7 +272,7 @@ async function main(): Promise<void> {
   const paths = launcherRuntime.paths;
   const mcpBootstrap = resolvePackagedMcpBootstrapLaunch({
     installedLaunchPath: launcherRuntime.installedLaunchPath,
-    managed: isPackagedManagedLaunch(launcherRuntime),
+    managed: launcherHost != null || isPackagedManagedLaunch(launcherRuntime),
   });
 
   // Arm fatal-exit telemetry now that we know the channel key/version. The
@@ -311,12 +327,25 @@ async function main(): Promise<void> {
   });
   applyPackagedElectronPathOverrides(paths);
   applyPackagedUpdaterEnv(activeConfig.updateMetadataUrl);
-  if (!claimPackagedSingleInstanceLock(app, (argv) => {
+  let pendingDesktopIntent = false;
+  let restoreDeferredDesktop: (() => void) | null = null;
+  const requestDeferredDesktop = () => {
+    if (restoreDeferredDesktop == null) pendingDesktopIntent = true;
+    else restoreDeferredDesktop();
+  };
+  if (launcherHost != null) {
+    launcherHost.onSecondInstance(argv => {
+      secondInstanceHandoff.handle(findPackagedDeeplinkArg(argv));
+      if (deferredHeadless && !argv.includes("--headless")) requestDeferredDesktop();
+    });
+  } else if (!claimPackagedSingleInstanceLock(app, (argv) => {
     secondInstanceHandoff.handle(findPackagedDeeplinkArg(argv));
   })) {
     return;
   }
   await app.whenReady();
+  // Preserve a user's Dock/Finder open while daemon/web startup is pending.
+  if (deferredHeadless) watchUserDesktopIntent(app, requestDeferredDesktop);
 
   // Show the brand splash IMMEDIATELY, before we await the daemon/web sidecars
   // below. Cold boot otherwise leaves the user staring at no window at all for
@@ -523,14 +552,27 @@ async function main(): Promise<void> {
     },
   });
   await client.start();
+  if (launcherHost != null) {
+    // OS entry repair is independent of ready/confirmation; errors must not
+    // block the main window or turn a successful launch into a rollback.
+    void refreshMacApplicationRegistration({ executablePath: process.execPath, appBundleName: `${basename(process.execPath)}.app`, versionsRoot: launcherRuntime.launcherPaths.versionsRoot });
+    void repairMacDockEntries({ canonicalAppBundlePath: launcherHost.installedAppPath, appBundleName: `${basename(process.execPath)}.app`, versionsRoot: launcherRuntime.launcherPaths.versionsRoot }).then(result => {
+      if (result.status === "failed") packagedLogger?.warn("failed to repair owned Dock entries", { error: result.error });
+    });
+  }
+
   if (deferredDesktop != null) {
+    restoreDeferredDesktop = () => { void deferredDesktop.restore().catch(() => undefined); };
+    launcherHost?.onSecondInstance(argv => {
+      if (argv.includes("--headless")) return;
+      secondInstanceHandoff.handle(findPackagedDeeplinkArg(argv));
+      void deferredDesktop.restore().catch(() => undefined);
+    });
     // A deferred headless runtime is a successful launch of this generation.
     void confirmPackagedLauncherRuntime(launcherRuntime).catch((error: unknown) => {
       packagedLogger?.warn("failed to confirm packaged launcher runtime", { error });
     });
-    watchUserDesktopIntent(app, () => {
-      void deferredDesktop.restore().catch(() => undefined);
-    });
+    if (pendingDesktopIntent) restoreDeferredDesktop();
   }
 }
 

@@ -692,3 +692,16 @@ export function selectLauncherRuntimeTarget(input: {
 
   return { pointer: active, reason: "active", selected: true };
 }
+
+export {
+  LAUNCHER_HOST_CONTRACT_VERSION,
+  LAUNCHER_HOST_KEY,
+  readLauncherHost,
+  publishLauncherHost,
+  type LauncherHostIdentity,
+  type LauncherHostRelaunchRequest,
+  type LauncherHostRunningCode,
+  type LauncherHostSelection,
+} from "./host.js";
+
+export { normalizeNamespace } from "@open-design/sidecar-proto";
