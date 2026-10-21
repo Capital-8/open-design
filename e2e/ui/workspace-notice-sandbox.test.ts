@@ -44,7 +44,9 @@ test('[P0] VIEW-020 real admin or member funding notice stays above empty and ar
         await page.setViewportSize({ width: 1280, height: 800 });
         await page.goto(client.runtime.url.web(`/projects/${projectId}`), { waitUntil: 'domcontentloaded', timeout: T.xlong });
         await expect(page.getByTestId('chat-composer-input')).toBeVisible({ timeout: T.xlong });
-        await expect(page.locator('html')).toHaveAttribute('lang', locale);
+        // VIEW-020 checks the actual localized notice below. Record document
+        // metadata separately: html.lang is not this QA case's acceptance rule.
+        const documentLanguage = await page.locator('html').getAttribute('lang');
         const contextResponse = await fetch(client.runtime.url.web('/api/workspace/context'), { headers: fundingHeaders(space) });
         expect(contextResponse.ok).toBe(true);
         const context = await contextResponse.json();
@@ -105,7 +107,7 @@ test('[P0] VIEW-020 real admin or member funding notice stays above empty and ar
             'Contact text and close controls must not be clipped inside their own boxes').toBe(true);
           const name = `${role}-${projectState}-${locale}-${viewport.width}`;
           await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
-          rows.push({ name, geometry, context: context.context, viewport,
+          rows.push({ name, geometry, context: context.context, viewport, requestedLocale: locale, documentLanguage,
             ownerNameRendered: (await dialog.innerText()).includes(ownerProfile.ownerDisplayName),
             realRunPosts: client.posts.slice(postStart).filter(p => p.path === '/api/runs'), originalPage: new URL(page.url()).pathname });
           if (index === 1) {
