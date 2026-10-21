@@ -146,6 +146,7 @@ export function Dialog({
     tabIndex: -1,
     id,
     className: joinClassNames(
+      styles.focusTarget,
       includeChromeClassName ? styles.dialog : undefined,
       includeChromeClassName && layout === 'sectioned' ? styles.dialogSectioned : undefined,
       includeChromeClassName ? 'modal' : undefined,
