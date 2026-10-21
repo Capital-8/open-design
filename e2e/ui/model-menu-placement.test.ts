@@ -23,6 +23,11 @@ test('[P1] home Flash model remains clickable below workspace chrome', async ({ 
   await seedBrowserConfig(page, config);
   await page.route('**/api/app-config', (route) => route.request().method() === 'GET'
     ? route.fulfill({ json: { config } }) : route.continue());
+  // The worker daemon survives earlier files. This entry-surface fixture is
+  // specifically an empty Home: existing projects disable vertical centering
+  // and would remove the delayed-catalog layout shift this test must exercise.
+  await page.route('**/api/projects', (route) => route.request().method() === 'GET'
+    ? route.fulfill({ json: { projects: [] } }) : route.fallback());
   await routeAgents(page, [{
     id: 'amr', name: 'OpenDesign AMR', bin: 'vela', available: true, version: 'test',
     models: [
