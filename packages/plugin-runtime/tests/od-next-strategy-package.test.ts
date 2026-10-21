@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BundledStrategyDeclarationV2Schema } from '@open-design/contracts';
+import { assertOdNextPlanningBuildOnlyV2, BundledStrategyDeclarationV2Schema } from '@open-design/contracts';
 import { parseManifest } from '../src/index.js';
 
 const pluginRoot = fileURLToPath(
@@ -58,6 +58,7 @@ describe('bundled OD Next Strategy V2 package', () => {
       ['ppt', 'active', ['deck']],
       ['marketing', 'active', ['image']],
       ['hyperframes', 'active', ['video']],
+      ['motion-design', 'active', ['video']],
     ]);
   });
 
@@ -86,6 +87,15 @@ describe('bundled OD Next Strategy V2 package', () => {
       // Resources (shells, stylesheets) are quoted as facts, never as
       // instructions, so the pre-Build vocabulary rule applies to prose only.
       if (!assetPath.endsWith('.md')) continue;
+      if (assetPath === './assets/task-profiles/motion-design.md') {
+        // Motion has a bounded production check; animation vocabulary is not a workflow loop.
+        const canonical = readFileSync(`${pluginRoot}/../../../../skills/motion-design/SKILL.md`, 'utf8');
+        expect(content).toBe(canonical);
+        expect(() => assertOdNextPlanningBuildOnlyV2(content, assetPath)).not.toThrow();
+        expect(content).toContain('no repeat or');
+        expect(content).toContain('repeat an open-ended polish loop');
+        continue;
+      }
       for (const forbidden of forbiddenContent) {
         expect(content, `${assetPath} must not match ${forbidden}`).not.toMatch(forbidden);
       }
