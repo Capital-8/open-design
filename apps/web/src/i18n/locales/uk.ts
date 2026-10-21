@@ -93,6 +93,8 @@ export const uk: Dict = {
   'chat.amrError.rechargeCta': 'Поповнити',
   "chat.amrConcurrencyGate.title": "Досягнуто ліміту одночасних запитів",
   "chat.amrConcurrencyGate.message": "Вільних місць немає. Перейдіть на вищий тариф і спробуйте знову.",
+  "chat.amrConcurrencyGate.teamTitle": "Досягнуто ліміту одночасних запитів команди",
+  "chat.amrConcurrencyGate.teamMessage": "Команда досягла ліміту одночасних запитів. Попросіть власника робочого простору команди підвищити план підписки.",
   "chat.amrConcurrencyGate.benefit1": "Передові моделі без складного налаштування",
   "chat.amrConcurrencyGate.benefit2": "Запрошуйте учасників безкоштовно та діліться квотою",
   "chat.amrConcurrencyGate.benefit3": "Створюйте мультимодальні зображення й текст в одному місці",

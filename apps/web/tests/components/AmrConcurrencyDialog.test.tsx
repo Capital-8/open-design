@@ -6,11 +6,13 @@ import { AmrConcurrencyDialog } from '../../src/components/AmrConcurrencyDialog'
 import { resolveAmrBalanceBranch } from '../../src/runtime/amr-balance-branch';
 import { workspaceContextFixture } from '../helpers/workspace-context';
 
+const translation = vi.hoisted(() => ({ language: 'en' }));
+
 vi.mock('../../src/i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/i18n')>();
-  return { ...actual, useT: () => actual.tForLanguageTag('en')! };
+  return { ...actual, useT: () => actual.tForLanguageTag(translation.language)! };
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); translation.language = 'en'; });
 
 it.each(['free', 'go', 'plus', 'pro', 'max'].flatMap((tier) =>
   (['owner', 'admin', 'member'] as const).map((role) => ({ tier, role }))))(
@@ -24,13 +26,13 @@ it.each(['free', 'go', 'plus', 'pro', 'max'].flatMap((tier) =>
     const open = vi.fn(); vi.stubGlobal('open', open);
     const onClose = vi.fn();
     render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
-      workspaceContext={context} onClose={onClose} />);
+      workspaceContext={context} profile="local" onClose={onClose} />);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent(role === 'owner' && tier !== 'max'
-      ? 'Concurrency limit reached' : 'Concurrent request limit reached');
-    if (role !== 'owner' || tier === 'max') expect(dialog).toHaveTextContent('manually');
+      ? 'Concurrency limit reached' : role !== 'owner' ? 'Team concurrency limit reached' : 'Concurrent request limit reached');
+    if (role === 'owner' && tier === 'max') expect(dialog).toHaveTextContent('manually');
     expect(dialog.textContent).not.toMatch(/recharge|auto.?recharge/i);
-    if (role !== 'owner') expect(dialog).toHaveTextContent('workspace Owner');
+    if (role !== 'owner') expect(dialog).toHaveTextContent('Ask the team workspace Owner to upgrade the subscription.');
     const upgrade = screen.queryByTestId('amr-concurrency-upgrade');
     if (role === 'owner' && tier !== 'max') {
       expect(upgrade).toBeTruthy(); fireEvent.click(upgrade!);
@@ -52,7 +54,7 @@ it('renders the complete F04 design for a paid upgradable Owner', () => {
     role: 'owner', planId: 'team_pro',
     permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
   render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
-    workspaceContext={context} onClose={vi.fn()} />);
+    workspaceContext={context} profile="local" onClose={vi.fn()} />);
   const dialog = screen.getByRole('dialog');
   expect(dialog.querySelector('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
   expect(screen.getAllByRole('listitem')).toHaveLength(4);
@@ -99,6 +101,75 @@ it('does not create an upgrade entrance before a workspace identity is known', (
   const open = vi.fn(); vi.stubGlobal('open', open);
   render(<AmrConcurrencyDialog branch={{ tier: 'below_max', audience: 'owner' }}
     workspaceContext={null} profile="local" onClose={vi.fn()} />);
+  expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+  expect(open).not.toHaveBeenCalled();
+});
+
+// Frozen client F06 / F05: non-purchasing users still get the original image.
+// Acknowledgement only dismisses; it never buys, recharges or retries a run.
+it.each([
+  ...(['free', 'go', 'plus', 'pro', 'max'] as const).flatMap((tier) =>
+    (['admin', 'member'] as const).map((role) => ({ tier, role }))),
+])('$tier / $role keeps the illustration and a single acknowledgement', ({ tier, role }) => {
+  const context = workspaceContextFixture({ workspaceId: `f06-${tier}`, workspaceMemberId: `f06-${role}`,
+    role, planId: tier === 'free' ? null : `team_${tier}`, permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }) });
+  const onClose = vi.fn(); const open = vi.fn(); vi.stubGlobal('open', open);
+  render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })} workspaceContext={context}
+    profile="local" consoleOrigin="http://127.0.0.1:57457" onClose={onClose} />);
+  const dialog = screen.getByRole('dialog');
+  expect(dialog.querySelector('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
+  expect(screen.getAllByRole('button')).toHaveLength(2);
+  expect(screen.getByRole('button', { name: 'Got it' })).toBe(screen.getByTestId('amr-concurrency-close'));
+  expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+  expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  expect(onClose).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+  expect(onClose).toHaveBeenCalledOnce(); expect(open).not.toHaveBeenCalled();
+});
+
+it('retains the explicit console origin when an upgradable Owner chooses a plan', () => {
+  const context = workspaceContextFixture({ workspaceId: 'explicit-origin-owner', workspaceMemberId: 'origin-owner',
+    role: 'owner', planId: 'team_plus', permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
+  const open = vi.fn(); vi.stubGlobal('open', open);
+  render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })} workspaceContext={context}
+    profile="local" consoleOrigin="http://127.0.0.1:57457" onClose={vi.fn()} />);
+  fireEvent.click(screen.getByTestId('amr-concurrency-upgrade'));
+  const target = new URL(open.mock.calls[0]![0]);
+  expect(target.origin).toBe('http://127.0.0.1:57457');
+  expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+  expect(target.searchParams.get('billing')).toBe('plan');
+});
+
+it('uses the frozen Chinese F06 message and acknowledgement without adding purchase actions', () => {
+  translation.language = 'zh-CN';
+  const context = workspaceContextFixture({ workspaceId: 'f06-zh', workspaceMemberId: 'f06-zh-admin',
+    role: 'admin', planId: 'team_pro', permissions: buildWorkspacePermissions({ role: 'admin', lifecycleState: 'active' }) });
+  const onClose = vi.fn();
+  render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })} workspaceContext={context} onClose={onClose} />);
+  expect(screen.getByRole('heading', { name: '团队并发不足' })).toBeTruthy();
+  expect(screen.getByRole('dialog')).toHaveTextContent('当前团队并发不足，请联系团队空间所有者升级订阅。');
+  expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '知道了' }));
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+it('retains production origin pinning even when an explicit origin is supplied', () => {
+  const context = workspaceContextFixture({ workspaceId: 'prod-pinned-space', workspaceMemberId: 'prod-owner',
+    role: 'owner', planId: 'team_plus', permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
+  const open = vi.fn(); vi.stubGlobal('open', open);
+  render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })} workspaceContext={context}
+    profile="prod" consoleOrigin="http://127.0.0.1:57457" onClose={vi.fn()} />);
+  fireEvent.click(screen.getByTestId('amr-concurrency-upgrade'));
+  expect(new URL(open.mock.calls[0]![0]).origin).toBe('https://open-design.ai');
+});
+
+// Identity readiness must not fall back to a guessed production upgrade URL.
+it.each([undefined, null, '', '  '])('does not offer an upgrade before profile %s is ready', (profile) => {
+  const context = workspaceContextFixture({ workspaceId: 'known-space', workspaceMemberId: 'known-owner',
+    role: 'owner', planId: 'team_pro', permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
+  const open = vi.fn(); vi.stubGlobal('open', open);
+  render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
+    workspaceContext={context} profile={profile} onClose={vi.fn()} />);
   expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
   expect(open).not.toHaveBeenCalled();
 });

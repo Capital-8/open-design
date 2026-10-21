@@ -96,6 +96,8 @@ export const zhTW: Dict = {
   "chat.amrError.rechargeCta": "儲值",
   "chat.amrConcurrencyGate.title": "可用並行容量不足",
   "chat.amrConcurrencyGate.message": "目前並行容量不足，請升級方案後再試。",
+  "chat.amrConcurrencyGate.teamTitle": "團隊並行額度不足",
+  "chat.amrConcurrencyGate.teamMessage": "目前團隊並行額度不足，請聯絡團隊工作空間擁有者升級訂閱。",
   "chat.amrConcurrencyGate.benefit1": "無需複雜設定，海量 SOTA 模型任選",
   "chat.amrConcurrencyGate.benefit2": "邀請成員免費加入，共享額度",
   "chat.amrConcurrencyGate.benefit3": "支援多模態圖像創作，圖文一站生成",

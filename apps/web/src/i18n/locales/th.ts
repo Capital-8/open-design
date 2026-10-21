@@ -93,6 +93,8 @@ export const th: Dict = {
   'chat.amrError.rechargeCta': 'เติมเงิน',
   "chat.amrConcurrencyGate.title": "ถึงขีดจำกัดคำขอพร้อมกันแล้ว",
   "chat.amrConcurrencyGate.message": "ความจุพร้อมกันเต็มแล้ว โปรดอัปเกรดแผนแล้วลองอีกครั้ง",
+  "chat.amrConcurrencyGate.teamTitle": "ทีมถึงขีดจำกัดการทำงานพร้อมกันแล้ว",
+  "chat.amrConcurrencyGate.teamMessage": "ทีมถึงขีดจำกัดการทำงานพร้อมกันแล้ว โปรดติดต่อเจ้าของพื้นที่ทำงานของทีมเพื่ออัปเกรดการสมัครสมาชิก",
   "chat.amrConcurrencyGate.benefit1": "เลือกรุ่นล้ำสมัยได้โดยไม่ต้องตั้งค่าซับซ้อน",
   "chat.amrConcurrencyGate.benefit2": "เชิญสมาชิกฟรีและใช้โควตาร่วมกัน",
   "chat.amrConcurrencyGate.benefit3": "สร้างภาพและข้อความหลายรูปแบบในที่เดียว",

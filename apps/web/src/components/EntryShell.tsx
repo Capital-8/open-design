@@ -515,6 +515,7 @@ interface Props {
    */
   amrAccountPlan?: string | null;
   amrAccountId?: string | null;
+  amrRegistrationStatus?: VelaLoginStatus | null;
   daemonLive: boolean;
   onModeChange: (mode: ExecMode) => void;
   onAgentChange: (id: string) => void;
@@ -658,6 +659,7 @@ export function EntryShell({
   amrSessionState,
   amrAccountPlan = null,
   amrAccountId = null,
+  amrRegistrationStatus = null,
   daemonLive,
   onModeChange,
   onAgentChange,
@@ -1943,7 +1945,8 @@ export function EntryShell({
       {homeConcurrencyBlock && homeConcurrencyBlock.identity === homeFundingIdentity ? (
         <AmrConcurrencyDialog branch={homeConcurrencyBlock.branch}
           workspaceContext={homeConcurrencyBlock.workspaceContext}
-          profile={amrProfile}
+          profile={amrRegistrationStatus?.profile?.trim() || amrProfile}
+          consoleOrigin={amrRegistrationStatus?.consoleOrigin}
           onClose={() => setHomeConcurrencyBlock(null)} />
       ) : null}
       <div

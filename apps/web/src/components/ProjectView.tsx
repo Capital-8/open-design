@@ -26,6 +26,7 @@ import {
   type DaemonAgentReconnectState,
   type DaemonAgentRetryState,
   type DaemonReconnectState,
+  type VelaLoginStatus,
   createStrategyTaskBlockedError,
   fetchChatRunStatus,
   GENERIC_DAEMON_DISCONNECT_CODE,
@@ -864,6 +865,7 @@ function ensureConversationPresent(
 
 interface Props {
   project: Project;
+  workspaceQuotaStatus?: Pick<VelaLoginStatus, 'profile' | 'consoleOrigin'> | null;
   /** Authenticated daemon profile (or explicit runtime configuration), independent of wallet availability. */
   amrProfile?: string | null;
   /**
@@ -2117,6 +2119,7 @@ export function reconcileProjectDetail(
 
 export function ProjectView({
   project,
+  workspaceQuotaStatus,
   amrProfile = null,
   workspaceContextOverride,
   initialWorkspaceScope,
@@ -14569,7 +14572,8 @@ export function ProjectView({
         && config.mode === 'daemon' && config.agentId === 'amr' ? (
         <AmrConcurrencyDialog branch={concurrencyRejection.branch}
           workspaceContext={concurrencyRejection.workspaceContext}
-          profile={config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE ?? null}
+          profile={workspaceQuotaStatus?.profile?.trim() || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null}
+          consoleOrigin={workspaceQuotaStatus?.consoleOrigin}
           onClose={() => setConcurrencyDialogOpen(false)} />
       ) : null}
       {amrBalanceGateBlock?.dialog === 'ask_owner' || amrOwnerTopUpFromCard ? (

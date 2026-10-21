@@ -90,6 +90,7 @@ interface Props {
   amrAccountPlan?: string | null;
   /** Stable account boundary for CMS authorization instances. */
   amrAccountId?: string | null;
+  amrRegistrationStatus?: VelaLoginStatus | null;
   // Execution / model-switching context forwarded to the EntryShell so the
   // sticky top-bar can expose the active CLI/BYOK + model and persist
   // changes through the same channels as the project view.
@@ -274,6 +275,7 @@ export function EntryView({
   amrSessionState,
   amrAccountPlan,
   amrAccountId,
+  amrRegistrationStatus,
   config,
   providerModelsCache,
   onProviderModelsCacheChange,
@@ -413,6 +415,7 @@ export function EntryView({
       {...(amrSessionState !== undefined ? { amrSessionState } : {})}
       {...(amrAccountPlan !== undefined ? { amrAccountPlan } : {})}
       {...(amrAccountId !== undefined ? { amrAccountId } : {})}
+      amrRegistrationStatus={amrRegistrationStatus}
       daemonLive={daemonLive}
       onModeChange={onModeChange}
       onAgentChange={onAgentChange}

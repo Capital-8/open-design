@@ -93,6 +93,8 @@ export const ar: Dict = {
   'chat.amrError.rechargeCta': 'شحن',
   "chat.amrConcurrencyGate.title": "تم بلوغ حد الطلبات المتزامنة",
   "chat.amrConcurrencyGate.message": "السعة المتزامنة ممتلئة. قم بترقية خطتك ثم حاول مجددًا.",
+  "chat.amrConcurrencyGate.teamTitle": "تم بلوغ حد الطلبات المتزامنة للفريق",
+  "chat.amrConcurrencyGate.teamMessage": "بلغ الفريق حد الطلبات المتزامنة. اطلب من مالك مساحة عمل الفريق ترقية الاشتراك.",
   "chat.amrConcurrencyGate.benefit1": "اختر من أحدث النماذج دون إعدادات معقدة",
   "chat.amrConcurrencyGate.benefit2": "ادعُ الأعضاء مجانًا وشارك الرصيد",
   "chat.amrConcurrencyGate.benefit3": "أنشئ الصور والنصوص متعددة الوسائط في مكان واحد",

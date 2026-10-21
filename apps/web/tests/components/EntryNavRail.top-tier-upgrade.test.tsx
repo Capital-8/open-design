@@ -81,7 +81,7 @@ function renderRail(props: {
         open
         context={props.context}
         billing={props.billing}
-        amrProfile={props.amrProfile}
+        amrProfile={props.amrProfile ?? 'local'}
         balanceUsd="210"
       />
     </I18nProvider>,

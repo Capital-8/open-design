@@ -159,16 +159,26 @@ export function amrRechargeUrlForProfile(profile: string | null | undefined): st
   return amrConsoleUrlForProfile(profile);
 }
 
-function amrWorkspaceUrl(
-  profile: string | null | undefined,
+export function amrWorkspaceUrl(
+  base: string,
   workspaceId: string | null | undefined,
-  intent?: 'plans',
+  intent?: string,
 ): string | null {
   const normalizedWorkspaceId = workspaceId?.trim();
   if (!normalizedWorkspaceId) return null;
-  const url = new URL(amrConsoleUrlForProfile(profile));
-  url.searchParams.set('workspaceId', normalizedWorkspaceId);
-  if (intent === 'plans') url.searchParams.set('billing', AMR_CONSOLE_UPGRADE_INTENT);
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return null;
+  }
+  // Workspace first, attribution, then intent.
+  const params = new URLSearchParams({ workspaceId: normalizedWorkspaceId, source: 'open_design' });
+  for (const [key, value] of url.searchParams) {
+    if (key !== 'workspaceId' && key !== 'source') params.append(key, value);
+  }
+  url.search = params.toString();
+  if (intent) url.searchParams.set('billing', intent);
   return url.toString();
 }
 
@@ -176,14 +186,14 @@ export function amrConsoleUrlForWorkspace(
   profile: string | null | undefined,
   workspaceId: string | null | undefined,
 ): string | null {
-  return amrWorkspaceUrl(profile, workspaceId);
+  return amrWorkspaceUrl(amrConsoleUrlForProfile(profile), workspaceId);
 }
 
 export function amrPlansUrlForWorkspace(
   profile: string | null | undefined,
   workspaceId: string | null | undefined,
 ): string | null {
-  return amrWorkspaceUrl(profile, workspaceId, 'plans');
+  return amrWorkspaceUrl(amrConsoleUrlForProfile(profile), workspaceId, AMR_CONSOLE_UPGRADE_INTENT);
 }
 
 /**
@@ -200,8 +210,12 @@ export function amrPlansUrlForWorkspace(
  * `setRuntimeAmrConsoleOrigin`), so there is no second source of truth for
  * "which environment am I".
  */
-export function amrPlansUrlForProfile(profile: string | null | undefined): string {
-  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_UPGRADE_INTENT);
+export function amrPlansUrlForProfile(
+  profile: string | null | undefined,
+  workspaceId?: string | null,
+  consoleOrigin?: string | null,
+): string {
+  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_UPGRADE_INTENT, workspaceId, consoleOrigin);
 }
 
 /**
@@ -209,15 +223,23 @@ export function amrPlansUrlForProfile(profile: string | null | undefined): strin
  * Max-tier balance card whose owner has no higher plan to buy. See
  * {@link AMR_CONSOLE_AUTO_RECHARGE_INTENT} for the B-side caveat.
  */
-export function amrAutoRechargeUrlForProfile(profile: string | null | undefined): string {
-  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_AUTO_RECHARGE_INTENT);
+export function amrAutoRechargeUrlForProfile(
+  profile: string | null | undefined,
+  workspaceId?: string | null,
+  consoleOrigin?: string | null,
+): string {
+  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_AUTO_RECHARGE_INTENT, workspaceId, consoleOrigin);
 }
 
 function amrConsoleUrlWithBillingIntent(
   profile: string | null | undefined,
   intentValue: string,
+  workspaceId?: string | null,
+  consoleOrigin?: string | null,
 ): string {
-  const base = amrConsoleUrlForProfile(profile);
+  const base = amrConsoleUrlForProfile(profile, consoleOrigin);
+  const workspaceUrl = amrWorkspaceUrl(base, workspaceId, intentValue);
+  if (workspaceUrl) return workspaceUrl;
   const intent = `billing=${intentValue}`;
   return base.includes('?') ? `${base}&${intent}` : `${base}?${intent}`;
 }

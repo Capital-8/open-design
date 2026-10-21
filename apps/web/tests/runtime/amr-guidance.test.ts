@@ -104,12 +104,12 @@ describe('workspace-scoped AMR URLs', () => {
   // console plan surface. Full coverage in `amr-plans-console-deeplink.test.ts`.
   it('pins both console links to the workspace', () => {
     setRuntimeAmrConsoleOrigin(RUNTIME_CONSOLE_ORIGIN);
-    expect(amrConsoleUrlForWorkspace('feature-test', ' workspace-a ')).toBe(
-      `${RUNTIME_CONSOLE_ORIGIN}/dashboard?source=open_design&workspaceId=workspace-a`,
-    );
-    expect(amrPlansUrlForWorkspace('feature-test', ' workspace-a ')).toBe(
-      `${RUNTIME_CONSOLE_ORIGIN}/dashboard?source=open_design&workspaceId=workspace-a&billing=plan`,
-    );
+    const consoleUrl = new URL(amrConsoleUrlForWorkspace('feature-test', ' workspace-a ')!);
+    const plansUrl = new URL(amrPlansUrlForWorkspace('feature-test', ' workspace-a ')!);
+    expect(consoleUrl.origin + consoleUrl.pathname).toBe(`${RUNTIME_CONSOLE_ORIGIN}/dashboard`);
+    expect(Object.fromEntries(consoleUrl.searchParams)).toEqual({ source: 'open_design', workspaceId: 'workspace-a' });
+    expect(plansUrl.origin + plansUrl.pathname).toBe(`${RUNTIME_CONSOLE_ORIGIN}/dashboard`);
+    expect(Object.fromEntries(plansUrl.searchParams)).toEqual({ source: 'open_design', workspaceId: 'workspace-a', billing: 'plan' });
   });
 
   it('fails closed when the workspace identity is absent', () => {

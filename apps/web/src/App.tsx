@@ -5654,6 +5654,7 @@ function AppInner() {
             activeProjectWorkspaceContext,
           )}
           project={activeProject}
+          workspaceQuotaStatus={amrLoginStatus}
           amrProfile={amrProfileForConfig(config) ?? (
             isAmrSessionAuthenticated(amrLoginStatus) ? amrLoginStatus?.profile ?? null : null
           )}
@@ -5762,6 +5763,7 @@ function AppInner() {
           || null
         }
         amrAccountId={amrLoginStatus?.user?.id ?? amrLoginStatus?.credentialRevision ?? null}
+        amrRegistrationStatus={amrLoginStatus}
         config={config}
         providerModelsCache={providerModelsCache}
         onProviderModelsCacheChange={setProviderModelsCache}
@@ -6021,7 +6023,8 @@ function AppInner() {
         && homeConcurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration() ? (
         <AmrConcurrencyDialog branch={homeConcurrencyRejection.branch}
           workspaceContext={homeConcurrencyRejection.workspaceContext}
-          profile={amrProfileForConfig(config)}
+          profile={amrLoginStatus?.profile?.trim() || amrProfileForConfig(config)}
+          consoleOrigin={amrLoginStatus?.consoleOrigin}
           onClose={() => setHomeConcurrencyRejection(null)} />
       ) : null}
       <HomeAmrBalanceGateDialogs

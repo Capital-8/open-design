@@ -106,7 +106,7 @@ import {
   amrAutoRechargeUrlForProfile,
   amrConsoleUrlForWorkspace,
   amrPlansUrlForProfile,
-  amrPlansUrlForWorkspace,
+  amrWorkspaceUrl,
 } from '../runtime/amr-guidance';
 import { useWorkspaceInvalidation } from '../collab/workspace-events';
 import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
@@ -854,7 +854,7 @@ function consoleBillingIntentUrl(base: string | null, intent: string): string | 
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
   billing: WorkspaceBillingSummary | null | undefined,
-  options: { fallbackProfile: string | null | undefined },
+  options: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null;
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
@@ -863,14 +863,15 @@ export function workspaceUpgradeUrl(
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
   _billing: WorkspaceBillingSummary | null | undefined,
-  options?: { fallbackProfile: string | null | undefined },
+  options?: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null {
   // Missing context can use the caller's fallback profile because there is no
   // workspace identity to authorize yet.
   if (context && !canReachWorkspaceBillingEntrance(context)) return null;
   if (!context && !options) return null;
-  if (context) return amrPlansUrlForWorkspace(options?.fallbackProfile, context.workspaceId);
-  return amrPlansUrlForProfile(options?.fallbackProfile);
+  // Explicit runtime callers wait for a profile rather than guessing production.
+  if (options && !options.fallbackProfile?.trim()) return null;
+  return amrPlansUrlForProfile(options?.fallbackProfile, context?.workspaceId, options?.consoleOrigin);
 }
 
 /**
@@ -890,12 +891,19 @@ export function workspaceUpgradeUrl(
  */
 export function workspaceAutoRechargeUrl(
   context: WorkspaceCollabContext | null | undefined,
-  options: { fallbackProfile: string | null | undefined },
+  options: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null {
   if (context && context.permissions?.canManageAutoRecharge !== true) return null;
   const settingsUrl = context?.workspaceSettingsUrl?.trim() || null;
-  if (settingsUrl) return teamConsoleUrl(settingsUrl, 'auto-recharge');
-  return amrAutoRechargeUrlForProfile(options.fallbackProfile);
+  if (settingsUrl) return amrWorkspaceUrl(
+    teamConsoleUrl(settingsUrl, 'auto-recharge'),
+    context?.workspaceId,
+    AMR_CONSOLE_AUTO_RECHARGE_INTENT,
+  ) ?? teamConsoleUrl(settingsUrl, 'auto-recharge');
+  // A resolved workspace URL above remains authoritative. Without it, wait for
+  // the runtime profile just as the plan entrance does; null cannot pick prod.
+  if (!options.fallbackProfile?.trim()) return null;
+  return amrAutoRechargeUrlForProfile(options.fallbackProfile, context?.workspaceId, options.consoleOrigin);
 }
 
 export type WorkspaceInviteTarget =
