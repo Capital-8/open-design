@@ -74,6 +74,20 @@ export function createRevokedWorkspaceRunCancellation<TRun extends WorkspaceRun>
     const workspaceId = run.workspaceScope?.workspaceId?.trim();
     if (workspaceId) bindings.set(run, { generation, workspaceId });
   };
+  const revoke = async (workspaceIdInput: string, actorKey: string | null): Promise<void> => {
+    const workspaceId = workspaceIdInput.trim();
+    if (!workspaceId || !actorKey) return;
+    revoked.set(key(workspaceId, actorKey), ++generation);
+    const cancellations: Promise<void>[] = [];
+    for (const run of deps.listRuns()) {
+      const binding = bindings.get(run);
+      if (
+        binding?.workspaceId === workspaceId && binding.actorKey === actorKey
+        && !deps.isTerminal(run.status)
+      ) cancellations.push(cancel(run));
+    }
+    await Promise.all(cancellations);
+  };
   return {
     begin,
     /** Returns false when setup must not spawn/restart this physical Run. */
@@ -92,19 +106,28 @@ export function createRevokedWorkspaceRunCancellation<TRun extends WorkspaceRun>
       }
       return !pending.has(run) && !deps.isTerminal(run.status);
     },
-    async revoke(workspaceIdInput: string, actorKey: string | null): Promise<void> {
-      const workspaceId = workspaceIdInput.trim();
-      if (!workspaceId || !actorKey) return;
-      revoked.set(key(workspaceId, actorKey), ++generation);
-      const cancellations: Promise<void>[] = [];
+    revoke,
+    /** The caller supplies a complete directory proven for this actor. A role
+     * or billing/lifecycle change with active membership is not removal. */
+    async observeDirectory(
+      actorKey: string | null,
+      items: ReadonlyArray<{ workspaceId: string; memberStatus: 'active' | 'removed' }>,
+    ): Promise<void> {
+      if (!actorKey) return;
+      const activeWorkspaces = new Set(
+        items.filter((item) => item.memberStatus === 'active').map((item) => item.workspaceId),
+      );
+      const missingWorkspaces = new Set<string>();
       for (const run of deps.listRuns()) {
         const binding = bindings.get(run);
         if (
-          binding?.workspaceId === workspaceId && binding.actorKey === actorKey
+          binding && !activeWorkspaces.has(binding.workspaceId)
           && !deps.isTerminal(run.status)
-        ) cancellations.push(cancel(run));
+        ) missingWorkspaces.add(binding.workspaceId);
       }
-      await Promise.all(cancellations);
+      // Include setup runs whose actor is not pinned yet: revoke's generation
+      // fence will be consumed only if their eventual launch actor matches.
+      await Promise.all([...missingWorkspaces].map((workspaceId) => revoke(workspaceId, actorKey)));
     },
   };
 }

@@ -68,12 +68,15 @@ afterEach(async () => {
 }, 30_000);
 
 describe('server workspace context authority wiring', () => {
-  it('cancels only the current actor runs absent from a successful fresh directory after missed Hub events', async () => {
+  it.each(['absent', 'removed'] as const)('cancels only current actor runs with %s membership after missed Hub events', async (membership) => {
     const h = await startDirectoryRunHarness();
     const removed = h.run(WORKSPACE_ID);
     const personal = h.run('personal');
     const otherActor = h.run(WORKSPACE_ID, 'another-user');
-    h.directory.items = [directoryItem('personal')];
+    h.directory.items = [
+      directoryItem('personal'),
+      ...(membership === 'removed' ? [{ ...directoryItem(WORKSPACE_ID), memberStatus: 'removed' }] : []),
+    ];
 
     expect((await h.directoryBroker.fresh()).ok).toBe(true);
 
@@ -81,6 +84,41 @@ describe('server workspace context authority wiring', () => {
     expect(removed.cancelOrigin).toBe('unknown');
     expect(personal.status).toBe('running');
     expect(otherActor.status).toBe('running');
+  });
+
+  it('preserves active membership through role and billing lifecycle changes', async () => {
+    const h = await startDirectoryRunHarness();
+    const run = h.run(WORKSPACE_ID);
+    h.directory.items = [{ ...directoryItem(WORKSPACE_ID), role: 'member', lifecycleState: 'locked' }];
+
+    expect((await h.directoryBroker.fresh()).ok).toBe(true);
+
+    expect(run.status).toBe('running');
+    expect(run.cancelRequested).toBe(false);
+  });
+
+  it('still stops the same actor after credential refresh changes the directory identity', async () => {
+    const h = await startDirectoryRunHarness();
+    const run = h.run(WORKSPACE_ID);
+    await h.signIn('member-user', 'rotated');
+    h.directory.items = [directoryItem('personal')];
+
+    expect((await h.directoryBroker.fresh()).ok).toBe(true);
+
+    await vi.waitFor(() => expect(run.status).toBe('canceled'));
+    expect(run.cancelOrigin).toBe('unknown');
+  });
+
+  it('records removal during setup before the actual child actor can be pinned', async () => {
+    const h = await startDirectoryRunHarness();
+    const run = h.run(WORKSPACE_ID, 'member-user', false);
+    h.directory.items = [directoryItem('personal')];
+
+    expect((await h.directoryBroker.fresh()).ok).toBe(true);
+    expect(run.cancelRequested).toBe(false);
+
+    expect(h.pin(run)).toBe(false);
+    await vi.waitFor(() => expect(run.status).toBe('canceled'));
   });
 
   it.each([401, 403, 503])('does not turn a directory %s into membership revocation', async (status) => {
@@ -95,10 +133,13 @@ describe('server workspace context authority wiring', () => {
     expect(run.cancelRequested).toBe(false);
   });
 
-  it('does not treat a malformed successful directory body as a complete membership list', async () => {
+  it.each([
+    { unrelated: [] },
+    { items: [{ ...directoryItem(WORKSPACE_ID), memberStatus: 'unrecognized' }] },
+  ])('does not treat a malformed successful directory body %j as a complete membership list', async (body) => {
     const h = await startDirectoryRunHarness();
     const run = h.run(WORKSPACE_ID);
-    h.directory.body = { unrelated: [] };
+    h.directory.body = body;
 
     await h.directoryBroker.fresh();
 
@@ -253,11 +294,11 @@ async function startDirectoryRunHarness() {
   const authorityUrl = await startAuthority({ onDirectory: () => undefined, directory });
   const amrHome = join(scratch, 'amr');
   await mkdir(amrHome);
-  const signIn = async (userId: string) => {
+  const signIn = async (userId: string, revision = '') => {
     await writeFile(join(amrHome, 'config.json'), JSON.stringify({
       profiles: { local: {
-        runtimeKey: `test-runtime-${userId}`,
-        controlKey: `test-control-${userId}`,
+        runtimeKey: `test-runtime-${userId}-${revision}`,
+        controlKey: `test-control-${userId}-${revision}`,
         apiUrl: authorityUrl,
         linkUrl: authorityUrl,
         user: { id: userId, email: `${userId}@example.test`, name: userId },
@@ -297,17 +338,21 @@ async function startDirectoryRunHarness() {
   expect(runs).toBeDefined();
   expect(cancellation).toBeDefined();
   expect((await directoryBroker.fresh()).ok).toBe(true);
+  const actorKey = (userId: string) => cancellationModule.workspaceRunActorKey({
+    login: { loggedIn: true, profile: 'local', user: { id: userId } },
+    control: { profile: 'local', apiUrl: authorityUrl, user: { id: userId } },
+    credentialOverrides: false,
+  });
   return {
     directory, directoryBroker, signIn,
-    run(workspaceId: string, userId = 'member-user') {
+    pin(run: ReturnType<typeof runs.create>, userId = 'member-user') {
+      return cancellation.pin(run, actorKey(userId));
+    },
+    run(workspaceId: string, userId = 'member-user', pin = true) {
       const run = runs.create({ agentId: 'amr', workspaceScope: { workspaceId, workspaceMemberId: 'different-project-creator' } });
       run.status = 'running';
       cancellation.begin(run);
-      expect(cancellation.pin(run, cancellationModule.workspaceRunActorKey({
-        login: { loggedIn: true, profile: 'local', user: { id: userId } },
-        control: { profile: 'local', apiUrl: authorityUrl, user: { id: userId } },
-        credentialOverrides: false,
-      }))).toBe(true);
+      if (pin) expect(cancellation.pin(run, actorKey(userId))).toBe(true);
       return run;
     },
   };

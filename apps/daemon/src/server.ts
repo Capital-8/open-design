@@ -959,6 +959,7 @@ import {
   createWorkspaceDirectoryAuthorityBroker,
   createWorkspaceContextProviderFromEnv,
   fetchVelaWorkspaceDirectory,
+  mapVelaWorkspaceDirectory,
   resolveVelaWorkspaceHubEventsEndpoint,
   velaWorkspaceDirectoryIdentity,
   velaWorkspaceDirectoryIdentityForSession,
@@ -3808,6 +3809,8 @@ export async function startServer({
   const workspaceTypes = createWorkspaceTypeRegistry();
   const configuredAmrEnv = () =>
     agentCliEnvForAgent(readAppConfigSync(RUNTIME_DATA_DIR).agentCliEnv, 'amr');
+  let revokedWorkspaceRuns = null;
+  const directoryRunActorProofs = new WeakMap();
   const workspaceExactAuthorityCache = createWorkspaceExactAuthorityCache({
     identity: () => velaWorkspaceDirectoryIdentity(
       readVelaControlApiContext,
@@ -3816,10 +3819,45 @@ export async function startServer({
   });
   const workspaceDirectoryAuthority = createWorkspaceDirectoryAuthorityBroker({
     fetchDirectory: async () => {
+      const configuredEnv = configuredAmrEnv();
+      const session = readVelaControlApiContext(process.env, configuredEnv);
+      const login = readVelaLoginStatus(process.env, configuredEnv);
+      const identity = velaWorkspaceDirectoryIdentityForSession(session);
+      const credentialEnv = { ...process.env, ...configuredEnv };
+      const actorKey = workspaceRunActorKey({
+        control: session,
+        login,
+        credentialOverrides: Boolean(
+          credentialEnv.VELA_RUNTIME_KEY?.trim() || credentialEnv.VELA_CONTROL_KEY?.trim(),
+        ),
+      });
+      let completePrincipalDirectory = false;
       const result = await fetchVelaWorkspaceDirectory({
-        configuredEnv: configuredAmrEnv(),
+        configuredEnv,
+        fetch: async (input, init) => {
+          const response = await fetch(input, init);
+          const requestUrl = input instanceof Request ? input.url : String(input);
+          const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+          if (
+            response.ok && session?.controlKey && actorKey
+            && requestUrl === new URL('/api/v1/workspaces', session.apiUrl).toString()
+            && headers.get('authorization') === `Bearer ${session.controlKey}`
+          ) {
+            try {
+              const raw = await response.clone().json();
+              // Display mapping may drop malformed entries. Only a complete
+              // valid list is evidence of absence for host cancellation.
+              completePrincipalDirectory = Array.isArray(raw?.items)
+                && mapVelaWorkspaceDirectory(raw).length === raw.items.length;
+            } catch { /* Preserve the existing directory read/error behavior. */ }
+          }
+          return response;
+        },
       });
       if (result.ok) workspaceTypes.learn(result.items);
+      if (result.ok && completePrincipalDirectory) {
+        directoryRunActorProofs.set(result, { identity, actorKey });
+      }
       return result;
     },
     identityKey: () => velaWorkspaceDirectoryIdentity(
@@ -3838,8 +3876,15 @@ export async function startServer({
       mode: workspaceAuthorityCacheMode,
       ...input,
     }),
-    onAcceptedResult: (result, identity) =>
-      workspaceExactAuthorityCache.observe(identity, result.items),
+    onAcceptedResult: (result, identity) => {
+      workspaceExactAuthorityCache.observe(identity, result.items);
+      const proof = directoryRunActorProofs.get(result);
+      if (
+        proof?.identity !== identity
+        || identity !== velaWorkspaceDirectoryIdentity(readVelaControlApiContext, configuredAmrEnv())
+      ) return;
+      void revokedWorkspaceRuns?.observeDirectory(proof.actorKey, result.items);
+    },
   });
   const fetchWorkspaceDirectory = workspaceDirectoryAuthority.read;
   const fetchFreshMutationWorkspaceDirectory =
@@ -6161,7 +6206,6 @@ export async function startServer({
       await teamProjectsForDisplay(context);
     },
   });
-  let revokedWorkspaceRuns = null;
   const hubRunActors = new Map<string, { identityKey: string; actorKey: string | null }>();
   const authenticatedRunActor = (
     env,
