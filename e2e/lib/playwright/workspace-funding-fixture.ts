@@ -37,6 +37,9 @@ export type FundingFixture = {
   };
   actor: { controlKey: string; userId: string; email: string };
   spaces: { funded: FundingSpace; empty: FundingSpace; dp: FundingSpace };
+  /** VIEW-020's actual long Owner profile, verified by the environment owner. */
+  noticeLayout?: { ownerUserId: string; ownerDisplayName: string;
+    ownerProfileProofPath: string; ownerProfileProofSha256: string };
   /** Explicit server-owned capacity coordinator for the manual Link lane. */
   concurrency?: {
     space: FundingSpace & { actorRole: 'owner'; actorMemberId: string };

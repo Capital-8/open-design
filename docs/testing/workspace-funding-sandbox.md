@@ -197,3 +197,21 @@ no automatic submission, and a successful explicit manual send. The separate
 hashed `server-one-released-receipt.safe.json` proves the intermediate count of
 nine; the final released receipt proves cleanup to zero. It does not cover the
 remaining tier/surface matrix, visual requirements, or RUN-003 timing targets.
+
+`OD_FUNDING_CASE=view020` runs the real member/admin insufficient-funds notice
+layout case through the same canonical owner runner. Run it once for each of
+separate admin and member version2 fixtures; a single role does not pass the
+whole QA case. Each fixture includes `noticeLayout` with the actual long Owner
+profile and the path/digest of its environment owner's private read-only profile
+proof. The proof binds the current AMR SHA, empty workspace, Owner identity/name,
+and actual actor membership/role. No Owner name is injected into the UI.
+
+The matrix uses empty and existing-artifact projects, English and Simplified
+Chinese, the established 1280×800 baseline and a 375×812 narrow window. It changes
+the real stored locale preference and reloads the project, resizes the open
+notice, and closes/reopens it. It covers visible/actionable contact-Owner copy
+and close controls, stacking above project content, absence of purchase actions,
+and no task start on dismissal. It does not impose F04's image/benefits checks,
+all19locales, name interpolation, or initial-send admission as new VIEW-020
+criteria. Both roles' screenshots, traces, profile/authorization evidence and
+server-side no-usage review are required before whole-case acceptance.

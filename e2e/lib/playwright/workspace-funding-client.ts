@@ -6,7 +6,7 @@ import type { Page, Request, Response, TestInfo } from '@playwright/test';
 
 import { expect } from './suite.ts';
 import { warmPlaywrightDaemonRuntime, warmPlaywrightWebRuntime } from './runtime-lifecycle.ts';
-import { fundingHeaders, readFundingFixture, requireDpModelCoverage, type FundingSpace } from './workspace-funding-fixture.ts';
+import { fundingHeaders, readFundingFixture, requireDpModelCoverage, type FundingSpace, type FundingFixture } from './workspace-funding-fixture.ts';
 import { verifyFundingLease } from './workspace-funding-lease.ts';
 import { createToolsDevSuite, e2eWorkspaceRoot } from '../tools-dev/runtime.ts';
 import { T } from '../timeouts.ts';
@@ -22,7 +22,9 @@ type Preflight = {
   codingPlan: { eligible: boolean; tier: string; windows: Array<{ remainingCredits: string }> };
 };
 
-export async function startFundingClient(page: Page, info: TestInfo) {
+export async function startFundingClient(page: Page, info: TestInfo, options: {
+  preserveSelectedLocale?: boolean; initialSpace?: keyof FundingFixture['spaces'];
+} = {}) {
   if (process.env.OD_FUNDING_OWNER_RUNNER !== 'active') {
     throw new Error('Use the mandatory funding-runner entrypoint; direct Playwright invocation is not owned');
   }
@@ -142,14 +144,14 @@ export async function startFundingClient(page: Page, info: TestInfo) {
       amrSha: fixture.upstream.amrSha, velaSha256: fixture.runtime.velaSha256,
       openCodeSha256: fixture.runtime.openCodeSha256, preconditions });
     await attach('canonical-owner-live-pre', ownerPre.safe);
-    await page.addInitScript(({ config, space }) => {
+    await page.addInitScript(({ config, space, preserveSelectedLocale }) => {
       localStorage.setItem('open-design:config', JSON.stringify(config));
-      localStorage.setItem('open-design:locale', 'en');
+      if (!preserveSelectedLocale || !localStorage.getItem('open-design:locale')) localStorage.setItem('open-design:locale', 'en');
       localStorage.setItem('open-design:locale-source', 'manual');
       sessionStorage.setItem('od.workspaceSelection.v1', JSON.stringify({
         workspaceId: space.workspaceId, workspaceMemberId: space.actorMemberId ?? space.ownerMemberId,
       }));
-    }, { config, space: fixture.spaces.dp });
+    }, { config, space: fixture.spaces[options.initialSpace ?? 'dp'], preserveSelectedLocale: options.preserveSelectedLocale ?? false });
     const select = async (space: FundingSpace) => {
       const toggle = page.getByTestId('entry-rail-collapse');
       if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click({ timeout: T.medium });

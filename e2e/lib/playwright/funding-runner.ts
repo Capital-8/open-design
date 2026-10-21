@@ -24,7 +24,8 @@ async function recordOdSource(e2eRoot: string, output: string) {
   const files = ['lib/playwright/funding-runner.ts', 'lib/playwright/funding.config.ts',
     'lib/playwright/workspace-funding-client.ts', 'lib/playwright/workspace-funding-fixture.ts',
     'lib/playwright/workspace-funding-lease.ts', 'lib/playwright/suite.ts',
-    'lib/tools-dev/runtime.ts', 'ui/workspace-funding-sandbox.test.ts', 'playwright.config.ts'];
+    'lib/tools-dev/runtime.ts', 'ui/workspace-funding-sandbox.test.ts', 'playwright.config.ts',
+    'lib/playwright/notice.config.ts', 'lib/playwright/workspace-notice-fixture.ts', 'ui/workspace-notice-sandbox.test.ts'];
   const sources = await Promise.all(files.map(async path => ({ path, sha256: hash(await readFile(join(e2eRoot, path))) })));
   return { odHead: head.stdout.trim(), trackedDiffPaths: names.stdout.trim().split('\n').filter(Boolean),
     trackedDiffSha256: hash(diff.stdout), sourceDigest: hash(JSON.stringify(sources)), sources };
@@ -97,9 +98,11 @@ async function main() {
       const e2eRoot = fileURLToPath(new URL('../..', import.meta.url));
       const args = ['pnpm', 'exec', 'playwright', 'test', '-c', 'lib/playwright/funding.config.ts'];
       const selection = process.env.OD_FUNDING_CASE;
-      if (selection) {
+      if (selection === 'view020') {
+        args[args.length - 1] = 'lib/playwright/notice.config.ts';
+      } else if (selection) {
         const filters: Record<string, string> = { project: 'VIEW-015 project', home: 'VIEW-015 home', dp: 'VIEW-015 cash0', inflight: 'VIEW-015 existing A task' };
-        if (!filters[selection]) throw new Error('OD_FUNDING_CASE must be project, home, dp, or inflight');
+        if (!filters[selection]) throw new Error('OD_FUNDING_CASE must be project, home, dp, inflight, or view020');
         args.push('--grep', filters[selection]);
       }
       receipts.push({ entrypoint: 'lib/playwright/funding-runner.ts',
