@@ -35,7 +35,8 @@ test('[P0] RUN-002 actual Link refusal, one release, preserved input and manual 
   const requests: Array<{ method: string; path: string; at: number; body: string | null }> = [];
   page.on('request', r => { const path = new URL(r.url()).pathname;
     if (path.startsWith('/api/')) requests.push({ method: r.method(), path, at: Date.now(), body: r.postData() }); });
-  const results: Record<string, unknown> = { caseKey: 'server:RUN-002', binding,
+  const results: Record<string, unknown> = { caseKey: 'server:RUN-002', actualUiSurface: 'project', binding,
+    controlNamespace: 'Reuses the existing Free provider home tag; actual UI surface is Project, not inferred from the control tag',
     explicitGiven: 'Actual Free3 Link slots; only delivery timing of one genuine advisory response is controlled. No forged response or application task slots.' };
   let client: Awaited<ReturnType<typeof startScopedFundingClient>> | undefined;
   let advisoryHeld = false;
