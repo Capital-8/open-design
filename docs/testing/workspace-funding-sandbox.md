@@ -270,8 +270,12 @@ failed execution or turn a diagnostic into whole-case acceptance.
 
 `OD_FUNDING_CASE=ws005` selects the explicit canonical two-space lane. Its
 private `scopeSwitch` Given binds the same real actor to A with 10 USD and B
-with 20 USD, separate scoped runtime keys, an original balance proof and a
-repository-owned controlled upstream. The standard Go and Free fixtures keep
+with 20 USD, their original member identities, an original balance proof and a
+repository-owned controlled upstream. A real HTTP DeviceAuthorization login
+provides one `cli_device` runtime/control key pair for the whole flow, linked
+by actual key hashes, approved authorization, and both active memberships in
+the same private proof. Workspace switching never replaces that credential;
+a workspace-bound `source=user` API key cannot stand in for an account login. The standard Go and Free fixtures keep
 their existing assertions; this scenario does not infer membership tier from
 the Coding Plan DTO.
 

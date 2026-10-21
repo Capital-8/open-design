@@ -10,6 +10,11 @@ import { T } from '../timeouts.ts';
 export type WorkspaceSwitchProof = {
   amrSha: string;
   actorUserId: string;
+  deviceAuth: {
+    runtimeKeySource: 'cli_device'; userId: string; authorizationId: string; status: 'approved';
+    runtimeKeySha256: string; controlKeySha256: string;
+    memberships: Record<'a' | 'b', { workspaceId: string; workspaceMemberId: string; status: 'active' }>;
+  };
   spaces: Record<'a' | 'b', { workspaceId: string; workspaceMemberId: string;
     balanceCredits: string; availableBalanceUsd: string }>;
 };
@@ -20,6 +25,14 @@ export function assertWorkspaceSwitchProof(fixture: FundingFixture, proof: Works
     || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(given.attemptId)) {
     throw new Error('Same-source WS-005 actor and fresh attempt required');
   }
+  const auth = proof.deviceAuth;
+  const keyHash = (value: string) => createHash('sha256').update(value).digest('hex');
+  if (!given.deviceRuntimeKey || !auth || auth.runtimeKeySource !== 'cli_device'
+    || auth.userId !== fixture.actor.userId || !auth.authorizationId || auth.status !== 'approved'
+    || auth.runtimeKeySha256 !== keyHash(given.deviceRuntimeKey)
+    || auth.controlKeySha256 !== keyHash(fixture.actor.controlKey)) {
+    throw new Error('Real same-account DeviceAuthorization runtime/control credential proof required');
+  }
   for (const alias of ['a', 'b'] as const) {
     const space = given.spaces[alias];
     const actual = proof.spaces[alias];
@@ -28,6 +41,9 @@ export function assertWorkspaceSwitchProof(fixture: FundingFixture, proof: Works
     if (!space.workspaceId || !space.runtimeKey || !space.ownerMemberId || !space.workspaceName
       || actual.workspaceId !== space.workspaceId
       || actual.workspaceMemberId !== (space.actorMemberId ?? space.ownerMemberId)
+      || auth.memberships?.[alias]?.workspaceId !== space.workspaceId
+      || auth.memberships[alias].workspaceMemberId !== actual.workspaceMemberId
+      || auth.memberships[alias].status !== 'active'
       || actual.balanceCredits !== String(before * 10_000) || Number(actual.availableBalanceUsd) !== before
       || !charges.length || !charges.some(row => row.kind === 'main')
       || charges.some(row => !['main', 'aux'].includes(row.kind) || !row.modelId
@@ -38,8 +54,7 @@ export function assertWorkspaceSwitchProof(fixture: FundingFixture, proof: Works
       throw new Error(`Original WS-005 ${alias} scope, starting funds or complete usage budget differs`);
     }
   }
-  if (given.spaces.a.workspaceId === given.spaces.b.workspaceId
-    || given.spaces.a.runtimeKey === given.spaces.b.runtimeKey) throw new Error('Distinct WS-005 workspace credentials required');
+  if (given.spaces.a.workspaceId === given.spaces.b.workspaceId) throw new Error('Distinct WS-005 workspaces required');
 }
 
 export async function readWorkspaceSwitchProof(fixture: FundingFixture) {

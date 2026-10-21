@@ -34,7 +34,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
   const wallet = options.freeWallet ? loaded.freeWallet?.[options.freeWallet] : undefined;
   if (options.freeWallet && !wallet) throw new Error('Explicit real personal Free wallet required');
   const switchGiven = options.scopeSwitch ? loaded.scopeSwitch : undefined;
-  if (options.scopeSwitch && !switchGiven) throw new Error('Explicit WS-005 two-space Given required');
+  if (options.scopeSwitch && !switchGiven?.deviceRuntimeKey) throw new Error('Explicit WS-005 account DeviceAuthorization credential required');
   const fixture = wallet ? { ...loaded, actor: wallet.actor } : loaded;
   const initialSpace = wallet?.space ?? switchGiven?.spaces.a ?? fixture.spaces[options.initialSpace ?? 'dp'];
   const checkedSpaces = wallet ? { wallet: wallet.space } : switchGiven?.spaces ?? fixture.spaces;
@@ -53,7 +53,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
   await mkdir(runtime.dataDir, { recursive: true });
   await writeFile(join(amrHome, 'config.json'), JSON.stringify({ profiles: { local: {
     controlKey: fixture.actor.controlKey,
-    runtimeKey: wallet?.space.runtimeKey ?? switchGiven?.spaces.a.runtimeKey ?? fixture.spaces.dp.runtimeKey,
+    runtimeKey: wallet?.space.runtimeKey ?? switchGiven?.deviceRuntimeKey ?? fixture.spaces.dp.runtimeKey,
     apiUrl: fixture.upstream.apiUrl,
     linkUrl: fixture.upstream.linkUrl,
     user: { id: fixture.actor.userId, email: fixture.actor.email, name: 'Disposable funding QA' },

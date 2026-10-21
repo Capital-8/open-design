@@ -42,6 +42,8 @@ export type FundingFixture = {
   /** WS-005 keeps both real tasks bound to their original workspace. */
   scopeSwitch?: {
     attemptId: string;
+    /** One real account DeviceAuthorization credential for the whole A/B flow. */
+    deviceRuntimeKey: string;
     spaces: { a: FundingSpace & { workspaceName: string }; b: FundingSpace & { workspaceName: string } };
     proofPath: string;
     proofSha256: string;
