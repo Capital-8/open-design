@@ -240,10 +240,10 @@ export function AmrBalanceDialog({
     );
   };
   const benefits = [
-    t('chat.amrBalanceGate.benefit1'),
-    t('chat.amrBalanceGate.benefit2'),
-    t('chat.amrBalanceGate.benefit3'),
-    t('chat.amrBalanceGate.benefit4'),
+    t('chat.amrConcurrencyGate.benefit1'),
+    t('chat.amrConcurrencyGate.benefit2'),
+    t('chat.amrConcurrencyGate.benefit3'),
+    t('chat.amrConcurrencyGate.benefit4'),
   ];
   const dialog = (
     <Dialog
