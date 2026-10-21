@@ -1,4 +1,5 @@
 import { homeAutoSendIdentity, stableIdentityDigest, type HomeRequestConcurrencyRejection } from '../runtime/home-auto-send-identity';
+import { withLiveArtifactDeliveries } from '../runtime/live-artifact-delivery';
 import { readRetriedErrorSurface, retriedErrorSurfaceKey, writeRetriedErrorSurface } from '../runtime/chat/retried-error-surface';
 import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './share/observed-public-share-link';
 import type { ShareLoginReturn } from './share/share-login-return';
@@ -708,13 +709,9 @@ function mergeServerMessageWithLocal(
     if ((local.content?.length ?? 0) > (server.content?.length ?? 0)) {
       merged.content = local.content;
     }
-    if (
-      !(server.strategyTaskBlocked === false && local.strategyTaskBlocked === true)
-      && (
-        (local.events?.length ?? 0) > (server.events?.length ?? 0)
-        || localThinkingExtendsServerSnapshot(server, local)
-      )
-    ) {
+    if (!(server.strategyTaskBlocked === false && local.strategyTaskBlocked === true)
+      && ((local.events?.length ?? 0) > (server.events?.length ?? 0)
+        || localThinkingExtendsServerSnapshot(server, local))) {
       merged.events = local.events;
     }
   }
@@ -6857,6 +6854,8 @@ export function ProjectView({
           ?? await fetchChatRunStatus(runId, projectRunWorkspaceContext);
         if (cancelled) return;
         if (!physicalStatus) {
+          // A missing status response cannot invalidate persisted success.
+          if (message.runStatus === 'succeeded') continue;
           // A local retry seal is not a daemon terminal verdict. Keep this
           // run's receipts for the existing manual reconnect action.
           // `fetchChatRunStatus` returns null on ANY non-OK response or fetch
@@ -7212,7 +7211,7 @@ export function ProjectView({
             // OPEND-2588 (2026-09-04): a turn that finishes while we are
             // replaying it opens ALL of its primary artifacts, same as a live
             // completion — the user cannot tell the two apart.
-            const turnArtifacts = selectAutoOpenTurnArtifacts(produced, nextFiles, {
+            const turnArtifacts = withLiveArtifactDeliveries(selectAutoOpenTurnArtifacts(produced, nextFiles, {
               ...autoOpenArtifactOptions,
               preTurnFileNames: beforeFileNames,
               turnStartedAt: status.createdAt || message.startedAt || message.createdAt || null,
@@ -7223,7 +7222,7 @@ export function ProjectView({
                 project.id,
                 projectDetail.resolvedDir,
               ),
-            });
+            }), message.events);
             if (turnArtifacts.focused && !userTookOverPreviewRef.current) {
               requestOpenTurnArtifacts(turnArtifacts.open, turnArtifacts.focused);
             }
@@ -7749,7 +7748,7 @@ export function ProjectView({
                 );
                 // OPEND-2588 (2026-09-04): see the replay path above — a run
                 // that lands while reattached is still a turn finishing.
-                const turnArtifacts = selectAutoOpenTurnArtifacts(produced, nextFiles, {
+                const turnArtifacts = withLiveArtifactDeliveries(selectAutoOpenTurnArtifacts(produced, nextFiles, {
                   ...autoOpenArtifactOptions,
                   preTurnFileNames: beforeFileNames,
                   turnStartedAt: status.createdAt || message.startedAt || message.createdAt || null,
@@ -7763,7 +7762,7 @@ export function ProjectView({
                     project.id,
                     projectDetail.resolvedDir,
                   ),
-                });
+                }), needsFullReplay ? replayedEvents : message.events);
                 if (turnArtifacts.focused && !userTookOverPreviewRef.current) {
                   requestOpenTurnArtifacts(turnArtifacts.open, turnArtifacts.focused);
                 }
@@ -9679,7 +9678,10 @@ export function ProjectView({
         if (ev.kind === 'live_artifact') {
           setLiveArtifactEvents((prev) => appendLiveArtifactEventItem(prev, ev));
           void refreshLiveArtifacts().then(() => {
-            if (ev.action !== 'deleted') requestOpenFile(liveArtifactTabId(ev.artifactId));
+            if (ev.action !== 'deleted' && !userTookOverPreviewRef.current) {
+              completionSelectedAutoOpen = true;
+              requestOpenFile(liveArtifactTabId(ev.artifactId));
+            }
           });
           onProjectsRefresh();
           return;
@@ -10144,7 +10146,7 @@ export function ProjectView({
               // `turnArtifacts.focused` is byte-for-byte the old
               // `selectAutoOpenTurnArtifact` answer, so the focused tab below
               // is decided exactly as it was before; only `.open` is new.
-              const turnArtifacts = selectAutoOpenTurnArtifacts(produced, nextFiles, {
+              const turnArtifacts = withLiveArtifactDeliveries(selectAutoOpenTurnArtifacts(produced, nextFiles, {
                 ...autoOpenArtifactOptions,
                 preTurnFileNames: beforeFileNames,
                 turnStartedAt: startedAt,
@@ -10158,9 +10160,11 @@ export function ProjectView({
                   project.id,
                   projectDetail.resolvedDir,
                 ),
-              });
+              }), latestAssistantMsg.events);
               const turnArtifactToOpen = turnArtifacts.focused;
-              const producedArtifactToOpen = selectAutoOpenProducedArtifact(
+              const producedArtifactToOpen = turnArtifactToOpen && isLiveArtifactTabId(turnArtifactToOpen)
+                ? turnArtifactToOpen
+                : selectAutoOpenProducedArtifact(
                 [
                   ...provenTraceTouchedFiles(),
                   ...(turnArtifactToOpen
