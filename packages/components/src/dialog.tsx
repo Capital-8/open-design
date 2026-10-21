@@ -1,5 +1,8 @@
 import {
+  useCallback,
   useEffect,
+  useLayoutEffect,
+  useRef,
   type ComponentPropsWithoutRef,
   type FormEventHandler,
   type MouseEvent,
@@ -39,6 +42,25 @@ type DialogHeadingProps = ComponentPropsWithoutRef<'h2'>;
 
 type DialogDescriptionProps = ComponentPropsWithoutRef<'p'>;
 
+const modalSelector = '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]';
+const focusableSelector = 'button, [href], input, select, textarea, [tabindex], [contenteditable="true"]';
+
+function isTopDialog(panel: HTMLElement): boolean {
+  const modals = [...panel.ownerDocument.querySelectorAll<HTMLElement>(modalSelector)]
+    .filter(element => !element.closest('[hidden], [aria-hidden="true"]'));
+  return modals.at(-1) === panel;
+}
+
+function isFocusableControl(element: HTMLElement): boolean {
+  if (element.tabIndex < 0 || element.matches(':disabled')
+    || element.closest('[hidden], [inert], [aria-hidden="true"]')
+    || getComputedStyle(element).visibility === 'hidden') return false;
+  for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+    if (getComputedStyle(ancestor).display === 'none') return false;
+  }
+  return true;
+}
+
 export function Dialog({
   children,
   onClose,
@@ -57,11 +79,60 @@ export function Dialog({
   onSubmit,
   ...dataAttributes
 }: DialogProps) {
+  const panelRef = useRef<HTMLDivElement | HTMLFormElement | null>(null);
+  const setPanelRef = useCallback((panel: HTMLDivElement | HTMLFormElement | null) => {
+    panelRef.current = panel;
+  }, []);
+  // A child's autoFocus commits before this layout effect. Retain the opener
+  // before that focus change so closing a nested form can return to it.
+  const focusBeforeMountRef = useRef<Element | null>(
+    typeof document === 'undefined' ? null : document.activeElement,
+  );
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const doc = panel.ownerDocument;
+    const previous = panel.contains(doc.activeElement)
+      ? focusBeforeMountRef.current : doc.activeElement;
+    const focusPanel = () => panel.focus({ preventScroll: true });
+    if (isTopDialog(panel) && !panel.contains(doc.activeElement)) focusPanel();
+
+    const keepFocusInside = (event: FocusEvent) => {
+      if (isTopDialog(panel) && event.target instanceof Node && !panel.contains(event.target)) focusPanel();
+    };
+    const trapTab = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== 'Tab' || !isTopDialog(panel)) return;
+      const controls = [...panel.querySelectorAll<HTMLElement>(focusableSelector)].filter(isFocusableControl);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        focusPanel();
+      } else if (event.shiftKey && (doc.activeElement === first || doc.activeElement === panel)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (doc.activeElement === last || doc.activeElement === panel)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    doc.addEventListener('focusin', keepFocusInside);
+    doc.addEventListener('keydown', trapTab);
+    return () => {
+      doc.removeEventListener('focusin', keepFocusInside);
+      doc.removeEventListener('keydown', trapTab);
+      if (previous instanceof HTMLElement && previous.isConnected
+        && (panel.contains(doc.activeElement) || doc.activeElement === doc.body)) {
+        previous.focus({ preventScroll: true });
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!onClose || !closeOnEscape) return;
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
+      if (event.defaultPrevented || event.key !== 'Escape' || !panelRef.current || !isTopDialog(panelRef.current)) return;
       event.preventDefault();
       onClose?.();
     }
@@ -71,6 +142,8 @@ export function Dialog({
   }, [closeOnEscape, onClose]);
 
   const sharedProps = {
+    ref: setPanelRef,
+    tabIndex: -1,
     id,
     className: joinClassNames(
       includeChromeClassName ? styles.dialog : undefined,

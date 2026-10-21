@@ -61,6 +61,15 @@ function readTooltipTarget(start: EventTarget | null): HTMLElement | null {
   return isTooltipTarget(candidate) ? candidate : null;
 }
 
+function isActiveTooltipTarget(target: HTMLElement): boolean {
+  if (!target.isConnected || target.closest('[inert], [hidden], [aria-hidden="true"]')) return false;
+  const modals = [...document.querySelectorAll<HTMLElement>(
+    '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
+  )].filter(element => !element.closest('[hidden], [aria-hidden="true"]'));
+  const modal = modals.at(-1);
+  return !modal || modal.contains(target);
+}
+
 function tooltipPlacement(target: HTMLElement): TooltipPlacement {
   const raw = target.dataset.tooltipPlacement;
   return raw === 'bottom' || raw === 'left' || raw === 'right' ? raw : 'top';
@@ -194,6 +203,10 @@ export function TooltipLayer() {
   }, [hideTooltip, suppressNativeTitle]);
 
   const showTooltip = useCallback((target: HTMLElement) => {
+    if (!isActiveTooltipTarget(target)) {
+      hideTooltip({ instant: true });
+      return;
+    }
     const text = target.dataset.tooltip?.trim();
     if (!text) return;
     suppressNativeTitle(target);
@@ -219,7 +232,7 @@ export function TooltipLayer() {
           : { x: 0, y: 0, visibility: 'hidden' },
       };
     });
-  }, [suppressNativeTitle]);
+  }, [hideTooltip, suppressNativeTitle]);
 
   const updatePosition = useCallback(() => {
     setState((current) => {
@@ -227,7 +240,7 @@ export function TooltipLayer() {
       /* 已经在淡出的气泡不再跟着滚动/缩放重新定位 —— 它要停在原地淡完。 */
       if (!current.visible) return current;
       /* 触发元素没了就立刻收,别对着空气淡 */
-      if (!document.contains(current.target)) {
+      if (!isActiveTooltipTarget(current.target)) {
         return { ...current, visible: false, instant: true };
       }
       if (current.target.getAttribute('aria-expanded') === 'true') {
@@ -288,6 +301,21 @@ export function TooltipLayer() {
       attributes: true,
       attributeFilter: ['aria-expanded', 'class', 'data-tooltip', 'disabled'],
     });
+    return () => observer.disconnect();
+  }, [hideTooltip, state?.target, state?.visible]);
+
+  useEffect(() => {
+    if (!state?.visible) return;
+    // A modal can arrive after a send while the pointer stays still. Its
+    // portal is a sibling of the trigger, so watching only that trigger misses
+    // the transition. Dismiss immediately, keeping normal hover fades intact.
+    const dismissInactive = () => {
+      if (!isActiveTooltipTarget(state.target)) hideTooltip({ instant: true });
+    };
+    dismissInactive();
+    const observer = new MutationObserver(dismissInactive);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['aria-modal', 'aria-hidden', 'hidden', 'inert'] });
     return () => observer.disconnect();
   }, [hideTooltip, state?.target, state?.visible]);
 
