@@ -1,7 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
+import * as ts from "@typescript/native/unstable/ast";
+import { parseSource, withNativeSourceParser } from "./lib/typescript/source.ts";
 
 import { checkCrossAppImports } from "./check-cross-app-imports.ts";
 import { checkTsNocheckImports } from "./check-ts-nocheck-imports.ts";
@@ -934,13 +935,7 @@ function pushStringSpecifier(
 }
 
 function collectImportSpecifiersFromSource(repositoryPath: string, source: string): SourceImportSpecifier[] {
-  const sourceFile = ts.createSourceFile(
-    repositoryPath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    repositoryPath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSource(repositoryPath, source);
   const imports: SourceImportSpecifier[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -956,7 +951,7 @@ function collectImportSpecifiersFromSource(repositoryPath: string, source: strin
       pushStringSpecifier(imports, sourceFile, node.arguments[0]);
     }
 
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
 
   visit(sourceFile);
@@ -1553,7 +1548,7 @@ if (isMain) {
   // `--list-checks` is the machine-readable registry of repository guard checks.
   if (process.argv[2] === "--list-checks") {
     for (const check of checks) console.log(check.name);
-  } else if (!(await runGuardChecks(checks, { repoRoot }))) {
+  } else if (!(await withNativeSourceParser(() => runGuardChecks(checks, { repoRoot })))) {
     process.exitCode = 1;
   }
 }

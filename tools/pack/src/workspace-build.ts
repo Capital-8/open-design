@@ -51,13 +51,12 @@ export const WORKSPACE_BUILD_CACHE_SCHEMA_VERSION = 11;
 
 /**
  * V8 old-space ceiling (MB) for the packaged closure build, the stage that runs
- * `next build` for apps/web. Next type-checks apps/web in-process against the
- * app tsconfig (src and tests alike), and since the Home entry refresh (#8208)
- * that pass needs more than Node's 2 GB default: on GitHub's macos-14 and
- * macos-15-intel runners it dies deterministically with "JavaScript heap out of
- * memory" during "Running TypeScript". 4 GB fits the 7 GB runners. The ceiling
- * changes how much memory the build may use, never what it emits, so it is not
- * a cache-key determinant and does not bump the schema version.
+ * `next build` for apps/web. This ceiling was introduced for Next's historical
+ * in-process TypeScript checker, which exceeded Node's 2 GB default on macOS CI.
+ * Type checking now runs in the native TS 7 process after Next's build; keep the
+ * existing Node ceiling for the remaining Next/bundler work. It does not control
+ * native compiler memory. The ceiling changes resource limits, not emitted
+ * output, so it is not a cache-key determinant or a schema-version change.
  */
 export const WORKSPACE_BUILD_MAX_OLD_SPACE_MB = 4096;
 
