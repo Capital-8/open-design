@@ -27,7 +27,7 @@ async function recordOdSource(e2eRoot: string, output: string) {
     'lib/tools-dev/runtime.ts', 'ui/workspace-funding-sandbox.test.ts', 'playwright.config.ts',
     'lib/playwright/notice.config.ts', 'lib/playwright/workspace-notice-fixture.ts', 'ui/workspace-notice-sandbox.test.ts',
     'lib/playwright/free-wallet.config.ts', 'lib/playwright/workspace-free-wallet-fixture.ts', 'ui/workspace-free-wallet-sandbox.test.ts',
-    'lib/playwright/workspace-switch.config.ts', 'lib/playwright/workspace-switch-fixture.ts', 'ui/workspace-switch-billing-sandbox.test.ts', 'lib/playwright/depletion.config.ts', 'lib/playwright/workspace-depletion-fixture.ts', 'ui/workspace-depletion-sandbox.test.ts', 'lib/playwright/recovery.config.ts', 'lib/playwright/workspace-recovery-fixture.ts', 'ui/workspace-recovery-sandbox.test.ts'];
+    'lib/playwright/workspace-switch.config.ts', 'lib/playwright/workspace-switch-fixture.ts', 'ui/workspace-switch-billing-sandbox.test.ts', 'lib/playwright/depletion.config.ts', 'lib/playwright/workspace-depletion-fixture.ts', 'ui/workspace-depletion-sandbox.test.ts', 'lib/playwright/recovery.config.ts', 'lib/playwright/workspace-recovery-fixture.ts', 'ui/workspace-recovery-sandbox.test.ts', 'lib/playwright/workspace-transport.ts'];
   const sources = await Promise.all(files.map(async path => ({ path, sha256: hash(await readFile(join(e2eRoot, path))) })));
   return { odHead: head.stdout.trim(), trackedDiffPaths: names.stdout.trim().split('\n').filter(Boolean),
     trackedDiffSha256: hash(diff.stdout), sourceDigest: hash(JSON.stringify(sources)), sources };

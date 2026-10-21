@@ -7,6 +7,7 @@ import { startScopedFundingClient } from '@/playwright/workspace-funding-client'
 import { readRecoveryFixture } from '@/playwright/workspace-recovery-fixture';
 import { verifyFundingLease, withFundingLease } from '@/playwright/workspace-funding-lease';
 import { T } from '@/timeouts';
+import { startWorkspaceTransport } from '@/playwright/workspace-transport';
 
 type Json = Record<string, unknown>;
 type Run = {
@@ -85,6 +86,7 @@ for (const alias of ['a', 'b'] as const) {
     const originalPrompt = `QA:${JSON.stringify({ id: `od-ws005-${given.attemptId}-${alias}`, scenario: 'WS-005', task: alias })} Reply ok only.`;
     let client: Awaited<ReturnType<typeof startScopedFundingClient>> | undefined;
     let originalRunId: string | undefined;
+    let transport: Awaited<ReturnType<typeof startWorkspaceTransport>> | undefined;
     const results: Json = {
       case: 'server:RUN-010',
       alias,
@@ -122,7 +124,8 @@ for (const alias of ['a', 'b'] as const) {
         expect(r.ok).toBe(true);
         return (await r.json()) as Run;
       };
-      await page.goto(runtime.url.web('/'), { waitUntil: 'domcontentloaded', timeout: T.xlong });
+      transport = await startWorkspaceTransport({ target: runtime.url.web('/'), namespace: runtime.namespace, workspaceId: wallet.space.workspaceId, memberId: wallet.space.actorMemberId! });
+      await page.goto(transport.origin, { waitUntil: 'domcontentloaded', timeout: T.xlong });
       await client.select(wallet.space);
       await expect(page.getByTestId('home-hero-input')).toBeVisible({ timeout: T.xlong });
       await page.getByTestId('home-hero-input').fill(originalPrompt);
@@ -172,7 +175,9 @@ for (const alias of ['a', 'b'] as const) {
       const beforeOffline = requests.length;
       const beforeEvents = (await provider()).events;
       const offlineAt = Date.now();
+      expect(transport.activeScoped).toBeGreaterThan(0);
       await page.context().setOffline(true);
+      transport.disconnect();
       const offlineProbe = await page.evaluate(async () => {
         try {
           await fetch('/api/workspaces');
@@ -191,7 +196,8 @@ for (const alias of ['a', 'b'] as const) {
           { timeout: T.long },
         )
         .toBe(true);
-      results.offline = { at: offlineAt, offlineProbe, failures: networkFailures };
+      await expect.poll(() => transport!.events.some(e => e.type === 'upstream-response-close'), { timeout: T.long }).toBe(true);
+      results.offline = { at: offlineAt, offlineProbe, failures: networkFailures, transportEvents: transport.events };
       if (originalRunId) {
         await expect
           .poll(async () => (await run(originalRunId!)).status, {
@@ -257,6 +263,7 @@ for (const alias of ['a', 'b'] as const) {
       expect(requests.slice(beforeOffline).filter(mutation)).toEqual([]);
       const readyBefore = frames.filter((frame) => frame.event === 'ready').length;
       const reconnectAt = Date.now();
+      transport.restore();
       await page.context().setOffline(false);
       await expect
         .poll(() => frames.filter((frame) => frame.event === 'ready').length, { timeout: T.xlong })
@@ -341,13 +348,15 @@ for (const alias of ['a', 'b'] as const) {
         provider: await provider(),
         backend: JSON.parse(await readFile(given.backendObservationPath, 'utf8')),
         concurrency: JSON.parse(await readFile(given.concurrencyObservationPath, 'utf8')),
+        transport: transport ? { origin: transport.origin, events: transport.events } : null,
       });
       await info.attach(`RUN010-${alias}-observations`, {
         path: join(output, 'observations.private.json'),
         contentType: 'application/json',
       });
+      await cdp.detach().catch(() => undefined);
       if (client) await client.close({ preserveScratch: true });
-      await cdp.detach();
+      if (transport) await transport.close();
     }
   });
 }
