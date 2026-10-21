@@ -885,6 +885,9 @@ export function workspaceAutoRechargeUrl(
     context?.workspaceId,
     AMR_CONSOLE_AUTO_RECHARGE_INTENT,
   ) ?? teamConsoleUrl(settingsUrl, 'auto-recharge');
+  // A resolved workspace URL above remains authoritative. Without it, wait for
+  // the runtime profile just as the plan entrance does; null cannot pick prod.
+  if (!options.fallbackProfile?.trim()) return null;
   return amrAutoRechargeUrlForProfile(options.fallbackProfile, context?.workspaceId);
 }
 
