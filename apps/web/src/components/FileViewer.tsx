@@ -11335,6 +11335,8 @@ function HtmlViewer({
     const onStorage = (event: MessageEvent) => {
       savePreviewStorageMessage(event, srcDocPreviewIframeRef.current?.contentWindow ?? null,
         expectedSrcDocTransportGenerationRef.current, previewStorageScopeKey);
+      savePreviewStorageMessage(event, presentOverlayRef.current?.querySelector('iframe')?.contentWindow ?? null,
+        `${expectedSrcDocTransportGenerationRef.current}:presentation`, previewStorageScopeKey);
     };
     window.addEventListener('message', onStorage);
     return () => window.removeEventListener('message', onStorage);
@@ -11491,6 +11493,11 @@ function HtmlViewer({
       hideDeckChrome: effectiveDeck,
       deckClickNavigation: effectiveDeck,
       previewFocusGuard: true,
+      previewStorage: Boolean(previewStorageScopeKey),
+      previewStorageSeed: previewStorageScopeKey ? {
+        generation: `${srcDocTransportGeneration}:presentation`,
+        values: readPreviewStorage(previewStorageScopeKey),
+      } : undefined,
     }) : ''),
     [
       deckVisualSource,
@@ -11500,6 +11507,8 @@ function HtmlViewer({
       file.name,
       previewStateKey,
       latestSrcDocPreviewBaseHref,
+      previewStorageScopeKey,
+      srcDocTransportGeneration,
     ],
   );
   // Per-slide thumbnail documents are built lazily by DeckThumbnailRail, one
@@ -18476,7 +18485,7 @@ function HtmlViewer({
               title="present"
               sandbox={HTML_PREVIEW_SANDBOX}
               data-od-render-mode="srcdoc"
-              srcDoc={effectiveDeck ? presentationSrcDoc : srcDoc}
+              srcDoc={presentationSrcDoc}
             />
           ) : (
             <iframe

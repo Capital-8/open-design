@@ -3909,19 +3909,19 @@ describe('FileViewer SVG artifacts', () => {
       projectId: 'project-1',
       projectKind: 'prototype' as const,
       file,
-      // An inline Babel script selects the guarded srcDoc transport without
-      // requesting the isolated origin used by Web Storage artifacts.
-      liveHtml: '<html><body><script type="text/babel">const ready = true;</script><main>Editable</main></body></html>',
+      // Storage uses the guarded lazy srcDoc transport with host-scoped persistence.
+      liveHtml: '<html><body><script>localStorage.getItem("ready");</script><main>Editable</main></body></html>',
     };
     const { rerender } = render(<FileViewer {...props} filesRefreshKey={1} />);
 
     const initialFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
-    const post = vi.spyOn(initialFrame.contentWindow!, 'postMessage');
+    const previewWindow = installSandboxedPreviewWindow(initialFrame);
+    const post = vi.mocked(previewWindow.postMessage);
     fireEvent.load(initialFrame);
     const activations = () => post.mock.calls
       .map(([message]) => message)
       .filter((message) => message.type === 'od:srcdoc-transport-activate');
-    expect(activations()).toHaveLength(1);
+    await waitFor(() => expect(activations()).toHaveLength(1));
     fireEvent.click(screen.getByTestId('manual-edit-mode-toggle'));
     const frame = await waitFor(() => {
       const active = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
@@ -10240,7 +10240,7 @@ describe('FileViewer tweaks toolbar', () => {
           projectId="project-1"
           projectKind="prototype"
           file={htmlPreviewFile({ name: 'page.html', path: 'page.html' })}
-          liveHtml={'<html><body><script type="text/babel">const ready = true;</script><img src="assets/hero.png"></body></html>'}
+          liveHtml={'<html><body><script>localStorage.getItem("ready");</script><img src="assets/hero.png"></body></html>'}
         />,
         personalWorkspaceContext(),
       );
@@ -10248,12 +10248,13 @@ describe('FileViewer tweaks toolbar', () => {
       const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
       expect(frame.getAttribute('data-od-render-mode')).toBe('srcdoc');
       const initialTransport = frame.srcdoc;
-      const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+      const previewWindow = installSandboxedPreviewWindow(frame);
+      const post = vi.mocked(previewWindow.postMessage);
       fireEvent.load(frame);
       const activations = () => post.mock.calls
         .map(([message]) => message)
         .filter((message) => message.type === 'od:srcdoc-transport-activate');
-      expect(activations()).toHaveLength(1);
+      await waitFor(() => expect(activations()).toHaveLength(1));
       expect(activations()[0].html).toContain('src="assets/hero.png"');
 
       filesResponse.resolve(new Response(JSON.stringify({

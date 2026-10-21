@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../src/server.js';
 
@@ -33,6 +33,7 @@ type RunStatus = { id: string; status: string; exitCode: number | null };
 
 describe('plain-stream artifact persistence vs run.events ring-buffer truncation (HTTP)', () => {
   const originalEnv = {
+    OD_NEXT_STRATEGY_ROLLOUT: process.env.OD_NEXT_STRATEGY_ROLLOUT,
     POSTHOG_KEY: process.env.POSTHOG_KEY,
     POSTHOG_HOST: process.env.POSTHOG_HOST,
     LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
@@ -42,6 +43,11 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
   };
   let started: StartedServer | null = null;
   let binDir: string | null = null;
+
+  beforeEach(() => {
+    // The retired saved Labs preference no longer selects the ordinary path.
+    process.env.OD_NEXT_STRATEGY_ROLLOUT = 'off';
+  });
 
   afterEach(async () => {
     await Promise.resolve(started?.shutdown?.());
@@ -439,7 +445,7 @@ async function putConfig(url: string, patch: Record<string, unknown>): Promise<v
   const response = await fetch(`${url}/api/app-config`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...patch, odNextStrategyMode: 'off' }),
+    body: JSON.stringify(patch),
   });
   expect(response.status).toBe(200);
 }

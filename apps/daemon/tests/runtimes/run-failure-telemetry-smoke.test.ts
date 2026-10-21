@@ -219,13 +219,11 @@ describe('run failure telemetry smoke', () => {
 
     for (const item of cases) {
       // Each case owns its daemon, data root and reporter selection.
+      process.env.OD_NEXT_STRATEGY_ROLLOUT = item.representation === 'single_run' ? 'off' : 'active';
       started = await startIsolatedServer();
       await putConfig(started.url, {
         telemetry: { metrics: true, content: true, artifactManifest: false },
         privacyDecisionAt: Date.now(),
-        // Keep both reporter representations explicit instead of depending on
-        // a runtime's old OD Next admission status.
-        odNextStrategyMode: item.representation === 'single_run' ? 'off' : 'active',
       });
       await putConfig(started.url, { agentId: item.agentId, ...item.config });
       const run = await createAndWaitForRun(started.url, {
@@ -437,6 +435,7 @@ describe('run failure telemetry smoke', () => {
   }, 60_000);
 
   it('keeps streamed Antigravity output admitted before a non-zero policy failure', async () => {
+    process.env.OD_NEXT_STRATEGY_ROLLOUT = 'off';
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-antigravity-admission-bin-'));
     await writeFakeAntigravity(binDir);
     process.env.PATH = `${binDir}${delimiter}${process.env.PATH ?? ''}`;
@@ -450,8 +449,6 @@ describe('run failure telemetry smoke', () => {
     await putConfig(started.url, {
       telemetry: { metrics: false, content: false, artifactManifest: false },
       privacyDecisionAt: Date.now(),
-      // Exercise ordinary streamed-output admission before a policy failure.
-      odNextStrategyMode: 'off',
     });
     const run = await createAndWaitForRun(started.url, {
       caseId: 'antigravity_buffered_policy_failure',
@@ -591,6 +588,7 @@ async function removeDataDir(root: string): Promise<void> {
 
 function snapshotEnv(): Record<string, string | undefined> {
   return {
+    OD_NEXT_STRATEGY_ROLLOUT: process.env.OD_NEXT_STRATEGY_ROLLOUT,
     LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
     LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY,
     LANGFUSE_BASE_URL: process.env.LANGFUSE_BASE_URL,

@@ -1041,7 +1041,7 @@ test('[P0] @critical HTML preview permits client-side form submission while isol
   }
 });
 
-test('[P0] @critical storage-backed HTML keeps project state isolated across preview reloads', async ({ page, context }) => {
+test('[P0] @critical storage-backed HTML keeps project state isolated across preview reloads', async ({ page }) => {
   await routeMockAgents(page);
   const projectIds = [
     await createProjectViaApi(page, 'Persistent form preview A'),
@@ -1067,9 +1067,6 @@ test('[P0] @critical storage-backed HTML keeps project state isolated across pre
   }
   const openProject = async (index: number) => {
     await page.goto(`/projects/${projectIds[index]}`, { waitUntil: 'domcontentloaded' });
-    // Chromium requires a browser permission for loopback-host preview embeds.
-    // Grant it only to this test's app origin; daemon host guards stay active.
-    await context.grantPermissions(['local-network-access'], { origin: new URL(page.url()).origin });
     await expectWorkspaceReady(page);
     await openDesignFile(page, 'saved-form.html');
     await expect(preview.getByRole('heading', { name: `Persistent form ${index === 0 ? 'A' : 'B'}` })).toBeVisible();
@@ -1080,9 +1077,8 @@ test('[P0] @critical storage-backed HTML keeps project state isolated across pre
   await preview.getByLabel('Task name').fill('Project A saved across reload');
   await preview.getByRole('button', { name: 'Save task' }).click();
   await expect(preview.getByLabel('Saved task')).toHaveText('Project A saved across reload');
-  const src = await frame.getAttribute('src');
-  expect(src).toContain('/powered/');
-  expect(new URL(src!).origin).not.toBe(new URL(page.url()).origin);
+  await expect(frame).toHaveAttribute('data-od-render-mode', 'srcdoc');
+  expect(await frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
   expect(await preview.locator('body').evaluate(() => {
     try { void window.parent.document.body; return true; } catch { return false; }
   })).toBe(false);
@@ -1098,6 +1094,9 @@ test('[P0] @critical storage-backed HTML keeps project state isolated across pre
   expect(await presentation.locator('body').evaluate(() => {
     try { void window.parent.document.body; return true; } catch { return false; }
   })).toBe(false);
+  await presentation.getByLabel('Task name').fill('Project A saved from presentation');
+  await presentation.getByRole('button', { name: 'Save task' }).click();
+  await expect(presentation.getByLabel('Saved task')).toHaveText('Project A saved from presentation');
   await page.getByRole('button', { name: 'Exit presentation', exact: true }).click();
 
   await openProject(1);
@@ -1111,12 +1110,15 @@ test('[P0] @critical storage-backed HTML keeps project state isolated across pre
   await expect(preview.getByLabel('Saved task')).toHaveText('Project B saved separately');
 
   await openProject(0);
-  await expect(preview.getByLabel('Saved task')).toHaveText('Project A saved across reload');
+  await expect(preview.getByLabel('Saved task')).toHaveText('Project A saved from presentation');
   const blockedRoutes = await preview.locator('body').evaluate(async (_, otherProjectId) => {
     const paths = ['/api/projects', `/api/projects/${otherProjectId}/powered/saved-form.html`];
-    return Promise.all(paths.map(async (path) => ({ path, status: (await fetch(path)).status })));
+    return Promise.all(paths.map(async (path) => {
+      try { return { path, readable: (await fetch(path)).ok }; }
+      catch { return { path, readable: false }; }
+    }));
   }, projectIds[1]);
-  expect(blockedRoutes.map((route) => route.status)).toEqual([403, 403]);
+  expect(blockedRoutes.map((route) => route.readable)).toEqual([false, false]);
 });
 
 test('[P0] @critical white-screen monitoring recovers layout stalls and confirms persistent blanks', async ({ page }) => {

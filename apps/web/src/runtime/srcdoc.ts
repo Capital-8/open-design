@@ -76,6 +76,7 @@ import { COMMENT_IDENTITY_HELPERS } from '@open-design/contracts';
 export type SrcdocOptions = {
   /** Host-scoped local progress, seeded before authored scripts by the lazy shell. */
   previewStorage?: boolean;
+  previewStorageSeed?: { generation: string; values: Record<string, string> };
   /** Live embedded motion preview only; do not enable for exports/captures. */
   motionPreview?: boolean;
   deck?: boolean;
@@ -378,7 +379,7 @@ export function buildSrcdoc(
   const withDeferredFonts = options.deferFontStylesheets
     ? deferTrustedFontStylesheets(withPreviewBaseBridge)
     : withPreviewBaseBridge;
-  const withShim = injectSandboxShim(withDeferredFonts, options.previewStorage);
+  const withShim = injectSandboxShim(withDeferredFonts, options.previewStorage, options.previewStorageSeed);
   const blockLoadTimeScriptRedirect = htmlHasLoadTimeLocationNavigation(withPreviewBaseBridge);
   // Always on: a redirect loop can freeze ANY previewed artifact, and the guard
   // is inert on documents that never self-redirect. Injected right after the
@@ -1548,8 +1549,11 @@ function escapeAttr(value: string): string {
 // links with target="_blank" to work in the sandboxed preview.
 // Empty hrefs return to the top; element anchors scroll into view.
 // Hash routers keep their same-document route and browser history.
-function injectSandboxShim(doc: string, persistStorage = false): string {
-  return injectAtDocumentStart(doc, buildPreviewSandboxShim() + (persistStorage ? buildPreviewStorageBridge() : ''));
+function injectSandboxShim(doc: string, persistStorage = false, seed?: SrcdocOptions['previewStorageSeed']): string {
+  const seedScript = persistStorage && seed
+    ? `<script>window.__odPreviewStorageSeed=${JSON.stringify(seed).replace(/</g, '\\u003c')};</script>`
+    : '';
+  return injectAtDocumentStart(doc, buildPreviewSandboxShim() + seedScript + (persistStorage ? buildPreviewStorageBridge() : ''));
 }
 
 function injectPreviewFocusGuard(doc: string): string {

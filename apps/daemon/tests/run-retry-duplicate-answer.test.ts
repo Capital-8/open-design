@@ -84,13 +84,12 @@ describe('OPEND-2566 duplicate answer after an upstream reconnect', () => {
     delete process.env.LANGFUSE_BASE_URL;
     delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
     process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = STALL_WATCHDOG_TIMEOUT_MS;
+    process.env.OD_NEXT_STRATEGY_ROLLOUT = 'off';
 
     started = await startServer({ port: 0, returnServer: true }) as StartedServer;
     await putConfig(started.url, {
       agentId: 'claude',
       agentCliEnv: { claude: { CLAUDE_BIN: fakeClaude } },
-      // Exercise ordinary Run retry persistence without OD Next reply buffering.
-      odNextStrategyMode: 'off',
       telemetry: { metrics: true, content: false, artifactManifest: false },
       privacyDecisionAt: Date.now(),
     });
@@ -320,6 +319,7 @@ async function readRunEvents(file: string): Promise<RunEvent[]> {
 }
 
 const TRACKED_ENV_KEYS = [
+  'OD_NEXT_STRATEGY_ROLLOUT',
   'POSTHOG_KEY',
   'POSTHOG_HOST',
   'LANGFUSE_PUBLIC_KEY',
