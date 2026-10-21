@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../src/dialog';
+import styles from '../src/dialog.module.css';
 
 afterEach(() => {
   cleanup();
@@ -178,8 +179,9 @@ describe('Dialog', () => {
     const panel = baseElement.querySelector('.plugin-details-modal');
 
     expect(panel).toBeTruthy();
-    expect(panel?.className).toBe('plugin-details-modal');
+    expect(panel?.classList.contains('plugin-details-modal')).toBe(true);
     expect(panel?.classList.contains('modal')).toBe(false);
+    expect(panel?.className.split(/\s+/)).not.toContain(styles.dialog);
   });
 
   it('keeps caller variant sizing overrides ahead of shared dialog defaults', () => {

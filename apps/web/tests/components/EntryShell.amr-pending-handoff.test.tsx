@@ -154,7 +154,7 @@ function emptyWallet(): AmrWalletSnapshot {
 }
 
 /** Records the ORDER in which the shell touches the App-owned hooks. */
-function harness(agentId: string) {
+function harness(agentId: string, profile?: string) {
   const calls: string[] = [];
   const rollback = vi.fn((options?: { notice?: string }) => {
     calls.push(`rollback:${options?.notice ?? ''}`);
@@ -188,7 +188,7 @@ function harness(agentId: string) {
         defaultDesignSystemId={null}
         connectors={[]}
         connectorsLoading={false}
-        config={config(agentId)}
+        config={{ ...config(agentId), ...(profile ? { agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: profile } } } : {}) }}
         agents={[agent(agentId)]}
         daemonLive
         onModeChange={vi.fn()}
@@ -292,6 +292,33 @@ describe('OPEND-2614 · funded Home handoff precedes the remaining AMR sign-in g
     await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
     expect(h.onCreateProject.mock.calls[0]![0]).toMatchObject({ pendingPrompt: 'Never auto send this draft', pendingFiles: [attachment] });
     expect(reads).toBe(2);
+  });
+
+  it.each([
+    ['local', 'http://localhost:5173'],
+    ['test', 'https://open-design.powerformer.net'],
+    ['prod', 'https://open-design.ai'],
+  ] as const)('Home concurrency upgrade preserves %s profile and rejected workspace', async (profile, origin) => {
+    const context = personalContext();
+    const previous = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/billing/request-concurrency?')) return jsonResponse({ requestConcurrencyHint: {
+        workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+        observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+      } });
+      return previous(input, init);
+    }) as typeof fetch;
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const h = harness('amr', profile);
+    await submitHome('Keep this draft in its original workspace');
+    fireEvent.click(await screen.findByTestId('amr-concurrency-upgrade'));
+    const target = new URL(String(open.mock.calls[0]![0]));
+    expect(target.origin).toBe(origin);
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this draft in its original workspace');
+    open.mockRestore();
   });
 
   it('a pending read cannot dispatch after the account identity changes', async () => {

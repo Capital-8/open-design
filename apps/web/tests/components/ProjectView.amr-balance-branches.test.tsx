@@ -963,6 +963,31 @@ describe('Link request concurrency rejection preserves the original send', () =>
     await clickSendWhenReady();
     await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2));
   });
+  it.each([
+    ['local', 'http://localhost:5173'],
+    ['test', 'https://open-design.powerformer.net'],
+    ['prod', 'https://open-design.ai'],
+  ] as const)('Project concurrency upgrade preserves %s profile and the rejected payer', async (profile, origin) => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: profile } } } });
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('profile-limit-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link concurrency rejection'), {
+        failureDetail: 'membership_concurrency_limit',
+      }));
+    });
+    fireEvent.click(await screen.findByTestId('amr-concurrency-upgrade'));
+    const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+    expect(target.origin).toBe(origin);
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+  });
   it.each(['partial', 'thinking', 'tool', 'artifact', 'disconnect', 'late'] as const)('does not restore or reopen from %s work', async (mode) => {
     workspaceScopeMocks.ambientContext = callerContext('owner', 'team_max');
     renderProjectView({ project: { ...project(), pendingPrompt: null } as never });

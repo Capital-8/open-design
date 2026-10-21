@@ -315,11 +315,11 @@ describe('readVelaLoginStatus', () => {
     );
     process.env.AMR_HOME = amrHome;
 
-    const status = readVelaLoginStatus({ OPEN_DESIGN_AMR_PROFILE: 'local' });
+    const status = readVelaLoginStatus({ AMR_HOME: amrHome, OPEN_DESIGN_AMR_PROFILE: 'local' });
     expect(status.loggedIn).toBe(true);
     expect(status.configPath).toBe(path.join(amrHome, 'config.json'));
     expect(status.user?.email).toBe('custom@example.com');
-    expect(readVelaControlApiContext({ OPEN_DESIGN_AMR_PROFILE: 'local' })).toMatchObject({
+    expect(readVelaControlApiContext({ AMR_HOME: amrHome, OPEN_DESIGN_AMR_PROFILE: 'local' })).toMatchObject({
       profile: 'local',
       apiUrl: 'http://127.0.0.1:18082',
       controlKey: 'vela_ctrl_custom',

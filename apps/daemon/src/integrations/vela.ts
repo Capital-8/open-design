@@ -432,7 +432,7 @@ export function mergeVelaEnv(
 }
 
 function configDir(env: NodeJS.ProcessEnv = process.env): string {
-  const amrHome = (readAmrEndpointBinding(env) ? applyAmrEndpointBinding(env).AMR_HOME : process.env.AMR_HOME)?.trim();
+  const amrHome = (readAmrEndpointBinding(env) ? applyAmrEndpointBinding(env).AMR_HOME : env.AMR_HOME)?.trim();
   if (amrHome === '~') return homedir();
   if (amrHome?.startsWith('~/')) return path.join(homedir(), amrHome.slice(2));
   if (amrHome) return amrHome;
@@ -527,10 +527,10 @@ function registrationInviteUsesStoredControlSource(
   const defaultApi = 'https://amr-api.open-design.ai';
   const storedApi = stored?.apiUrl?.trim() || defaultApi;
   // Match readRawVelaControlApiContext: an env control key selects env/default
-  // API directly; otherwise readVelaApiContext gives the stored API precedence.
+  // API directly; otherwise readVelaApiContext applies the explicit API override.
   const effectiveApi = controlOverride
     ? env.VELA_API_URL?.trim() || defaultApi
-    : stored?.apiUrl?.trim() || env.VELA_API_URL?.trim() || defaultApi;
+    : env.VELA_API_URL?.trim() || stored?.apiUrl?.trim() || defaultApi;
   const normalize = (value: string): string | null => {
     try {
       const url = new URL(value);
@@ -851,8 +851,8 @@ export function readVelaApiContext(
     profile: readAmrEndpointBinding(mergedEnv)?.profile ?? snapshot.profile,
     apiUrl:
       readAmrEndpointBinding(mergedEnv)?.apiUrl
-      || snapshot.stored?.apiUrl?.trim()
       || mergedEnv.VELA_API_URL?.trim()
+      || snapshot.stored?.apiUrl?.trim()
       || 'https://amr-api.open-design.ai',
   };
 }

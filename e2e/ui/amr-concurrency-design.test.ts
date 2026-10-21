@@ -65,6 +65,7 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await expect(page.getByRole('tooltip')).toBeHidden();
   await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement)))
     .toBe(true);
+  await expect(dialog).toHaveCSS('outline-style', 'none');
   // The frozen F04 frame uses normal line-height and a neutral palette;
   // inherited app typography compressed the title and shifted all content up.
   await expect(dialog.locator('h2')).toHaveCSS('line-height', 'normal');
@@ -117,5 +118,27 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await expect(dialog).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await page.getByTestId('amr-concurrency-close').click();
   await expect(dialog).toHaveCount(0);
+  expect(runs.bodies).toHaveLength(1);
+
+  const keyboardRuns = await routeSuccessfulRuns(page, {
+    runId: `f04-keyboard-rejected-${Date.now()}`, eventBody: events,
+  });
+  await input.fill('Keyboard modal focus regression');
+  await input.press('Enter');
+  await expect(dialog).toBeVisible({ timeout: T.long });
+  await expect(dialog).toBeFocused();
+  await expect(dialog).toHaveAccessibleName('可用并发不足');
+  await testInfo.attach('f04-keyboard-initial-modal', {
+    body: await page.screenshot(), contentType: 'image/png',
+  });
+  await expect(dialog).toHaveCSS('outline-style', 'none');
+  await page.keyboard.press('Tab');
+  const closeButton = dialog.getByRole('button').first();
+  await expect(closeButton).toBeFocused();
+  await expect(closeButton).not.toHaveCSS('outline-style', 'none');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(input).toBeFocused();
+  expect(keyboardRuns.bodies).toHaveLength(1);
   expect(runs.bodies).toHaveLength(1);
 });
