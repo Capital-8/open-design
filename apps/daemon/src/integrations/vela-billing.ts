@@ -9,7 +9,8 @@ import type {
   WorkspaceTeamBillingPlanId,
   WorkspaceWalletBalance,
 } from '@open-design/contracts';
-import { runVelaCommand } from './vela-command.js';
+import { runVelaCommand, velaCommandStderr } from './vela-command.js';
+import { readVelaControlApiContext } from './vela.js';
 
 // A-lane billing 收口. Instead of the daemon holding billing credentials, it
 // shells out to `vela billing summary --format json`, which authenticates with
@@ -44,7 +45,7 @@ export async function fetchVelaBillingPreflight(
   return fetchVelaFundingPreview('preflight', workspaceId, modelId, options);
 }
 
-/** Optional send-time hint; old CLI/API failures stay unknown without a legacy fallback. */
+/** Optional send-time hint; old CLIs use the same authenticated API capability. */
 export async function fetchVelaBillingFundingCheck(
   workspaceId: string,
   modelId: string | null,
@@ -90,10 +91,71 @@ async function fetchVelaFundingPreview(
     stdout = await resolveVelaBillingRunner(options)(args);
   } catch (error) {
     if (isVelaWorkspaceAuthorizationError(error)) throw error;
-    // Old binaries, old servers and transient failures carry no quota evidence.
+    if (command === 'funding-check' && await isFundingCheckCommandMissing(error, options)) {
+      return fetchAuthenticatedFundingCheck(workspaceId, modelId, options);
+    }
+    // Server, transport and unrecognized CLI failures carry no quota evidence.
     return null;
   }
+  if (command === 'funding-check' && isBillingParentHelp(stdout)) {
+    return fetchAuthenticatedFundingCheck(workspaceId, modelId, options);
+  }
   return parseBillingPreflight(stdout, workspaceId, modelId);
+}
+
+function isBillingParentHelp(stdout: string): boolean {
+  return /^\s*vela billing \[command\]\s*$/m.test(stdout)
+    && /^Available Commands:\s*$/m.test(stdout)
+    && !/^\s+funding-check(?:\s|$)/m.test(stdout);
+}
+
+async function isFundingCheckCommandMissing(
+  error: unknown,
+  options: FetchVelaBillingOptions,
+): Promise<boolean> {
+  const detail = `${velaCommandStderr(error)}\n${error instanceof Error ? error.message : String(error)}`;
+  if (/unknown command\s+["']?funding-check(?:["']|\s|$)/i.test(detail)) return true;
+  if (!/unknown flag:\s+--workspace-id\b/i.test(detail)) return false;
+  // Older Cobra rejects flags before resolving the absent subcommand. Prove
+  // that case with this same binary's help; a bad flag alone is not capability.
+  try {
+    const help = await resolveVelaBillingRunner(options)(['funding-check', '--help']);
+    return isBillingParentHelp(help);
+  } catch (helpError) {
+    if (isVelaWorkspaceAuthorizationError(helpError)) throw helpError;
+    return false;
+  }
+}
+
+async function fetchAuthenticatedFundingCheck(
+  workspaceId: string,
+  modelId: string | null,
+  options: FetchVelaBillingOptions,
+): Promise<WorkspaceBillingPreflight | null> {
+  try {
+    const session = readVelaControlApiContext(process.env, options.configuredEnv);
+    if (!session) return null;
+    const url = new URL(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/billing/funding-check`,
+      session.apiUrl,
+    );
+    if (modelId) url.searchParams.set('modelId', modelId);
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${session.controlKey}` },
+      signal: AbortSignal.timeout(BILLING_PREFLIGHT_TIMEOUT_MS),
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`API request failed with status ${response.status}: workspace funding authorization rejected`);
+    }
+    if (!response.ok) return null;
+    const preview = parseBillingPreflight(await response.text(), workspaceId, modelId);
+    // An advisory preview without the endpoint's explicit result is not proof
+    // of send-time funding. Never derive this field from wallet or DP values.
+    return preview?.fundingCheck === undefined ? null : preview;
+  } catch (error) {
+    if (isVelaWorkspaceAuthorizationError(error)) throw error;
+    return null;
+  }
 }
 
 export function parseBillingPreflight(

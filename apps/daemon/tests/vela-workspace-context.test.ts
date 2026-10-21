@@ -19,6 +19,7 @@ import { createActiveWorkspaceSelectionStore } from '../src/collab/active-worksp
 import {
   clearVelaAuthorizationState,
   readVelaControlApiContext,
+  readVelaCredentialRevision,
   readVelaLoginStatus,
 } from '../src/integrations/vela.js';
 
@@ -212,7 +213,10 @@ describe('mapVelaWorkspaceContext', () => {
 
 describe('createCachedWorkspaceDirectoryFetcher', () => {
   it('builds hub URL, authorization, and identity from the same merged session', () => {
+    const amrHome = mkdtempSync(join(tmpdir(), 'od-vela-hub-session-'));
+    tempDirs.push(amrHome);
     const inherited = {
+      AMR_HOME: amrHome,
       VELA_API_URL: 'https://account-a.example',
       VELA_CONTROL_KEY: 'account-a-control-key',
     } as NodeJS.ProcessEnv;
@@ -1648,4 +1652,70 @@ describe('workspace authority failure evidence', () => {
       expect(record.mock.calls[0]![0]).not.toHaveProperty('controlKey');
     } finally { record.mockRestore(); }
   });
+});
+
+
+describe('Settings-selected AMR credential directory isolation', () => {
+  function fixture(label: string): { directory: string; contents: string } {
+    const directory = mkdtempSync(join(tmpdir(), 'od-vela-profile-isolation-'));
+    tempDirs.push(directory);
+    const contents = JSON.stringify({ profiles: Object.fromEntries(['prod', 'local'].map((profile) => [profile, {
+      apiUrl: `https://${label}-${profile}.example`, linkUrl: `https://${label}-${profile}-link.example`,
+      controlKey: `${label}-${profile}-control`, runtimeKey: `${label}-${profile}-runtime`,
+      user: { id: `${label}-${profile}-user`, email: `${label}-${profile}@example.test` },
+    }])) });
+    writeFileSync(join(directory, 'config.json'), contents);
+    return { directory, contents };
+  }
+
+  it('uses the configured directory and profile consistently for control, login, and revision reads', () => {
+    const inheritedHome = fixture('inherited');
+    const selectedHome = fixture('selected');
+    vi.stubEnv('AMR_HOME', inheritedHome.directory);
+    const inherited = { AMR_HOME: inheritedHome.directory, VELA_PROFILE: 'prod' };
+    const configured = { AMR_HOME: selectedHome.directory, VELA_PROFILE: 'local' };
+
+    expect(readVelaControlApiContext(inherited, configured)).toMatchObject({
+      profile: 'local', apiUrl: 'https://selected-local.example', controlKey: 'selected-local-control',
+      user: { id: 'selected-local-user' },
+    });
+    expect(readVelaLoginStatus(inherited, configured)).toMatchObject({
+      loggedIn: true, configPath: join(selectedHome.directory, 'config.json'), user: { id: 'selected-local-user' },
+    });
+    expect(readVelaCredentialRevision(inherited, configured)).toMatchObject({
+      profile: 'local', authSource: 'file', userId: 'selected-local-user',
+    });
+    expect(readVelaCredentialRevision(inherited, configured).credentialFingerprint)
+      .not.toBe(readVelaCredentialRevision(inherited).credentialFingerprint);
+    expect(readVelaControlApiContext(inherited)?.controlKey).toBe('inherited-prod-control');
+    expect(fs.readFileSync(join(inheritedHome.directory, 'config.json'), 'utf8')).toBe(inheritedHome.contents);
+    expect(fs.readFileSync(join(selectedHome.directory, 'config.json'), 'utf8')).toBe(selectedHome.contents);
+  });
+
+  it('never borrows the inherited profile when the configured directory has no session', () => {
+    const inheritedHome = fixture('inherited');
+    const emptyHome = mkdtempSync(join(tmpdir(), 'od-vela-empty-profile-'));
+    tempDirs.push(emptyHome);
+    vi.stubEnv('AMR_HOME', inheritedHome.directory);
+    const inherited = { AMR_HOME: inheritedHome.directory, VELA_PROFILE: 'prod' };
+    const configured = { AMR_HOME: emptyHome, VELA_PROFILE: 'local' };
+
+    expect(readVelaControlApiContext(inherited, configured)).toBeNull();
+    expect(readVelaLoginStatus(inherited, configured)).toMatchObject({
+      loggedIn: false, configPath: join(emptyHome, 'config.json'), user: null,
+    });
+    expect(readVelaCredentialRevision(inherited, configured)).toMatchObject({ authSource: 'none', loggedIn: false, userId: '' });
+  });
+
+  it('uses the same explicit API override as the CLI with the selected file profile', () => {
+    const selectedHome = fixture('selected');
+    vi.stubEnv('AMR_HOME', selectedHome.directory);
+    const inherited = { AMR_HOME: selectedHome.directory, VELA_PROFILE: 'prod', VELA_API_URL: 'https://inherited-api.example' };
+    const configured = { VELA_PROFILE: 'local', VELA_API_URL: 'https://settings-api.example' };
+    expect(readVelaControlApiContext(inherited, configured)).toMatchObject({
+      profile: 'local', apiUrl: 'https://settings-api.example', controlKey: 'selected-local-control',
+      user: { id: 'selected-local-user' },
+    });
+  });
+
 });

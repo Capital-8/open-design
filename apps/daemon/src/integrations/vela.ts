@@ -422,20 +422,20 @@ export function mergeVelaEnv(
   };
 }
 
-function configDir(): string {
-  const amrHome = process.env.AMR_HOME?.trim();
+function configDir(env: NodeJS.ProcessEnv = process.env): string {
+  const amrHome = env.AMR_HOME?.trim();
   if (amrHome === '~') return homedir();
   if (amrHome?.startsWith('~/')) return path.join(homedir(), amrHome.slice(2));
   if (amrHome) return amrHome;
   return path.join(homedir(), '.amr');
 }
 
-export function amrConfigPath(): string {
-  return path.join(configDir(), 'config.json');
+export function amrConfigPath(env: NodeJS.ProcessEnv = process.env): string {
+  return path.join(configDir(env), 'config.json');
 }
 
-function readConfigFile(): VelaConfigFileShape | null {
-  const file = amrConfigPath();
+function readConfigFile(env: NodeJS.ProcessEnv = process.env): VelaConfigFileShape | null {
+  const file = amrConfigPath(env);
   if (!existsSync(file)) return null;
   try {
     const data = readFileSync(file, 'utf8');
@@ -453,11 +453,12 @@ function readVelaProfileConfigSnapshot(
 ): VelaProfileConfigSnapshot {
   const mergedEnv = mergeVelaEnv(env, configuredEnv);
   const profile = resolveAmrProfile(mergedEnv);
-  const file = readConfigFile();
+  const file = readConfigFile(mergedEnv);
+  const configPath = amrConfigPath(mergedEnv);
   return {
     profile,
     stored: file?.profiles?.[profile],
-    configMtimeMs: existsSync(amrConfigPath()) ? statSync(amrConfigPath()).mtimeMs : null,
+    configMtimeMs: existsSync(configPath) ? statSync(configPath).mtimeMs : null,
   };
 }
 
@@ -493,7 +494,7 @@ function readRawVelaLoginStatus(
 ): Omit<VelaLoginStatus, 'sessionState' | 'credentialRevision'> {
   const mergedEnv = mergeVelaEnv(env, configuredEnv);
   const profile = resolveAmrProfile(mergedEnv);
-  const configPath = amrConfigPath();
+  const configPath = amrConfigPath(mergedEnv);
   const loginInFlight = isVelaLoginInFlight();
   // Only meaningful while signing in (loggedIn becomes true once vela writes the
   // runtime key); empty otherwise so completed sessions don't echo a stale URL.
@@ -523,7 +524,7 @@ function readRawVelaLoginStatus(
       ...readVelaLoginAttemptSnapshot(),
     };
   }
-  const file = readConfigFile();
+  const file = readConfigFile(mergedEnv);
   const stored = file?.profiles?.[profile];
   const storedRuntimeKey = stored?.runtimeKey?.trim() ?? '';
   if (!storedRuntimeKey) {
@@ -676,7 +677,7 @@ function readRawVelaCredentialRevision(
   // accounts whose only difference is the configured runtime credential.
   const fileProfile = hasEnvCredentials
     ? undefined
-    : readConfigFile()?.profiles?.[status.profile];
+    : readConfigFile(mergedEnv)?.profiles?.[status.profile];
   const credentialFingerprint = createHash('sha256')
     .update(
       hasEnvCredentials
@@ -792,8 +793,8 @@ export function readVelaApiContext(
   return {
     profile: snapshot.profile,
     apiUrl:
-      snapshot.stored?.apiUrl?.trim()
-      || mergedEnv.VELA_API_URL?.trim()
+      mergedEnv.VELA_API_URL?.trim()
+      || snapshot.stored?.apiUrl?.trim()
       || 'https://amr-api.open-design.ai',
   };
 }

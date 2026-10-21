@@ -1,13 +1,24 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { runVelaCommandMock } = vi.hoisted(() => ({
+const { runVelaCommandMock, readVelaControlApiContextMock } = vi.hoisted(() => ({
   runVelaCommandMock: vi.fn(),
+  readVelaControlApiContextMock: vi.fn<typeof import('../src/integrations/vela.js').readVelaControlApiContext>(),
 }));
 
 vi.mock('../src/integrations/vela-command.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/integrations/vela-command.js')>()),
   runVelaCommand: runVelaCommandMock,
 }));
+
+vi.mock('../src/integrations/vela.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/integrations/vela.js')>()),
+  readVelaControlApiContext: readVelaControlApiContextMock,
+}));
+
+afterEach(() => {
+  readVelaControlApiContextMock.mockReset();
+  vi.unstubAllGlobals();
+});
 
 import {
   BILLING_PREFLIGHT_TIMEOUT_MS,
@@ -167,4 +178,138 @@ describe('read-only Link request concurrency adapter', () => {
   it('preserves authorization rejection instead of offering another workspace', async () => {
     await expect(fetchVelaRequestConcurrency('ws', { run: async () => { throw new Error('API request failed with status 403: forbidden'); } })).rejects.toThrow('403');
   });
+});
+
+
+describe('default CLI funding-check capability compatibility', () => {
+  it('reads the authenticated scoped funding hint when Cobra confirms the stock command is absent', async () => {
+    const configuredEnv = { VELA_PROFILE: 'local', AMR_HOME: '/isolated/amr' };
+    const context = { profile: 'local', apiUrl: 'http://127.0.0.1:27480', controlKey: 'own-test-control', user: null, configMtimeMs: null };
+    readVelaControlApiContextMock.mockReturnValue(context);
+    const insufficient = {
+      ...preview, funding: 'gateway', fundingCheck: 'insufficient', modelCovered: null,
+      codingPlan: { ...preview.codingPlan, eligible: false, tier: null, windows: [] },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(insufficient)));
+    vi.stubGlobal('fetch', fetchMock);
+    const run = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('command exited 1'), { stderr: 'Error: unknown flag: --workspace-id\n' }))
+      .mockResolvedValueOnce('Show Vela billing information\n\nUsage:\n  vela billing [command]\n\nAvailable Commands:\n  preflight Preview member Coding Plan and wallet funding (advisory)\n  summary Show subscription and credit balance summary\n');
+
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { run, configuredEnv })).toEqual(insufficient);
+    expect(run.mock.calls.map(([args]) => args)).toEqual([
+      ['funding-check', '--workspace-id', 'ws', '--format', 'json', '--model', 'model'],
+      ['funding-check', '--help'],
+    ]);
+    expect(readVelaControlApiContextMock).toHaveBeenCalledExactlyOnceWith(process.env, configuredEnv);
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      new URL('http://127.0.0.1:27480/api/v1/workspaces/ws/billing/funding-check?modelId=model'),
+      expect.objectContaining({ headers: { authorization: 'Bearer own-test-control' }, signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  const funding = { ...preview, fundingCheck: 'available' };
+  const session = { profile: 'local', apiUrl: 'http://127.0.0.1:27480', controlKey: 'own-control', user: null, configMtimeMs: null };
+  const parentHelp = 'Usage:\n  vela billing [command]\n\nAvailable Commands:\n  preflight Advisory preview\n';
+
+  function apiCapability(body: unknown = funding, status = 200) {
+    readVelaControlApiContextMock.mockReturnValue(session);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    const run = vi.fn(async (_args: string[]) => { throw new Error('unknown command "funding-check" for "vela billing"'); });
+    return { run, fetchMock };
+  }
+
+  it('recognizes an exit-zero parent help response as an absent capability', async () => {
+    const { fetchMock } = apiCapability();
+    const run = vi.fn(async () => parentHelp);
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { run })).toEqual(funding);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['unknown flag: --model', ''],
+    ['unknown flag: --workspace-id', 'Usage:\n  vela billing funding-check [flags]\n'],
+    ['unknown flag: --workspace-id', 'malformed help'],
+  ])('does not mistake a bad flag or known command for an absent capability: %s / %s', async (message, help) => {
+    const { fetchMock } = apiCapability();
+    const run = vi.fn().mockRejectedValueOnce(new Error(message)).mockResolvedValueOnce(help);
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { run })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(readVelaControlApiContextMock).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])('preserves CLI authorization %s without trying another transport', async (status) => {
+    const { fetchMock } = apiCapability();
+    const run = vi.fn(async () => { throw new Error(`API request failed with status ${status}: forbidden`); });
+    await expect(fetchVelaBillingFundingCheck('ws', 'model', { run })).rejects.toThrow(String(status));
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(readVelaControlApiContextMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['API request failed with status 404', 'API request failed with status 503', 'command timed out'])(
+    'does not reinterpret CLI transport/server failure as missing capability: %s', async (message) => {
+      const { fetchMock } = apiCapability();
+      const run = vi.fn(async () => { throw new Error(message); });
+      expect(await fetchVelaBillingFundingCheck('ws', 'model', { run })).toBeNull();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([401, 403])('preserves authenticated API rejection %s with no other scope or legacy preview', async (status) => {
+    const { run, fetchMock } = apiCapability({ error: 'workspace_forbidden' }, status);
+    await expect(fetchVelaBillingFundingCheck('ws', 'model', { run })).rejects.toThrow(String(status));
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(readVelaControlApiContextMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([404, 503])('keeps unsupported/unavailable API %s unknown without using advisory funds', async (status) => {
+    const { run, fetchMock } = apiCapability({ error: 'unavailable' }, status);
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { run })).toBeNull();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([new TypeError('fetch failed'), new DOMException('deadline', 'TimeoutError')])(
+    'keeps API transport failure unavailable: %s', async (error) => {
+      const { run, fetchMock } = apiCapability();
+      fetchMock.mockRejectedValueOnce(error);
+      expect(await fetchVelaBillingFundingCheck('ws', 'model', { run })).toBeNull();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    { workspaceId: 'other' },
+    { modelId: 'other' },
+    { workspaceMemberId: '' },
+    { fundingCheck: undefined },
+    { fundingCheck: 'guess_from_zero_balance' },
+    { codingPlan: { ...preview.codingPlan, workspaceId: 'other' } },
+  ])('rejects missing or foreign authoritative API evidence: %j', async (change) => {
+    const { run } = apiCapability({ ...funding, ...change });
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { run })).toBeNull();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a malformed API response unavailable instead of deriving a wallet or DP result', async () => {
+    const { run, fetchMock } = apiCapability();
+    fetchMock.mockResolvedValueOnce(new Response('{invalid json'));
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { run })).toBeNull();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not borrow another login when the selected profile has no control session', async () => {
+    const { run, fetchMock } = apiCapability();
+    readVelaControlApiContextMock.mockReturnValueOnce(null);
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { run, configuredEnv: { VELA_PROFILE: 'test' } })).toBeNull();
+    expect(readVelaControlApiContextMock).toHaveBeenCalledExactlyOnceWith(process.env, { VELA_PROFILE: 'test' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
 });
