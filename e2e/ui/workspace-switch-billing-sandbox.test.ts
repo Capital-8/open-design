@@ -8,7 +8,7 @@ import { readWorkspaceSwitchProof } from '@/playwright/workspace-switch-fixture'
 import { T } from '@/timeouts';
 
 type ProviderState = { pid: number; sourceSha256: string; ownattempt: string | null; held: string[];
-  events: Array<{ type: string; kind: 'main' | 'aux'; id: string; tokens: number; at: string; workspaceId?: string; taskId?: string }> };
+  events: Array<{ type: string; kind: 'main' | 'aux'; id: string; requestIndex: number; tokens: number; at: string; workspaceId?: string; taskId?: string }> };
 type RunRead = { status: string; exitCode?: number; [key: string]: unknown };
 
 test('[P0] WS-005 switching to B preserves original A task and settles both exact workspace budgets', async ({ page }, info) => {
@@ -119,6 +119,14 @@ test('[P0] WS-005 switching to B preserves original A task and settles both exac
         { timeout: T.xlong * 2, intervals: [250, 500, 1_000] }).toBe(true);
       expect.soft(runs[alias]!.reads.at(-1)!.status).toBe('succeeded');
     }
+    // A plan-exhaustion rejection is a failed Given, never normal task completion.
+    const settledProvider = await providerState();
+    expect(settledProvider.held).toEqual([]);
+    const ownEvents = settledProvider.events.filter(event => Object.values(tags).includes(event.id));
+    expect(ownEvents.filter(event => ['rejected', 'failed', 'disconnected'].includes(event.type))).toEqual([]);
+    const requestKeys = (type: string) => ownEvents.filter(event => event.type === type)
+      .map(event => `${event.id}:${event.kind}:${event.requestIndex}`).sort();
+    expect(requestKeys('completed')).toEqual(requestKeys('arrived'));
     expect(client.posts.filter(post => post.path === '/api/runs')).toEqual([
       { path: '/api/runs', workspaceId: given.spaces.a.workspaceId },
       { path: '/api/runs', workspaceId: given.spaces.b.workspaceId },
