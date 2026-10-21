@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as ts from "@typescript/native/unstable/ast";
-import { parseSource, withNativeSourceParser } from "./lib/typescript/source.ts";
+import { parseSource, withNativeSourceParser, forEachNativeSource } from "./lib/typescript/source.ts";
 
 import { checkCrossAppImports } from "./check-cross-app-imports.ts";
 import { checkTsNocheckImports } from "./check-ts-nocheck-imports.ts";
@@ -1017,6 +1017,7 @@ export function collectWebImportIsolationViolationsFromSource(
 
 async function checkWebImportIsolation(): Promise<boolean> {
   const violations: WebImportIsolationViolation[] = [];
+  const sources = new Map<string, string>();
 
   for (const repositoryPrefix of webImportIsolationSourcePrefixes) {
     const repositoryDirectory = repositoryPrefix.replace(/\/$/, "");
@@ -1028,9 +1029,13 @@ async function checkWebImportIsolation(): Promise<boolean> {
     )) {
       if (!isWebImportIsolationSourcePath(repositoryPath)) continue;
       const source = await readFile(path.join(repoRoot, repositoryPath), "utf8");
-      violations.push(...collectWebImportIsolationViolationsFromSource(repositoryPath, source));
+      sources.set(repositoryPath, source);
     }
   }
+
+  await forEachNativeSource(sources, (repositoryPath, source) => {
+    violations.push(...collectWebImportIsolationViolationsFromSource(repositoryPath, source));
+  });
 
   if (violations.length > 0) {
     console.error("Web import isolation violations found:");

@@ -146,3 +146,40 @@ native process per full guard run and a one-entry AST cache avoid repeatedly
 starting the compiler or parsing identical consecutive inputs. Native snapshots
 are immutable; tests caught stale results when virtual paths were reused, so
 each distinct parse now opens a fresh virtual project and closes its predecessor.
+
+
+## Guard performance follow-up
+
+CI exposed a regression in the first API migration: the layout-policy step took
+131 s in run `39649012290` (52 s in run `39651364456`), versus 18 s in the nearby
+legacy run `39648868125`. Per-file immutable project creation is unsuitable for
+repository scans even though it protects correctness.
+
+Cross-app and web import isolation now collect the same inputs and parse them
+in batches of at most 256 files. Each batch owns one immutable parse-only project
+and snapshot, with no library or dependency resolution. Native ASTs are fetched
+lazily; the client cache retains only the immediately preceding tree so adjacent
+consumers do not transfer it twice. Each batch closes its native process and
+snapshot, including on failure. Changed or unlisted source contents still use
+isolated immutable projects. The checking rules and traversal are unchanged.
+
+Three alternating complete `pnpm guard` runs on the same macOS machine compared
+legacy commit `8d820a6989` with this optimization:
+
+| Variant | Round 1 | Round 2 | Round 3 | Median |
+| --- | ---: | ---: | ---: | ---: |
+| Legacy JS API | 8.37 s | 8.38 s | 8.42 s | 8.38 s |
+| Bounded native batches | 7.43 s | 7.18 s | 6.75 s | 7.18 s |
+
+All runs passed. The median wall time improved by 14.3% over the legacy guard.
+These are warm local observations, not an all-platform performance guarantee.
+`/usr/bin/time -l` reported maximum resident sizes of 642–648 MB for legacy and
+670–716 MB for the final native implementation (decimal units). This is a modest
+memory increase, not a memory saving. An unbounded batch prototype reached
+2.36 GB and was rejected. No process-wide heap limit or forced GC was added.
+
+Validation includes full guard/typecheck and 41 focused tests across five files,
+including batch-boundary traversal, changed content, TS/TSX handling, nested
+failure cleanup, and old-tree stability after releasing a batch. Linux CI timing
+must be checked independently; local measurements alone do not close the CI
+performance regression.

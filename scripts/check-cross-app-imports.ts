@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import * as ts from "@typescript/native/unstable/ast";
-import { parseSource } from "./lib/typescript/source.ts";
+import { parseSource, forEachNativeSource } from "./lib/typescript/source.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -335,13 +335,18 @@ export async function checkCrossAppImports(): Promise<boolean> {
   const registry = await loadAppDirectoryRegistry();
   const violations: CrossAppImportViolation[] = [];
 
+  const sources = new Map<string, string>();
   for (const appDirectory of [...registry.packageNameByDirectory.keys()].sort()) {
     for (const fullPath of await collectAppSourceFiles(path.join(repoRoot, "apps", appDirectory))) {
       const repositoryPath = path.relative(repoRoot, fullPath).split(path.sep).join("/");
       const source = await readFile(fullPath, "utf8");
-      violations.push(...collectCrossAppImportViolationsFromSource(repositoryPath, source, registry));
+      sources.set(repositoryPath, source);
     }
   }
+
+  await forEachNativeSource(sources, (repositoryPath, source) => {
+    violations.push(...collectCrossAppImportViolationsFromSource(repositoryPath, source, registry));
+  });
 
   if (violations.length > 0) {
     console.error("Cross-app import boundary violations found:");
