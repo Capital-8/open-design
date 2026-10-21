@@ -209,3 +209,32 @@ describe('modal lifecycle', () => {
     expect(screen.getByRole('tooltip').textContent).toBe('Stop');
   });
 });
+
+describe('route lifecycle', () => {
+  it.each(['pointer', 'keyboard'] as const)('dismisses a removed route control before the replacement screen can paint (%s)', (modality) => {
+    const content = (available: boolean) => <>
+      {available
+        ? <div><button className="od-tooltip" data-tooltip="Send">Send</button></div>
+        : <div role="alert">This project has been deleted or no longer exists.</div>}
+      <TooltipLayer />
+    </>;
+    const view = render(content(true));
+    const control = screen.getByRole('button', { name: 'Send' });
+    if (modality === 'keyboard') {
+      fireEvent.keyDown(document, { key: 'Tab' });
+      fireEvent.focusIn(control);
+    } else {
+      fireEvent.pointerOver(control);
+    }
+    expect(screen.getByRole('tooltip').textContent).toBe('Send');
+
+    view.rerender(content(false));
+
+    expect(control.isConnected).toBe(false);
+    expect(screen.getByRole('alert').textContent).toContain('no longer exists');
+    // No waitFor: this is the first committed replacement screen, before the
+    // body's asynchronous MutationObserver can dismiss the stale portal.
+    expect(bubble().style.visibility).toBe('hidden');
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+});
