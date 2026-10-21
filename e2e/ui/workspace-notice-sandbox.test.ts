@@ -82,7 +82,7 @@ test('[P0] VIEW-020 real admin or member funding notice stays above empty and ar
           const message = dialog.locator('p');
           const dismiss = dialog.getByTestId('amr-balance-owner-dismiss');
           const close = dialog.getByRole('button', { name: locale === 'en' ? 'Close' : '关闭', exact: true });
-          await expect(message).toContainText(locale === 'en' ? /(?:contact|ask)[\s\S]*owner/i : /联系[\s\S]*所有者/);
+          await expect(message).toContainText(locale === 'en' ? /(?:contact|ask)[\s\S]*owner/i : /联系[\s\S]*Owner/i);
           await expect(message).toBeInViewport({ ratio: 1 });
           await expect(dismiss).toBeInViewport({ ratio: 1 });
           await expect(close).toBeInViewport({ ratio: 1 });
@@ -123,7 +123,9 @@ test('[P0] VIEW-020 real admin or member funding notice stays above empty and ar
         if (projectState === 'artifact') {
           const saved = await fetch(fileUrl, { headers: fundingHeaders(space) });
           expect(saved.ok).toBe(true);
-          expect(createHash('sha256').update(await saved.text()).digest('hex')).toBe(artifactHash);
+          const actualHash = createHash('sha256').update(await saved.text()).digest('hex');
+          expect(actualHash).toBe(artifactHash);
+          await client.attach(`VIEW020-artifact-${role}-${locale}`, { projectId, artifactName, expectedHash: artifactHash, actualHash });
         }
       }
     }
