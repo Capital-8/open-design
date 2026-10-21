@@ -24,11 +24,17 @@ type Preflight = {
 
 export async function startFundingClient(page: Page, info: TestInfo, options: {
   preserveSelectedLocale?: boolean; initialSpace?: keyof FundingFixture['spaces'];
+  freeWallet?: 'retained' | 'giftOnly';
 } = {}) {
   if (process.env.OD_FUNDING_OWNER_RUNNER !== 'active') {
     throw new Error('Use the mandatory funding-runner entrypoint; direct Playwright invocation is not owned');
   }
-  const fixture = await readFundingFixture();
+  const loaded = await readFundingFixture();
+  const wallet = options.freeWallet ? loaded.freeWallet?.[options.freeWallet] : undefined;
+  if (options.freeWallet && !wallet) throw new Error('Explicit real personal Free wallet required');
+  const fixture = wallet ? { ...loaded, actor: wallet.actor } : loaded;
+  const initialSpace = wallet?.space ?? fixture.spaces[options.initialSpace ?? 'dp'];
+  const checkedSpaces = wallet ? { wallet: wallet.space } : fixture.spaces;
   const ownerPre = await verifyFundingLease(fixture, T.xlong * 7);
   const namespace = `funding-${process.pid}-${randomUUID().slice(0, 8)}`;
   const root = join(e2eWorkspaceRoot(), '.tmp', 'e2e', namespace);
@@ -44,7 +50,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
   await mkdir(runtime.dataDir, { recursive: true });
   await writeFile(join(amrHome, 'config.json'), JSON.stringify({ profiles: { local: {
     controlKey: fixture.actor.controlKey,
-    runtimeKey: fixture.spaces.dp.runtimeKey,
+    runtimeKey: wallet?.space.runtimeKey ?? fixture.spaces.dp.runtimeKey,
     apiUrl: fixture.upstream.apiUrl,
     linkUrl: fixture.upstream.linkUrl,
     user: { id: fixture.actor.userId, email: fixture.actor.email, name: 'Disposable funding QA' },
@@ -76,7 +82,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
     return !url.protocol.startsWith('http') || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
       ? route.continue() : route.abort();
   });
-  const identityPath = info.outputPath('owned-runtime-identity.safe.json');
+  const identityPath = info.outputPath(options.freeWallet ? `owned-runtime-identity-${options.freeWallet}.safe.json` : 'owned-runtime-identity.safe.json');
   await mkdir(dirname(identityPath), { recursive: true });
   await writeFile(identityPath, JSON.stringify({ namespace, root, dataDir: runtime.dataDir,
     toolsDevRoot: runtime.toolsDevRoot, testPid: process.pid }, null, 2), { mode: 0o600 });
@@ -89,7 +95,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
     await runtime.stopWeb(env);
     throw error;
   }
-  const attach = async (name: string, value: unknown) => info.attach(name, {
+  const attach = async (name: string, value: unknown) => info.attach(options.freeWallet ? `VIEW021-${options.freeWallet}-${name}` : name, {
     body: JSON.stringify(value, null, 2), contentType: 'application/json',
   });
   try {
@@ -100,15 +106,15 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
       workspaces?: Array<{ workspaceId: string; workspaceName: string; workspaceMemberId: string; role: string }>;
     };
     const items = directory.items ?? directory.workspaces ?? [];
-    for (const space of Object.values(fixture.spaces)) {
+    for (const space of Object.values(checkedSpaces)) {
       const item = items.find(item => item.workspaceId === space.workspaceId);
       expect(item, 'Every sandbox workspace must be authorized for the explicit actor').toBeTruthy();
-      expect(item!.workspaceName.startsWith(fixture.isolation.workspaceNamePrefix), 'Sandbox workspace isolation prefix').toBe(true);
+      if (!wallet) expect(item!.workspaceName.startsWith(fixture.isolation.workspaceNamePrefix), 'Sandbox workspace isolation prefix').toBe(true);
       expect(item!.workspaceMemberId).toBe(space.actorMemberId ?? space.ownerMemberId);
       expect(item!.role).toBe(space.actorRole ?? 'owner');
     }
     const preconditions: Record<string, Preflight> = {};
-    for (const [alias, space] of Object.entries(fixture.spaces)) {
+    for (const [alias, space] of Object.entries(checkedSpaces)) {
       const url = new URL('/api/workspace/billing', runtime.url.web());
       url.search = new URLSearchParams({ scope: 'workspace', workspaceId: space.workspaceId,
         includePreflight: '1', modelId: fixture.runtime.modelId }).toString();
@@ -119,7 +125,12 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
       expect(preflight.workspaceMemberId).toBe(space.actorMemberId ?? space.ownerMemberId);
       expect(preflight.modelId).toBe(fixture.runtime.modelId);
       expect(preflight.billingMode).toBe('shared');
-      expect(preflight.codingPlan.tier).toBe('go');
+      expect(preflight.codingPlan.tier).toBe(wallet ? 'free' : 'go');
+      if (wallet) {
+        expect(space.workspaceKind).toBe('personal');
+        expect(space.actorRole).toBe('owner');
+        expect(Number(preflight.balanceUsd)).toBe(Number(wallet.beforeBalanceUsd));
+      }
       // `unknown` is a legitimate advisory result for funded/DP-eligible
       // inputs. Only B needs a reliable insufficient verdict; Link remains
       // authoritative for actual model admission.
@@ -151,7 +162,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
       sessionStorage.setItem('od.workspaceSelection.v1', JSON.stringify({
         workspaceId: space.workspaceId, workspaceMemberId: space.actorMemberId ?? space.ownerMemberId,
       }));
-    }, { config, space: fixture.spaces[options.initialSpace ?? 'dp'], preserveSelectedLocale: options.preserveSelectedLocale ?? false });
+    }, { config, space: initialSpace, preserveSelectedLocale: options.preserveSelectedLocale ?? false });
     const select = async (space: FundingSpace) => {
       const toggle = page.getByTestId('entry-rail-collapse');
       if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click({ timeout: T.medium });
@@ -188,7 +199,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
         return id;
       },
       async close() {
-        await info.attach('final-observed-page', { body: await page.screenshot(), contentType: 'image/png' }).catch(() => undefined);
+        await info.attach(options.freeWallet ? `VIEW021-${options.freeWallet}-final-observed-page` : 'final-observed-page', { body: await page.screenshot(), contentType: 'image/png' }).catch(() => undefined);
         await attach('actual-POST-scopes', posts);
         let pageClosed = false;
         try {

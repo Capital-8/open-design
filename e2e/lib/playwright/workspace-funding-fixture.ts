@@ -7,6 +7,7 @@ export type FundingSpace = {
   workspaceId: string;
   ownerMemberId: string;
   runtimeKey: string;
+  workspaceKind?: 'team' | 'personal';
   /** Version2 keeps the actual owner distinct from this logged-in actor. */
   actorMemberId?: string;
   actorRole?: 'owner' | 'admin' | 'member';
@@ -37,6 +38,15 @@ export type FundingFixture = {
   };
   actor: { controlKey: string; userId: string; email: string };
   spaces: { funded: FundingSpace; empty: FundingSpace; dp: FundingSpace };
+  /** VIEW-021 uses actual default personal spaces and their separate Owners. */
+  freeWallet?: {
+    retained: FreeWalletGiven;
+    giftOnly: FreeWalletGiven;
+    proofPath: string;
+    proofSha256: string;
+    consoleUi: { phase1Enabled: boolean; proofPath: string; proofSha256: string };
+    expiry: { helperPath: string; helperSha256: string; helperSourceSha: string; helperRepoPath: string };
+  };
   /** VIEW-020's actual long Owner profile, verified by the environment owner. */
   noticeLayout?: { ownerUserId: string; ownerDisplayName: string;
     ownerProfileProofPath: string; ownerProfileProofSha256: string };
@@ -52,6 +62,15 @@ export type FundingFixture = {
       redisContainer: string; redisKeyPrefix: string;
     };
   };
+};
+
+export type FreeWalletGiven = {
+  actor: FundingFixture['actor'];
+  space: FundingSpace & { workspaceKind: 'personal'; actorRole: 'owner'; actorMemberId: string };
+  beforeBalanceUsd: '40.30' | '0.30';
+  afterBalanceUsd: '40.00' | '0.00';
+  consoleCookiesPath: string;
+  consoleCookiesSha256: string;
 };
 
 function requireValue(value: unknown, label: string): asserts value is string {
@@ -101,6 +120,7 @@ export function validateFundingFixture(value: unknown, expectedRunId: string): F
       requireValue(fixture.spaces?.[alias]?.[key], `spaces.${alias}.${key}`);
     }
     const space = fixture.spaces[alias];
+    if (space.workspaceKind !== undefined && !['team', 'personal'].includes(space.workspaceKind)) throw new Error('Explicit workspace kind must be team or personal');
     if (fixture.version === 2) {
       requireValue(space.actorMemberId, `spaces.${alias}.actorMemberId`);
       if (!['owner', 'admin', 'member'].includes(space.actorRole ?? '')) throw new Error('Version2 requires an explicit actor role');
@@ -138,7 +158,7 @@ export function fundingHeaders(space: FundingSpace): Record<string, string> {
     'x-od-workspace-id': space.workspaceId,
     'x-od-workspace-member-id': space.actorMemberId ?? space.ownerMemberId,
     'x-od-workspace-role': space.actorRole ?? 'owner',
-    'x-od-workspace-type': 'team',
+    'x-od-workspace-type': space.workspaceKind ?? 'team',
     'x-od-workspace-lifecycle-state': 'active',
     'x-od-workspace-member-status': 'active',
   };

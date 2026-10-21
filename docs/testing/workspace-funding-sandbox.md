@@ -215,3 +215,29 @@ and no task start on dismissal. It does not impose F04's image/benefits checks,
 all19locales, name interpolation, or initial-send admission as new VIEW-020
 criteria. Both roles' screenshots, traces, profile/authorization evidence and
 server-side no-usage review are required before whole-case acceptance.
+
+
+## VIEW-021: actual Free gift and retained funds
+
+`OD_FUNDING_CASE=view021` uses the same mandatory canonical runner and a private
+version2 fixture with `freeWallet.retained` and `freeWallet.giftOnly`. These are
+actual default personal spaces and separate real Owner sessions; they are not
+team-header aliases. Each wallet includes a hashed private original-signup cookie
+file and server-proven original gift/retained funds. The client keeps this phase's
+simplified single balance card.
+
+The lane checks the actual canonical phase1 console and client before/after
+original-gift expiry:40.30→40.00 and0.30→0.00, Free onlyFlash and no new topup
+actions. Both before sets are frozen before the repository-owned expiry helper
+can run. The helper is bound by source/rawhash, canonical lease, fixture hash,
+new run/attempt IDs, both exact workspace IDs and original gift IDs; it ages only
+those two gifts and refreshes the production projection. It does not control
+AMR lifecycle, global time, retained40 or model prices.
+
+`freeWallet.consoleUi` records the actual canonical served feature flag and
+source proof. Only visible `seats-console-page`, exact scoped snapshot and wallet
+DOM can satisfy console acceptance. A legacy console is explicitly blocked
+configuration evidence, never phase1 UI acceptance. The command's exit0 can
+mean a qualified client/API portion only; `VIEW021-exact-scope-results` and the
+independent server/root review decide the full QA case. Original failures remain
+frozen.
