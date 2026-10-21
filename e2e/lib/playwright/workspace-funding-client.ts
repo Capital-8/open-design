@@ -19,12 +19,12 @@ type Preflight = {
   billingMode: string;
   balanceUsd: string;
   fundingCheck: string;
-  codingPlan: { eligible: boolean; tier: string; windows: Array<{ remainingCredits: string }> };
+  codingPlan: { eligible: boolean; tier: string | null; windows: Array<{ remainingCredits: string }> };
 };
 
 export async function startFundingClient(page: Page, info: TestInfo, options: {
   preserveSelectedLocale?: boolean; initialSpace?: keyof FundingFixture['spaces'];
-  freeWallet?: 'retained' | 'giftOnly';
+  freeWallet?: 'retained' | 'giftOnly'; freeWalletPhase?: 'before' | 'after';
 } = {}) {
   if (process.env.OD_FUNDING_OWNER_RUNNER !== 'active') {
     throw new Error('Use the mandatory funding-runner entrypoint; direct Playwright invocation is not owned');
@@ -125,11 +125,14 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
       expect(preflight.workspaceMemberId).toBe(space.actorMemberId ?? space.ownerMemberId);
       expect(preflight.modelId).toBe(fixture.runtime.modelId);
       expect(preflight.billingMode).toBe('shared');
-      expect(preflight.codingPlan.tier).toBe(wallet ? 'free' : 'go');
+      // Free has no subscription-backed Design Plan descriptor.
+      expect(preflight.codingPlan.tier).toBe(wallet ? null : 'go');
       if (wallet) {
+        expect(preflight.codingPlan.eligible).toBe(false);
+        expect(preflight.codingPlan.windows).toEqual([]);
         expect(space.workspaceKind).toBe('personal');
         expect(space.actorRole).toBe('owner');
-        expect(Number(preflight.balanceUsd)).toBe(Number(wallet.beforeBalanceUsd));
+        expect(Number(preflight.balanceUsd)).toBe(Number(options.freeWalletPhase === 'after' ? wallet.afterBalanceUsd : wallet.beforeBalanceUsd));
       }
       // `unknown` is a legitimate advisory result for funded/DP-eligible
       // inputs. Only B needs a reliable insufficient verdict; Link remains

@@ -14,6 +14,8 @@ const RUNTIME_CONSOLE_ORIGIN = 'https://vela.example.invalid';
  * the ruling put the upgrade entries back on the console.
  */
 const PROD_CONSOLE_PLAN_URL =
+  'https://open-design.ai/cloud/dashboard?source=open_design&workspaceId=ws-1&billing=plan';
+const UNSCOPED_PROD_PLAN_URL =
   'https://open-design.ai/cloud/dashboard?source=open_design&billing=plan';
 
 afterEach(() => {
@@ -195,7 +197,7 @@ describe('workspaceUpgradeUrl', () => {
       `${RUNTIME_CONSOLE_ORIGIN}/dashboard?source=open_design&billing=plan`,
     );
     expect(workspaceUpgradeUrl(null, null, { fallbackProfile: 'prod' })).toBe(
-      PROD_CONSOLE_PLAN_URL,
+      UNSCOPED_PROD_PLAN_URL,
     );
   });
 });

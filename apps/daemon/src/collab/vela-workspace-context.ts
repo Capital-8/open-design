@@ -155,6 +155,13 @@ export function mapVelaWorkspaceContext(
   };
   const billingRecovery = parseBillingRecovery(raw.billingRecovery);
   if (billingRecovery) context.billingRecovery = billingRecovery;
+  if (
+    typeof raw.memberCount === 'number'
+    && Number.isSafeInteger(raw.memberCount)
+    && raw.memberCount > 0
+  ) {
+    context.memberCount = raw.memberCount;
+  }
   const lastActive = str(raw.lastActiveWorkspaceId);
   if (lastActive) context.lastActiveWorkspaceId = lastActive;
   // The team workspace IS the team scope; carry its id as teamId so the resource
@@ -351,9 +358,42 @@ export function createVelaWorkspaceContextProvider(
           && entry.memberStatus === 'active'
           && entry.lifecycleState !== 'deleted',
       );
-      return item
-        ? withUserIdentity(workspaceContextFromDirectoryItem(item, selectedEnv), session)
-        : null;
+      if (!item) return null;
+      const context = workspaceContextFromDirectoryItem(item, selectedEnv);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        // This explicit header asks B to authorize this workspace without
+        // reading or changing the account's global active selection. Keep the
+        // session captured for the original directory read across both calls.
+        const response = await fetchImpl(new URL('/api/v1/workspaces/current', session.apiUrl), {
+          method: 'GET',
+          headers: {
+            authorization: `Bearer ${session.controlKey}`,
+            'x-vela-workspace-id': workspaceId,
+          },
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          const enriched = mapVelaWorkspaceContext(await response.json(), selectedEnv);
+          if (
+            enriched?.workspaceId === context.workspaceId
+            && enriched.workspaceMemberId === context.workspaceMemberId
+            && enriched.memberStatus === 'active'
+            && enriched.lifecycleState !== 'deleted'
+            && enriched.memberCount !== undefined
+          ) {
+            // Only this same-principal count is supplemental. Directory
+            // permissions, plan/billing fields and local selection stay intact.
+            context.memberCount = enriched.memberCount;
+          }
+        }
+      } catch {
+        // Count is optional; outages and older providers leave it unknown.
+      } finally {
+        clearTimeout(timeout);
+      }
+      return withUserIdentity(context, session);
     } catch {
       return null;
     }

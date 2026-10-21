@@ -15,6 +15,7 @@ import {
   AMR_PERSONAL_WORKSPACE_HEADERS,
   AMR_PERSONAL_WORKSPACE_ITEM,
   createProjectViaApi,
+  expectWorkspaceReady,
   gotoEntryHome,
   gotoProject,
   openSettingsDialog,
@@ -229,91 +230,179 @@ test('[P0] @critical AMR insufficient-balance failures open a dialog and preserv
     .toBeTruthy();
 });
 
-test('[P0] @critical AMR insufficient preflight retains the draft and recovers only after an explicit send', async ({ page }, testInfo) => {
+// YANG-E2E-004/006, RUN-003/011/012: pre-send insufficiency must
+// preserve the project draft. The earlier advisory-only expectation here was
+// superseded by the current confirmed fundingCheck=insufficient contract.
+test('[P0] @critical AMR project preflight retains text and files, rejects other-space recovery, and sends once manually', async ({ page }, testInfo) => {
   await stubRuntimeAgents(page);
   await page.route('**/api/integrations/vela/status', (route) => route.fulfill({ json: {
     loggedIn: true, profile: 'local',
-    user: { id: 'funding-user', email: 'funding@example.test', plan: 'free' },
+    user: { id: 'funding-user', email: 'funding@example.test', plan: 'go' },
   } }));
   const amr = await setupAmrWorkspace(page, {
     selectedAgentId: 'amr', requireLoginConfig: false, fundingCheck: 'insufficient',
-    assistantText: 'The gateway admitted this run.',
+    accountBalanceUsd: '0', assistantText: 'Manual project funding retry completed.',
   });
-  await gotoProject(page, amr.projectId);
-  // RUN-003/011/012: confirmed insufficiency cannot race into startup. The
-  // original CI red expected the unchanged insufficient fixture to execute
-  // merely because this POST route gate was released. Preserve the successful
-  // run/zero-cancellation check after a genuine fixture recovery and manual Send.
+  const runs = trackRunRequests(page);
   let releaseRun!: () => void;
-  const heldRun = new Promise<void>((resolve) => { releaseRun = resolve; });
+  const heldRun = new Promise<void>(resolve => { releaseRun = resolve; });
   let runForwarded = false;
-  let runPosts = 0;
-  let cancellations = 0;
-  page.on('request', (request) => {
-    if (/\/api\/runs\/[^/]+\/cancel/.test(request.url())) cancellations++;
-  });
-  await page.route('**/api/runs', async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
-    runPosts++;
+  await page.route('**/api/runs', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
     await heldRun;
     runForwarded = true;
-    await route.continue();
+    await route.fallback();
   });
-  const input = page.getByTestId('chat-composer-input');
-  await input.fill('Check funding independently of agent startup');
-  await expect(page.getByTestId('chat-send')).toBeEnabled();
-  const startedAt = Date.now();
   try {
-    const insufficientRead = page.waitForResponse(response => response.url().includes('/api/workspace/billing/preflight?'));
+    let cancellations = 0;
+    let runPosts = 0;
+    let runWorkspaceId: string | undefined;
+    page.on('request', (request) => {
+      if (/\/api\/runs\/[^/]+\/cancel/.test(request.url())) cancellations++;
+      if (new URL(request.url()).pathname === '/api/runs' && request.method() === 'POST') {
+        runPosts++;
+        runWorkspaceId = request.headers()['x-od-workspace-id'];
+      }
+    });
+    const previousArtifact = '<!doctype html><html><body><h1>Existing project output stays intact</h1></body></html>';
+    const written = await page.request.post(`/api/projects/${amr.projectId}/files`, {
+      headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS },
+      data: { name: 'existing-output.html', content: previousArtifact, artifactManifest: {
+        version: 1, kind: 'html', title: 'Existing project output', entry: 'existing-output.html',
+        renderer: 'html', exports: ['html'],
+      } },
+    });
+    expect(written.ok(), await written.text()).toBeTruthy();
+    await gotoProject(page, amr.projectId);
+    await page.goto(`/projects/${amr.projectId}/files/existing-output.html`, { waitUntil: 'domcontentloaded' });
+    await expectWorkspaceReady(page);
+    const existingOutput = artifactPreviewFrame(page).getByRole('heading', { name: 'Existing project output stays intact' });
+    await expect(existingOutput).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/projects/${amr.projectId}/conversations/[^/]+/files/existing-output.html`));
+    const originalProjectUrl = page.url();
+    const input = page.getByTestId('chat-composer-input');
+    const prompt = 'Retain this project draft until I explicitly send again';
+    await input.fill(prompt);
+    const uploaded = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/upload'));
+    await page.getByTestId('chat-file-input').setInputFiles({
+      name: 'funding-brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Exact project attachment bytes.\n'),
+    });
+    expect((await uploaded).ok()).toBeTruthy();
+    const attachment = page.getByTestId('staged-attachments').getByTitle('funding-brief.txt', { exact: true });
+    await expect(attachment).toBeVisible();
+    await expect(page.getByTestId('chat-send')).toBeEnabled();
+    const funding = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/workspace/billing/preflight' && response.ok());
+    const startedAt = Date.now();
     await input.press('Enter');
+    expect((await funding).ok()).toBeTruthy();
     const dialog = page.getByTestId('amr-balance-dialog');
     await expect(dialog).toBeVisible({ timeout: T.long });
-    const insufficientResponse = await insufficientRead;
-    expect((await insufficientResponse.json()).preflight.fundingCheck).toBe('insufficient');
-    expect(runForwarded).toBe(false);
+    const rejectionElapsedMs = Date.now() - startedAt;
+    await expect(input).toHaveText(prompt);
+    await expect(attachment).toBeVisible();
+    await expect(page).toHaveURL(originalProjectUrl);
+    await expect(existingOutput).toBeVisible();
+    await expect(page.getByTestId('user-message')).toHaveCount(0);
+    await expect(page.getByTestId('chat-run-error-card')).toHaveCount(0);
+    await runs.expectNone();
     expect(runPosts).toBe(0);
-    await testInfo.attach('independent-preflight-timing', { contentType: 'application/json',
-      body: JSON.stringify({ elapsedMs: Date.now() - startedAt, runForwarded, source: 'local fake Vela preflight; real daemon and browser' }) });
-    await testInfo.attach('independent-preflight-before-agent', {
-      body: await page.screenshot(), contentType: 'image/png',
+    expect(runForwarded).toBe(false);
+    const persistedAfterRejection = await page.request.get(
+      `/api/projects/${amr.projectId}/conversations/${amr.conversationId}/messages`,
+      { headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS } },
+    );
+    expect(persistedAfterRejection.ok()).toBeTruthy();
+    expect((await persistedAfterRejection.json()).messages).toEqual([]);
+    await testInfo.attach('project-preflight-rejection', { body: await page.screenshot(), contentType: 'image/png' });
+    await testInfo.attach('project-preflight-timing', { body: JSON.stringify({ rejectionElapsedMs,
+      source: 'isolated browser and daemon, local fake Vela funding-check; no real AMR writer' }), contentType: 'application/json' });
+
+    // Drive the real wallet watcher with exact HTTP identity witnesses. A
+    // positive other-space response must not resolve the originating A dialog.
+    let recoveredSpace: 'other' | 'origin' = 'other';
+    await page.route('**/api/workspace/billing?*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get('includePreflight') !== '1') return route.fallback();
+      const workspaceId = recoveredSpace === 'other' ? 'unrelated-space-B' : AMR_PERSONAL_WORKSPACE_ITEM.workspaceId;
+      const workspaceMemberId = recoveredSpace === 'other' ? 'unrelated-member-B' : AMR_PERSONAL_WORKSPACE_ITEM.workspaceMemberId;
+      const observedAt = new Date().toISOString();
+      await route.fulfill({ json: {
+        summary: null,
+        workspaceBalance: { workspaceId, workspaceMemberId, balanceUsd: '10', billingScopeVersion: 2, updatedAt: observedAt, expiresAt: null },
+        workspaceRuntime: { workspaceId, workspaceMemberId, status: 'fresh', revision: 'recovery', observedAt,
+          hardExpiresAt: new Date(Date.now() + T.xlong).toISOString() },
+        authoritativeWorkspaceRead: { workspaceId, workspaceMemberId, observedAt },
+      } });
     });
-    await expect(page.getByTestId('chat-upgrade-card')).toHaveCount(0);
-    await expect(input).toHaveText('Check funding independently of agent startup');
-    // Update the actual fake CLI used by the real daemon, including a positive
-    // cash balance. Do not mock a successful POST or infer available from time.
-    await writeFakeVelaBin(join(amr.root, 'bin'), {
-      fundingCheck: { status: 'available', workspaceMemberId: AMR_PERSONAL_WORKSPACE_ITEM.workspaceMemberId, balanceUsd: '20.00' },
-      assistantText: 'The gateway admitted this run.', requireLoginConfig: false, requireSetModel: false,
-    });
-    // Project billing invalidation does not promise an eager preflight request.
-    // Read the exact original member/model URL through the real daemon to prove
-    // the external fixture changed, then publish the existing invalidation event.
-    const availableResponse = await page.request.get(insufficientResponse.url());
-    await page.evaluate(() => window.dispatchEvent(new Event('od:workspace-billing-refresh')));
-    expect(availableResponse.ok()).toBe(true);
-    const availableBody = await availableResponse.json();
-    expect(availableBody.preflight.fundingCheck).toBe('available');
-    expect(Number(availableBody.preflight.balanceUsd)).toBe(20);
-    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(runPosts, 'Recovery alone cannot submit the retained draft').toBe(0);
-    if (await dialog.isVisible()) await dialog.getByRole('button', { name: /Not now|暂不需要|稍后|Later/i }).click();
-    await expect(input).toHaveText('Check funding independently of agent startup');
-    await expect(input).toBeEditable();
-    releaseRun();
-    const created = page.waitForResponse(response => response.request().method() === 'POST'
-      && new URL(response.url()).pathname === '/api/runs');
-    await page.getByTestId('chat-send').click();
-    const createdResponse = await created;
-    expect(createdResponse.status()).toBe(202);
-    expect(runPosts).toBe(1);
-    await expect(page.getByText('The gateway admitted this run.').first()).toBeVisible({ timeout: T.long });
-    const { runId } = await createdResponse.json();
-    await expect.poll(async () => (await (await page.request.get(`/api/runs/${runId}`)).json()).status,
-      { timeout: T.long }).toBe('succeeded');
+    await page.clock.install();
+    const consolePage = page.waitForEvent('popup');
+    await page.getByTestId('amr-balance-dialog-plans').click();
+    const opened = await consolePage;
+    await opened.close();
+    const otherRead = page.waitForResponse((response) => response.url().includes('includePreflight=1'));
+    await page.clock.fastForward(T.short);
+    await otherRead;
+    await expect(dialog).toBeVisible();
+    await expect(input).toHaveText(prompt);
+    await expect(attachment).toBeVisible();
+    await runs.expectNone();
+    expect(runPosts).toBe(0);
+    expect(runForwarded).toBe(false);
+    await testInfo.attach('other-space-cannot-recover-project', { body: await page.screenshot(), contentType: 'image/png' });
+
+    recoveredSpace = 'origin';
+    const originRead = page.waitForResponse((response) => response.url().includes('includePreflight=1'));
+    await page.clock.fastForward(T.short);
+    await originRead;
     await expect(dialog).toBeHidden();
+    await page.clock.fastForward(T.short * 2);
+    await expect(input).toHaveText(prompt);
+    await expect(attachment).toBeVisible();
+    await runs.expectNone();
+    expect(runPosts).toBe(0);
+    expect(runForwarded).toBe(false);
+    await expect(existingOutput).toBeVisible();
+    const persistedAfterRecovery = await page.request.get(
+      `/api/projects/${amr.projectId}/conversations/${amr.conversationId}/messages`,
+      { headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS } },
+    );
+    expect(persistedAfterRecovery.ok()).toBeTruthy();
+    expect((await persistedAfterRecovery.json()).messages).toEqual([]);
+    await testInfo.attach('recovered-project-awaits-manual-send', { body: await page.screenshot(), contentType: 'image/png' });
+
+    await writeFakeVelaBin(join(amr.root, 'bin'), {
+      sessionId: `manual-funding-${amr.projectId}`, requireLoginConfig: false, requireSetModel: false,
+      fundingCheck: { status: 'available', workspaceMemberId: AMR_PERSONAL_WORKSPACE_ITEM.workspaceMemberId, balanceUsd: '10' },
+      assistantText: 'Manual project funding retry completed.',
+    });
+    await expect(page.getByTestId('chat-send')).toBeEnabled();
+    const createdRun = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/runs' && response.request().method() === 'POST');
+    expect(runForwarded).toBe(false);
+    releaseRun();
+    await page.getByTestId('chat-send').click();
+    const createdResponse = await createdRun;
+    expect(createdResponse.status()).toBe(202);
+    expect(runForwarded).toBe(true);
+    expect(runPosts).toBe(1);
+    const { runId } = await createdResponse.json();
+    await expect.poll(async () => (await (await page.request.get(`/api/runs/${runId}`, { headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS } })).json()).status,
+      { timeout: T.long }).toBe('succeeded');
+    await expect(page.getByText('Manual project funding retry completed.').first()).toBeVisible({ timeout: T.long });
+    await runs.expectCount(1);
+    expect(runs.bodies[0]?.currentPrompt).toBe(prompt);
+    expect(runs.bodies[0]?.attachments).toContain('funding-brief.txt');
+    expect(runWorkspaceId).toBe(AMR_PERSONAL_WORKSPACE_ITEM.workspaceId);
     expect(cancellations).toBe(0);
+    await testInfo.attach('manual-project-send-network', { contentType: 'application/json', body: JSON.stringify({
+      createStatus: createdResponse.status(), runCount: runs.bodies.length, currentPrompt: runs.bodies[0]?.currentPrompt,
+      attachments: runs.bodies[0]?.attachments, workspaceId: runWorkspaceId, cancellations,
+    }) });
   } finally {
     releaseRun();
+    runs.dispose?.();
   }
 });
 
@@ -730,8 +819,11 @@ test('[P1] Settings AMR upgrade opens the attributed plans URL for the active pr
 
   await expect.poll(() => openedUrl).toBeTruthy();
   const url = new URL(openedUrl);
-  expect(url.pathname).toBe('/pricing/');
-  expect(url.searchParams.get('billing')).toBeNull();
+  // T54: generic Upgrade uses this profile's console plan surface.
+  expect(url.origin).toBe('https://open-design.powerformer.net');
+  expect(url.pathname).toBe('/cloud/dashboard');
+  expect(url.searchParams.get('billing')).toBe('plan');
+  expect(url.searchParams.get('workspaceId')).toBe(AMR_PERSONAL_WORKSPACE_ITEM.workspaceId);
   expect(url.searchParams.get('od_origin')).toBe('open_design');
   expect(url.searchParams.get('od_entry_source')).toBe('settings_amr_upgrade');
   expect(url.searchParams.get('od_entry_id')).toBeTruthy();
@@ -1161,6 +1253,7 @@ async function setupAmrWorkspace(
     seedLoginConfig?: boolean;
     assistantText?: string;
     accountSummaryAvailable?: boolean;
+    accountBalanceUsd?: string;
     workspaceBalanceAvailable?: boolean;
     fundingCheck?: 'available' | 'insufficient' | 'unknown';
   },
@@ -1230,7 +1323,7 @@ async function setupAmrWorkspace(
     projectId,
     'AMR UI failure smoke',
     {
-      accountBalanceUsd: '20.00',
+      accountBalanceUsd: options.accountBalanceUsd ?? '20.00',
       accountCredits: 2_000,
       accountPlan: 'free',
       ...(options.accountSummaryAvailable !== undefined

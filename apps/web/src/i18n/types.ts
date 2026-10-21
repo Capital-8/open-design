@@ -2862,6 +2862,12 @@ export interface Dict {
   'chat.amrError.balanceMessage': string;
   'chat.amrError.authorizeCta': string;
   'chat.amrError.rechargeCta': string;
+  'chat.amrConcurrencyGate.title': string;
+  'chat.amrConcurrencyGate.message': string;
+  'chat.amrConcurrencyGate.benefit1': string;
+  'chat.amrConcurrencyGate.benefit2': string;
+  'chat.amrConcurrencyGate.benefit3': string;
+  'chat.amrConcurrencyGate.benefit4': string;
   'chat.amrBalanceGate.title': string;
   'chat.amrBalanceGate.message': string;
   'chat.amrBalanceGate.benefitsTitle': string;

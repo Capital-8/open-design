@@ -7,7 +7,7 @@ function given() {
   const proof: FreeWalletProof = { amrSha: 'a'.repeat(40), wallets: {} as FreeWalletProof['wallets'] };
   for (const alias of ['retained', 'giftOnly'] as const) {
     fixture.freeWallet![alias] = { actor: { userId: alias, email: `${alias}@example.test`, controlKey: `control-${alias}` },
-      space: { workspaceId: `personal-${alias}`, ownerMemberId: `${alias}-owner`, actorMemberId: `${alias}-owner`,
+      space: { workspaceId: `personal-${alias}`, workspaceName: `Actual ${alias} personal`, ownerMemberId: `${alias}-owner`, actorMemberId: `${alias}-owner`,
         runtimeKey: `scoped-${alias}`, actorRole: 'owner', workspaceKind: 'personal' },
       beforeBalanceUsd: alias === 'retained' ? '40.30' : '0.30', afterBalanceUsd: alias === 'retained' ? '40.00' : '0.00',
       consoleCookiesPath: `/private/${alias}.json`, consoleCookiesSha256: 'a'.repeat(64) };
@@ -24,6 +24,12 @@ describe('actual VIEW-021 personal Free wallet Given', () => {
     const { fixture, proof } = given();
     expect(() => assertFreeWalletProof(fixture, proof)).not.toThrow();
     expect(fundingHeaders(fixture.freeWallet!.retained.space)['x-od-workspace-type']).toBe('personal');
+  });
+  it('keeps expired original proof readable only for explicit after evidence', () => {
+    const { fixture, proof } = given();
+    proof.wallets.retained.giftExpiresAt = new Date(Date.now() - 1000).toISOString();
+    expect(() => assertFreeWalletProof(fixture, proof)).toThrow();
+    expect(() => assertFreeWalletProof(fixture, proof, 'after')).not.toThrow();
   });
   it('retains the existing team header for legacy Go fixtures', () => {
     expect(fundingHeaders({ workspaceId: 'legacy', ownerMemberId: 'owner', runtimeKey: 'scoped' })['x-od-workspace-type']).toBe('team');

@@ -15,7 +15,7 @@ export type FreeWalletProof = {
   }>;
 };
 
-export function assertFreeWalletProof(fixture: FundingFixture, proof: FreeWalletProof) {
+export function assertFreeWalletProof(fixture: FundingFixture, proof: FreeWalletProof, phase: 'before' | 'after' = 'before') {
   const wallets = fixture.freeWallet;
   if (!wallets || proof.amrSha !== fixture.upstream.amrSha) throw new Error('Explicit same-source Free wallet proof required');
   for (const alias of ['retained', 'giftOnly'] as const) {
@@ -25,13 +25,13 @@ export function assertFreeWalletProof(fixture: FundingFixture, proof: FreeWallet
     const after = alias === 'retained' ? '40.00' : '0.00';
     if (!wallet || !actual || !wallet.actor?.controlKey || !wallet.actor.userId || !wallet.actor.email
       || !isAbsolute(wallet.consoleCookiesPath) || !/^[a-f0-9]{64}$/.test(wallet.consoleCookiesSha256)
-      || !wallet.space?.runtimeKey || wallet.space.workspaceKind !== 'personal' || wallet.space.actorRole !== 'owner'
+      || !wallet.space?.workspaceName || !wallet.space.runtimeKey || wallet.space.workspaceKind !== 'personal' || wallet.space.actorRole !== 'owner'
       || !wallet.space.ownerMemberId || wallet.space.actorMemberId !== wallet.space.ownerMemberId
       || wallet.beforeBalanceUsd !== before || wallet.afterBalanceUsd !== after
       || actual.workspaceId !== wallet.space.workspaceId || actual.ownerUserId !== wallet.actor.userId
       || actual.ownerMemberId !== wallet.space.ownerMemberId || actual.workspaceKind !== 'personal'
       || !actual.giftId || actual.giftAmountCredits !== '5000' || actual.giftRemainingCredits !== '3000'
-      || !Number.isFinite(Date.parse(actual.giftExpiresAt)) || Date.parse(actual.giftExpiresAt) <= Date.now()
+      || !Number.isFinite(Date.parse(actual.giftExpiresAt)) || (phase === 'before' && Date.parse(actual.giftExpiresAt) <= Date.now())
       || actual.retainedCredits !== (alias === 'retained' ? '400000' : '0') || actual.availableBalanceUsd !== before) {
       throw new Error(`Actual ${alias} personal Owner, original gift and retained funds differ from VIEW-021 Given`);
     }
@@ -44,7 +44,7 @@ export function assertFreeWalletProof(fixture: FundingFixture, proof: FreeWallet
   }
 }
 
-export async function readFreeWalletProof(fixture: FundingFixture) {
+export async function readFreeWalletProof(fixture: FundingFixture, phase: 'before' | 'after' = 'before') {
   const wallets = fixture.freeWallet;
   if (!wallets || !isAbsolute(wallets.proofPath) || !/^[a-f0-9]{64}$/.test(wallets.proofSha256)) {
     throw new Error('Explicit hashed private Free wallet proof required');
@@ -54,12 +54,12 @@ export async function readFreeWalletProof(fixture: FundingFixture) {
   const bytes = await readFile(wallets.proofPath);
   if (createHash('sha256').update(bytes).digest('hex') !== wallets.proofSha256) throw new Error('Free wallet proof digest mismatch');
   const proof = JSON.parse(bytes.toString('utf8')) as FreeWalletProof;
-  assertFreeWalletProof(fixture, proof);
+  assertFreeWalletProof(fixture, proof, phase);
   const consoleUi = wallets.consoleUi;
   if (!consoleUi || typeof consoleUi.phase1Enabled !== 'boolean' || !isAbsolute(consoleUi.proofPath)
     || !/^[a-f0-9]{64}$/.test(consoleUi.proofSha256)) throw new Error('Actual canonical console source/flag proof required');
   const helper = wallets.expiry;
-  if (!helper || !isAbsolute(helper.helperPath) || !/^[a-f0-9]{64}$/.test(helper.helperSha256)
+  if (!helper || (helper.mode !== undefined && !['controlled_age', 'natural_wait'].includes(helper.mode)) || !isAbsolute(helper.helperPath) || !/^[a-f0-9]{64}$/.test(helper.helperSha256)
     || !/^[a-f0-9]{40}$/.test(helper.helperSourceSha) || isAbsolute(helper.helperRepoPath)
     || !['e2e/', 'services/api/test/e2e/'].some(prefix => helper.helperRepoPath.startsWith(prefix))
     || helper.helperRepoPath.split('/').includes('..')) {

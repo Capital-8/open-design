@@ -99,8 +99,9 @@ async function main() {
       const e2eRoot = fileURLToPath(new URL('../..', import.meta.url));
       const args = ['pnpm', 'exec', 'playwright', 'test', '-c', 'lib/playwright/funding.config.ts'];
       const selection = process.env.OD_FUNDING_CASE;
-      if (selection === 'view021') {
+      if (selection === 'view021' || selection === 'view021-after') {
         args[args.length - 1] = 'lib/playwright/free-wallet.config.ts';
+        args.push('--grep', selection === 'view021' ? 'VIEW-021 actual' : 'VIEW-021 continuation');
       } else if (selection === 'view020') {
         args[args.length - 1] = 'lib/playwright/notice.config.ts';
       } else if (selection) {

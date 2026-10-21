@@ -3567,6 +3567,27 @@ export function ProjectView({
   };
   const fundingDialogContextRef = useRef(fundingDialogContext);
   fundingDialogContextRef.current = fundingDialogContext;
+  // A → B → A is still a new selection intent. Comparing only the current
+  // model/workspace would let A's first, delayed preflight authorize or block
+  // the later A draft. Gateway feedback remains owned by its admitted run.
+  const fundingSelectionKey = JSON.stringify([
+    project.id,
+    projectRunAuthorityKey,
+    config.mode,
+    config.agentId,
+    fundingDialogContext.modelId,
+  ]);
+  const fundingSelectionRef = useRef({
+    key: fundingSelectionKey,
+    generation: 0,
+  });
+  if (fundingSelectionRef.current.key !== fundingSelectionKey) {
+    fundingSelectionRef.current = {
+      key: fundingSelectionKey,
+      generation: fundingSelectionRef.current.generation + 1,
+    };
+  }
+
   // AMR funding feedback owns one dialog in its original conversation/account.
   // Display-wallet reads and historical replays cannot open or reopen it.
   const showAmrFundingFailure = useCallback((input: {
@@ -8881,12 +8902,15 @@ export function ProjectView({
       // Start the exact member/model read alongside preparation, but a known
       // insufficiency must settle before run persistence or provider dispatch.
       // Unknown/unavailable reads still defer authority to the backend.
-      const fundingIdentityIsCurrent = () => mountedRef.current
+      const modelRequestIdentityIsCurrent = () => mountedRef.current
         && projectIdRef.current === project.id
         && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
         && currentWorkspaceAccountGeneration() === sendAccountGeneration
-        && fundingDialogContextRef.current.isAmr
-        && fundingDialogContextRef.current.modelId === fundingModelId;
+        && fundingDialogContextRef.current.isAmr;
+      const fundingSelectionGeneration = fundingSelectionRef.current.generation;
+      const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
+        && fundingDialogContextRef.current.modelId === fundingModelId
+        && fundingSelectionRef.current.generation === fundingSelectionGeneration;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
         ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
         : Promise.resolve('unknown' as const);
@@ -8904,10 +8928,19 @@ export function ProjectView({
         // A cached verdict can settle before React flushes the paint updater.
         // Queue the rollback behind it so that its original transcript exists.
         setMessages((current) => {
-          const restore = paintedFrom.messages;
-          paintedFrom.messages = null;
-          return messagesConversationIdRef.current === runConversationId
-            ? restore ?? current : current;
+          if (messagesConversationIdRef.current !== runConversationId) return current;
+          // React can replay this updater. Keep the snapshot reusable and
+          // remove only this send's provisional rows; preserve transcript
+          // updates and messages that arrived while the preflight was pending.
+          const restore = paintedFrom.messages ?? [];
+          const originalIds = new Set(restore.map((message) => message.id));
+          const currentById = new Map(current.map((message) => [message.id, message]));
+          return [
+            ...restore.map((message) => message.id === userMsg.id || message.id === assistantId
+              ? message : currentById.get(message.id) ?? message),
+            ...current.filter((message) => !originalIds.has(message.id)
+              && message.id !== userMsg.id && message.id !== assistantId),
+          ];
         });
       };
       // A Home witness skips only the duplicate sign-in read. Every actual
@@ -10114,8 +10147,9 @@ export function ProjectView({
           const requestLimit = limitDetail === 'membership_concurrency_limit'
             || (limitDetail == null && isMembershipConcurrencyLimitFailure(err.message));
           if (!requestLimit) retireHomeRejectionSource();
+          // Link's refusal belongs to the original workspace, even if another model is selected meanwhile.
           if (requestLimit && runMayFinalize && latestRequestSendRef.current.get(runConversationId) === clientRequestId
-            && fundingIdentityIsCurrent()
+            && modelRequestIdentityIsCurrent()
             && messagesConversationIdRef.current === runConversationId) {
             const key = `request-limit:${sendAccountGeneration}:${runConversationId}:${assistantId}`;
             if (!shownFundingFailuresRef.current.has(key)) {
@@ -10123,7 +10157,9 @@ export function ProjectView({
               // A later model in an active tool workflow can also hit Link's
               // limit. Keep its history, but never re-inject the whole prompt.
               const unstarted = !observedModelWork && !streamedText.trim() && !latestAssistantMsg.content.trim()
-                && !(latestAssistantMsg.events ?? []).some((event) => event.kind !== 'status');
+                // The daemon emits done_key before spawning the child. Its
+                // nonce identifies this run, but is not evidence of model work.
+                && !(latestAssistantMsg.events ?? []).some((event) => event.kind !== 'status' && event.kind !== 'done_key');
               setConcurrencyRejection({
                 conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
                 accountGeneration: sendAccountGeneration,
@@ -14472,6 +14508,7 @@ export function ProjectView({
         && config.mode === 'daemon' && config.agentId === 'amr' ? (
         <AmrConcurrencyDialog branch={concurrencyRejection.branch}
           workspaceContext={concurrencyRejection.workspaceContext}
+          profile={config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE ?? null}
           onClose={() => setConcurrencyDialogOpen(false)} />
       ) : null}
       {amrBalanceGateBlock?.dialog === 'ask_owner' || amrOwnerTopUpFromCard ? (

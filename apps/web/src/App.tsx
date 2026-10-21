@@ -5842,6 +5842,7 @@ function AppInner() {
             the routes are mutually exclusive, so exactly one is on screen. */}
         {route.kind === 'project' ? (
           <WorkspaceTopRightAccountCluster
+            amrProfile={amrProfileForConfig(config)}
             onOpenSettings={openSettings}
             onSignedOut={handleActiveCloudSignOut}
             updaterSlot={
@@ -5981,6 +5982,7 @@ function AppInner() {
         && homeConcurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration() ? (
         <AmrConcurrencyDialog branch={homeConcurrencyRejection.branch}
           workspaceContext={homeConcurrencyRejection.workspaceContext}
+          profile={amrProfileForConfig(config)}
           onClose={() => setHomeConcurrencyRejection(null)} />
       ) : null}
       <HomeAmrBalanceGateDialogs

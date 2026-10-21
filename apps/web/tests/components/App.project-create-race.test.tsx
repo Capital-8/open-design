@@ -971,6 +971,44 @@ describe('App project creation routing', () => {
     expect(mockedCreateProject).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ['local', 'http://localhost:5173'],
+    ['test', 'https://open-design.powerformer.net'],
+    ['prod', 'https://open-design.ai'],
+  ] as const)('App recovered Home concurrency upgrade preserves %s profile and original space', async (profile, origin) => {
+    mockedLoadConfig.mockReturnValue({ ...baseConfig, agentId: 'amr',
+      agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: profile } } });
+    mockedListProjects.mockResolvedValue([]);
+    let createdId = '';
+    mockedCreateProject.mockImplementation(async (input) => {
+      createdId = input.id!;
+      return { project: { ...freshProject, id: createdId }, conversationId: 'conv-new' };
+    });
+    const context = { ...workspaceContext('rejected-space-a', 'owner-a'), role: 'owner' as const,
+      planId: 'team_pro', permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) };
+    stubWorkspaceContext(context.workspaceId, context.workspaceMemberId);
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(<App />);
+    await screen.findByRole('button', { name: 'Create prompted project' });
+    await act(async () => { notifyWorkspaceContextRefresh({ context }); });
+    fireEvent.click(screen.getByRole('button', { name: 'Create prompted project' }));
+    await screen.findByTestId('project-view');
+    await waitFor(() => expect(requestLimitHandoff.reject).toBeTypeOf('function'));
+    await act(async () => {
+      expect(requestLimitHandoff.reject!({ projectId: createdId,
+        clientRequestId: homeAutoSendIdentity(createdId).clientRequestId,
+        accountGeneration: currentWorkspaceAccountGeneration(), workspaceContext: context,
+        branch: { tier: 'below_max', audience: 'owner' } })).toBe(true);
+    });
+    fireEvent.click(await screen.findByTestId('amr-concurrency-upgrade'));
+    const target = new URL(String(open.mock.calls[0]![0]));
+    expect(target.origin).toBe(origin);
+    expect(target.searchParams.get('workspaceId')).toBe('rejected-space-a');
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(mockedCreateProject).toHaveBeenCalledOnce();
+    open.mockRestore();
+  });
+
   it.each(['request', 'account', 'workspace', 'route'] as const)('rejects stale Home recovery across %s boundaries without overwriting the current draft', async (boundary) => {
     mockedListProjects.mockResolvedValue([]);
     let createdId = '';

@@ -9,6 +9,29 @@ import { T } from '../timeouts.ts';
 
 const exec = promisify(execFile);
 const digest = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
+const canonicalToolsSha = '3dfcdc6fb4f940f2955cfa4835315d4ee9f83c82';
+const canonicalToolPaths = ['sandbox/cli.py', 'sandbox/app/docker-compose.yml'] as const;
+
+/** Only the explicitly reviewed canonical seats-UI opt-in tools may differ
+ * from the fixed product HEAD. No general allowDirty or product exception. */
+export function assertCanonicalToolsOverlay(
+  overlay: NonNullable<FundingFixture['owner']['canonicalToolsOverlay']>, changedPaths: string[],
+  observed: Array<{ path: string; rawSha256: string; gitBlobSha256: string }>,
+) {
+  const paths = [...canonicalToolPaths].sort();
+  if (overlay.sourceSha !== canonicalToolsSha || overlay.files.length !== 2
+    || JSON.stringify(overlay.files.map(f => f.path).sort()) !== JSON.stringify(paths)
+    || JSON.stringify([...changedPaths].sort()) !== JSON.stringify(paths)
+    || observed.length !== 2 || JSON.stringify(observed.map(f => f.path).sort()) !== JSON.stringify(paths)) {
+    throw new Error('Only the reviewed exact two-file canonical tools overlay is permitted');
+  }
+  for (const expected of overlay.files) {
+    const actual = observed.find(file => file.path === expected.path)!;
+    if (!/^[a-f0-9]{64}$/.test(expected.sha256) || expected.sha256 !== actual.rawSha256
+      || expected.sha256 !== actual.gitBlobSha256) throw new Error('Canonical tool overlay differs from committed/raw expected bytes');
+  }
+}
+
 const ownerKeys = ['E2E_DATABASE_URL', 'VELA_E2E_OWNER_TOKEN', 'VELA_E2E_OWNER_LABEL',
   'VELA_E2E_OWNER_KEY', 'VELA_SANDBOX_NAME'] as const;
 type FundingLeaseTarget = Pick<FundingFixture, 'owner' | 'upstream'>;
@@ -79,11 +102,23 @@ export async function verifyFundingLease(fixture: FundingLeaseTarget, reserveMs:
   const helper = join(root, 'e2e/helper/e2e_ownership.py');
   if (digest(await readFile(helper)) !== fixture.owner.helperSha256) throw new Error('Canonical owner helper hash mismatch');
   const options = { cwd: root, env: { ...process.env, ...env }, timeout: T.long, maxBuffer: 4 * 1024 * 1024 };
-  await exec('git', ['diff', '--quiet', 'HEAD', '--'], options);
+  const overlay = fixture.owner.canonicalToolsOverlay;
+  if (overlay) {
+    const changed = await exec('git', ['diff', '--name-only', 'HEAD', '--'], options);
+    const observed = [];
+    // Fixed repository paths/source, never a fixture-controlled filesystem read.
+    for (const relative of canonicalToolPaths) {
+      const original = await exec('git', ['show', `${canonicalToolsSha}:${relative}`], options);
+      observed.push({ path: relative, rawSha256: digest(await readFile(join(root, relative))), gitBlobSha256: digest(original.stdout) });
+    }
+    assertCanonicalToolsOverlay(overlay, changed.stdout.trim().split('\n').filter(Boolean), observed);
+    await exec('git', ['diff', '--quiet', 'HEAD', '--', '.', ':(exclude)sandbox/cli.py', ':(exclude)sandbox/app/docker-compose.yml'], options);
+  } else await exec('git', ['diff', '--quiet', 'HEAD', '--'], options);
   // Do not trust only the declared helper hash or named manifest source root.
   // Verify both control-plane files against the exact live checkout's Git blob.
   for (const relative of ['e2e/helper/e2e_ownership.py', 'sandbox/cli.py']) {
-    const original = await exec('git', ['show', `HEAD:${relative}`], options);
+    const source = overlay && relative === 'sandbox/cli.py' ? canonicalToolsSha : 'HEAD';
+    const original = await exec('git', ['show', `${source}:${relative}`], options);
     if (digest(original.stdout) !== digest(await readFile(join(root, relative)))) throw new Error('Canonical control-plane source has uncommitted changes');
   }
   const head = await exec('git', ['rev-parse', 'HEAD'], options);
@@ -98,7 +133,8 @@ export async function verifyFundingLease(fixture: FundingLeaseTarget, reserveMs:
     safe: { verifiedAt, exitCode: 0, name: receipt.name, database: receipt.database,
       targetKey: receipt.targetKey, sourceRoot: root, amrSha: head.stdout.trim(),
       urls: receipt.urls, redisDb: receipt.redisDb, guardianPid: receipt.guardianPid,
-      deadlineUtc: receipt.deadlineUtc, helperSha256: fixture.owner.helperSha256 },
+      deadlineUtc: receipt.deadlineUtc, helperSha256: fixture.owner.helperSha256,
+      ...(overlay ? { canonicalToolsOverlay: overlay } : {}) },
   };
 }
 

@@ -230,9 +230,17 @@ The lane checks the actual canonical phase1 console and client before/after
 original-gift expiry:40.30→40.00 and0.30→0.00, Free onlyFlash and no new topup
 actions. Both before sets are frozen before the repository-owned expiry helper
 can run. The helper is bound by source/rawhash, canonical lease, fixture hash,
-new run/attempt IDs, both exact workspace IDs and original gift IDs; it ages only
-those two gifts and refreshes the production projection. It does not control
-AMR lifecycle, global time, retained40 or model prices.
+new run/attempt IDs, both exact workspace IDs and original gift IDs. For a
+qualified natural-expiry check use `freeWallet.expiry.mode=natural_wait`: prepare
+the original gifts' common near-future expiry before opening either UI, preserve
+their three-day lifetime, then make no further funding-row changes. Before
+evidence must show the client projection carries that same future expiry. The
+helper waits for actual database time to cross it and refreshes the production
+projection. Its receipt proves the original boundary, clock samples before and
+after, and no funding-row writes after the before evidence. The retained cash,
+global time, AMR lifecycle and model prices stay outside this operation. The
+older controlled-age mode remains a diagnostic; advancing a date after clients
+have cached a later expiry does not prove natural-crossing behavior.
 
 `freeWallet.consoleUi` records the actual canonical served feature flag and
 source proof. Only visible `seats-console-page`, exact scoped snapshot and wallet
@@ -241,3 +249,19 @@ configuration evidence, never phase1 UI acceptance. The command's exit0 can
 mean a qualified client/API portion only; `VIEW021-exact-scope-results` and the
 independent server/root review decide the full QA case. Original failures remain
 frozen.
+
+The fixed product HEAD is still mandatory. The single reviewed canonical seats-UI
+opt-in infrastructure change may be declared as `owner.canonicalToolsOverlay`:
+source3dfcdc6fb4f940f2955cfa4835315d4ee9f83c82 and exact raw/blob SHA256s
+for `sandbox/cli.py` and `sandbox/app/docker-compose.yml`. The verifier requires
+exactly those two tracked differences, checks all other tracked product files
+unchanged and keeps the ownership helper equal to the fixed HEAD. This is not a
+general dirty-checkout allowance. Missing overlay metadata retains the original
+fully clean source guard.
+
+A separate `OD_FUNDING_CASE=view021-after` continuation accepts the original
+receipt path and SHA256 through `OD_FREE_WALLET_EXPIRY_RECEIPT` and
+`OD_FREE_WALLET_EXPIRY_RECEIPT_SHA256`. It verifies the same fixture/run/workspace
+binding, opens fresh real Owner clients and consoles, and records both after
+amounts without repeating before or executing expiry. It cannot erase a prior
+failed execution or turn a diagnostic into whole-case acceptance.

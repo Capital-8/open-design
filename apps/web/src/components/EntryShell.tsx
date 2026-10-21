@@ -1936,6 +1936,7 @@ export function EntryShell({
       {homeConcurrencyBlock && homeConcurrencyBlock.identity === homeFundingIdentity ? (
         <AmrConcurrencyDialog branch={homeConcurrencyBlock.branch}
           workspaceContext={homeConcurrencyBlock.workspaceContext}
+          profile={amrProfile}
           onClose={() => setHomeConcurrencyBlock(null)} />
       ) : null}
       <div
@@ -1945,6 +1946,7 @@ export function EntryShell({
         style={{ ['--entry-rail-width' as string]: '236px' }}
       >
         <EntryNavRail
+          amrProfile={amrProfile}
           view={view}
           onViewChange={changeView}
           onNewProject={() => {

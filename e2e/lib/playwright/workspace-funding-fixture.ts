@@ -28,6 +28,7 @@ export type FundingFixture = {
     ownerEnvPath: string;
     runtimeReceiptPath: string;
     helperSha256: string;
+    canonicalToolsOverlay?: { sourceSha: string; files: Array<{ path: string; sha256: string }> };
   };
   runtime: {
     velaBin: string;
@@ -45,7 +46,7 @@ export type FundingFixture = {
     proofPath: string;
     proofSha256: string;
     consoleUi: { phase1Enabled: boolean; proofPath: string; proofSha256: string };
-    expiry: { helperPath: string; helperSha256: string; helperSourceSha: string; helperRepoPath: string };
+    expiry: { mode?: 'controlled_age' | 'natural_wait'; helperPath: string; helperSha256: string; helperSourceSha: string; helperRepoPath: string };
   };
   /** VIEW-020's actual long Owner profile, verified by the environment owner. */
   noticeLayout?: { ownerUserId: string; ownerDisplayName: string;
@@ -66,7 +67,7 @@ export type FundingFixture = {
 
 export type FreeWalletGiven = {
   actor: FundingFixture['actor'];
-  space: FundingSpace & { workspaceKind: 'personal'; actorRole: 'owner'; actorMemberId: string };
+  space: FundingSpace & { workspaceName: string; workspaceKind: 'personal'; actorRole: 'owner'; actorMemberId: string };
   beforeBalanceUsd: '40.30' | '0.30';
   afterBalanceUsd: '40.00' | '0.00';
   consoleCookiesPath: string;

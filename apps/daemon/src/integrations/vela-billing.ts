@@ -468,6 +468,7 @@ export function parseWorkspaceBillingSnapshot(
   ) {
     return null;
   }
+  const designPlanWindows = parseWorkspaceDesignPlanWindows(raw.designPlanWindows);
   return {
     schemaVersion: 1,
     workspaceId,
@@ -482,6 +483,7 @@ export function parseWorkspaceBillingSnapshot(
       expiresAt: nullableString(wallet.expiresAt),
       updatedAt: nullableString(wallet.updatedAt),
     },
+    ...(designPlanWindows !== undefined ? { designPlanWindows } : {}),
     revisions: {
       billing: billingRevision,
       wallet: walletRevision,
@@ -495,6 +497,37 @@ export function parseWorkspaceBillingSnapshot(
         }
       : {}),
   };
+}
+
+// Keep the canonical AMR datetime(offset:true) grammar, including leap days.
+const workspaceDPTime = /^((\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\d|3[01])|(0[469]|11)-(0[1-9]|[12]\d|30)|(02)-(0[1-9]|1\d|2[0-8])))T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+function parseWorkspaceDesignPlanWindows(
+  value: unknown,
+): WorkspaceBillingSnapshot['designPlanWindows'] {
+  if (!Array.isArray(value)) return undefined;
+  const windows: NonNullable<WorkspaceBillingSnapshot['designPlanWindows']> = [];
+  for (const raw of value) {
+    if (
+      !isObjectRecord(raw) ||
+      (raw.kind !== '5h' && raw.kind !== '7d') ||
+      typeof raw.remainingCredits !== 'string' ||
+      !/^(0|[1-9]\d*)$/.test(raw.remainingCredits) ||
+      typeof raw.limitCredits !== 'string' ||
+      !/^(0|[1-9]\d*)$/.test(raw.limitCredits) ||
+      ![raw.windowStart, raw.resetsAt].every(
+        time => time === null || (typeof time === 'string' && workspaceDPTime.test(time)),
+      )
+    ) return undefined;
+    windows.push({
+      kind: raw.kind,
+      windowStart: raw.windowStart as string | null,
+      resetsAt: raw.resetsAt as string | null,
+      remainingCredits: raw.remainingCredits,
+      limitCredits: raw.limitCredits,
+    });
+  }
+  // An explicit empty array is valid; absence/invalidity must not synthesize it.
+  return windows;
 }
 
 function parseWorkspaceBillingRevisionClock(

@@ -106,6 +106,7 @@ import {
   amrAutoRechargeUrlForProfile,
   amrConsoleUrlForWorkspace,
   amrPlansUrlForProfile,
+  amrPlansUrlForWorkspace,
 } from '../runtime/amr-guidance';
 import { useWorkspaceInvalidation } from '../collab/workspace-events';
 import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
@@ -261,6 +262,7 @@ interface Props {
    *  chip falls back to the context plan-tier hint. */
   billing?: WorkspaceBillingSummary | null;
   billingResponse?: WorkspaceBillingResponse | null;
+  amrProfile?: string | null;
   /** Explicitly scoped balance in USD for `context`. Team callers must pass
    *  only a backend-proven v2 workspace wallet, never account credits. */
   balanceUsd?: string | null;
@@ -867,6 +869,7 @@ export function workspaceUpgradeUrl(
   // workspace identity to authorize yet.
   if (context && !canReachWorkspaceBillingEntrance(context)) return null;
   if (!context && !options) return null;
+  if (context) return amrPlansUrlForWorkspace(options?.fallbackProfile, context.workspaceId);
   return amrPlansUrlForProfile(options?.fallbackProfile);
 }
 
@@ -1031,6 +1034,7 @@ interface EntryTopRightClusterProps {
   context: WorkspaceCollabContext | null;
   billing?: WorkspaceBillingSummary | null;
   billingResponse?: WorkspaceBillingResponse | null;
+  amrProfile?: string | null;
   balanceUsd?: string | null;
   /** Extra content rendered LEFT of the credits pill (e.g. the DeepSeek
    *  campaign badge on Home). */
@@ -1075,6 +1079,7 @@ export function EntryTopRightCluster({
   context,
   billing,
   billingResponse,
+  amrProfile,
   balanceUsd,
   leadingSlot,
   updaterSlot,
@@ -1320,7 +1325,9 @@ export function EntryTopRightCluster({
 
   // One public comparison destination shared with the rail's invite dialog.
   // Pricing owns plan choice; only a selected card hands off to checkout.
-  const upgradeUrl = workspaceUpgradeUrl(context, billing);
+  const upgradeUrl = context
+    ? workspaceUpgradeUrl(context, billing, { fallbackProfile: amrProfile })
+    : workspaceUpgradeUrl(context, billing);
   const billingUpgradeUrl =
     context?.billingRecovery?.recoveryUrl?.trim() || upgradeUrl;
   // #62: the 积分 row links straight OUT to B's console dashboard (usage detail
@@ -1898,6 +1905,7 @@ export function WorkspaceTopRightAccountCluster({
   amrLoggedIn = null,
   amrAccountPlan = null,
   amrAccountId = null,
+  amrProfile,
   metricsConsent = false,
   installationId,
 }: {
@@ -1910,6 +1918,7 @@ export function WorkspaceTopRightAccountCluster({
   amrLoggedIn?: boolean | null;
   amrAccountPlan?: string | null;
   amrAccountId?: string | null;
+  amrProfile?: string | null;
   metricsConsent?: boolean;
   installationId?: string | null;
 }) {
@@ -1951,6 +1960,7 @@ export function WorkspaceTopRightAccountCluster({
   return (
     <EntryTopRightCluster
       page="project"
+      amrProfile={amrProfile}
       context={context}
       billing={billing}
       billingResponse={billingResponse}
@@ -2097,6 +2107,7 @@ export function EntryNavRail({
   context,
   billing,
   billingResponse,
+  amrProfile,
   balanceUsd,
   onOpenSettings,
   onSignedOut,
@@ -2169,7 +2180,9 @@ export function EntryNavRail({
   const inviteTarget = resolveWorkspaceInviteTarget(context);
   // The invite dialog's seat-gate upgrade entry uses the same public Pricing
   // destination as the credits chip's twin decision in EntryTopRightCluster.
-  const upgradeUrl = workspaceUpgradeUrl(context, billing);
+  const upgradeUrl = context
+    ? workspaceUpgradeUrl(context, billing, { fallbackProfile: amrProfile })
+    : workspaceUpgradeUrl(context, billing);
   const identityWorkspaceItems = workspaceDirectoryForIdentity(workspaceItems, context);
   const currentWorkspaceItem = context
     ? identityWorkspaceItems.find((item) => item.workspaceId === context.workspaceId) ?? null
@@ -2859,6 +2872,7 @@ export function EntryNavRail({
           `EntryTopRightCluster`). */}
       <EntryTopRightCluster
         page={analyticsPage}
+        amrProfile={amrProfile}
         context={context}
         billing={billing}
         billingResponse={billingResponse}
