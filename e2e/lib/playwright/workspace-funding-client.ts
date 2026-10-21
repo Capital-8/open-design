@@ -25,6 +25,7 @@ type Preflight = {
 export async function startFundingClient(page: Page, info: TestInfo, options: {
   preserveSelectedLocale?: boolean; initialSpace?: keyof FundingFixture['spaces'];
   freeWallet?: 'retained' | 'giftOnly'; freeWalletPhase?: 'before' | 'after';
+  scopeSwitch?: boolean;
 } = {}) {
   if (process.env.OD_FUNDING_OWNER_RUNNER !== 'active') {
     throw new Error('Use the mandatory funding-runner entrypoint; direct Playwright invocation is not owned');
@@ -32,9 +33,11 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
   const loaded = await readFundingFixture();
   const wallet = options.freeWallet ? loaded.freeWallet?.[options.freeWallet] : undefined;
   if (options.freeWallet && !wallet) throw new Error('Explicit real personal Free wallet required');
+  const switchGiven = options.scopeSwitch ? loaded.scopeSwitch : undefined;
+  if (options.scopeSwitch && !switchGiven) throw new Error('Explicit WS-005 two-space Given required');
   const fixture = wallet ? { ...loaded, actor: wallet.actor } : loaded;
-  const initialSpace = wallet?.space ?? fixture.spaces[options.initialSpace ?? 'dp'];
-  const checkedSpaces = wallet ? { wallet: wallet.space } : fixture.spaces;
+  const initialSpace = wallet?.space ?? switchGiven?.spaces.a ?? fixture.spaces[options.initialSpace ?? 'dp'];
+  const checkedSpaces = wallet ? { wallet: wallet.space } : switchGiven?.spaces ?? fixture.spaces;
   const ownerPre = await verifyFundingLease(fixture, T.xlong * 7);
   const namespace = `funding-${process.pid}-${randomUUID().slice(0, 8)}`;
   const root = join(e2eWorkspaceRoot(), '.tmp', 'e2e', namespace);
@@ -50,7 +53,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
   await mkdir(runtime.dataDir, { recursive: true });
   await writeFile(join(amrHome, 'config.json'), JSON.stringify({ profiles: { local: {
     controlKey: fixture.actor.controlKey,
-    runtimeKey: wallet?.space.runtimeKey ?? fixture.spaces.dp.runtimeKey,
+    runtimeKey: wallet?.space.runtimeKey ?? switchGiven?.spaces.a.runtimeKey ?? fixture.spaces.dp.runtimeKey,
     apiUrl: fixture.upstream.apiUrl,
     linkUrl: fixture.upstream.linkUrl,
     user: { id: fixture.actor.userId, email: fixture.actor.email, name: 'Disposable funding QA' },
@@ -126,7 +129,8 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
       expect(preflight.modelId).toBe(fixture.runtime.modelId);
       expect(preflight.billingMode).toBe('shared');
       // Free has no subscription-backed Design Plan descriptor.
-      expect(preflight.codingPlan.tier).toBe(wallet ? null : 'go');
+      if (!switchGiven) expect(preflight.codingPlan.tier).toBe(wallet ? null : 'go');
+      if (switchGiven) expect(Number(preflight.balanceUsd)).toBe(alias === 'a' ? 10 : 20);
       if (wallet) {
         expect(preflight.codingPlan.eligible).toBe(false);
         expect(preflight.codingPlan.windows).toEqual([]);

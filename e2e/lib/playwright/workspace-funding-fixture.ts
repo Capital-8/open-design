@@ -39,6 +39,17 @@ export type FundingFixture = {
   };
   actor: { controlKey: string; userId: string; email: string };
   spaces: { funded: FundingSpace; empty: FundingSpace; dp: FundingSpace };
+  /** WS-005 keeps both real tasks bound to their original workspace. */
+  scopeSwitch?: {
+    attemptId: string;
+    spaces: { a: FundingSpace & { workspaceName: string }; b: FundingSpace & { workspaceName: string } };
+    proofPath: string;
+    proofSha256: string;
+    provider: { baseUrl: string; statePath: string; sourcePath: string; sourceSha256: string;
+      sourceCommit: string; sourceRepoPath: string; pid: number };
+    usage: Record<'a' | 'b', Array<{ kind: 'main' | 'aux'; modelId: string;
+      tokens: Record<string, number>; expectedCredits: string }>>;
+  };
   /** VIEW-021 uses actual default personal spaces and their separate Owners. */
   freeWallet?: {
     retained: FreeWalletGiven;

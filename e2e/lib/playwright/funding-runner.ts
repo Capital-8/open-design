@@ -26,7 +26,8 @@ async function recordOdSource(e2eRoot: string, output: string) {
     'lib/playwright/workspace-funding-lease.ts', 'lib/playwright/suite.ts',
     'lib/tools-dev/runtime.ts', 'ui/workspace-funding-sandbox.test.ts', 'playwright.config.ts',
     'lib/playwright/notice.config.ts', 'lib/playwright/workspace-notice-fixture.ts', 'ui/workspace-notice-sandbox.test.ts',
-    'lib/playwright/free-wallet.config.ts', 'lib/playwright/workspace-free-wallet-fixture.ts', 'ui/workspace-free-wallet-sandbox.test.ts'];
+    'lib/playwright/free-wallet.config.ts', 'lib/playwright/workspace-free-wallet-fixture.ts', 'ui/workspace-free-wallet-sandbox.test.ts',
+    'lib/playwright/workspace-switch.config.ts', 'lib/playwright/workspace-switch-fixture.ts', 'ui/workspace-switch-billing-sandbox.test.ts'];
   const sources = await Promise.all(files.map(async path => ({ path, sha256: hash(await readFile(join(e2eRoot, path))) })));
   return { odHead: head.stdout.trim(), trackedDiffPaths: names.stdout.trim().split('\n').filter(Boolean),
     trackedDiffSha256: hash(diff.stdout), sourceDigest: hash(JSON.stringify(sources)), sources };
@@ -99,14 +100,16 @@ async function main() {
       const e2eRoot = fileURLToPath(new URL('../..', import.meta.url));
       const args = ['pnpm', 'exec', 'playwright', 'test', '-c', 'lib/playwright/funding.config.ts'];
       const selection = process.env.OD_FUNDING_CASE;
-      if (selection === 'view021' || selection === 'view021-after') {
+      if (selection === 'ws005') {
+        args[args.length - 1] = 'lib/playwright/workspace-switch.config.ts';
+      } else if (selection === 'view021' || selection === 'view021-after') {
         args[args.length - 1] = 'lib/playwright/free-wallet.config.ts';
         args.push('--grep', selection === 'view021' ? 'VIEW-021 actual' : 'VIEW-021 continuation');
       } else if (selection === 'view020') {
         args[args.length - 1] = 'lib/playwright/notice.config.ts';
       } else if (selection) {
         const filters: Record<string, string> = { project: 'VIEW-015 project', home: 'VIEW-015 home', dp: 'VIEW-015 cash0', inflight: 'VIEW-015 existing A task' };
-        if (!filters[selection]) throw new Error('OD_FUNDING_CASE must be project, home, dp, inflight, view020, or view021');
+        if (!filters[selection]) throw new Error('OD_FUNDING_CASE must be project, home, dp, inflight, view020, view021, view021-after, or ws005');
         args.push('--grep', filters[selection]);
       }
       receipts.push({ entrypoint: 'lib/playwright/funding-runner.ts',

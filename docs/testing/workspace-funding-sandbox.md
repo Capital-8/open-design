@@ -265,3 +265,27 @@ receipt path and SHA256 through `OD_FREE_WALLET_EXPIRY_RECEIPT` and
 binding, opens fresh real Owner clients and consoles, and records both after
 amounts without repeating before or executing expiry. It cannot erase a prior
 failed execution or turn a diagnostic into whole-case acceptance.
+
+## WS-005: concurrent tasks retain their original workspace
+
+`OD_FUNDING_CASE=ws005` selects the explicit canonical two-space lane. Its
+private `scopeSwitch` Given binds the same real actor to A with 10 USD and B
+with 20 USD, separate scoped runtime keys, an original balance proof and a
+repository-owned controlled upstream. The standard Go and Free fixtures keep
+their existing assertions; this scenario does not infer membership tier from
+the Coding Plan DTO.
+
+The actual browser starts A, observes its main request held, navigates through
+Home and the real workspace switcher to B, then submits B. The dedicated
+upstream releases A only after this attempt's B main request actually arrives.
+Auxiliary requests cannot satisfy that phase boundary. Existing prices and
+allowlists stay fixed; every actual main and auxiliary charge must be included
+in the task totals of 2 and 3 USD without assuming one auxiliary invocation.
+
+The test records both persisted terminal runs, A 8 / B 17 authoritative balances,
+the visible selected B row and current B context. Independent server review
+must match every usage and unique ledger to the original run, workspace and
+initiator. The environment owner remains the only fixture/route writer. A
+shared auxiliary route may be borrowed only in the explicitly coordinated
+window, with before/after snapshots and normal restoration; fault experiments
+on the same environment must not overlap that route change.
