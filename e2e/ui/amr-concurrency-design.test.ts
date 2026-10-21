@@ -55,6 +55,16 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await page.getByTestId('chat-send').click();
   const dialog = page.getByTestId('amr-concurrency-dialog');
   await expect(dialog).toBeVisible({ timeout: T.long });
+  // Inspect the first modal state before any in-dialog click can move focus
+  // away from the send/stop control and conceal its lingering tooltip.
+  await testInfo.attach('f04-initial-focus', { body: JSON.stringify(await page.evaluate(() => ({
+    active: document.activeElement?.outerHTML,
+    tooltip: document.querySelector('.od-tooltip-layer')?.outerHTML,
+  })), null, 2), contentType: 'application/json' });
+  await testInfo.attach('f04-initial-modal', { body: await page.screenshot(), contentType: 'image/png' });
+  await expect(page.getByRole('tooltip')).toBeHidden();
+  await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement)))
+    .toBe(true);
   // The frozen F04 frame uses normal line-height and a neutral palette;
   // inherited app typography compressed the title and shifted all content up.
   await expect(dialog.locator('h2')).toHaveCSS('line-height', 'normal');
@@ -87,8 +97,7 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
   expect(target.searchParams.get('billing')).toBe('plan');
   expect(runs.bodies).toHaveLength(1);
-  // The original send button can retain a focus tooltip behind the modal.
-  // Capture after the native dialog interaction, without hiding that DOM.
+  // Native modal interaction must also leave no background tooltip behind.
   await page.mouse.move(0, 0);
   await expect(page.getByRole('tooltip')).toBeHidden();
   await testInfo.attach('f04-viewport-1280x720', { body: await page.screenshot(), contentType: 'image/png' });
