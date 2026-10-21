@@ -92,7 +92,7 @@ test('[P0] RUN-013-CLIENT Free three Link slots, manual recovery and independent
     await expect(page.getByTestId('home-hero-input')).toBeVisible({ timeout: T.xlong });
     await expect(observerPage.getByTestId('home-hero-input')).toBeVisible({ timeout: T.xlong });
     await connected(page); await connected(observerPage);
-    const observerBillingUrl = observer.runtime.url.web(`/api/workspace/billing?scope=workspace&workspaceId=${encodeURIComponent(free.spaces.w1.workspaceId)}&includePreflight=1&modelId=${encodeURIComponent(f.runtime.modelId)}`);
+    const observerBillingUrl = new URL(`/api/workspace/billing?scope=workspace&workspaceId=${encodeURIComponent(free.spaces.w1.workspaceId)}&includePreflight=1&modelId=${encodeURIComponent(f.runtime.modelId)}`, observer.runtime.url.web('/')).toString();
     let observerRealtime: unknown;
     const healthResponse = await fetch(observerBillingUrl, { headers: fundingHeaders(free.observer.space) });
     const healthBody = await healthResponse.text();
@@ -143,6 +143,7 @@ test('[P0] RUN-013-CLIENT Free three Link slots, manual recovery and independent
     await expect(observerPage.getByTestId('amr-concurrency-dialog')).toHaveCount(0);
     const recheckIndex = requests.length;
     results.manual = await sendPrompt(owner, page);
+    await save('step2-completed.safe.json', { binding, minute: results.minute, manual: results.manual });
     const rechecks = requests.slice(recheckIndex);
     expect(rechecks.some(r => r.path === '/api/workspace/billing/request-concurrency')).toBe(true);
     expect(rechecks.some(r => r.path.includes('/billing'))).toBe(true);
