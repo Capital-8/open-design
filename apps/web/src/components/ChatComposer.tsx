@@ -38,7 +38,7 @@ import type {
 } from '@open-design/contracts/analytics';
 import { deriveUploadCohort } from '../analytics/upload-tracking';
 import { notifyCompletionFeedbackGesture } from '../utils/notifications';
-import { projectRawUrl, uploadProjectFiles, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml } from "../providers/registry";
+import { projectRawUrl, uploadProjectFiles, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml, libraryAssetRawUrl } from "../providers/registry";
 import {
   duplicatePluginAsProject,
   patchProject,
@@ -359,6 +359,9 @@ interface Props {
   // project folder exists on disk before files land in it. Returns the
   // project id when ready.
   onEnsureProject: () => Promise<string | null>;
+  /** Explicit storage adapter for a conversation that has no project. */
+  onUploadFiles?: (files: File[]) => Promise<import('../providers/registry').UploadProjectFilesResult>;
+  attachmentUrl?: (path: string) => string;
   commentAttachments?: ChatCommentAttachment[];
   onRemoveCommentAttachment?: (id: string) => void;
   // Available skills the user can compose into a turn via @<skill>. The
@@ -606,6 +609,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       placeholderScenarios = [],
       draftStorageKey,
       onEnsureProject,
+      onUploadFiles,
+      attachmentUrl,
       commentAttachments = [],
       onRemoveCommentAttachment,
       skills = [],
@@ -2374,19 +2379,16 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
      * 等人点重试或者「×」。
      */
     async function runOnePendingUpload(
-      projectIdForUpload: string,
+      projectIdForUpload: string | null,
       entry: PendingUpload,
     ): Promise<{ ok: boolean; error?: string }> {
       const local = pendingFilesRef.current.get(entry.id);
       // 人在这一轮里已经把卡「×」掉了 —— 别再把结果塞回托盘。
       if (!local) return { ok: true };
       try {
-        const result = await uploadProjectFiles(
-          projectIdForUpload,
-          [local.file],
-          undefined,
-          workspaceContext,
-        );
+        const result = onUploadFiles
+          ? await onUploadFiles([local.file])
+          : await uploadProjectFiles(projectIdForUpload!, [local.file], undefined, workspaceContext);
         const uploaded = result.uploaded[0];
         // 人在等结果的这几秒里把卡撤了,结果就地丢掉(文件本身已经落到项目里,
         // 和「传完再点×」是同一个语义 —— 不进待发列表,也不回删)。
@@ -2416,8 +2418,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     async function retryPendingUpload(pendingId: string) {
       const target = pendingUploads.find((item) => item.id === pendingId);
       if (!target || !pendingFilesRef.current.has(pendingId)) return;
-      const id = await ensureProject();
-      if (!id) return;
+      const id = onUploadFiles ? null : await ensureProject();
+      if (!id && !onUploadFiles) return;
       setUploadError(null);
       setPendingUploads((current) =>
         current.map((item) => (item.id === pendingId ? { ...item, state: 'uploading' } : item)),
@@ -2427,8 +2429,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
 
     async function uploadFiles(files: File[]) {
       if (files.length === 0) return;
-      const id = await ensureProject();
-      if (!id) return;
+      const id = onUploadFiles ? null : await ensureProject();
+      if (!id && !onUploadFiles) return;
       setUploading(true);
       setUploadError(null);
       // Cohort math is identical to the Design Files Upload button; see
@@ -2465,7 +2467,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         }
         // 埋点仍然是**一次挑文件一条事件**(v2 文档的口径),不随请求数变成 N 条。
         const firstError = failures.find((outcome) => outcome.error)?.error;
-        trackFileUploadResult(analytics.track, {
+        if (id) trackFileUploadResult(analytics.track, {
           page_name: 'chat_panel',
           area: 'chat_composer',
           project_id: id,
@@ -2476,7 +2478,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         setUploadError(`${t('chat.annotationUploadFailed')} (${detail})`);
-        trackFileUploadResult(analytics.track, {
+        if (id) trackFileUploadResult(analytics.track, {
           page_name: 'chat_panel',
           area: 'chat_composer',
           project_id: id,
@@ -2496,6 +2498,19 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     // consumed.
     async function addAssetsFromLibrary(assets: LibraryAsset[]) {
       if (assets.length === 0) return;
+      if (onUploadFiles) {
+        try {
+          const selected = await Promise.all(assets.map(async (asset) => {
+            const response = await fetch(libraryAssetRawUrl(asset.id));
+            if (!response.ok) throw new Error(`Asset read failed (${response.status})`);
+            const blob = await response.blob();
+            const name = asset.relPath?.split('/').pop() || assetTitle(asset);
+            return new File([blob], name, { type: blob.type || asset.mime || 'application/octet-stream' });
+          }));
+          await uploadFiles(selected);
+        } catch (failure) { setUploadError(failure instanceof Error ? failure.message : String(failure)); }
+        return;
+      }
       const id = await ensureProject();
       if (!id) return;
       setUploading(true);
@@ -2600,13 +2615,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
             );
             if (annotationFiles.length > 0) {
               const orderStart = reserveAttachmentOrders(annotationFiles.length);
-              const id = await ensureProject();
-              if (!id) {
+              const id = onUploadFiles ? null : await ensureProject();
+              if (!id && !onUploadFiles) {
                 ack({ ok: false, message: t('chat.annotationProjectCreateFailed') });
                 return;
               }
               setUploading(true);
-              const result = await uploadProjectFiles(id, annotationFiles, undefined, workspaceContext);
+              const result = onUploadFiles ? await onUploadFiles(annotationFiles)
+                : await uploadProjectFiles(id!, annotationFiles, undefined, workspaceContext);
               if (result.uploaded.length > 0) {
                 uploaded = assignChatAttachmentOrders(result.uploaded, orderStart);
               }
@@ -3601,6 +3617,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
             <StagedAttachmentTray
               cards={stagedAttachmentCards}
               projectId={projectId}
+              attachmentUrl={attachmentUrl}
               onRemoveStaged={removeStaged}
               onRemovePending={removePendingCard}
               onRetryPending={(id) => void retryPendingUpload(id)}
@@ -4577,6 +4594,7 @@ function StagedRunContexts({
 export function StagedAttachmentTray({
   cards,
   projectId,
+  attachmentUrl,
   onRemoveStaged,
   onRemovePending,
   onRetryPending,
@@ -4584,6 +4602,7 @@ export function StagedAttachmentTray({
 }: {
   cards: StagedAttachmentCard[];
   projectId: string | null;
+  attachmentUrl?: (path: string) => string;
   onRemoveStaged: (path: string) => void;
   onRemovePending: (pendingId: string) => void;
   onRetryPending: (pendingId: string) => void;
@@ -4597,7 +4616,7 @@ export function StagedAttachmentTray({
   const [preview, setPreview] = useState<StagedAttachmentCard | null>(null);
   const previewUrl = preview
     ? preview.previewUrl
-      ?? (preview.path && projectId ? projectRawUrl(projectId, preview.path, workspaceContext) : null)
+      ?? (preview.path && attachmentUrl ? attachmentUrl(preview.path) : preview.path && projectId ? projectRawUrl(projectId, preview.path, workspaceContext) : null)
     : null;
   useEffect(() => {
     if (!preview) return;
@@ -4645,7 +4664,7 @@ export function StagedAttachmentTray({
               );
             }
             const thumbUrl = card.previewUrl
-              ?? (card.path && projectId ? projectRawUrl(projectId, card.path, workspaceContext) : null);
+              ?? (card.path && attachmentUrl ? attachmentUrl(card.path) : card.path && projectId ? projectRawUrl(projectId, card.path, workspaceContext) : null);
             return (
               <span key={card.key} className={`msg-att-img${stateClass}`} data-testid="staged-attachment-image">
                 <span className="msg-att-ph">

@@ -28,7 +28,9 @@ const HERO_PROPS = {
   activePluginTitle: null,
   activeChipId: 'prototype',
   onClearActivePlugin: () => undefined,
-  pluginOptions: [],
+  pluginOptions: [{ id: 'example-prototype-poster', title: 'Prototype poster',
+    manifest: { name: 'example-prototype-poster', tags: ['prototype'],
+      od: { mode: 'prototype', useCase: { query: 'Build a polished interactive prototype for the product team.' }, preview: { type: 'image', poster: '/test/poster.webp' } } } }],
   pluginsLoading: false,
   pendingPluginId: null,
   pendingChipId: null,
@@ -41,13 +43,13 @@ const HERO_PROPS = {
 describe('HomeHero example card overlay (#3203)', () => {
   it('renders the example cards on the prototype chip', () => {
     render(<HomeHero {...(HERO_PROPS as any)} />);
-    const cards = screen.queryAllByTestId('home-hero-prompt-example');
+    const cards = screen.queryAllByTestId('home-hero-plugin-preset');
     expect(cards.length).toBeGreaterThan(0);
   });
 
   it('does not render an overlay icon inside the example card', () => {
     render(<HomeHero {...(HERO_PROPS as any)} />);
-    const cards = screen.queryAllByTestId('home-hero-prompt-example');
+    const cards = screen.queryAllByTestId('home-hero-plugin-preset');
     expect(cards.length).toBeGreaterThan(0);
     for (const card of cards) {
       // Pre-fix the card contained an `<svg>` icon as a sibling to the

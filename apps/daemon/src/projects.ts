@@ -149,6 +149,11 @@ export async function ensureProject(projectsRoot, projectId, metadata?) {
 export async function listFiles(projectsRoot, projectId, opts = {}) {
   const metadata = opts?.metadata;
   const dir = resolveProjectDir(projectsRoot, projectId, metadata);
+  return listWorkspaceFiles(dir, opts);
+}
+
+/** Inventory a resolved workspace root, independent of project ownership. */
+export async function listWorkspaceFiles(dir, opts = {}) {
   const out = [];
   // Skip generated dependency/build trees for all project roots. Standard OD
   // projects can contain framework installs too; surfacing package HTML like

@@ -11,3 +11,76 @@
 .projectListError p {
   margin: 0;
 }
+
+/* The project editor owns its own layout; this applies only to entry pages. */
+:global(.entry-shell--no-header) .threeColumns {
+  position: relative;
+  grid-template-columns: 0 0 minmax(0, 1fr);
+}
+
+:global(.entry-shell--no-header) .threeColumns:global(.entry--rail-open) {
+  grid-template-columns: 64px 244px minmax(0, 1fr);
+}
+
+/* The three-column layout keeps its icon rail visible below the legacy
+   two-column auto-collapse breakpoint, so its controls must remain usable. */
+.threeColumns:global(.entry--rail-open) > :global(.entry-nav-rail) {
+  pointer-events: auto;
+  overflow: visible;
+}
+
+.projectColumn {
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-inline-end: 1px solid var(--border-soft);
+}
+
+.threeColumns > :global(.entry-main) {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.homeContent {
+  height: 100%;
+  min-height: 0;
+  padding-block: 24px 20px;
+}
+
+.homeContent > :global(.entry-main__view-home) {
+  height: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 1100px) {
+  :global(.entry-shell--no-header) .threeColumns:global(.entry--rail-open) {
+    grid-template-columns: 56px 218px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  :global(.entry-shell--no-header) .threeColumns:global(.entry--rail-open) {
+    grid-template-columns: 56px 0 minmax(0, 1fr);
+  }
+
+  .projectColumn {
+    position: absolute;
+    /* Anchor to the whole grid; column 2 would add the rail width twice. */
+    grid-column: 1 / -1;
+    inset-block: 0;
+    inset-inline-start: 56px;
+    width: min(244px, calc(100% - 56px));
+    z-index: 25;
+    background: var(--bg-panel);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .threeColumns:not(:global(.entry--rail-open)) .projectColumn {
+    visibility: hidden;
+  }
+
+  .homeContent {
+    padding-block: 16px;
+  }
+}

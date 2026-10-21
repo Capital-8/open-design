@@ -162,6 +162,20 @@ describe('WorkspaceTabsBar navigation semantics', () => {
     document.querySelector('[data-testid="blank-workspace-area"]')?.remove();
   });
 
+  it('opens independent conversation tabs with real titles and preserves Home', async () => {
+    const titles = new Map([['independent-1', 'Website ideas']]);
+    const view = render(<WorkspaceTabsBar route={homeRoute} projects={[]} standaloneConversationTitles={titles} />);
+    const route: Route = { kind: 'standalone-conversation', conversationId: 'independent-1' };
+    view.rerender(<WorkspaceTabsBar route={route} projects={[]} standaloneConversationTitles={titles} />);
+    await waitFor(() => expect(screen.getAllByRole('tab')).toHaveLength(2));
+    expect(screen.getByText('Website ideas')).toBeTruthy();
+    view.rerender(<WorkspaceTabsBar route={{ ...route }} projects={[]} standaloneConversationTitles={titles} />);
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    view.rerender(<WorkspaceTabsBar route={homeRoute} projects={[]} standaloneConversationTitles={titles} />);
+    fireEvent.click(screen.getByText('Website ideas'));
+    expect(navigate).toHaveBeenCalledWith(route);
+  });
+
   it('keeps Home tab as a singleton and avoids duplication', async () => {
     const { rerender } = render(
       <WorkspaceTabsBar route={{ kind: 'home', view: 'home' }} projects={[project]} />,
@@ -390,9 +404,9 @@ describe('WorkspaceTabsBar navigation semantics', () => {
     expect(order).toEqual(['entry-rail-collapse', 'entry-nav-search']);
 
     const toggle = screen.getByTestId('entry-rail-collapse');
-    // Fresh storage: the rail is collapsed, so the toggle reads as "expand".
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle.getAttribute('aria-label')).toBe('entry.navExpand');
+    // Fresh desktop storage presents the three-column workspace by default.
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('entry.navCollapse');
     const currentGlyph = () =>
       toggle.querySelectorAll('.entry-nav-rail__collapse-glyph.is-current').length;
     expect(toggle.querySelectorAll('.entry-nav-rail__collapse-glyph')).toHaveLength(2);
@@ -407,19 +421,28 @@ describe('WorkspaceTabsBar navigation semantics', () => {
     window.removeEventListener('od:entry-rail-toggle', toggled);
 
     // EntryShell answers with the state event; the toggle mirrors it in place
-    // (same element, same slot) and flips to the collapse affordance.
+    // (same element, same slot) and flips to the expand affordance.
     act(() => {
-      window.dispatchEvent(new CustomEvent('od:entry-rail-state', { detail: { open: true } }));
+      window.dispatchEvent(new CustomEvent('od:entry-rail-state', { detail: { open: false } }));
     });
     expect(screen.getByTestId('entry-rail-collapse')).toBe(toggle);
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(toggle.getAttribute('aria-label')).toBe('entry.navCollapse');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('entry.navExpand');
     expect(currentGlyph()).toBe(1);
     expect(
       Array.from(cluster!.querySelectorAll('[data-testid]')).map(
         (el) => (el as HTMLElement).dataset.testid,
       ),
     ).toEqual(['entry-rail-collapse', 'entry-nav-search']);
+  });
+
+  it('shows an actionable home button instead of entry-only controls on an independent conversation', () => {
+    const view = render(<WorkspaceTabsBar route={{ kind: 'home', view: 'plugins' }} projects={[]} />);
+    view.rerender(<WorkspaceTabsBar route={{ kind: 'standalone-conversation', conversationId: 'independent' }} projects={[]} />);
+    expect(screen.queryByTestId('entry-rail-collapse')).toBeNull();
+    expect(screen.queryByTestId('entry-nav-search')).toBeNull();
+    fireEvent.click(screen.getByTestId('workspace-home-chrome'));
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ kind: 'home', view: 'home' }));
   });
 
   it('shows no rail toggle in the docked (project) chrome — there is no entry rail to switch', async () => {

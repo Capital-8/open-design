@@ -1,3 +1,4 @@
+import { migrateStandaloneConversations, migrateStandalonePluginSnapshots } from './storage/standalone-conversation-schema.js';
 import { pendingCommentFileRetirements } from './collab/comment-file-retirements.js';
 // SQLite-backed persistence for projects, conversations, messages, and the
 // per-project set of open workspace tabs. The on-disk project folder under
@@ -446,6 +447,7 @@ function migrate(db: SqliteDb): void {
   if (!conversationCols.some((c: DbRow) => c.name === 'intent_signals_json')) {
     db.exec(`ALTER TABLE conversations ADD COLUMN intent_signals_json TEXT`);
   }
+  migrateStandaloneConversations(db);
   const messageCols = db.prepare(`PRAGMA table_info(messages)`).all() as DbRow[];
   if (!messageCols.some((c: DbRow) => c.name === 'agent_id')) {
     db.exec(`ALTER TABLE messages ADD COLUMN agent_id TEXT`);
@@ -679,6 +681,7 @@ function migrate(db: SqliteDb): void {
   migrateMediaTasks(db);
   migrateLibrary(db);
   migratePlugins(db);
+  migrateStandalonePluginSnapshots(db);
   migrateProjectScenarioBindings(db);
   migrateStrategyTaskStore(db);
   migrateChatArtifacts(db);

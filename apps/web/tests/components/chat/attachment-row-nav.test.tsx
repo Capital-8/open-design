@@ -152,3 +152,15 @@ describe('附件行 · 翻页箭头', () => {
     expect(row.scrollLeft).toBeCloseTo(412 * 0.8);
   });
 });
+
+it('keeps uploaded image thumbnails and open paths for a conversation without a project', () => {
+  const onRequestOpenFile = vi.fn();
+  const { container } = render(<UserMessageImpl
+    message={{ id: 'standalone-user', role: 'user', content: 'reference', attachments: [{ path: 'uploads/reference.png', name: 'reference.png', kind: 'image' }] }}
+    projectId={null} attachmentUrl={(path) => `/api/conversations/c/files/raw?path=${encodeURIComponent(path)}`}
+    projectFileNames={new Set(['uploads/reference.png'])} onRequestOpenFile={onRequestOpenFile} t={t}
+  />);
+  expect(container.querySelector('img.msg-att-mini')?.getAttribute('src')).toBe('/api/conversations/c/files/raw?path=uploads%2Freference.png');
+  fireEvent.click(container.querySelector('button.msg-att-img')!);
+  expect(onRequestOpenFile).toHaveBeenCalledWith('uploads/reference.png');
+});

@@ -64,10 +64,9 @@ type SqliteDb = Database.Database;
 export interface ResolveSnapshotInput {
   db: SqliteDb;
   body: Record<string, unknown> | null | undefined;
-  // The project this snapshot will pin to. For the run-create path we
-  // always know it (the run carries `projectId`). For project-create we
-  // pass the freshly-inserted project id.
-  projectId: string;
+  // Null only for an independently owned conversation. Project creation
+  // supplies the freshly inserted project; no synthetic project is needed.
+  projectId: string | null;
   conversationId?: string | null | undefined;
   runId?: string | null | undefined;
   // Pluggable for tests; in production these are the daemon's live
@@ -213,6 +212,11 @@ export function resolvePluginSnapshot(input: ResolveSnapshotInput): ResolveSnaps
       fields.snapshotId = pinned;
     }
   }
+  if (!fields.pluginId && !fields.snapshotId && input.projectId === null && input.conversationId) {
+    const row = input.db.prepare('SELECT applied_plugin_snapshot_id AS id FROM conversations WHERE id = ? AND project_id IS NULL')
+      .get(input.conversationId) as { id?: string | null } | undefined;
+    if (row?.id) fields.snapshotId = row.id;
+  }
   if (!fields.pluginId && !fields.snapshotId) return null;
 
   // Path 1: explicit snapshot id — look it up and verify status.
@@ -234,9 +238,9 @@ export function resolvePluginSnapshot(input: ResolveSnapshotInput): ResolveSnaps
     }
     if (input.requireSnapshotProjectMatch) {
       const row = input.db
-        .prepare('SELECT project_id AS projectId FROM applied_plugin_snapshots WHERE id = ?')
-        .get(fields.snapshotId) as { projectId?: unknown } | undefined;
-      if (row?.projectId !== input.projectId) {
+        .prepare('SELECT project_id AS projectId, conversation_id AS conversationId FROM applied_plugin_snapshots WHERE id = ?')
+        .get(fields.snapshotId) as { projectId?: unknown; conversationId?: unknown } | undefined;
+      if (row?.projectId !== input.projectId || (input.projectId === null && row?.conversationId !== input.conversationId)) {
         return {
           ok: false,
           status: 404,

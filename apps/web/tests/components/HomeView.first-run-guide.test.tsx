@@ -136,10 +136,9 @@ describe('Home first-run guide trail', () => {
     });
   });
 
-  it('carries a default prototype straight to beat 2 through the static prompt-example fallback', async () => {
-    // The chip's default plugin exists (so the chip binds) but nothing
-    // matches the example filter — the chip renders static prompt-example
-    // cards, and the guide's beat 2 must land on the first of those.
+  it('pulses the first real template after the user selects prototype', async () => {
+    // The selected task has a real template poster; beat 2 should guide
+    // the user to its preview without fabricating a fallback card.
     const WEB_PROTOTYPE_PLUGIN = {
       id: 'example-web-prototype',
       title: 'Web Prototype',
@@ -156,7 +155,8 @@ describe('Home first-run guide trail', () => {
         title: 'Web Prototype',
         version: '0.1.0',
         description: 'General-purpose desktop web prototype.',
-        od: { kind: 'scenario', taskKind: 'new-generation' },
+        tags: ['prototype'],
+        od: { kind: 'scenario', taskKind: 'new-generation', mode: 'prototype', useCase: { query: 'Build an interactive product prototype.' }, preview: { type: 'image', poster: '/test/prototype.webp' } },
       },
     };
     vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {
@@ -171,12 +171,12 @@ describe('Home first-run guide trail', () => {
     renderHome([]);
 
     // Home no longer seeds a default type; beat 1 is the pick itself, and beat
-    // 2 then lands on the first static prompt-example card under it.
+    // 2 then lands on the first real template preview.
     await pickHomeTemplate('prototype');
-    const exampleCards = await screen.findAllByTestId('home-hero-prompt-example');
+    const exampleCard = await screen.findByRole('button', { name: 'Preview: Web Prototype' });
     await waitFor(
       () => {
-        expect(exampleCards[0]?.className).toContain('home-hero__attention-sheen');
+        expect(exampleCard.className).toContain('home-hero__attention-sheen');
       },
       { timeout: 3000 },
     );

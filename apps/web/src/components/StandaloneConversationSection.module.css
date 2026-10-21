@@ -1,0 +1,35 @@
+.section {
+  color: var(--text);
+  min-width: 0;
+}
+.section h2 {
+  margin: 0 8px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+.section p, .status {
+  margin: 10px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+.status { display: flex; flex-direction: column; align-items: flex-start; }
+.section ul { padding: 0; margin: 0; list-style: none; }
+.row.row {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+  border-radius: var(--radius-large);
+}
+.row svg { flex-shrink: 0; }
+.row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runStatus { margin-inline-start: auto; flex-shrink: 0; font-size: 10px; color: var(--text-soft); }
+.runStatus[data-status='running'], .runStatus[data-status='queued'] { color: var(--brand-ink); }
+.runStatus[data-status='failed'] { color: var(--red); }

@@ -519,6 +519,12 @@ function stubAnimationFrame() {
   });
 }
 
+function withPreviewPosters<T extends { id: string; manifest: { od: object } }>(records: T[]) {
+  return records.map((record) => ({ ...record, manifest: { ...record.manifest, od: {
+    ...record.manifest.od, preview: { type: 'image', poster: `/test/${record.id}.webp` },
+  } } }));
+}
+
 describe('HomeView prompt handoff', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -574,9 +580,9 @@ describe('HomeView prompt handoff', () => {
     expect(screen.getByTestId('home-hero-submit').getAttribute('aria-busy')).toBe('false');
   });
 
-  it('defaults a fresh Home to Prototype without applying a plugin or changing the draft', async () => {
+  it('leaves a fresh Home unselected without applying a plugin or changing the draft', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
-      if (url === '/api/plugins') return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN] }));
+      if (url === '/api/plugins') return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN]) }));
       throw new Error(`unexpected fetch ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -584,13 +590,14 @@ describe('HomeView prompt handoff', () => {
     window.localStorage.setItem('open-design:home-composer:prompt', 'Keep my draft');
     const onSubmit = vi.fn();
     render(<HomeView projects={[]} onSubmit={onSubmit} onOpenProject={() => undefined} />);
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-picker').getAttribute('data-type')).toBe('prototype'));
+    await waitFor(() => expect(homeTemplateTrigger().disabled).toBe(false));
+    expect(screen.getByTestId('home-hero-template-picker').getAttribute('data-type')).toBeNull();
     expect(homeHeroPromptValue()).toBe('Keep my draft');
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/apply'))).toBe(false);
     expect(onSubmit).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('home-hero-submit'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'Keep my draft', projectKind: 'prototype', automaticStrategyTaskProfile: 'prototype',
+      prompt: 'Keep my draft', pluginId: 'od-default',
     })));
   });
 
@@ -608,18 +615,18 @@ describe('HomeView prompt handoff', () => {
     fireEvent.click(screen.getByTestId('home-hero-submit'));
     expect(onSubmit).not.toHaveBeenCalled();
     await act(async () => {
-      resolveCatalog(new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] })));
+      resolveCatalog(new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) })));
       await catalog;
     });
     await waitFor(() => expect((screen.getByTestId('home-hero-submit') as HTMLButtonElement).disabled).toBe(false));
-    expect(screen.getByTestId('home-hero-template-picker').getAttribute('data-type')).toBe('prototype');
+    expect(screen.getByTestId('home-hero-template-picker').getAttribute('data-type')).toBeNull();
   });
 
   it('restores a saved Deck selection instead of seeding Prototype', async () => {
     window.localStorage.setItem('open-design:home-composer:chip', JSON.stringify({
       chipId: 'deck', pluginId: SIMPLE_DECK_PLUGIN.id, projectKind: 'deck',
     }));
-    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN] }))));
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN]) }))));
     stubAnimationFrame();
     render(<HomeView projects={[]} onSubmit={() => undefined} onOpenProject={() => undefined} />);
     await waitFor(() => expect(screen.getByTestId('home-hero-template-picker').getAttribute('data-type')).toBe('deck'));
@@ -628,7 +635,7 @@ describe('HomeView prompt handoff', () => {
   });
 
   it('keeps an explicit queued type ahead of the fresh-home default', async () => {
-    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN] }))));
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN]) }))));
     stubAnimationFrame();
     requestHomeChip('deck');
     render(<HomeView projects={[]} onSubmit={() => undefined} onOpenProject={() => undefined} />);
@@ -637,7 +644,7 @@ describe('HomeView prompt handoff', () => {
   });
 
   it('leaves the dock type to its host', async () => {
-    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }))));
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }))));
     render(<HomeView variant="dock" projects={[]} onSubmit={() => undefined} onOpenProject={() => undefined} />);
     await waitFor(() => expect(homeTemplateTrigger().disabled).toBe(false));
     expect(screen.getByTestId('home-hero-template-picker').getAttribute('data-type')).toBeNull();
@@ -650,7 +657,7 @@ describe('HomeView prompt handoff', () => {
     });
     let pluginListReads = 0;
     const pluginResponse = () => new Response(
-      JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }),
+      JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }),
       {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -713,7 +720,7 @@ describe('HomeView prompt handoff', () => {
     });
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -773,7 +780,7 @@ describe('HomeView prompt handoff', () => {
   it('uses the same authoring prompt from the Home rail chip', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -809,7 +816,7 @@ describe('HomeView prompt handoff', () => {
   it('asks before replacing an edited Home draft with the rail create-plugin prompt', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -855,7 +862,7 @@ describe('HomeView prompt handoff', () => {
   it('routes a plugin-use handoff from the Plugins page as the active driver and submits it as the run driver', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -914,7 +921,7 @@ describe('HomeView prompt handoff', () => {
   it('restores the Community template type while binding its exact plugin', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -962,7 +969,7 @@ describe('HomeView prompt handoff', () => {
   it('routes free-form submits through the hidden default plugin without applying a visible chip', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [HIDDEN_DEFAULT_PLUGIN, DEFAULT_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([HIDDEN_DEFAULT_PLUGIN, DEFAULT_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -997,7 +1004,7 @@ describe('HomeView prompt handoff', () => {
   it('falls back to od-new-generation when od-plugin-authoring is not registered yet', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [DEFAULT_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([DEFAULT_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1060,7 +1067,7 @@ describe('HomeView prompt handoff', () => {
   it('hands the Home rail Prototype chip entirely to OD Next on submit', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1159,7 +1166,7 @@ describe('HomeView prompt handoff', () => {
   }) => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1235,7 +1242,7 @@ describe('HomeView prompt handoff', () => {
     // instead of failing the catalog lookup and silently dropping the intent.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1288,7 +1295,7 @@ describe('HomeView prompt handoff', () => {
     // leave the deck route exactly where it was.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [FACETED_DECK_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([FACETED_DECK_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1337,7 +1344,7 @@ describe('HomeView prompt handoff', () => {
   it('keeps Document prompt entry submittable even when od-new-generation has required inputs', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [DOCUMENT_NEW_GENERATION_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([DOCUMENT_NEW_GENERATION_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1399,7 +1406,7 @@ describe('HomeView prompt handoff', () => {
   it('defaults to "No design system" (不指定) when the user has no personal default and submits a null designSystemId', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1451,7 +1458,7 @@ describe('HomeView prompt handoff', () => {
   it('lets the user explicitly pick "No design system" to override a personal default and submit a null designSystemId', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1511,7 +1518,7 @@ describe('HomeView prompt handoff', () => {
   it('keeps an official example card under 原型 on the automatic OD Next route and sends its example reference', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1611,7 +1618,7 @@ describe('HomeView prompt handoff', () => {
   it('keeps a deck example card on the automatic ppt route and sends its example reference', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [SIMPLE_DECK_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([SIMPLE_DECK_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1681,7 +1688,7 @@ describe('HomeView prompt handoff', () => {
   }) => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [FACETED_WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([FACETED_WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1745,7 +1752,7 @@ describe('HomeView prompt handoff', () => {
   it('still pins the plugin for a Community "Use" pick made under the same OD Next task type', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1800,7 +1807,7 @@ describe('HomeView prompt handoff', () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
         return new Response(JSON.stringify({
-          plugins: [LIVE_ARTIFACT_PLUGIN, LIVE_ARTIFACT_IMAGE_TEMPLATE_PLUGIN],
+          plugins: withPreviewPosters([LIVE_ARTIFACT_PLUGIN, LIVE_ARTIFACT_IMAGE_TEMPLATE_PLUGIN]),
         }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
@@ -1879,7 +1886,7 @@ describe('HomeView prompt handoff', () => {
   it('binds the Home rail Live artifact chip with live-artifact metadata and applies it on submit', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN, LIVE_ARTIFACT_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN, LIVE_ARTIFACT_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1945,7 +1952,7 @@ describe('HomeView prompt handoff', () => {
     // deck footer now mirrors the prototype footer — design system only.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [SIMPLE_DECK_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([SIMPLE_DECK_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -1999,7 +2006,7 @@ describe('HomeView prompt handoff', () => {
   it('switches output-type chips without replacing an existing prompt', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2040,7 +2047,7 @@ describe('HomeView prompt handoff', () => {
   it('lets selected chips seed the hero through preset cards', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN, SIMPLE_DECK_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2106,7 +2113,7 @@ describe('HomeView prompt handoff', () => {
   it('appends a plugin-use query handoff without replacing an existing prompt', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2174,7 +2181,7 @@ describe('HomeView prompt handoff', () => {
     // and submit resolves the snapshot from what the user sees.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2243,7 +2250,7 @@ describe('HomeView prompt handoff', () => {
     // pluginInputs and submit resolves the snapshot from the visible prompt.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2314,7 +2321,7 @@ describe('HomeView prompt handoff', () => {
     // the placeholder edit still flows into pluginInputs.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2382,7 +2389,7 @@ describe('HomeView prompt handoff', () => {
     // dumping the meta-instruction into the composer.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [META_INSTRUCTION_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([META_INSTRUCTION_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2431,7 +2438,7 @@ describe('HomeView prompt handoff', () => {
   it('binds od-plugin-authoring before submitting the rail create-plugin prompt', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2486,7 +2493,7 @@ describe('HomeView prompt handoff', () => {
   it('keeps the authoring goal input linked to the prompt and submit payload', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -2543,7 +2550,7 @@ describe('HomeView prompt handoff', () => {
     });
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: withPreviewPosters([AUTHORING_PLUGIN, WEB_PROTOTYPE_PLUGIN]) }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });

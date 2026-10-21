@@ -136,7 +136,7 @@ describe('HomeHero intent rail', () => {
     }
   });
 
-  it('no longer renders the inline template rail below the composer', () => {
+  it('shows the new showcase above the composer without the retired tab row', () => {
     renderHero({ onStartBlankProject: vi.fn() });
 
     expect(screen.queryByTestId('home-hero-template-section')).toBeNull();
@@ -144,9 +144,8 @@ describe('HomeHero intent rail', () => {
     expect(screen.queryByTestId('home-hero-blank-project')).toBeNull();
     expect(screen.queryByTestId('home-hero-type-tabs')).toBeNull();
     expect(screen.queryByTestId('home-hero-shortcuts-trigger')).toBeNull();
-    for (const chip of HOME_HERO_CHIPS) {
-      expect(screen.queryByTestId(`home-hero-rail-${chip.id}`)).toBeNull();
-    }
+    expect(screen.getByTestId('home-hero-rail-prototype')).toBeTruthy();
+    expect(screen.getByTestId('home-hero-rail-motion-design')).toBeTruthy();
   });
 
   it('renders execution switcher inside the input footer when provided', () => {
@@ -173,7 +172,7 @@ describe('HomeHero intent rail', () => {
   it('moves the active creation chip into the composer and hides the tab row', () => {
     renderHero({ activeChipId: 'video' });
     expect(screen.queryByTestId('home-hero-type-tabs')).toBeNull();
-    expect(screen.queryByTestId('home-hero-rail-video')).toBeNull();
+    expect(screen.getByTestId('home-hero-rail-video').getAttribute('aria-pressed')).toBe('true');
     const node = screen.getByTestId('home-hero-template-trigger');
     expect(node.textContent).toContain('Video');
   });
@@ -266,21 +265,11 @@ describe('HomeHero intent rail', () => {
     expect(onClearActivePlugin).toHaveBeenCalledTimes(1);
   });
 
-  it('shows prompt examples below the composer for the selected tab', () => {
-    const onPromptChange = vi.fn();
-    renderHero({ activeChipId: 'deck', onPromptChange });
-
-    expect(screen.getByTestId('home-hero-prompt-examples')).toBeTruthy();
-    const examples = screen.getAllByTestId('home-hero-prompt-example');
-    expect(examples).toHaveLength(4);
-
-    fireEvent.click(examples[0]!);
-    expect(onPromptChange).toHaveBeenCalledWith(
-      'Research the market opportunity for a product launch, including competitors, target users, pricing hypotheses, and launch narrative',
-    );
-    // The top "selected example" pill was removed from the composer; picking an
-    // example still seeds the prompt but no longer surfaces a dismissible chip.
-    expect(screen.queryByTestId('home-hero-active-example')).toBeNull();
+  it('shows an honest empty state instead of fabricated preview cards for a type without templates', () => {
+    renderHero({ activeChipId: 'deck' });
+    expect(screen.queryByTestId('home-hero-prompt-examples')).toBeNull();
+    expect(screen.queryByTestId('home-hero-plugin-preset')).toBeNull();
+    expect(screen.getByText(/No templates available/)).toBeTruthy();
   });
 
   it('shows matching plugin presets in the example prompt area for the selected tab', () => {
@@ -306,6 +295,7 @@ describe('HomeHero intent rail', () => {
       deckPlugin,
       'deck',
       'Create with a focused brief using Investor deck',
+      expect.any(Function),
     );
     expect(onOpenPluginDetails).not.toHaveBeenCalled();
   });
@@ -321,7 +311,7 @@ describe('HomeHero intent rail', () => {
     });
 
     const row = screen.getByTestId('home-hero-plugin-preset');
-    const thumb = row.querySelector<HTMLElement>('.home-hero__plugin-preset-row-thumb');
+    const thumb = screen.getByRole('button', { name: 'Preview: Investor deck' });
     expect(thumb).not.toBeNull();
     const expectNoEye = () => {
       expect(row.querySelector('.home-hero__plugin-preset-row-preview')).toBeNull();
@@ -386,7 +376,6 @@ describe('HomeHero intent rail', () => {
     expect(presets.map((preset) => preset.getAttribute('data-plugin-id'))).toEqual([
       'example-html-ppt-zhangzara-creative-mode',
       'example-html-ppt-zhangzara-capsule',
-      'example-ordinary-deck',
     ]);
   });
 
@@ -428,7 +417,6 @@ describe('HomeHero intent rail', () => {
     expect(presets.map((preset) => preset.textContent)).toEqual([
       expect.stringContaining('Image Poster'),
       expect.stringContaining('Stone Infographic'),
-      expect.stringContaining('Hatch Pet'),
     ]);
   });
 
@@ -487,15 +475,10 @@ describe('HomeHero intent rail', () => {
     });
 
     presets = screen.getAllByTestId('home-hero-plugin-preset');
-    // Order within a facet is now usage/sink-driven (OPEND-449); this test is
-    // about which presets route into Live Artifact, so assert membership only.
-    expect(presets.map((preset) => preset.getAttribute('data-plugin-id')).sort()).toEqual([
-      'example-live-artifact',
-      'example-live-dashboard',
-      'example-social-media-matrix-tracker-template',
-      'example-trading-analysis-dashboard-template',
-      'image-template-notion-team-dashboard-live-artifact',
-    ]);
+    expect(presets).toHaveLength(2);
+    const allowed = new Set([liveArtifact.id, liveDashboard.id, socialTracker.id, tradingDashboard.id, notionDashboard.id]);
+    for (const preset of presets) expect(allowed.has(preset.getAttribute('data-plugin-id')!)).toBe(true);
+    expect(presets.some((preset) => preset.getAttribute('data-plugin-id') === imagePoster.id)).toBe(false);
   });
 
   it('disables every template while a plugin apply is in flight', () => {

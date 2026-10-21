@@ -70,7 +70,8 @@ const WEB_PROTOTYPE_PLUGIN = {
     title: 'Web Prototype',
     version: '0.1.0',
     description: 'General-purpose desktop web prototype.',
-    od: { kind: 'scenario', taskKind: 'new-generation' },
+    tags: ['prototype'],
+    od: { kind: 'scenario', taskKind: 'new-generation', mode: 'prototype', useCase: { query: 'Build a polished interactive prototype for the product team.' }, preview: { type: 'image', poster: '/test/prototype.webp' } },
   },
 };
 
@@ -253,10 +254,9 @@ describe('home composer sending state', () => {
       </I18nProvider>,
     );
 
-    // Seeding through a fallback prompt-example card is what arms the
-    // examplePromptContext marker; the type comes from the row under the composer.
+    // Using a real featured template arms the one-shot examplePromptContext marker.
     await pickHomeTemplate('prototype');
-    const exampleCards = await screen.findAllByTestId('home-hero-prompt-example');
+    const exampleCards = await screen.findAllByTestId('home-hero-plugin-preset');
     fireEvent.click(exampleCards[0]!);
 
     const submit = (await screen.findByTestId('home-hero-submit')) as HTMLButtonElement;

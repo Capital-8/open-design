@@ -263,3 +263,40 @@ describe('NewProjectModal template deletion plumbing', () => {
     expect(onDelete).toHaveBeenCalledWith('tmpl-landing');
   });
 });
+
+it('keeps a compact create failure visible without closing or repeating the request', async () => {
+  const onCreate = vi.fn().mockResolvedValue(false);
+  const onClose = vi.fn();
+  render(<I18nProvider initial="zh-CN"><NewProjectModal open compact initialTab="other"
+    skills={skills} designSystems={designSystems} defaultDesignSystemId="clay" templates={[]} promptTemplates={[]}
+    onCreate={onCreate} onClose={onClose} /></I18nProvider>);
+  expect(screen.queryByRole('tablist')).toBeNull();
+  expect(screen.getByRole('button', { name: '工作文件夹 默认存储位置' })).toBeTruthy();
+  fireEvent.change(screen.getByRole('textbox', { name: '项目名称' }), { target: { value: '新项目' } });
+  fireEvent.click(screen.getByTestId('create-project'));
+  expect((await screen.findByRole('alert')).textContent).toContain('无法创建项目，请重试。');
+  expect(onCreate).toHaveBeenCalledTimes(1); expect(onClose).not.toHaveBeenCalled();
+  expect((screen.getByRole('textbox', { name: '项目名称' }) as HTMLInputElement).value).toBe('新项目');
+});
+
+it('wraps compact keyboard focus, skips disabled controls, and restores the trigger after closing', async () => {
+  const trigger = document.createElement('button'); trigger.textContent = 'New project trigger'; document.body.append(trigger); trigger.focus();
+  const modalProps = { compact: true, initialTab: 'other' as const, skills, designSystems, defaultDesignSystemId: null,
+    templates: [], promptTemplates: [], onCreate: vi.fn(), onClose: vi.fn() };
+  const view = render(<NewProjectModal {...modalProps} open />);
+  try {
+    const name = screen.getByRole('textbox', { name: 'Project name' });
+    expect(document.activeElement).toBe(name);
+    const close = screen.getByRole('button', { name: 'Close' });
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    // Empty-name Create is disabled, so Cancel is the last tab stop.
+    cancel.focus(); fireEvent.keyDown(cancel, { key: 'Tab' }); expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true }); expect(document.activeElement).toBe(cancel);
+    fireEvent.change(name, { target: { value: 'Project' } });
+    const create = screen.getByTestId('create-project');
+    create.focus(); fireEvent.keyDown(create, { key: 'Tab' }); expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true }); expect(document.activeElement).toBe(create);
+    view.rerender(<NewProjectModal {...modalProps} open={false} />);
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  } finally { view.unmount(); trigger.remove(); }
+});

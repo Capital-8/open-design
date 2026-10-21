@@ -1,0 +1,111 @@
+/* Page-only home composition. The existing composer keeps its own styles and
+   behavior; these seams only give it a bottom row next to a scrollable showcase. */
+.page:global(.home-view) {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  justify-content: flex-start;
+}
+.page > .hero:global(.home-hero) {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  max-width: 880px;
+  padding: 0;
+  gap: 20px;
+  align-items: stretch;
+}
+.hero > :global(.home-hero__composer-card) {
+  max-width: none;
+  flex-shrink: 0;
+  margin-top: auto;
+  border-radius: var(--radius-2xl);
+}
+.hero > :global(.home-hero__error) { flex-shrink: 0; }
+.showcase {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  padding: 20px 2px 8px;
+}
+.content { display: flex; flex-direction: column; gap: 0; }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+  color: var(--text-strong);
+  font-size: clamp(25px, 2.4vw, 34px);
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -1.1px;
+}
+.brand img { flex: 0 0 auto; }
+.primary, .templates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.taskCard.taskCard {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  height: auto;
+  min-height: 136px;
+  white-space: normal;
+  padding: 22px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-2xl);
+  background: var(--bg-panel);
+  color: var(--text-strong);
+  text-align: start;
+  box-shadow: none;
+  transition: background 180ms cubic-bezier(0.23, 1, 0.32, 1), border-color 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.taskCard.taskCard:hover { background: var(--bg-fill-tertiary); border-color: var(--border); }
+.taskCard.taskCard[aria-pressed='true'] { background: var(--brand-surface); border-color: color-mix(in srgb, var(--brand-ink) 32%, var(--border-soft)); }
+.taskIcon { color: var(--text-muted); }
+.taskCard[aria-pressed='true'] .taskIcon { color: var(--brand-ink); }
+.taskCopy { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.taskCopy strong { font-size: 21px; font-weight: 600; line-height: 1.25; }
+.taskCopy > span { font-size: 13px; font-weight: 400; color: var(--text-muted); line-height: 1.5; }
+.taskArrow { transform: rotate(-45deg); position: absolute; inset-inline-end: 22px; top: 23px; color: var(--text-soft); }
+.secondary { display: flex; justify-content: center; align-items: center; gap: 9px; margin: 12px 0 20px; }
+.smallTask.smallTask { display: inline-flex; gap: 6px; font-size: 12px; color: var(--text-muted); padding: 7px 9px; white-space: nowrap; border-radius: var(--radius); }
+.smallTask[aria-pressed='true'], .moreItem[aria-pressed='true'] { color: var(--brand-ink); background: var(--brand-surface); }
+.more { position: relative; }
+.morePanel { position: fixed; z-index: var(--z-menu); width: 220px; overflow-y: auto; overscroll-behavior: contain; padding: 6px; border: 1px solid var(--border-soft); border-radius: var(--radius-lg); background: var(--bg-elevated); box-shadow: var(--shadow-md); }
+.moreItem.moreItem { display: flex; justify-content: flex-start; gap: 10px; width: 100%; padding: 9px 10px; font-size: 13px; border-radius: var(--radius); }
+.template { min-width: 0; }
+.preview.preview { display: block; position: relative; width: 100%; height: auto; max-height: 232px; padding: 0; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--border-soft); background: var(--bg-panel); box-shadow: none; }
+.preview > img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+.preview:hover > img { transform: scale(1.025); }
+.typeBadge { position: absolute; inset-inline-start: 10px; top: 10px; border-radius: var(--radius-sm); padding: 3px 7px; font-size: 11px; line-height: 1.5; font-weight: 500; color: var(--text-strong); background: var(--bg-panel); border: 1px solid var(--border-soft); }
+.caption { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 7px; position: relative; }
+.templateName.templateName { display: block; height: 28px; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 3px; color: var(--text); font-size: 13px; font-weight: 500; text-align: center; }
+.use.use { position: absolute; inset-inline-end: 4px; top: -43px; display: flex; gap: 4px; background: var(--bg-panel); color: var(--text-strong); border: 1px solid var(--border-soft); border-radius: var(--radius); opacity: 0; transition: opacity 140ms cubic-bezier(0.23, 1, 0.32, 1); }
+.template:hover .use, .template:focus-within .use { opacity: 1; }
+.template[data-selected='true'] .preview { border-color: var(--brand-ink); }
+.allTemplates.allTemplates { align-self: center; display: inline-flex; gap: 6px; height: 28px; margin-top: 8px; color: var(--text-soft); font-size: 12px; padding: 6px 10px; }
+.empty { min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--text-soft); font-size: 13px; text-align: center; }
+.skeleton { aspect-ratio: 16 / 9; border-radius: var(--radius-lg); background: var(--bg-subtle); }
+@media (max-height: 800px) { .showcase { padding-top: 8px; } .brand { margin-bottom: 20px; } .taskCard.taskCard { min-height: 130px; padding: 18px; gap: 12px; } .secondary { margin-bottom: 16px; } .preview.preview { max-height: 168px; } }
+@media (max-width: 600px) {
+  .page > .hero:global(.home-hero) { gap: 16px; height: auto; }
+  .showcase { overflow: visible; flex-shrink: 0; }
+  .brand { font-size: 25px; margin-bottom: 20px; }
+  .primary, .templates { gap: 10px; }
+  .taskCard.taskCard { padding: 15px; min-height: 140px; }
+  .taskCopy strong { font-size: 18px; }
+  .taskCopy > span { font-size: 12px; }
+  .taskArrow { top: 17px; inset-inline-end: 15px; }
+  .secondary { gap: 0; flex-wrap: wrap; }
+  .smallTask.smallTask { padding-inline: 6px; }
+  .typeBadge { top: 6px; inset-inline-start: 6px; font-size: 10px; }
+  .use.use { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .taskCard.taskCard, .preview > img, .use.use { transition: none; } }
+
+.previewFailure { display: flex; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--text-soft); font-size: 12px; }

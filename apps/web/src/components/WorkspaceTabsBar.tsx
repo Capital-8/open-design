@@ -83,6 +83,7 @@ import { useLiquidGlass } from '../hooks/useLiquidGlass';
 import { WORKSPACE_CHROME_ACCOUNT_ACTIONS_ID } from './workspaceChromeActions';
 
 type WorkspaceChromeTab =
+  | { id: string; kind: 'standalone-conversation'; conversationId: string; createdAt: number; lastActiveAt: number }
   | {
       id: string;
       kind: 'entry';
@@ -139,6 +140,7 @@ interface TabDragTarget {
 }
 
 interface Props {
+  standaloneConversationTitles?: ReadonlyMap<string, string>;
   route: Route;
   projects: Project[];
   /**
@@ -231,6 +233,7 @@ function dockActionsAnchorFor(
 const STORAGE_KEY = 'open-design:workspace-tabs:v1';
 const OPEN_WORKSPACE_TAB_EVENT = 'open-design:workspace-tabs:open';
 const REMOVE_WORKSPACE_PROJECT_TABS_EVENT = 'open-design:workspace-tabs:remove-project';
+const REMOVE_STANDALONE_TABS_EVENT = 'open-design:workspace-tabs:remove-conversation';
 const MAX_PERSISTED_TAB_SCOPES = 12;
 const TAB_DRAG_HAPTIC_MS = 8;
 const TAB_DROP_HAPTIC_MS = 12;
@@ -261,6 +264,10 @@ export function removeWorkspaceProjectTabs(projectId: string): void {
   );
 }
 
+export function removeStandaloneConversationTabs(conversationId: string): void {
+  window.dispatchEvent(new CustomEvent(REMOVE_STANDALONE_TABS_EVENT, { detail: { conversationId } }));
+}
+
 function nowId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -276,6 +283,7 @@ function createEntryTab(view: EntryHomeView, timestamp = Date.now()): WorkspaceC
 }
 
 function tabFromRoute(route: Route, timestamp = Date.now()): WorkspaceChromeTab {
+  if (route.kind === 'standalone-conversation') return { id: `conversation:${route.conversationId}:${nowId()}`, kind: 'standalone-conversation', conversationId: route.conversationId, createdAt: timestamp, lastActiveAt: timestamp };
   if (route.kind === 'project') {
     return {
       id: `project:${route.projectId}:${nowId()}`,
@@ -301,6 +309,7 @@ function tabFromRoute(route: Route, timestamp = Date.now()): WorkspaceChromeTab 
 }
 
 function routeForTab(tab: WorkspaceChromeTab): Route {
+  if (tab.kind === 'standalone-conversation') return { kind: 'standalone-conversation', conversationId: tab.conversationId };
   if (tab.kind === 'project') {
     return {
       kind: 'project',
@@ -324,6 +333,7 @@ function reviveTab(value: unknown): WorkspaceChromeTab | null {
   const createdAt = typeof record.createdAt === 'number' ? record.createdAt : Date.now();
   const lastActiveAt = typeof record.lastActiveAt === 'number' ? record.lastActiveAt : createdAt;
   if (!id) return null;
+  if (record.kind === 'standalone-conversation' && typeof record.conversationId === 'string' && record.conversationId) return { id, kind: 'standalone-conversation', conversationId: record.conversationId, createdAt, lastActiveAt };
   if (record.kind === 'entry') {
     const view = record.view;
     if (
@@ -361,6 +371,7 @@ function reviveTab(value: unknown): WorkspaceChromeTab | null {
 }
 
 function uniqueIdForTab(tab: WorkspaceChromeTab): string {
+  if (tab.kind === 'standalone-conversation') return `conversation:${tab.conversationId}:${nowId()}`;
   if (tab.kind === 'project') return `project:${tab.projectId}:${nowId()}`;
   if (tab.kind === 'marketplace') {
     return `marketplace:${tab.pluginId ?? 'index'}:${nowId()}`;
@@ -668,6 +679,13 @@ function syncStateToRoute(state: WorkspaceTabsState, route: Route): WorkspaceTab
     });
   }
 
+  if (route.kind === 'standalone-conversation') {
+    const existing = current.tabs.find((tab) => tab.kind === 'standalone-conversation' && tab.conversationId === route.conversationId);
+    if (existing) return normalizeTabsState({ ...current, activeTabId: existing.id, tabs: current.tabs.map((tab) => tab.id === existing.id ? { ...tab, lastActiveAt: timestamp } : tab) });
+    const next = tabFromRoute(route, timestamp);
+    return normalizeTabsState({ tabs: [...current.tabs, next], activeTabId: next.id });
+  }
+
   // 2. If we are navigating to a project, and that project tab already exists:
   if (route.kind === 'project') {
     const existingProjectTab = current.tabs.find(
@@ -677,7 +695,7 @@ function syncStateToRoute(state: WorkspaceTabsState, route: Route): WorkspaceTab
       return normalizeTabsState({
         ...current,
         tabs: current.tabs.map((tab) =>
-          tab.id === existingProjectTab.id
+          tab.kind === 'project' && tab.id === existingProjectTab.id
             ? {
                 ...tab,
                 conversationId: route.conversationId ?? null,
@@ -858,6 +876,7 @@ function DockRowPreview({
 }
 
 export function WorkspaceTabsBar({
+  standaloneConversationTitles,
   route,
   projects,
   activeProjectWorkspaceId,
@@ -1339,13 +1358,14 @@ export function WorkspaceTabsBar({
     void onRenameProject?.(project.id, next);
   }, [dockRenameDraft, onRenameProject]);
 
-  // Full-page settings borrows CHAT's chrome row: a lone Home logo at the left
+  // Settings and independent conversations borrow CHAT's chrome: a Home logo at the left
   // edge, no search / rail toggle. App swaps EntryShell out for the settings
-  // surface on this route, so the rail those two controls drive isn't mounted —
+  // or independent chat surface, so the rail those controls drive is absent —
   // the toggle collapses nothing and the ⌘K search (an EntryShell listener)
   // never hears the event. The strip stays undocked here, so the row is the
   // docked layout minus the dock: same button, same x, nothing else.
-  const settingsPageChrome = route.kind === 'home' && route.view === 'settings';
+  const pageWithoutEntryShell = (route.kind === 'home' && route.view === 'settings')
+    || route.kind === 'standalone-conversation';
 
   // Refresh the fallback cache from whatever this fetch actually returned,
   // before `displayTabFor` below reads it — same render pass, so a tab
@@ -1356,8 +1376,8 @@ export function WorkspaceTabsBar({
   }
 
   const displayTabs = useMemo(
-    () => state.tabs.map((tab) => displayTabFor(tab, projectById, t, knownProjectNamesRef.current)),
-    [state.tabs, projectById, t],
+    () => state.tabs.map((tab) => displayTabFor(tab, projectById, t, knownProjectNamesRef.current, standaloneConversationTitles)),
+    [state.tabs, projectById, t, standaloneConversationTitles],
   );
   const displayTabById = useMemo(
     () => new Map(displayTabs.map((tab) => [tab.id, tab])),
@@ -1626,7 +1646,7 @@ export function WorkspaceTabsBar({
             return normalizeTabsState({
               ...normalized,
               tabs: normalized.tabs.map((tab) =>
-                tab.id === existingProjectTab.id
+                tab.kind === 'project' && tab.id === existingProjectTab.id
                   ? {
                       ...tab,
                       conversationId: nextRoute.conversationId ?? null,
@@ -1671,12 +1691,22 @@ export function WorkspaceTabsBar({
       });
     }
 
+    const onRemoveStandaloneTabs = (event: Event) => {
+      const conversationId = (event as CustomEvent<{ conversationId: string }>).detail?.conversationId;
+      if (!conversationId) return;
+      setState((current) => normalizeTabsState({
+        tabs: current.tabs.filter((tab) => tab.kind !== 'standalone-conversation' || tab.conversationId !== conversationId),
+        activeTabId: current.activeTabId,
+      }));
+    };
+    window.addEventListener(REMOVE_STANDALONE_TABS_EVENT, onRemoveStandaloneTabs);
     window.addEventListener(OPEN_WORKSPACE_TAB_EVENT, onOpenWorkspaceTab);
     window.addEventListener(
       REMOVE_WORKSPACE_PROJECT_TABS_EVENT,
       onRemoveWorkspaceProjectTabs,
     );
     return () => {
+      window.removeEventListener(REMOVE_STANDALONE_TABS_EVENT, onRemoveStandaloneTabs);
       window.removeEventListener(OPEN_WORKSPACE_TAB_EVENT, onOpenWorkspaceTab);
       window.removeEventListener(
         REMOVE_WORKSPACE_PROJECT_TABS_EVENT,
@@ -2115,7 +2145,7 @@ export function WorkspaceTabsBar({
     if (!activeTab) return null;
     const activeDisplay =
       displayTabById.get(activeTab.id)
-        ?? displayTabFor(activeTab, projectById, t, knownProjectNamesRef.current);
+        ?? displayTabFor(activeTab, projectById, t, knownProjectNamesRef.current, standaloneConversationTitles);
     const isEntryActive = activeTab.kind === 'entry';
     // Most recently opened first. The active tab ranks first even before the
     // MRU effect has run for it; never-activated tabs keep strip order after.
@@ -2186,7 +2216,7 @@ export function WorkspaceTabsBar({
               {projectTabs.map((tab) => {
                 const display =
                   displayTabById.get(tab.id)
-                    ?? displayTabFor(tab, projectById, t, knownProjectNamesRef.current);
+                    ?? displayTabFor(tab, projectById, t, knownProjectNamesRef.current, standaloneConversationTitles);
                 const active = tab.id === state.activeTabId;
                 // The row's project, when the ambient list carries it — the ⋮
                 // menu acts on a Project, so a tab naming one this list has
@@ -2432,7 +2462,7 @@ export function WorkspaceTabsBar({
           the workspace 设计文件 row. The strip's own pinned entry tab hides
           inside the dock (CSS) — this button is its chrome-row stand-in.
           In chat the logo means 回到首页. */}
-      {(tabsDockEl || settingsPageChrome) && state.tabs[0] ? (
+      {(tabsDockEl || pageWithoutEntryShell) && state.tabs[0] ? (
         <button
           type="button"
           className="workspace-tabs-home-chrome od-tooltip"
@@ -2441,7 +2471,9 @@ export function WorkspaceTabsBar({
           data-tooltip={t('entry.navHome')}
           data-tooltip-placement="bottom"
           data-testid="workspace-home-chrome"
-          onClick={() => openTab(state.tabs[0]!)}
+          onClick={() => route.kind === 'standalone-conversation'
+            ? navigate({ kind: 'home', view: 'home' })
+            : openTab(state.tabs[0]!)}
         >
           <ChromeHomeGlyph />
         </button>
@@ -2484,7 +2516,7 @@ export function WorkspaceTabsBar({
             behind the chat-column dropdown. */}
         {state.tabs.map((tab) => {
           const display =
-            displayTabById.get(tab.id) ?? displayTabFor(tab, projectById, t, knownProjectNamesRef.current);
+            displayTabById.get(tab.id) ?? displayTabFor(tab, projectById, t, knownProjectNamesRef.current, standaloneConversationTitles);
           const active = tab.id === state.activeTabId;
           // The single entry tab is permanent and pinned leftmost: it cannot be
           // closed or dragged out of the first slot, whatever section it shows.
@@ -2610,11 +2642,11 @@ export function WorkspaceTabsBar({
             Only the undocked (entry) chrome shows them, and only on routes
             that actually mount EntryShell — in chat the strip lives in the
             column dock and there is no entry rail to toggle, and full-page
-            settings replaces the rail outright (settingsPageChrome). Both
+            settings replaces the rail outright (pageWithoutEntryShell). Both
             targets live in EntryShell's tree, so the clicks travel as window
             events (see entryRailBridge). The classes are the rail's own, so
             the controls keep their look. */}
-        {!tabsDockEl && !settingsPageChrome ? (
+        {!tabsDockEl && !pageWithoutEntryShell ? (
           <div className="entry-nav-rail__search-row workspace-tabs-rail-actions">
             <button
               type="button"
@@ -2791,7 +2823,9 @@ function displayTabFor(
   projectById: Map<string, Project>,
   t: ReturnType<typeof useT>,
   knownProjectNames?: Map<string, string>,
+  conversationTitles?: ReadonlyMap<string, string>,
 ): DisplayTab {
+  if (tab.kind === 'standalone-conversation') return { id: tab.id, title: conversationTitles?.get(tab.conversationId) || t('chat.newConversation'), meta: t('chat.conversationsTitle'), icon: 'comment', tab };
   if (tab.kind === 'project') {
     const project = projectById.get(tab.projectId);
     // recvq5eKj2kdF0: `projectById` only covers this render's fetched list

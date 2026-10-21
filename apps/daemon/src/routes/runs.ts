@@ -1,3 +1,4 @@
+import type { StandaloneConversationService } from '../storage/standalone-conversations.js';
 import type { Express, Request, Response } from 'express';
 import type Database from 'better-sqlite3';
 import fs from 'node:fs';
@@ -579,6 +580,7 @@ function automaticOdNextFallbackDecision(
 }
 
 export interface RegisterRunRoutesDeps {
+  standaloneConversations?: StandaloneConversationService;
   db: SqliteDb;
   design: RunRoutesDesignService;
   resources: RunRoutesSkillCatalogService;
@@ -1345,6 +1347,9 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       capability: 'writeFiles';
     },
   ): Promise<boolean> {
+    if (!run.projectId && run.conversationId && (ctx.standaloneConversations?.scope(run.conversationId) || run.workspaceScope?.source === 'persisted_standalone_binding') && ctx.standaloneConversations) {
+      return ctx.standaloneConversations.authorize(req, res, run.conversationId, options.mode === 'write');
+    }
     if (!run.projectId || !ctx.authorizeProjectRequest) return true;
 
     // Once a run exists, status/stream/cancel are local lifecycle operations.
@@ -1418,10 +1423,16 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     // the snapshot to the conversation and would FK-fail / 500) and before
     // omit-pin mint/seed (which would return 202 with an unpersisted
     // assistantMessageId, or write messages without owning-project context).
+    let standaloneConversationId: string | null = null;
     if (typeof requestBody.conversationId === 'string' && requestBody.conversationId) {
       const requestConversation = getConversation(db, requestBody.conversationId);
+      if (requestConversation?.projectId === null && !requestBody.projectId && ctx.standaloneConversations) {
+        if (!await ctx.standaloneConversations.authorize(req, res, requestBody.conversationId, true)) return;
+        standaloneConversationId = requestBody.conversationId;
+        requestBody.projectId = null;
+      }
       if (
-        (!stream && (
+        (!stream && !standaloneConversationId && (
           !requestConversation || typeof requestBody.projectId !== 'string' || !requestBody.projectId
         )) ||
         (!requestConversation && (requestBody.assistantMessageId || requestBody.userMessageId)) ||
@@ -1497,7 +1508,8 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         console.warn('[runs] agent id fallback failed', err);
       }
     }
-    let preparedWorkspaceScope: RunWorkspaceScope | null = null;
+    let preparedWorkspaceScope: RunWorkspaceScope | null = standaloneConversationId
+      ? ctx.standaloneConversations!.pinRunScope(standaloneConversationId) : null;
     if (typeof requestBody.projectId === 'string' && requestBody.projectId) {
       const prepared = await prepareRunWorkspaceScope(
         req,
@@ -1943,6 +1955,19 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         resolvedSnapshot = resolved;
       }
     }
+    if (standaloneConversationId && !resolvedSnapshot) {
+      const pluginId = typeof requestBody.pluginId === 'string' ? requestBody.pluginId : null;
+      if (pluginId && ctx.plugins.authorizePluginRequest && !await ctx.plugins.authorizePluginRequest(req, res, pluginId)) return;
+      const scope = ctx.standaloneConversations!.scope(standaloneConversationId)!;
+      const registry = await loadPluginRegistryView(scope.workspaceId ? scope : undefined);
+      const resolved = resolvePluginSnapshot({
+        db, body: requestBody, projectId: null, conversationId: standaloneConversationId,
+        registry, connectorProbe: buildConnectorProbe(connectorService),
+        requireSnapshotProjectMatch: true, allowProjectPinFallback: false,
+      });
+      if (resolved && !resolved.ok) return res.status(resolved.status).json(resolved.body);
+      resolvedSnapshot = resolved;
+    }
     const meta: RunCreateMeta = {
       ...withoutSensitiveRunInput(requestBody),
       mediaExecution: mediaExecution.policy,
@@ -2127,9 +2152,8 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     if (!stream && typeof meta.conversationId === 'string' && meta.conversationId) {
       if (
         !conversationSession ||
-        typeof meta.projectId !== 'string' ||
-        !meta.projectId ||
-        conversationSession.projectId !== meta.projectId
+        (!standaloneConversationId && (typeof meta.projectId !== 'string' || !meta.projectId || conversationSession.projectId !== meta.projectId)) ||
+        (standaloneConversationId !== null && (meta.conversationId !== standaloneConversationId || conversationSession.projectId !== null || !!meta.projectId))
       ) {
         return sendApiError(res, 404, 'CONVERSATION_NOT_FOUND', 'conversation not found for project');
       }
@@ -2269,7 +2293,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       typeof meta.conversationId === 'string' &&
       meta.conversationId &&
       conversationSession &&
-      typeof meta.projectId === 'string' && meta.projectId &&
+      ((typeof meta.projectId === 'string' && meta.projectId) || standaloneConversationId) &&
       (clientUserMessageId || missingClientPin || conversationFallbackBound)
     ) {
       if (missingClientPin) {
@@ -2287,7 +2311,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       // currentPrompt unset.
       const projectRoot = runProject && meta.projectId
         ? resolveProjectDir(PROJECTS_DIR, meta.projectId, runProject.metadata)
-        : null;
+        : standaloneConversationId ? await ctx.standaloneConversations!.ensureWorkspace(standaloneConversationId) : null;
       const seededAttachments = seededUserMessageAttachmentFields(meta, projectRoot);
       const hasSeedableAttachmentMetadata =
         (seededAttachments.attachments?.length ?? 0) > 0 ||
@@ -2966,6 +2990,11 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     const { projectId, conversationId, status } = req.query;
     const runs = design.runs.list({ projectId, conversationId, status });
     let visibleRuns = runs;
+    if (typeof conversationId === 'string' && ctx.standaloneConversations?.scope(conversationId)) {
+      if (!await ctx.standaloneConversations.authorize(req, res, conversationId, false)) return;
+    } else {
+      visibleRuns = runs.filter((run) => run.workspaceScope?.source !== 'persisted_standalone_binding' && (!run.conversationId || !ctx.standaloneConversations?.scope(run.conversationId)));
+    }
     if (typeof projectId === 'string' && projectId) {
       const binding =
         ctx.projectStore?.getWorkspaceProjectByProjectId(db, projectId);

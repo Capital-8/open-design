@@ -1,7 +1,10 @@
 import type http from 'node:http';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
-import { chmod, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import JSZip from 'jszip';
@@ -463,6 +466,33 @@ describe('POST /api/import/folder', () => {
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error?: { message?: string } };
     expect(body.error?.message).toMatch(/orchestratorWorkspace\.kind/i);
+  });
+
+  it('CLI create uses the existing working directory directly without creating subfolders or overwriting files', async () => {
+    const folder = makeFolder();
+    const originalHtml = '<!doctype html><title>Preserve existing work</title>';
+    await writeFile(path.join(folder, 'index.html'), originalHtml);
+    await writeFile(path.join(folder, 'notes.txt'), 'Do not overwrite');
+    const before = await readdir(folder);
+    const cliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+    const { stdout, stderr } = await promisify(execFile)(process.execPath, [cliPath,
+      'project', 'create', '--name', 'Existing folder project', '--working-dir', folder,
+      '--json', '--daemon-url', baseUrl,
+    ], { env: process.env, timeout: 15_000 });
+    expect(stderr).toBe('');
+    const created = JSON.parse(stdout) as { project: { id: string }; conversationId: string; workingDir: string };
+    const canonicalFolder = await realpath(folder);
+    expect(created.workingDir).toBe(canonicalFolder);
+    expect(created.conversationId).toBeTruthy();
+    const readback = await fetch(`${baseUrl}/api/projects/${created.project.id}`);
+    expect(readback.status).toBe(200);
+    await expect(readback.json()).resolves.toMatchObject({
+      project: { name: 'Existing folder project', metadata: { kind: 'other', baseDir: canonicalFolder } },
+      resolvedDir: canonicalFolder,
+    });
+    expect(await readdir(folder)).toEqual(before);
+    expect(await readFile(path.join(folder, 'index.html'), 'utf8')).toBe(originalHtml);
+    expect(await readFile(path.join(folder, 'notes.txt'), 'utf8')).toBe('Do not overwrite');
   });
 
   it('rejects malformed orchestrator workspace metadata on working-dir replacement', async () => {

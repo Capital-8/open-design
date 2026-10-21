@@ -25,7 +25,8 @@ export const ENTRY_RAIL_STATE_EVENT = 'od:entry-rail-state';
 export function readStoredRailOpen(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    return window.localStorage.getItem(RAIL_OPEN_STORAGE_KEY) === 'true';
+    const stored = window.localStorage.getItem(RAIL_OPEN_STORAGE_KEY);
+    return stored == null ? window.innerWidth > 760 : stored === 'true';
   } catch {
     return false;
   }

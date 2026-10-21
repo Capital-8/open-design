@@ -655,6 +655,10 @@ interface Props {
   // positive-proof anchor for chat file-link routing (see AssistantMessage).
   projectResolvedDir?: string | null;
   onEnsureProject: () => Promise<string | null>;
+  onUploadFiles?: (files: File[]) => Promise<import('../providers/registry').UploadProjectFilesResult>;
+  attachmentUrl?: (path: string) => string;
+  /** Namespaced draft identity for non-project conversation hosts. */
+  draftStorageKey?: string;
   previewComments?: PreviewComment[];
   attachedComments?: PreviewComment[];
   onAttachComment?: (comment: PreviewComment) => void;
@@ -1355,6 +1359,9 @@ export function ChatPane({
   projectFileNames,
   projectResolvedDir,
   onEnsureProject,
+  onUploadFiles,
+  attachmentUrl,
+  draftStorageKey,
   previewComments = [],
   attachedComments = [],
   onAttachComment,
@@ -2661,9 +2668,9 @@ export function ChatPane({
     [projectFiles, projectMetadata?.entryFile, projectMetadata?.importedFrom],
   );
   const showImportedFolderArtifacts = projectMetadata?.importedFrom === 'folder';
-  const composerDraftStorageKey = projectId && activeConversationId
+  const composerDraftStorageKey = draftStorageKey ?? (projectId && activeConversationId
     ? `od:chat-composer:draft:${projectId}:${activeConversationId}`
-    : undefined;
+    : undefined);
   const shouldBalanceFinishedTranscript =
     !loading &&
     !streaming &&
@@ -4118,6 +4125,8 @@ export function ChatPane({
       placeholderScenarios={composerPlaceholderScenarios}
       draftStorageKey={composerDraftStorageKey}
       onEnsureProject={onEnsureProject}
+      onUploadFiles={onUploadFiles}
+      attachmentUrl={attachmentUrl}
       commentAttachments={commentsToAttachments(attachedComments)}
       onRemoveCommentAttachment={onDetachComment}
       onSend={(prompt, attachments, commentAttachments, meta) => {
@@ -4488,6 +4497,7 @@ export function ChatPane({
                   onResendUserMessage={onResendUserMessage}
                   onRetryImage={handleRetryImage}
                   projectId={projectId}
+                  attachmentUrl={attachmentUrl}
                   projectKindForTracking={projectKindForTracking}
                   activeConversationId={activeConversationId}
                   activeConversationKey={activeConversationId ?? 'no-conversation'}
@@ -5250,6 +5260,7 @@ function ChatRows({
   onResendUserMessage,
   onRetryImage,
   projectId,
+  attachmentUrl,
   projectKindForTracking,
   activeConversationId,
   activeConversationKey,
@@ -5333,6 +5344,7 @@ function ChatRows({
   onRetryImage?: (row: { total: number; done: number; failed: number }, index: number) => void;
   streaming: boolean;
   projectId: string | null;
+  attachmentUrl?: (path: string) => string;
   projectKindForTracking: TrackingProjectKind | null;
   activeConversationId: string | null;
   activeConversationKey: string;
@@ -5451,6 +5463,7 @@ function ChatRows({
         <UserMessage
           message={m}
           projectId={projectId}
+          attachmentUrl={attachmentUrl}
           projectFileNames={projectFileNames}
           onRequestOpenFile={onRequestOpenFile}
           t={t}
@@ -6673,6 +6686,7 @@ const UserMessage = memo(UserMessageImpl);
   export function UserMessageImpl({
   message,
   projectId,
+  attachmentUrl,
   projectFileNames,
   onRequestOpenFile,
   t,
@@ -6681,6 +6695,7 @@ const UserMessage = memo(UserMessageImpl);
 }: {
   message: ChatMessage;
   projectId: string | null;
+  attachmentUrl?: (path: string) => string;
   projectFileNames?: Set<string>;
   onRequestOpenFile?: (name: string) => void;
   /** 发送失败时那颗常驻的「重试」(稿子第 49 / 50 格) */
@@ -6757,6 +6772,7 @@ const UserMessage = memo(UserMessageImpl);
           <UserAttachmentRow
             attachments={attachments}
             projectId={projectId}
+            attachmentUrl={attachmentUrl}
             projectFileNames={projectFileNames}
             onRequestOpenFile={onRequestOpenFile}
             workspaceContext={workspaceContext}
@@ -6929,6 +6945,7 @@ const UserMessage = memo(UserMessageImpl);
   function UserAttachmentRow({
   attachments,
   projectId,
+  attachmentUrl,
   projectFileNames,
   onRequestOpenFile,
   workspaceContext,
@@ -6936,6 +6953,7 @@ const UserMessage = memo(UserMessageImpl);
   }: {
   attachments: ChatAttachment[];
   projectId: string | null;
+  attachmentUrl?: (path: string) => string;
   projectFileNames?: Set<string>;
   onRequestOpenFile?: (name: string) => void;
   workspaceContext: ReturnType<typeof useProjectCollabContext>['workspaceContext'];
@@ -6963,7 +6981,7 @@ const UserMessage = memo(UserMessageImpl);
           const openable = !!onRequestOpenFile;
           const handleOpen = openable ? () => onRequestOpenFile?.(openName) : undefined;
           const label = openable ? t('chat.openFile', { name: baseName }) : a.path;
-          return a.kind === 'image' && projectId ? (
+          return a.kind === 'image' && (projectId || attachmentUrl) ? (
             <button
               type="button"
               key={a.path}
@@ -6976,7 +6994,7 @@ const UserMessage = memo(UserMessageImpl);
               <span className="msg-att-ph">
                 <img
                   className="msg-att-mini"
-                  src={projectRawUrl(projectId, a.path, workspaceContext)}
+                  src={attachmentUrl ? attachmentUrl(a.path) : projectRawUrl(projectId!, a.path, workspaceContext)}
                   alt=""
                 />
               </span>

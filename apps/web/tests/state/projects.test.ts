@@ -1361,6 +1361,14 @@ describe('listPlugins', () => {
     vi.unstubAllGlobals();
   });
 
+  it('lets Home distinguish failed catalogue reads from an empty catalogue without changing legacy callers', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response('unavailable', { status: 503 })));
+    await expect(listPlugins()).resolves.toEqual([]);
+    await expect(listPlugins({ throwOnError: true })).rejects.toThrow('503');
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ plugins: [] }), { status: 200 })));
+    await expect(listPlugins({ throwOnError: true })).resolves.toEqual([]);
+  });
+
   it('hides plugins marked od.hidden from UI-facing lists', async () => {
     const visible = {
       id: 'od-new-generation',

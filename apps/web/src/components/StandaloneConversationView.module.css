@@ -1,0 +1,17 @@
+/* This view owns both rows of the legacy app grid, including its empty chrome row. */
+.root { grid-row: 1 / -1; height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg-panel); }
+.header { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border-soft); }
+.header strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--text-strong); }
+.body { flex: 1; min-height: 0; display: flex; }
+.chat { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.chat > :global(.pane) { flex: 1; min-width: 0; }
+.files { width: 240px; padding: 16px; overflow: auto; border-inline-start: 1px solid var(--border-soft); }
+.files h2 { font-size: 12px; color: var(--text-soft); font-weight: 500; margin: 0 0 10px; }
+.files > button { display: flex; width: 100%; justify-content: flex-start; }
+.files > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loadFailure { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; color: var(--text-muted); }
+.preview { width: min(1000px, 90vw); }
+.preview iframe { width: 100%; height: min(65vh, 700px); border: 1px solid var(--border-soft); border-radius: var(--radius); }
+@media (max-width: 800px) { .body { flex-direction: column; } .files { width: auto; max-height: 130px; border-inline-start: 0; border-top: 1px solid var(--border-soft); } }
+
+.previewStatus { min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--text-soft); }

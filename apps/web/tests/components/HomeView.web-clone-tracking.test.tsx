@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
 import { pickHomeTemplate } from '../helpers/home-template-picker';
 //
-// Web-clone example-card analytics (埋点文档 row 116, element=example_prompt).
-// The Website-clone examples are plain text prompt cards (no embedded HTML / no
-// Remix — dropped to avoid reproducing copyrighted site markup). Picking one must
-// still fire a home chat_composer ui_click with chip_id=web-clone so the
-// site-clone funnel entry is tracked, complementing the created project's
-// project_kind=web_clone on project_create_result.
+// Web-clone remains reachable through task selection with real catalogue states.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import { HomeView } from '../../src/components/HomeView';
-import { HOME_APPLY_TEMPLATE_EVENT } from '../../src/components/home-hero/chips';
 import { I18nProvider } from '../../src/i18n';
 import { writeHomeGuideStage } from '../../src/components/home-hero/firstRunGuide';
 
@@ -41,9 +35,7 @@ vi.mock('../../src/analytics/provider', async (importOriginal) => {
   };
 });
 
-// The Website-clone chip's base scenario (its action.pluginId). It only needs to
-// exist so clicking the chip binds; the site examples themselves are static text
-// prompt cards from HOME_PROMPT_EXAMPLES, not plugins.
+// The base scenario binds the task but has no poster, so it is not a featured template.
 const WEB_CLONE_BASE = {
   id: 'example-web-clone',
   title: 'Website clone',
@@ -104,98 +96,27 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-// #5517 removed the inline template rail from Home; scenario templates are
-// picked from the composer footer's radial Template picker instead.
 
-
-describe('web-clone example-card tracking', () => {
-  it('renders the Website-clone examples as text prompt cards (no plugin preview / no remix)', async () => {
+describe('web-clone task discovery', () => {
+  it('shows an honest empty catalogue instead of static site mockups', async () => {
     writeHomeGuideStage('done');
     stubPlugins();
     renderHome();
-
     await pickHomeTemplate('web-clone');
-    // Text prompt cards (site variant: logo tile + bare domain), not plugin cards.
-    const textCards = await screen.findAllByTestId('home-hero-prompt-example');
-    expect(textCards.length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('home-hero-prompt-example')).toBeNull();
     expect(screen.queryByTestId('home-hero-plugin-presets')).toBeNull();
-    // No remix/duplicate affordance on the web-clone rail.
+    expect(screen.getByText('No templates available for this type yet. You can start with your own idea.')).toBeTruthy();
     expect(document.querySelector('[data-testid^="home-hero-plugin-preset-duplicate"]')).toBeNull();
-    // Site cards show the bare domain (e.g. open-design.ai), not the raw prompt line.
-    expect(textCards.some((c) => (c.textContent ?? '').includes('open-design.ai'))).toBe(true);
-    expect(textCards.every((c) => !(c.textContent ?? '').includes('https://'))).toBe(true);
-    expect(document.querySelector('.home-hero__prompt-example--site')).not.toBeNull();
   });
 
-  // Contract lock: the shipped Website-clone example set is intentionally
-  // narrowed to the first-party OpenDesign site to avoid shipping third-party
-  // brand copies. Assert the exact count + domain so the rail can't silently
-  // drift back to the old multi-site set without updating this contract.
-  it('resolves exactly the contracted OpenDesign Website-clone site card', async () => {
+  it('tracks the web-clone task selection and keeps its composer binding', async () => {
     writeHomeGuideStage('done');
     stubPlugins();
     renderHome();
-
     await pickHomeTemplate('web-clone');
-    const siteCards = await screen.findAllByTestId('home-hero-prompt-example');
-    const domains = siteCards.map((c) => (c.textContent ?? '').trim());
-    expect(domains).toEqual(['open-design.ai']);
-    // Every card must be the site variant (favicon tile + bare domain).
-    expect(
-      siteCards.every((c) => c.classList.contains('home-hero__prompt-example--site')),
-    ).toBe(true);
-  });
-
-  it('renders the contracted OpenDesign site card with a local eager logo', async () => {
-    writeHomeGuideStage('done');
-    stubPlugins();
-    renderHome();
-
-    await pickHomeTemplate('web-clone');
-    const siteCard = (await screen.findAllByTestId('home-hero-prompt-example'))[0]!;
-    const logo = siteCard.querySelector<HTMLImageElement>('.home-hero__site-badge img');
-    expect(logo?.getAttribute('src')).toBe('/logo.svg');
-    expect(logo?.getAttribute('loading')).toBe('eager');
-    expect(logo?.getAttribute('fetchpriority')).toBe('high');
-  });
-
-  it('falls back when the local OpenDesign site card logo cannot load', async () => {
-    writeHomeGuideStage('done');
-    stubPlugins();
-    renderHome();
-
-    await pickHomeTemplate('web-clone');
-    const siteCard = (await screen.findAllByTestId('home-hero-prompt-example'))[0]!;
-    const localLogo = siteCard.querySelector<HTMLImageElement>('.home-hero__site-badge img');
-    expect(localLogo?.getAttribute('src')).toBe('/logo.svg');
-
-    fireEvent.error(localLogo!);
-    const remoteFallback = siteCard.querySelector<HTMLImageElement>('.home-hero__site-badge img');
-    expect(remoteFallback?.getAttribute('src')).toBe(
-      'https://www.google.com/s2/favicons?sz=128&domain=open-design.ai',
-    );
-
-    fireEvent.error(remoteFallback!);
-    expect(siteCard.querySelector('.home-hero__site-monogram')?.textContent).toBe('O');
-  });
-
-  it('fires element=example_prompt with chip_id=web-clone when a text example is picked', async () => {
-    writeHomeGuideStage('done');
-    stubPlugins();
-    renderHome();
-
-    await pickHomeTemplate('web-clone');
-    const textCards = await screen.findAllByTestId('home-hero-prompt-example');
-    analyticsMocks.track.mockClear(); // ignore the chip-pick ui_click; assert the card event
-    fireEvent.click(textCards[0]!);
-
-    await waitFor(() => {
-      expect(lastClickProps('example_prompt')).toMatchObject({
-        page_name: 'home',
-        area: 'chat_composer',
-        element: 'example_prompt',
-        chip_id: 'web-clone',
-      });
-    });
+    await waitFor(() => expect(lastClickProps('task_chip')).toMatchObject({
+      page_name: 'home', area: 'chat_composer', element: 'task_chip', chip_id: 'web-clone',
+    }));
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Website clone');
   });
 });

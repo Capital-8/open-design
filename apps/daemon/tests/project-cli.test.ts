@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve as pathResolve } from 'node:path';
@@ -37,7 +37,7 @@ afterEach(async () => {
   tempRoot = '';
 });
 
-async function startProjectStubServer(deleteResponse: unknown = { ok: true }, shareResponse?: unknown, shareStatus = 200, planResponse?: unknown): Promise<StubServer> {
+async function startProjectStubServer(deleteResponse: unknown = { ok: true }, shareResponse?: unknown, shareStatus = 200, planResponse?: unknown, workingDirResponse?: { status: number; body: unknown }): Promise<StubServer> {
   const requests: CapturedRequest[] = [];
   const server = http.createServer((req, res) => {
     let raw = '';
@@ -64,7 +64,15 @@ async function startProjectStubServer(deleteResponse: unknown = { ok: true }, sh
       }
       if (captured.method === 'POST' && captured.url === '/api/projects') {
         res.statusCode = 201;
-        res.end(JSON.stringify({ project: { id: 'created-project' } }));
+        res.end(JSON.stringify({ project: { id: 'created-project' }, conversationId: 'created-conversation' }));
+        return;
+      }
+      if (captured.method === 'POST' && captured.url === '/api/projects/created-project/working-dir') {
+        const { baseDir } = JSON.parse(raw);
+        res.statusCode = workingDirResponse?.status ?? 200;
+        res.end(JSON.stringify(workingDirResponse?.body ?? {
+          project: { id: 'created-project', metadata: { kind: 'other', baseDir } }, baseDir,
+        }));
         return;
       }
       if (captured.method === 'POST' && captured.url === '/api/projects/source-project/design-system-copy') {
@@ -566,6 +574,65 @@ describe('od project CLI', () => {
       },
       body: JSON.stringify({ slug: 'legacy-public-slug' }),
     });
+  });
+
+  it('creates a named project directly in an existing working directory with workspace scope', async () => {
+    stub = await startProjectStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-project-working-dir-'));
+    writeFileSync(join(tempRoot, 'existing.txt'), 'preserved');
+    const baseDir = realpathSync(tempRoot);
+    const result = await runCli(['project', 'create', '--name', 'My project', '--working-dir', tempRoot,
+      '--workspace', 'ws-1', '--workspace-member', 'member-1', '--json', '--daemon-url', stub.baseUrl]);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(stub.requests.map(({ method, url }) => [method, url])).toEqual([
+      ['POST', '/api/projects'], ['POST', '/api/projects/created-project/working-dir'],
+    ]);
+    expect(JSON.parse(stub.requests[0]!.body)).toMatchObject({
+      name: 'My project', skillId: null, designSystemId: null, metadata: { kind: 'other' },
+    });
+    expect(JSON.parse(stub.requests[1]!.body)).toEqual({ baseDir });
+    for (const request of stub.requests) expect(request.headers).toMatchObject({
+      'x-od-workspace-id': 'ws-1', 'x-od-workspace-member-id': 'member-1',
+    });
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      project: { id: 'created-project', metadata: { baseDir } },
+      conversationId: 'created-conversation', workingDir: baseDir,
+    });
+    expect(readdirSync(tempRoot)).toEqual(['existing.txt']);
+  });
+
+  it.each(['missing', 'file'])('rejects a %s working directory before creating any project', async kind => {
+    stub = await startProjectStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-project-working-dir-'));
+    const target = join(tempRoot, 'target');
+    if (kind === 'file') writeFileSync(target, 'not a directory');
+    const result = await runCli(['project', 'create', '--working-dir', target, '--json', '--daemon-url', stub.baseUrl]);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(JSON.parse(result.stderr).error.code).toBe('INVALID_WORKING_DIRECTORY');
+    expect(stub.requests).toEqual([]);
+    expect(readdirSync(tempRoot)).toEqual(kind === 'file' ? ['target'] : []);
+  });
+
+  it.each([
+    { status: 403, body: { error: { code: 'IMPORT_TOKEN_REQUIRED', message: 'Select the folder again.' } }, code: 'PROJECT_WORKING_DIRECTORY_FAILED' },
+    { status: 200, body: {}, code: 'PROJECT_WORKING_DIRECTORY_UNCONFIRMED' },
+  ])('preserves the created project for recovery when directory binding fails ($code)', async failure => {
+    stub = await startProjectStubServer(undefined, undefined, 200, undefined, failure);
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-project-working-dir-'));
+    const result = await runCli(['project', 'create', '--name', 'Recover me', '--working-dir', tempRoot,
+      '--json', '--daemon-url', stub.baseUrl]);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(JSON.parse(result.stderr).error).toMatchObject({ code: failure.code, data: {
+      projectId: 'created-project', conversationId: 'created-conversation',
+      createdProject: { id: 'created-project' }, requestedWorkingDir: realpathSync(tempRoot),
+    } });
+    expect(stub.requests.map(({ method, url }) => [method, url])).toEqual([
+      ['POST', '/api/projects'], ['POST', '/api/projects/created-project/working-dir'],
+    ]);
+    expect(readdirSync(tempRoot)).toEqual([]);
   });
 
   it('creates a motion design task with the same automatic OD Next route as Home', async () => {

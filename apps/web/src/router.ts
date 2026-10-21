@@ -62,6 +62,7 @@ export type Route =
       conversationId?: string | null;
       fileName: string | null;
     }
+  | { kind: 'standalone-conversation'; conversationId: string }
   | { kind: 'marketplace' }
   | { kind: 'marketplace-detail'; pluginId: string }
   // Team collaboration demo surface. Drives the live presence + sync loop
@@ -75,6 +76,9 @@ export type Route =
 export function parseRoute(pathname: string): Route {
   const parts = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
   if (parts.length === 0) return { kind: 'home', view: 'home' };
+  if (parts[0] === 'conversations' && parts[1] && parts.length === 2) {
+    return { kind: 'standalone-conversation', conversationId: decodeURIComponent(parts[1]) };
+  }
   if (parts[0] === 'onboarding') {
     return { kind: 'home', view: 'onboarding' };
   }
@@ -195,6 +199,7 @@ export function buildPath(route: Route): string {
     if (route.view === 'settings') return '/settings';
     return '/';
   }
+  if (route.kind === 'standalone-conversation') return `/conversations/${encodeURIComponent(route.conversationId)}`;
   if (route.kind === 'marketplace') return '/marketplace';
   if (route.kind === 'marketplace-detail') return `/marketplace/${encodeURIComponent(route.pluginId)}`;
   if (route.kind === 'collab-demo') {

@@ -322,3 +322,19 @@ describe('待发送附件托盘 · 一行横滚(#64)', () => {
     expect(scrollBy).toHaveBeenCalledWith({ left: 406 * 0.8, behavior: 'smooth' });
   });
 });
+
+it('uploads and retries through standalone storage without creating a project', async () => {
+  const onEnsureProject = vi.fn();
+  const onUploadFiles = vi.fn()
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce(uploadedImage('reference.png'));
+  render(<ChatComposer projectId={null} projectFiles={[]} streaming={false}
+    onEnsureProject={onEnsureProject} onUploadFiles={onUploadFiles}
+    attachmentUrl={(path) => `/api/conversations/c/files/raw?path=${encodeURIComponent(path)}`}
+    onSend={vi.fn()} onStop={vi.fn()} />);
+  pickFiles([png('reference.png')]);
+  const retry = await screen.findByTestId('staged-att-retry');
+  fireEvent.click(retry);
+  await waitFor(() => expect(onUploadFiles).toHaveBeenCalledTimes(2));
+  expect(onEnsureProject).not.toHaveBeenCalled(); expect(mockedUpload).not.toHaveBeenCalled();
+});

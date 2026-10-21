@@ -71,7 +71,7 @@ import type {
 } from '@open-design/contracts/analytics';
 import { agentIdToTracking } from '@open-design/contracts/analytics';
 import { useI18n, useT } from '../i18n';
-import { navigate, useRoute } from '../router';
+import { navigate, parseRoute, useRoute } from '../router';
 import type {
   AgentInfo,
   ApiProtocol,
@@ -93,6 +93,8 @@ import { CenteredLoader } from './Loading';
 import { DesignsTab } from './DesignsTab';
 import { DesignSystemsTab } from './DesignSystemsTab';
 import { BrandsTab } from './BrandsTab';
+import { ProjectConversationSidebar } from './ProjectConversationSidebar';
+import { StandaloneConversationSection, useStandaloneConversationCatalog } from './StandaloneConversationSection';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import {
   buildProjectSearchCatalog,
@@ -1093,7 +1095,10 @@ export function EntryShell({
     if (view === 'all-projects') setProjectsCollection('teamProjects');
     else if (view === 'drafts') setProjectsCollection('recent');
   }, [view]);
-  async function handleOpenAllProjects(id: string): Promise<boolean> {
+  const sidebarOpenSequence = useRef(0);
+  async function handleOpenAllProjects(id: string, conversationId?: string): Promise<boolean> {
+    const openSequence = ++sidebarOpenSequence.current;
+    const openAccountGeneration = currentWorkspaceAccountGeneration();
     // The grid already reconciled the local row with the authoritative team
     // catalog (notably the owner's current project name). Carry its title and
     // provenance into App before navigation. Passing only the id made App reopen its local
@@ -1116,7 +1121,17 @@ export function EntryShell({
           ),
         }
       : undefined;
-    const open = () => Promise.resolve(onOpenProject(id, undefined, projectTitleHint));
+    const open = async () => {
+      const opened = await onOpenProject(id, undefined, projectTitleHint);
+      const currentRoute = parseRoute(window.location.pathname);
+      if (opened !== false && conversationId
+        && openSequence === sidebarOpenSequence.current
+        && openAccountGeneration === currentWorkspaceAccountGeneration()
+        && currentRoute.kind === 'project' && currentRoute.projectId === id) {
+        navigate({ kind: 'project', projectId: id, conversationId, fileName: null });
+      }
+      return opened;
+    };
     if (contentReadyProjectIdsRef.current.has(id)) {
       await open();
       return true;
@@ -1218,14 +1233,15 @@ export function EntryShell({
   // "什么都不显示,有余额就允许运行" — and the project page has now been pulled
   // level with it, so `handlePluginLoopSubmit` having no low-balance branch is
   // simply the shape of the gate: there is no such result kind to handle.
-  // The entry nav rail is collapsed by default (Manus-style) so the entry
-  // view opens clean and full-width; the panel toggle in the topbar opens it
-  // as an overlay that dismisses on selection / backdrop click / Escape.
-  // Its open/collapsed state is persisted (localStorage) so it survives a
-  // home -> project -> home round trip (EntryShell unmounts on the project
-  // route) and a reload, instead of snapping back to collapsed.
+  // Start expanded on desktop, collapsed on narrow screens. Explicit choices
+  // survive project navigation and reload through the shared rail preference.
   const [railOpen, setRailOpen] = useState<boolean>(readStoredRailOpen);
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  const sidebarCatalogUnavailable = workspaceContextState.failure === 'unavailable'
+    || workspaceContextState.failure === 'reauth-required';
+  const sidebarScopeReady = !workspaceLoading && !workspaceContextState.identityChangePending && !sidebarCatalogUnavailable;
+  const standaloneScopeReady = sidebarScopeReady;
+  const standaloneCatalog = useStandaloneConversationCatalog(workspaceContext, railOpen && standaloneScopeReady);
 
   // ⌘K / Ctrl+K opens the project search palette — same as clicking the rail
   // search box. ⌘B / Ctrl+B toggles the nav rail — same as the pinned Home
@@ -1302,7 +1318,7 @@ export function EntryShell({
       ? onProviderModelsCacheChange!
       : setLocalProviderModelsCache;
   const [newProjectInitialTab, setNewProjectInitialTab] =
-    useState<CreateTab>('prototype');
+    useState<CreateTab | null>(null);
   const [integrationTab, setIntegrationTab] = useState<IntegrationTab>(integrationInitialTab);
   // Lazy initializer, so a handoff published by a surface that then navigated
   // here — the `/marketplace/<id>` detail route, which `App` renders outside
@@ -1410,8 +1426,8 @@ export function EntryShell({
     changeView('integrations');
   }
 
-  function openNewProject(tab: CreateTab = 'prototype') {
-    setNewProjectInitialTab(tab);
+  function openNewProject(tab?: CreateTab) {
+    setNewProjectInitialTab(tab ?? null);
     setNewProjectOpen(true);
   }
 
@@ -1861,6 +1877,7 @@ export function EntryShell({
     onOpenProject,
     // The Add menu's "Add plugin" row lands on the plugins page.
     onBrowseRegistry: () => changeView('plugins'),
+    onBrowseTemplates: () => changeView('community'),
     onOpenIntegrations: () => openIntegrationTab('connectors'),
     onOpenMcp: () => openIntegrationTab('mcp'),
     onOpenNewProject: (tab: 'template') => {
@@ -1882,12 +1899,12 @@ export function EntryShell({
   return (
     <div className="entry-shell entry-shell--no-header">
       <div
-        className={`entry${railOpen ? ' entry--rail-open' : ''}`}
-        // The team/local shell is a labeled Manus-style rail, so widen the rail
-        // track (the base 56px icon-rail clips the labels + team affordances).
-        style={{ ['--entry-rail-width' as string]: '236px' }}
+        className={`entry ${styles.threeColumns}${railOpen ? ' entry--rail-open' : ''}`}
+        // Keep global navigation separate from the project/conversation tree.
+        style={{ ['--entry-rail-width' as string]: '64px' }}
       >
         <EntryNavRail
+          iconOnly
           view={view}
           onViewChange={changeView}
           onNewProject={() => {
@@ -1936,7 +1953,7 @@ export function EntryShell({
           // Keep the account slot neutral until Cloud answers successfully;
           // only a successful null context (or known local sign-out) may show
           // the sign-in card.
-          footerNotice={accountFooterNotice}
+          footerNotice={null}
           /* Same catalog and same opener the 全部项目 grid uses below, so the
              rail's 最近浏览过 list and that view's 最近浏览过 tab are two views of
              ONE list rather than two sorts of two lists. */
@@ -1959,6 +1976,31 @@ export function EntryShell({
           priorityAnnouncementAmrProfile={amrProfile}
           priorityAnnouncementMetricsConsent={config.telemetry?.metrics === true}
         />
+        <div className={styles.projectColumn} inert={!railOpen ? true : undefined} aria-hidden={!railOpen || undefined}>
+          <ProjectConversationSidebar
+            projects={sidebarScopeReady ? projectSearchProjects : []}
+            enabled={railOpen && sidebarScopeReady}
+            catalogLoading={!sidebarScopeReady || projectsLoading}
+            catalogUnavailable={sidebarCatalogUnavailable}
+            workspaceContext={railWorkspaceContext}
+            onOpenProject={handleOpenAllProjects}
+            onOpenConversation={(projectId, conversationId) => handleOpenAllProjects(projectId, conversationId)}
+            onNewProject={() => openNewProject()}
+            newProjectDisabled={workspaceContextState.identityChangePending}
+            onNewConversation={() => void standaloneCatalog.create()}
+            newConversationDisabled={standaloneCatalog.creating || !standaloneScopeReady}
+            conversationsSlot={<StandaloneConversationSection catalog={standaloneCatalog} />}
+            onBrowseProjects={() => changeView('drafts')}
+            headerSlot={accountFooterNotice}
+            onRenameRecentProject={onRenameProject}
+            onDeleteRecentProject={onDeleteProject}
+            onDuplicateRecentProject={onDuplicateProject}
+            isSharedRecentProject={isSharedProject}
+            recentProjectOwnerMemberIds={teamProjectOwnerMemberIds}
+            onRecentProjectShared={markProjectShared}
+            onRecentProjectShareFailed={markProjectShareFailed}
+          />
+        </div>
         {projectSearchOpen ? (
           <ProjectSearchModal
             // Search spans personal drafts plus the shared workspace catalog.
@@ -1980,7 +2022,7 @@ export function EntryShell({
           <div
             className={[
               'entry-main__inner',
-              view === 'home' ? '' : 'entry-main__inner--wide',
+              view === 'home' ? styles.homeContent : 'entry-main__inner--wide',
             ].filter(Boolean).join(' ')}
           >
             <div className="entry-main__view-home" data-testid="entry-view-home" data-active={view === 'home' ? 'true' : 'false'} {...inactiveViewProps(view === 'home')}>
@@ -2262,7 +2304,8 @@ export function EntryShell({
       </div>
       <NewProjectModal
         open={newProjectOpen}
-        initialTab={newProjectInitialTab}
+        initialTab={newProjectInitialTab ?? 'other'}
+        compact={newProjectInitialTab === null}
         skills={skills}
         designTemplates={designTemplates}
         designSystems={designSystems}
@@ -2273,7 +2316,7 @@ export function EntryShell({
         mediaProviders={config.mediaProviders}
         connectors={connectors}
         connectorsLoading={connectorsLoading}
-        loading={skillsLoading}
+        loading={(newProjectInitialTab !== null && skillsLoading) || workspaceContextState.identityChangePending}
         onCreate={handleCreate}
         onImportClaudeDesign={onImportClaudeDesign}
         {...(onImportFolder ? { onImportFolder } : {})}

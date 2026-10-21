@@ -20,7 +20,17 @@ export type AccountScopedRunWorkspaceScope = Readonly<{
   source: 'unbound_account';
 }>;
 
+export type StandaloneRunWorkspaceScope = Readonly<{
+  schemaVersion: 1;
+  projectId: null;
+  conversationId: string;
+  workspaceId: string | null;
+  workspaceMemberId: string | null;
+  source: 'persisted_standalone_binding';
+}>;
+
 export type RunWorkspaceScope =
+  | StandaloneRunWorkspaceScope
   | PinnedRunWorkspaceScope
   | AccountScopedRunWorkspaceScope;
 
@@ -137,6 +147,14 @@ export async function openDesignAmrTraceEnvForRun(
   };
   if (input.agentId !== 'amr') return openDesignAmrTraceEnv(traceInput);
 
+  // Independently persisted conversations pin their own billing identity.
+  // Neither the request's workspace hint nor a fabricated project may supply it.
+  const standalone = input.workspaceScope;
+  if (!input.projectId && standalone?.source === 'persisted_standalone_binding'
+    && standalone.schemaVersion === 1 && standalone.projectId === null
+    && standalone.conversationId === input.conversationId) {
+    return openDesignAmrTraceEnv({ ...traceInput, ...(standalone.workspaceId ? { workspaceId: standalone.workspaceId } : {}) });
+  }
   const projectId = input.projectId?.trim();
   if (!projectId) throw new AmrWorkspaceScopeRequiredError(null);
   const accountScoped =

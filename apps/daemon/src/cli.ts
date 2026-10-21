@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { readFileSync, writeFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { readFileSync, writeFileSync, statSync, realpathSync } from 'node:fs';
+import { basename, resolve as resolvePath } from 'node:path';
 import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';
 import { runLiveArtifactsMcpServer } from './mcp-live-artifacts-server.js';
 import { runArtifactsCli } from './artifacts-cli.js';
@@ -250,7 +250,7 @@ const PROJECT_STRING_FLAGS = new Set([
   'client-request-id',
   'agent', 'model', 'service-tier', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
-  'source', 'out',
+  'source', 'out', 'working-dir',
 ]);
 const PROJECT_RESOURCE_STRING_FLAGS = new Set([
   ...PROJECT_STRING_FLAGS,
@@ -7402,7 +7402,8 @@ async function runProject(args) {
   od project create [--name "<title>"] [--skill <id>] [--design-system <id>]
                     [--plugin <id>] [--inputs <json>] [--metadata-json <path|->]
                     [--mode design|chat|plan] [--task-type motion-design]
-                    [--prompt-file <path|->] [--json]
+                    [--prompt-file <path|->] [--working-dir <existing-folder>] [--json]
+                    --working-dir uses that existing folder directly; no subfolder is created.
   od project create-design-system <id> [--name "<title>"]
                     [--prompt "<text>" | --prompt-file <path|->] [--json]
                     Duplicate a project as a design-system workspace and seed
@@ -7603,6 +7604,16 @@ Common options:
       return;
     }
     case 'create': {
+      let workingDir = null;
+      if (flags['working-dir'] !== undefined) {
+        try {
+          const requested = String(flags['working-dir']);
+          if (!requested.trim() || !statSync(resolvePath(requested)).isDirectory()) throw new Error('not a directory');
+          workingDir = realpathSync(resolvePath(requested));
+        } catch {
+          return exitWithStructuredError({ code: 'INVALID_WORKING_DIRECTORY', message: '--working-dir must point to an existing directory; no directory was created.' });
+        }
+      }
       const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2);
@@ -7647,6 +7658,7 @@ Common options:
       if (flags['grant-caps']) {
         body.grantCaps = String(flags['grant-caps']).split(',').map((c) => c.trim()).filter(Boolean);
       }
+      if (workingDir && !body.metadata && !flags.plugin && !flags['task-type']) body.metadata = { kind: 'other' };
       const resp = await fetch(`${base}/api/projects`, {
         method:  'POST',
         headers: { 'content-type': 'application/json', ...workspaceHeaders },
@@ -7680,6 +7692,32 @@ Common options:
         }
         console.error(`POST /api/projects failed: ${resp.status} ${JSON.stringify(data)}`);
         process.exit(1);
+      }
+      if (workingDir) {
+        const recovery = { projectId: data.project?.id ?? id, conversationId: data.conversationId ?? null,
+          createdProject: data.project ?? null, requestedWorkingDir: workingDir };
+        try {
+          const importToken = await mintCliImportToken(workingDir, recovery);
+          const bound = await fetch(`${base}/api/projects/${encodeURIComponent(recovery.projectId)}/working-dir`, {
+            method: 'POST', headers: { 'content-type': 'application/json', ...workspaceHeaders,
+              ...(importToken ? { 'x-od-desktop-import-token': importToken } : {}) },
+            body: JSON.stringify({ baseDir: workingDir }),
+          });
+          const result = await bound.json().catch(() => ({}));
+          if (!bound.ok) return exitWithStructuredError({
+            code: 'PROJECT_WORKING_DIRECTORY_FAILED',
+            message: 'Project was created, but applying the selected directory failed. Inspect the existing project and reselect its working directory if needed.',
+            data: { ...recovery, status: bound.status, cause: result.error ?? result },
+          });
+          if (!result.project) throw new Error('Working-directory response did not contain the updated project');
+          data.project = result.project;
+          data.workingDir = result.baseDir ?? workingDir;
+        } catch (error) {
+          return exitWithStructuredError({ code: 'PROJECT_WORKING_DIRECTORY_UNCONFIRMED',
+            message: 'Project was created, but the selected directory could not be confirmed. Inspect the existing project before retrying.',
+            data: { ...recovery, cause: error instanceof Error ? error.message : String(error) },
+          });
+        }
       }
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(`[project] created ${data.project?.id ?? id} (conversation ${data.conversationId})`);
@@ -8244,7 +8282,7 @@ Common options:
 async function runRun(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
-  od run start --project <projectId> [--conversation <id>] [--message "<text>"]
+  od run start [--project <projectId>] [--conversation <id>] [--message "<text>"]
                [--prompt-file <path|->] [--task-execution <id>]
                [--client-request-id <id>]
                [--skill <id>[,<id>]] [--plugin <id>] [--inputs <json>] [--grant-caps a,b]
@@ -8286,7 +8324,9 @@ Common options:
     case 'list': {
       const url = flags.project
         ? `${base}/api/runs?projectId=${encodeURIComponent(flags.project)}`
-        : `${base}/api/runs`;
+        : flags.conversation
+          ? `${base}/api/runs?conversationId=${encodeURIComponent(flags.conversation)}`
+          : `${base}/api/runs`;
       const resp = await fetch(url, { headers: workspaceHeaders });
       if (!resp.ok) return structuredHttpFailure(resp);
       const data = await resp.json();
@@ -8414,7 +8454,7 @@ Common options:
         else console.error(payload.error.message);
         process.exit(1);
       }
-      if (!status.projectId || !status.conversationId) {
+      if (!status.conversationId) {
         const payload = {
           error: {
             code: 'run-missing-context',
@@ -8518,11 +8558,11 @@ Common options:
       return;
     }
     case 'start': {
-      if (!flags.project) {
-        console.error('--project <projectId> is required');
+      if (!flags.project && !flags.conversation) {
+        console.error('--project <projectId> or --conversation <standaloneId> is required');
         process.exit(2);
       }
-      const body = { projectId: flags.project };
+      const body = { projectId: flags.project ?? null };
       if (flags.conversation) body.conversationId = flags.conversation;
       const message = await readRunMessageFromFlags(flags);
       if (message) body.message = message;
@@ -9094,7 +9134,7 @@ async function readStdinUtf8() {
   return fs.readFileSync(0, 'utf8');
 }
 
-async function mintCliImportToken(baseDir) {
+async function mintCliImportToken(baseDir, failureData = {}) {
   const client = SidecarFactory.connectInherited();
   if (client == null) return null;
   let result;
@@ -9110,7 +9150,7 @@ async function mintCliImportToken(baseDir) {
     exitWithStructuredError({
       code: 'desktop-auth-pending',
       message: result.message ?? 'desktop auth required but secret not yet registered',
-      data: { retryable: result.retryable === true },
+      data: { ...failureData, retryable: result.retryable === true },
     });
   }
   return null;
@@ -9386,7 +9426,16 @@ async function runConversation(args) {
                                            --fork-after stops the copy at one
                                            source message.
   od conversation list <projectId>           List conversations in a project.
-  od conversation info <conversationId>      Print one conversation.
+  od conversation info <conversationId>      Print one standalone conversation.
+  od conversation new --standalone [--title "<title>"]
+  od conversation list --standalone
+  od conversation rename <id> --title "<title>"
+  od conversation delete <id>
+  od conversation messages <id>
+  od conversation files <id> [--path <file> --out <destination>]
+  od conversation files <id> --preview --path <file>
+  od conversation upload <id> --path <local-file>
+  od run start --conversation <id> --prompt-file <path|-> [--follow] [--json]
 
 Common options:
   --daemon-url <url>         OpenDesign daemon HTTP base.
@@ -9397,23 +9446,17 @@ Common options:
   }
   const sub = args[0];
   const rest = args.slice(1);
-  const conversationStringFlags =
-    sub === 'new' || sub === 'list'
-      ? PROJECT_RESOURCE_STRING_FLAGS
-      : PROJECT_STRING_FLAGS;
+  const conversationStringFlags = PROJECT_RESOURCE_STRING_FLAGS;
   const flags = parseFlags(rest, {
     string: conversationStringFlags,
-    boolean: PROJECT_BOOLEAN_FLAGS,
+    boolean: new Set([...PROJECT_BOOLEAN_FLAGS, 'standalone', 'preview']),
   });
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
-  const workspaceHeaders =
-    sub === 'new' || sub === 'list'
-      ? workspaceHeadersFromExplicitFlags(flags) ?? {}
-      : {};
+  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
   switch (sub) {
     case 'new': {
       const [id] = positionalArgs(rest, conversationStringFlags);
-      if (!id) {
+      if (!id && !flags.standalone) {
         console.error('Usage: od conversation new <projectId> [--title "<title>"] [--seed-from <cid>] [--fork-after <mid>]');
         process.exit(2);
       }
@@ -9431,7 +9474,7 @@ Common options:
         }
         body.forkAfterMessageId = flags['fork-after'];
       }
-      const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/conversations`, {
+      const resp = await fetch(flags.standalone ? `${base}/api/conversations` : `${base}/api/projects/${encodeURIComponent(id)}/conversations`, {
         method:  'POST',
         headers: { 'content-type': 'application/json', ...workspaceHeaders },
         body:    JSON.stringify(body),
@@ -9445,11 +9488,11 @@ Common options:
     }
     case 'list': {
       const id = positionalArgs(rest, conversationStringFlags)[0];
-      if (!id) {
+      if (!id && !flags.standalone) {
         console.error('Usage: od conversation list <projectId>');
         process.exit(2);
       }
-      const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/conversations`, {
+      const resp = await fetch(flags.standalone ? `${base}/api/conversations` : `${base}/api/projects/${encodeURIComponent(id)}/conversations`, {
         headers: workspaceHeaders,
       });
       if (!resp.ok) return structuredHttpFailure(resp);
@@ -9458,16 +9501,51 @@ Common options:
       return;
     }
     case 'info': {
-      const id = rest.find((a) => !a.startsWith('-'));
+      const id = positionalArgs(rest, conversationStringFlags)[0];
       if (!id) {
         console.error('Usage: od conversation info <conversationId>');
         process.exit(2);
       }
-      const resp = await fetch(`${base}/api/conversations/${encodeURIComponent(id)}`);
+      const resp = await fetch(`${base}/api/conversations/${encodeURIComponent(id)}`, { headers: workspaceHeaders });
       if (!resp.ok) return structuredHttpFailure(resp);
       const data = await resp.json();
       process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       return;
+    }
+    case 'rename':
+    case 'delete':
+    case 'messages':
+    case 'files':
+    case 'upload': {
+      const id = positionalArgs(rest, conversationStringFlags)[0];
+      if (!id) { console.error('conversation id is required'); process.exit(2); }
+      const url = `${base}/api/conversations/${encodeURIComponent(id)}`;
+      let resp;
+      if (sub === 'rename') {
+        if (typeof flags.title !== 'string') { console.error('--title is required'); process.exit(2); }
+        resp = await fetch(url, { method: 'PATCH', headers: { ...workspaceHeaders, 'content-type': 'application/json' }, body: JSON.stringify({ title: flags.title }) });
+      } else if (sub === 'upload') {
+        if (!flags.path) { console.error('--path is required'); process.exit(2); }
+        const form = new FormData();
+        form.append('files', new Blob([readFileSync(flags.path)]), basename(flags.path));
+        resp = await fetch(`${url}/upload`, { method: 'POST', headers: workspaceHeaders, body: form });
+      } else if (sub === 'files' && flags.preview) {
+        if (!flags.path) { console.error('--path is required for a preview'); process.exit(2); }
+        resp = await fetch(`${url}/files/preview-scope`, { headers: workspaceHeaders });
+        if (!resp.ok) return structuredHttpFailure(resp);
+        const scope = await resp.json();
+        process.stdout.write(JSON.stringify({ url: `${base}${scope.baseUrl}${String(flags.path).split('/').map(encodeURIComponent).join('/')}`, expiresAt: scope.expiresAt }) + '\n'); return;
+      } else if (sub === 'files' && flags.path) {
+        if (!flags.out) { console.error('--out is required to download a file'); process.exit(2); }
+        resp = await fetch(`${url}/files/raw?path=${encodeURIComponent(flags.path)}`, { headers: workspaceHeaders });
+        if (!resp.ok) return structuredHttpFailure(resp);
+        writeFileSync(flags.out, Buffer.from(await resp.arrayBuffer()));
+        process.stdout.write(JSON.stringify({ path: flags.out }) + '\n'); return;
+      } else {
+        resp = await fetch(sub === 'delete' ? url : `${url}/${sub}`, { method: sub === 'delete' ? 'DELETE' : 'GET', headers: workspaceHeaders });
+      }
+      if (!resp.ok) return structuredHttpFailure(resp);
+      process.stdout.write(JSON.stringify(await resp.json(), null, 2) + '\n'); return;
     }
     default:
       console.error(`unknown subcommand: od conversation ${sub}`);

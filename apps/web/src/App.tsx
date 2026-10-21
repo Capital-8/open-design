@@ -69,6 +69,9 @@ import {
 import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './components/share/observed-public-share-link';
 import type { ShareLoginReturn } from './components/share/share-login-return';
 import { SignedOutObservedShare } from './components/share/SignedOutObservedShare';
+import { removeStandaloneConversationTabs } from './components/WorkspaceTabsBar';
+import { StandaloneConversationView } from './components/StandaloneConversationView';
+import { StandaloneConversationAccess } from './components/StandaloneConversationAccess';
 import { ProjectCreationPendingView } from './components/ProjectCreationPendingView';
 import { projectsForWorkspaceChrome } from './runtime/workspace-chrome-projects';
 import { AmrArtifactUpgradeGate } from './components/AmrArtifactUpgradeGate';
@@ -980,6 +983,9 @@ function AppInner() {
   } = workspaceContextState;
   const currentWorkspaceIdentity = workspaceIdentityCacheKey(workspaceContext);
   const workspaceAccountGeneration = currentWorkspaceAccountGeneration();
+  const standaloneTitleScope = `${workspaceAccountGeneration}:${currentWorkspaceIdentity}`;
+  const [standaloneTitleState, setStandaloneTitleState] = useState<{scope: string; names: Map<string, string>}>({ scope: standaloneTitleScope, names: new Map() });
+  const standaloneConversationTitles = standaloneTitleState.scope === standaloneTitleScope ? standaloneTitleState.names : new Map<string, string>();
   // Catalog display state is account-scoped in addition to Workspace-scoped.
   // During an unseeded identity transition the hook intentionally retains the
   // previous context while the replacement account is resolved; a pending
@@ -5550,6 +5556,34 @@ function AppInner() {
     );
   } else if (route.kind === 'home' && route.view === 'settings') {
     appMain = renderSettingsSurface('page');
+  } else if (route.kind === 'standalone-conversation') {
+    appMain = (
+      <div className="app">
+        <StandaloneConversationAccess state={workspaceContextState}>
+          <StandaloneConversationView
+            key={`${standaloneTitleScope}:${route.conversationId}`}
+            conversationId={route.conversationId}
+            workspaceContext={workspaceContext}
+            config={config}
+            agents={agents}
+            daemonLive={daemonLive}
+            onModeChange={handleModeChange}
+            onAgentChange={handleAgentChange}
+            onAgentModelChange={handleAgentModelChange}
+            onApiModelChange={handleApiModelChange}
+            onRefreshAgents={refreshAgents}
+            onOpenSettings={openSettings}
+            onBack={() => navigate({ kind: 'home', view: 'home' })}
+            onDeleted={() => { removeStandaloneConversationTabs(route.conversationId); navigate({ kind: 'home', view: 'home' }); }}
+            onTitleChange={(name) => setStandaloneTitleState((previous) => {
+              const names = previous.scope === standaloneTitleScope ? new Map(previous.names) : new Map<string, string>();
+              names.set(route.conversationId, name);
+              return { scope: standaloneTitleScope, names };
+            })}
+          />
+        </StandaloneConversationAccess>
+      </div>
+    );
   } else if (route.kind === 'project') {
     // Keyed on the route, not on `activeProject`: the pending frame is built
     // from the creation record alone so it shows on the tick the create request
@@ -5897,6 +5931,7 @@ function AppInner() {
         data-host-platform={hostPlatform}
       >
         <WorkspaceTabsBar
+          standaloneConversationTitles={standaloneConversationTitles}
           route={route}
           // The ambient list may still be loading (or belong to a different
           // selected Workspace) while a deep-linked project is already open.

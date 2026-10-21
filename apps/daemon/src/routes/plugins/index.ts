@@ -1,3 +1,4 @@
+import type { StandaloneConversationService } from '../../storage/standalone-conversations.js';
 import type { Express, NextFunction, Request, RequestHandler, Response } from 'express';
 import type {
   InstalledPluginRecord,
@@ -190,6 +191,7 @@ interface PluginRouteHelpers {
 }
 
 export interface RegisterPluginRoutesDeps {
+  standaloneConversations?: Pick<StandaloneConversationService, 'authorize'>;
   db: SqliteDbLike;
   authorizeProjectRequest: AuthorizeProjectRequest;
   /** Team-resource copy red-line (D3). When present, a frozen team plugin cannot
@@ -854,10 +856,17 @@ export function registerPluginRoutes(app: Express, deps: RegisterPluginRoutesDep
       return null;
     }
     const row = db.prepare(
-      `SELECT project_id AS projectId FROM applied_plugin_snapshots WHERE id = ?`,
-    ).get(snapshotId) as { projectId?: unknown } | undefined;
+      `SELECT project_id AS projectId, conversation_id AS conversationId FROM applied_plugin_snapshots WHERE id = ?`,
+    ).get(snapshotId) as { projectId?: unknown; conversationId?: unknown } | undefined;
     const projectId = typeof row?.projectId === 'string' ? row.projectId : '';
-    if (!projectId || !await deps.authorizeProjectRequest(
+    if (!projectId) {
+      if (typeof row?.conversationId === 'string' && deps.standaloneConversations) {
+        return await deps.standaloneConversations.authorize(req, res, row.conversationId, false) ? snap : null;
+      }
+      res.status(404).json({ error: 'snapshot not found' });
+      return null;
+    }
+    if (!await deps.authorizeProjectRequest(
       req,
       res,
       projectId,

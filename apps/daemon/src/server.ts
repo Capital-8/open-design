@@ -1,4 +1,7 @@
 // @ts-nocheck
+import { listWorkspaceFiles } from './projects.js';
+import { StandaloneConversationService } from './storage/standalone-conversations.js';
+import { registerStandaloneConversationRoutes } from './routes/standalone-conversations.js';
 import { assertCommentFileNotPending } from './collab/comment-file-retirements.js';
 import { captureJsonBodySize } from './http/json-body-size.js';
 
@@ -3444,7 +3447,7 @@ export async function startServer({
   // Routes that serve content to sandboxed iframes (Origin: null) for
   // read-only purposes.  All other /api routes reject Origin: null.
   const _NULL_ORIGIN_SAFE_GET_RE =
-    /^\/projects\/[^/]+\/(?:raw|preview)\/|^\/codex-pets\/[^/]+\/spritesheet$|^\/asset-cache$/;
+    /^\/projects\/[^/]+\/(?:raw|preview)\/|^\/conversations\/[^/]+\/files\/preview\/[a-f0-9-]+\/|^\/codex-pets\/[^/]+\/spritesheet$|^\/asset-cache$/;
   const _POWERED_PREVIEW_SAFE_RE = /^\/projects\/[^/]+\/powered\/.+$/u;
 
   // Reject cross-origin requests to API endpoints.
@@ -3948,6 +3951,9 @@ export async function startServer({
     verifyExplicitWorkspaceRequestContext({ req }, { fresh: false });
   const verifyWorkspaceRequestAuthority = (req: unknown) =>
     verifyExplicitWorkspaceRequestContext({ req });
+  const standaloneConversations = new StandaloneConversationService({
+    db, runtimeDataDir: RUNTIME_DATA_DIR, verifyRead: verifyWorkspaceReadAuthority, verifyWrite: verifyWorkspaceRequestAuthority,
+  });
   const verifyPersonalProjectDeleteLeaseAuthority =
     process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
       ? (req: unknown) => verifyWorkspaceRequestContext({
@@ -10190,6 +10196,7 @@ export async function startServer({
 
   registerPluginRoutes(app, {
     db,
+    standaloneConversations,
     authorizeProjectRequest,
     teamResources: collab.teamResources,
     paths: { PROJECTS_DIR, PLUGIN_REGISTRY_ROOTS, PLUGIN_LOCKFILE_PATH },
@@ -11685,6 +11692,14 @@ export async function startServer({
         existingProjectFolders = [];
       }
     }
+    if (!projectId && conversationId && standaloneConversations.get(conversationId)) {
+      try {
+        cwd = await standaloneConversations.ensureWorkspace(conversationId);
+        existingProjectFiles = await listWorkspaceFiles(cwd);
+      } catch (error) {
+        return failRun('WORKSPACE_UNAVAILABLE', error instanceof Error ? error.message : 'Conversation workspace unavailable');
+      }
+    }
     if (run.cancelRequested || design.runs.isTerminal(run.status)) return;
 
     // Sanitise supplied image paths: must live under UPLOAD_DIR and stay
@@ -12228,7 +12243,7 @@ export async function startServer({
     // does not fail the run.
     const captureChatArtifactsBeforeSuccess = async () => {
       try {
-        if (!run?.projectId || !run.assistantMessageId) return;
+        if (!run?.assistantMessageId) return;
         const outcome = await resolveRunArtifactOutcomeBeforeFinishAsync();
         const touchedPaths = Array.isArray(outcome?.diff?.touchedPaths)
           ? outcome.diff.touchedPaths
@@ -12252,6 +12267,7 @@ export async function startServer({
         } catch (err) {
           console.warn('[chat-artifacts] produced-file association failed', err);
         }
+        if (!run.projectId) return;
         const deps = { db, blobs: CHAT_ARTIFACT_BLOBS, quota: CHAT_ARTIFACT_QUOTA };
         const captured = await captureRunChatArtifactSnapshots(deps, {
           projectId: run.projectId,
@@ -17757,7 +17773,16 @@ export async function startServer({
     };
   });
 
+  registerStandaloneConversationRoutes(app, {
+    db, standaloneConversations, design,
+    // Web may register its port after daemon startup. Resolve the same live
+    // trusted-port source as the API origin gate on every preview response.
+    previewOrigins: () => allowedBrowserPorts(resolvedPort).flatMap((trustedPort) => [
+      `http://127.0.0.1:${trustedPort}`, `http://localhost:${trustedPort}`, `http://[::1]:${trustedPort}`,
+    ]),
+  });
   registerRunRoutes(app, {
+    standaloneConversations,
     db,
     design,
     resources: { listAllSkillLikeEntries },
@@ -18239,6 +18264,7 @@ export async function startServer({
   routineService.start();
 
   assertServerContextSatisfiesRoutes({
+    standaloneConversations,
     db,
     design,
     http: httpDeps,

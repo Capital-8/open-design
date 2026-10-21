@@ -11,6 +11,7 @@ interface Props {
   activeChipId: string | null;
   onPick?: (chip: HomeHeroChip) => void;
   disabled?: boolean;
+  onClear?: () => void;
   // Localized label for a chip id (reuses HomeHero's chip copy).
   labelFor: (chipId: string) => string;
 }
@@ -21,6 +22,7 @@ export function TemplatePicker({
   onPick,
   disabled = false,
   labelFor,
+  onClear,
 }: Props) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -78,6 +80,9 @@ export function TemplatePicker({
           <span className="home-hero__footer-select-label">{valueLabel}</span>
           <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="6 6 12 12" fill="currentColor" aria-hidden="true"><path d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" /></svg>
         </button>
+        {active && onClear ? <button type="button" className={styles.clear} disabled={disabled}
+          aria-label={t('chat.removeAria', { name: valueLabel })}
+          onClick={() => { setOpen(false); onClear(); }}><Icon name="close" size={12} /></button> : null}
       </div>
       {open ? <div id={menuId} role="listbox" aria-label={t('homeHero.templatePicker.label')}
         className="home-hero__footer-select-menu" data-testid="home-hero-template-menu">

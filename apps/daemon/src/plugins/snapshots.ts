@@ -34,7 +34,7 @@ type SqliteDb = Database.Database;
 type DbRow = Record<string, unknown>;
 
 export interface CreateSnapshotInput {
-  projectId: string;
+  projectId: string | null;
   conversationId?: string | null | undefined;
   runId?: string | null | undefined;
   pluginId: string;

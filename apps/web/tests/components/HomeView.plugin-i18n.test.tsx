@@ -135,10 +135,9 @@ describe('HomeView plugin i18n', () => {
     // Lexical editor stays empty (serializes to whitespace).
     await screen.findByTestId('home-hero-input');
     expect(homeHeroPromptText().trim()).toBe('');
-    // Routing the plugin scrolls the Home surface back to the top.
-    await waitFor(() => {
-      expect(scrollContainer.scrollTop).toBe(0);
-    });
+    // The composer stays at the bottom; applying a plugin must not jump the
+    // surrounding Home surface back to the catalogue header.
+    expect(scrollContainer.scrollTop).toBe(240);
   });
 
   // The "Use with query" affordance was an inline rich-card control. The Home

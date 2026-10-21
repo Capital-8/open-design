@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
+import { Button, Input, Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 import { createTabToTracking } from '@open-design/contracts/analytics';
 import { isOpenDesignHostAvailable, pickHostWorkingDir } from '@open-design/host';
 import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
@@ -63,6 +63,7 @@ import { Icon } from './Icon';
 import { Skeleton } from './Loading';
 import { Toast } from './Toast';
 import { useOpenFolderImport } from './useOpenFolderImport';
+import compactStyles from './NewProjectCompact.module.css';
 
 // Snapshot of a curated prompt template, captured at New Project time and
 // folded into ProjectMetadata.promptTemplate. The user may have edited the
@@ -170,6 +171,9 @@ interface Props {
   onOpenConnectorsTab?: () => void;
   loading?: boolean;
   initialTab?: CreateTab;
+  /** Simple project container creation; task types remain explicit entry points. */
+  compact?: boolean;
+  onCancel?: () => void;
 }
 
 const TAB_LABEL_KEYS: Record<CreateTab, keyof Dict> = {
@@ -291,6 +295,8 @@ export function NewProjectPanel({
   onOpenConnectorsTab,
   loading = false,
   initialTab = 'prototype',
+  compact = false,
+  onCancel,
 }: Props) {
   const t = useT();
   const { locale } = useI18n();
@@ -719,6 +725,20 @@ export function NewProjectPanel({
 
   function handleCreate() {
     if (!canCreate) return;
+    if (compact) {
+      const trimmedName = name.trim();
+      if (!trimmedName || workingDirPicking) return;
+      const requestId = analytics.newRequestId();
+      trackNewProjectModalElementClick(analytics.track, {
+        page_name: 'home', area: 'new_project_modal', element: 'create', tab_name: createTabToTracking('other'),
+      }, { requestId });
+      onCreate({
+        name: trimmedName, skillId: null, designSystemId: null,
+        metadata: { kind: 'other', nameSource: 'user', ...(workingDir ? { userWorkingDir: workingDir } : {}) },
+        ...(workingDirToken ? { userWorkingDirToken: workingDirToken } : {}), requestId,
+      });
+      return;
+    }
     // Media surfaces don't carry a design system pick. Force the primary
     // and inspiration ids to empty there so the New Project panel can't
     // accidentally bind a stale DS that the user can no longer see in the
@@ -803,7 +823,8 @@ export function NewProjectPanel({
         }
         if ('canceled' in result && result.canceled) return;
         setWorkingDirError({
-          message: `Couldn't open the folder picker (${'reason' in result ? result.reason : 'host unavailable'}). Please update OpenDesign and try again.`,
+          message: compact ? t('chat.linkedFolderPickError') : `Couldn't open the folder picker (${'reason' in result ? result.reason : 'host unavailable'}). Please update OpenDesign and try again.`,
+          ...(compact && 'reason' in result ? { details: result.reason } : {}),
         });
         return;
       }
@@ -852,6 +873,36 @@ export function NewProjectPanel({
     onImportFolder,
     onImportFolderResponse,
   });
+
+  if (compact) return (
+    <form className={compactStyles.form} data-testid="new-project-panel" onSubmit={(event) => { event.preventDefault(); handleCreate(); }}>
+      <label className={compactStyles.field}>
+        <span>{t('newproj.namePlaceholder')}</span>
+        <Input data-testid="new-project-name" value={name} onChange={(event) => setName(event.target.value)}
+          placeholder={t('newproj.namePlaceholder')} autoFocus disabled={loading} required />
+      </label>
+      <div className={compactStyles.field}>
+        <span id="new-project-folder-label">{t('newproj.compactFolderLabel')}</span>
+        <div className={compactStyles.directory}>
+          <Button variant="default" type="button" className={compactStyles.directoryPicker}
+            aria-labelledby="new-project-folder-label new-project-folder-value" aria-describedby="new-project-folder-hint"
+            onClick={() => void handlePickWorkingDir()} disabled={loading || workingDirPicking} title={workingDir ?? t('workingDirPicker.homeTitle')}>
+            <Icon name="folder" size={16} />
+            <span id="new-project-folder-value">{workingDirPicking ? t('workingDirPicker.processing') : workingDir ?? t('newproj.compactFolderDefault')}</span>
+            <Icon name="chevron-down" size={14} />
+          </Button>
+          {workingDir ? <Button variant="ghost" size="icon" type="button" disabled={loading || workingDirPicking}
+            aria-label={t('workingDirPicker.clearAria')} onClick={() => { setWorkingDir(null); setWorkingDirToken(null); }}><Icon name="close" size={14} /></Button> : null}
+        </div>
+        <p id="new-project-folder-hint" className={compactStyles.hint}>{t('newproj.compactFolderHint')}</p>
+      </div>
+      {workingDirError ? <div className={compactStyles.error} role="alert">{workingDirError.message}{workingDirError.details ? ` ${workingDirError.details}` : ''}</div> : null}
+      <div className={compactStyles.actions}>
+        {onCancel ? <Button variant="ghost" type="button" disabled={loading} onClick={onCancel}>{t('common.cancel')}</Button> : null}
+        <Button variant="primary" type="submit" data-testid="create-project" disabled={loading || workingDirPicking || !name.trim()}>{t('newproj.create')}</Button>
+      </div>
+    </form>
+  );
 
   return (
     <div className="newproj" data-testid="new-project-panel">

@@ -1118,3 +1118,51 @@ describe('NewProjectPanel start-from rail', () => {
     );
   });
 });
+
+describe('NewProjectPanel compact project creation', () => {
+  function renderCompact(onCreate = vi.fn(), loading = false) {
+    render(<NewProjectPanel compact initialTab="other" skills={skills} designSystems={designSystems}
+      defaultDesignSystemId="clay" templates={templates} promptTemplates={[]} onCreate={onCreate} loading={loading} />);
+    return onCreate;
+  }
+  it('asks only for a name and optional folder, without binding a hidden type, template, or design system', () => {
+    const onCreate = renderCompact();
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByTestId('design-system-trigger')).toBeNull();
+    expect((screen.getByTestId('create-project') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Project name' }), { target: { value: '  New workspace  ' } });
+    fireEvent.click(screen.getByTestId('create-project'));
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'New workspace', skillId: null, designSystemId: null, metadata: { kind: 'other', nameSource: 'user' },
+    }));
+  });
+  it('uses the selected existing directory directly and allows returning to default storage', async () => {
+    mockedOpenFolderDialog.mockResolvedValue('/Users/me/work');
+    const onCreate = renderCompact();
+    fireEvent.change(screen.getByTestId('new-project-name'), { target: { value: 'Project name' } });
+    fireEvent.click(screen.getByRole('button', { name: /Working folder/ }));
+    await screen.findByRole('button', { name: /\/Users\/me\/work/ });
+    fireEvent.click(screen.getByTestId('create-project'));
+    expect(onCreate.mock.calls[0]![0].metadata).toEqual({ kind: 'other', nameSource: 'user', userWorkingDir: '/Users/me/work' });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear working directory' }));
+    fireEvent.click(screen.getByTestId('create-project'));
+    expect(onCreate.mock.calls[1]![0].metadata).toEqual({ kind: 'other', nameSource: 'user' });
+  });
+  it('keeps desktop folder selection authority and does not fall back to an untrusted path', async () => {
+    mockedIsHostAvailable.mockReturnValue(true);
+    mockedPickHostWorkingDir.mockResolvedValue({ ok: true, baseDir: '/Users/me/host-work', token: 'selected-folder-token' });
+    const onCreate = renderCompact();
+    fireEvent.change(screen.getByTestId('new-project-name'), { target: { value: 'Project' } });
+    fireEvent.click(screen.getByRole('button', { name: /Working folder/ }));
+    await screen.findByRole('button', { name: /host-work/ });
+    fireEvent.click(screen.getByTestId('create-project'));
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ userWorkingDirToken: 'selected-folder-token' }));
+    expect(mockedOpenFolderDialog).not.toHaveBeenCalled();
+  });
+  it('disables creation and folder selection while the parent create is pending', () => {
+    renderCompact(vi.fn(), true);
+    expect((screen.getByTestId('new-project-name') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByTestId('create-project') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /Working folder/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});

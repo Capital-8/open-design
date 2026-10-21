@@ -21,6 +21,7 @@ import type {
   SkillSummary,
 } from '../types';
 import { Icon } from './Icon';
+import compactStyles from './NewProjectCompact.module.css';
 import {
   NewProjectPanel,
   type CreateInput,
@@ -50,6 +51,7 @@ interface Props {
   onOpenConnectorsTab?: () => void;
   onClose: () => void;
   initialTab?: CreateTab;
+  compact?: boolean;
 }
 
 // The `open` flag stays the public API, but the close animation has to play
@@ -60,9 +62,21 @@ interface Props {
 // first. The body lives in its own component so its mount effects (focus the
 // close button, lock body scroll, bind Esc) fire exactly when it appears.
 export function NewProjectModal({ open, ...rest }: Props) {
+  const previousOpen = useRef(false);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  // Capture before the compact form's autoFocus runs during the child commit.
+  if (open && !previousOpen.current && rest.compact && typeof document !== 'undefined') {
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+  previousOpen.current = open;
+  const restoreTriggerFocus = () => {
+    if (returnFocus.current?.isConnected) returnFocus.current.focus();
+    returnFocus.current = null;
+  };
+  useEffect(() => { if (!open) restoreTriggerFocus(); }, [open]);
   return (
     <AnimatePresence>
-      {open ? <NewProjectModalBody {...rest} /> : null}
+      {open ? <NewProjectModalBody {...rest} focusActiveRef={previousOpen} /> : null}
     </AnimatePresence>
   );
 }
@@ -86,8 +100,11 @@ function NewProjectModalBody({
   onOpenConnectorsTab,
   onClose,
   initialTab,
-}: Omit<Props, 'open'>) {
+  compact = false,
+  focusActiveRef,
+}: Omit<Props, 'open'> & { focusActiveRef: { current: boolean } }) {
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const t = useT();
@@ -110,8 +127,39 @@ function NewProjectModalBody({
   }, []);
 
   useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
+    if (!compact) closeRef.current?.focus();
+  }, [compact]);
+
+  useEffect(() => {
+    if (!compact) return;
+    // The shared Dialog currently provides dismissal but no focus containment.
+    // Keep this small compact form bounded without changing the legacy panels.
+    const onTab = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !focusActiveRef.current) return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const controls = Array.from(dialog.querySelectorAll<HTMLElement>(
+        'button, input, select, textarea, a[href], [tabindex]',
+      )).filter((element) => element.tabIndex >= 0 && !element.matches(':disabled')
+        && !element.closest('[hidden], [inert]')
+        && getComputedStyle(element).display !== 'none'
+        && getComputedStyle(element).visibility !== 'hidden');
+      const first = controls[0];
+      const last = controls.at(-1);
+      const active = document.activeElement;
+      if (!first || !last) {
+        event.preventDefault(); dialog.focus();
+      } else if (!controls.some((control) => control === active)) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', onTab);
+    return () => document.removeEventListener('keydown', onTab);
+  }, [compact, focusActiveRef]);
 
   async function handleCreate(input: CreateInput & { requestId?: string }) {
     if (creating) return;
@@ -120,12 +168,12 @@ function NewProjectModalBody({
     try {
       const result = await onCreate(input);
       if (result === false) {
-        setCreateError('Could not create project. Please try again.');
+        setCreateError(t('newproj.createFailed'));
         return;
       }
       onClose();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Could not create project. Please try again.');
+      setCreateError(err instanceof Error ? err.message : t('newproj.createFailed'));
     } finally {
       setCreating(false);
     }
@@ -133,7 +181,7 @@ function NewProjectModalBody({
 
   return (
     <motion.div
-      className="new-project-modal-backdrop"
+      className={`new-project-modal-backdrop${compact ? ` ${compactStyles.backdrop}` : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -147,7 +195,9 @@ function NewProjectModalBody({
       exit="exit"
     >
       <motion.div
-        className="new-project-modal"
+        ref={dialogRef}
+        tabIndex={compact ? -1 : undefined}
+        className={`new-project-modal${compact ? ` ${compactStyles.modal}` : ''}`}
         variants={modalContent}
         initial="hidden"
         animate="visible"
@@ -161,14 +211,16 @@ function NewProjectModalBody({
             className="new-project-modal__close"
             onClick={onClose}
             disabled={creating}
-            aria-label="Close"
-            title="Close (Esc)"
+            aria-label={t('common.close')}
+            title={`${t('common.close')} (Esc)`}
           >
             <Icon name="close" size={14} />
           </button>
         </header>
         <div className="new-project-modal__body">
           <NewProjectPanel
+            compact={compact}
+            onCancel={onClose}
             skills={skills}
             {...(designTemplates ? { designTemplates } : {})}
             designSystems={designSystems}
@@ -191,7 +243,7 @@ function NewProjectModalBody({
           />
           {creating ? (
             <div className="new-project-modal__status" role="status">
-              Creating project…
+              {compact ? t('common.loading') : 'Creating project…'}
             </div>
           ) : null}
           {createError ? (

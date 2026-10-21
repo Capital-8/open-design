@@ -1890,6 +1890,8 @@ export async function persistTabsToDaemonNow(
 //     the prompt block to the frozen view)
 
 export interface ListPluginsOptions {
+  /** Opt in when the UI distinguishes a failed read from an empty catalogue. */
+  throwOnError?: boolean;
   includeHidden?: boolean;
   /**
    * When present, attaches the same workspace identity headers project reads
@@ -1975,7 +1977,10 @@ export async function listPlugins(
       '/api/plugins',
       options.workspaceContext ? { headers: workspaceProjectHeaders(options.workspaceContext) } : undefined,
     );
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      if (options.throwOnError) throw new Error(`Plugin catalogue read failed (${resp.status})`);
+      return [];
+    }
     const json = (await resp.json()) as { plugins?: InstalledPluginRecord[] };
     const plugins = json.plugins ?? [];
     const visible = plugins.filter(isVisiblePlugin);
@@ -1983,7 +1988,8 @@ export async function listPlugins(
       cacheVisiblePlugins(cacheKey, visible);
     }
     return options.includeHidden ? plugins : visible;
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return [];
   }
 }
@@ -1993,7 +1999,7 @@ export async function listPlugins(
 // surfaces that mount often (Home) where a slightly stale list is fine and the
 // heavy `/api/plugins` round trip per mount is not.
 export async function listPluginsFresh(
-  options: Pick<ListPluginsOptions, 'workspaceContext' | 'accountGeneration'> = {},
+  options: Pick<ListPluginsOptions, 'workspaceContext' | 'accountGeneration' | 'throwOnError'> = {},
 ): Promise<InstalledPluginRecord[]> {
   const cached = cachedVisiblePlugins.get(pluginCatalogCacheKey(options));
   if (cached && Date.now() - cached.cachedAt < PLUGINS_CACHE_TTL_MS) {

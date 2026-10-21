@@ -56,6 +56,7 @@ function pluginRecord(id: string, title: string, tags: string[], od: Record<stri
       tags,
       od: {
         kind: 'scenario',
+        preview: { type: 'image', poster: `/test/${id}.webp` },
         taskKind: 'new-generation',
         useCase: { query: `Seeded brief for ${title}.` },
         ...od,
@@ -121,10 +122,10 @@ const APPLY_RESULT = {
   projectMetadata: {},
 };
 
-function stubFetch() {
+function stubFetch(cardId?: string) {
   const fetchMock = vi.fn<typeof fetch>(async (url) => {
     if (typeof url === 'string' && url === '/api/plugins') {
-      return new Response(JSON.stringify({ plugins: CATALOG }), {
+      return new Response(JSON.stringify({ plugins: cardId ? [...CHIP_DEFAULTS.map((record) => ({ ...record, manifest: { ...record.manifest, od: { ...record.manifest.od, preview: undefined } } })), ...EXAMPLE_CARDS.filter((record) => record.id === cardId)] : CATALOG }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -333,7 +334,7 @@ describe('HomeView — dismissing a picked example card', () => {
       { ...testCase, remount: true, name: `${testCase.name} — after a Home remount` },
     ]),
   )('$name: dismissing the example returns the composer to its task type', async (testCase) => {
-    stubFetch();
+    stubFetch(testCase.cardId);
     stubAnimationFrame();
     const onSubmit = submitSpy();
 
@@ -382,7 +383,7 @@ describe('HomeView — dismissing a picked example card', () => {
     // Same root cause seen from the other side: the persisted composer draft is
     // the pick's only survivor, so it has to carry how the pick was made. A
     // restored example card is still an example card.
-    stubFetch();
+    stubFetch('example-social-carousel');
     stubAnimationFrame();
     const onSubmit = submitSpy();
 

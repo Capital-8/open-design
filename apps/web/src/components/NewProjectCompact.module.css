@@ -1,0 +1,11 @@
+.backdrop:global(.new-project-modal-backdrop) { align-items: center; }
+.modal:global(.new-project-modal) { width: min(480px, calc(100vw - 32px)); max-width: 480px; }
+.form { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; padding: 12px 24px 24px; }
+.field { display: flex; flex-direction: column; gap: 9px; min-width: 0; color: var(--text-strong); font-size: 13px; }
+.directory { display: flex; align-items: center; gap: 6px; }
+.directoryPicker { flex: 1; min-width: 0; justify-content: flex-start; }
+.directoryPicker span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+.hint { margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-soft); }
+.error { font-size: 13px; line-height: 1.5; color: var(--text-strong); }
+.actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 4px; }
+@media (max-width: 520px) { .form { padding-inline: 16px; } }

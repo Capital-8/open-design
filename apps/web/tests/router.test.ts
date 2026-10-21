@@ -24,6 +24,11 @@ function roundTrip(route: Route): Route {
 }
 
 describe('parseRoute / buildPath (issue #1505)', () => {
+  it('round-trips an independent conversation without a project segment', () => {
+    const route: Route = { kind: 'standalone-conversation', conversationId: 'conversation / one' };
+    expect(roundTrip(route)).toEqual(route);
+    expect(buildPath(route)).toBe('/conversations/conversation%20%2F%20one');
+  });
   it('parses the home route', () => {
     expect(parseRoute('/')).toEqual({ kind: 'home', view: 'home' });
     expect(parseRoute('')).toEqual({ kind: 'home', view: 'home' });

@@ -8,7 +8,7 @@
 // textarea can live centered in the hero.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
+import { Button, Dialog, DialogFooter, DialogTitle } from '@open-design/components';
 import type {
   ApplyResult,
   ChatSessionMode,
@@ -92,13 +92,13 @@ import type {
   SkillSummary,
 } from '../types';
 import { inlineMentionToken, mentionTokenPresent } from '../utils/inlineMentions';
-import { smoothScrollToTop } from '../utils/smoothScrollToTop';
 import {
   missingRequiredInputs,
   pluginInputsAreValid,
   requiredInputsAreUserFillable,
 } from '../utils/pluginRequiredInputs';
 import { HomeHero, type ExamplePromptInfo, type HomeHeroHandle } from './HomeHero';
+import homeStartStyles from './home-hero/HomeStartPanel.module.css';
 import { findChip, HOME_HERO_CHIPS, type HomeHeroChip } from './home-hero/chips';
 import {
   legacyPrototypeSceneForChipId,
@@ -281,6 +281,7 @@ interface Props {
   ) => Promise<boolean | 'blocked' | void> | boolean | 'blocked' | void;
   onOpenProject: (id: string, fileName?: string) => void;
   onBrowseRegistry?: () => void;
+  onBrowseTemplates?: () => void;
   onOpenIntegrations?: () => void;
   onOpenMcp?: () => void;
   // Stage B: optional callbacks the rail's migration chips need.
@@ -505,6 +506,7 @@ export function HomeView({
   onSubmit,
   onOpenProject,
   onBrowseRegistry,
+  onBrowseTemplates,
   onOpenIntegrations,
   onOpenMcp,
   onOpenNewProject,
@@ -546,6 +548,7 @@ export function HomeView({
   }
   const pluginAccountGeneration = currentWorkspaceAccountGeneration();
   const pluginCatalogOptions = {
+    throwOnError: true,
     workspaceContext: pluginCatalogWorkspaceContext,
     accountGeneration: pluginAccountGeneration,
   };
@@ -579,6 +582,7 @@ export function HomeView({
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>(
     () => initialPluginsRef.current ?? [],
   );
+  const [pluginsLoadFailed, setPluginsLoadFailed] = useState(false);
   const [pluginsLoading, setPluginsLoading] = useState(
     () => initialPluginsRef.current === null,
   );
@@ -592,6 +596,7 @@ export function HomeView({
       : null;
     setPluginCatalogKey(desiredPluginCatalogKey);
     setPlugins(cached ?? []);
+    setPluginsLoadFailed(false);
     setPluginsLoading(cached === null);
   }
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
@@ -934,15 +939,16 @@ export function HomeView({
   homeActiveRef.current = isActive;
   const desiredPluginCatalogKeyRef = useRef(desiredPluginCatalogKey);
   desiredPluginCatalogKeyRef.current = desiredPluginCatalogKey;
-  const scrollHomeToTop = useCallback(() => {
+  const scrollHomeComposerIntoView = useCallback(() => {
     // Only the page composer lives at the top of its column. A docked one is
     // pinned in view already, so scrolling its host would yank the grid the
     // user is reading out from under them for no gain.
     if (variant === 'dock') return;
     requestAnimationFrame(() => {
-      const scrollContainer = homeViewRef.current?.closest('.entry-main--scroll');
-      if (!(scrollContainer instanceof HTMLElement)) return;
-      smoothScrollToTop(scrollContainer);
+      const composer = homeViewRef.current?.querySelector('[data-testid="home-hero-composer-card"]');
+      if (composer instanceof HTMLElement && typeof composer.scrollIntoView === 'function') {
+        composer.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     });
   }, [variant]);
   useEffect(() => {
@@ -956,6 +962,7 @@ export function HomeView({
       const current = pluginCatalogReloadInFlightRef.current;
       if (!supersede && current?.key === issuedCatalogKey) return current.promise;
       const requestGeneration = ++pluginCatalogRequestGenerationRef.current;
+      setPluginsLoadFailed(false);
       const promise = (force
         ? listPlugins(pluginCatalogOptions)
         : listPluginsFresh(pluginCatalogOptions)).then((rows) => {
@@ -967,6 +974,12 @@ export function HomeView({
         setPluginCatalogKey(issuedCatalogKey);
         setPlugins(rows);
         setPluginsLoading(false);
+        setPluginsLoadFailed(false);
+      }).catch(() => {
+        if (cancelled || requestGeneration !== pluginCatalogRequestGenerationRef.current
+          || desiredPluginCatalogKeyRef.current !== issuedCatalogKey) return;
+        setPluginsLoading(false);
+        setPluginsLoadFailed(true);
       }).finally(() => {
         if (pluginCatalogReloadInFlightRef.current?.promise === promise) {
           pluginCatalogReloadInFlightRef.current = null;
@@ -1151,7 +1164,7 @@ export function HomeView({
       if (promptHandoff.focus) {
         focusPromptAtEnd();
       }
-      scrollHomeToTop();
+      scrollHomeComposerIntoView();
       return;
     }
 
@@ -1159,7 +1172,7 @@ export function HomeView({
       // Same destination as picking the skill from the composer's own picker:
       // the skill becomes the run's active skill and seeds its example prompt.
       useSkill(promptHandoff.skill, null);
-      scrollHomeToTop();
+      scrollHomeComposerIntoView();
       return;
     }
 
@@ -1180,8 +1193,8 @@ export function HomeView({
     setPendingAuthoringInputs(promptHandoff.inputs);
     setPendingAuthoringChipId('create-plugin');
     setPendingChipId('create-plugin');
-    scrollHomeToTop();
-  }, [promptHandoff, scrollHomeToTop]);
+    scrollHomeComposerIntoView();
+  }, [promptHandoff, scrollHomeComposerIntoView]);
 
   // "Chat to design" hand-off from the Library multi-select bar: the chosen
   // assets are parked as File objects in a single-shot store, then we navigate
@@ -1821,7 +1834,7 @@ export function HomeView({
         explicitPick: true,
         ...exampleBinding,
       });
-      scrollHomeToTop();
+      scrollHomeComposerIntoView();
       // Plugins with required inputs and no defaults land on the inputs
       // form, not Send — only cue Send when submit is actually unlocked.
       if (submittable) {
@@ -1837,7 +1850,7 @@ export function HomeView({
       explicitPick: true,
       ...exampleBinding,
     });
-    scrollHomeToTop();
+    scrollHomeComposerIntoView();
     // Plain Use doesn't seed the composer; with no draft and no staged
     // files (or with required inputs still missing) the send button stays
     // disabled, and flashing a disabled button points at a dead end.
@@ -1975,37 +1988,15 @@ export function HomeView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingChipRestore, pluginsLoading, plugins, active, pendingPluginUseHandoff]);
 
-  // Seed only the page's first untouched visit. Restored drafts and host
-  // handoffs own their selection; a later clear must not re-run this default.
-  const [defaultTypeSettled, setDefaultTypeSettled] = useState(false);
-  const defaultTypePending = ownsComposerDraft && !defaultTypeSettled && !active;
+  // An untouched page starts without a task type. Saved picks and host
+  // handoffs still resolve through the existing restore paths above.
+  const [initialTypeSettled, setInitialTypeSettled] = useState(false);
+  const defaultTypePending = ownsComposerDraft && !initialTypeSettled && !active;
   useEffect(() => {
-    if (!ownsComposerDraft || defaultTypeSettled) return;
-    if (active || promptHandoff || pendingPluginUseHandoff || hasPendingHomeChip(variant)) {
-      setDefaultTypeSettled(true);
-      return;
-    }
-    if (pluginsLoading || pendingChipRestore) return;
-    setDefaultTypeSettled(true);
-    const chip = findChip('prototype');
-    if (chip?.action.kind !== 'apply-scenario') return;
-    const action = chip.action;
-    const record = plugins.find((plugin) => plugin.id === action.pluginId);
-    // A missing catalog entry must not lock the composer or invent a plugin.
-    // Explicit picks continue to report the normal missing-scenario error.
-    if (!record) return;
-    void usePlugin(record, undefined, {
-      chipId: chip.id,
-      projectKind: chip.action.projectKind,
-      inputs: chip.action.inputs,
-      projectMetadata: chip.action.projectMetadata ?? null,
-      suppressPromptUpdate: true,
-      focusPrompt: false,
-      deferApply: true,
-    });
-    // usePlugin reads this render's catalog/context; it is not an effect trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownsComposerDraft, defaultTypeSettled, active, promptHandoff, pendingPluginUseHandoff, variant, pluginsLoading, pendingChipRestore, plugins]);
+    if (!ownsComposerDraft || initialTypeSettled) return;
+    if (active || promptHandoff || pendingPluginUseHandoff || hasPendingHomeChip(variant)
+      || (!pluginsLoading && !pendingChipRestore)) setInitialTypeSettled(true);
+  }, [ownsComposerDraft, initialTypeSettled, active, promptHandoff, pendingPluginUseHandoff, variant, pluginsLoading, pendingChipRestore]);
 
   function addPluginContext(record: InstalledPluginRecord, nextPrompt: string | null) {
     setSelectedPluginContexts((prev) => {
@@ -2017,14 +2008,9 @@ export function HomeView({
     focusPromptAtEnd();
   }
 
-  function useExamplePlugin(record: InstalledPluginRecord, chipId: string, promptText: string) {
+  function useExamplePlugin(record: InstalledPluginRecord, chipId: string, promptText: string, onApplied?: () => void) {
     setError(null);
-    // P0 ui_click area=chat_composer element=example_prompt: the user picked a
-    // plugin-preset example card below the rail. `chip_id` is the active task
-    // type, `plugin_id` the preset so example usage breaks down per plugin. (The
-    // Website-clone rail uses plain text prompt cards instead — those fire the
-    // same event from HomeHero's usePromptExample.) Raw seed text is never sent
-    // (free-text / PII rule).
+    // Track the real template selection without including editable seed text.
     trackHomeChatComposerClick(analytics.track, {
       page_name: 'home',
       area: 'chat_composer',
@@ -2033,29 +2019,24 @@ export function HomeView({
       plugin_id: record.sourceMarketplaceEntryName ?? record.id,
       plugin_type: record.marketplaceTrust ?? 'official',
     });
-    // Picking a preset card *binds* the plugin (not just a textarea fill):
-    // active switches to this exact preset so submit resolves its snapshot and
-    // injects the plugin's SKILL.md + example.html as generation context — the
-    // output faithfully recreates the reference. `promptText` is the short,
-    // editable seed; the full build spec rides along in the plugin context.
-    // deferApply mirrors the chip rail: bind now, resolve the snapshot on
-    // submit (submit() already re-resolves), so a preset click stays instant
-    // and doesn't fire an /apply roundtrip per card. The chip is already
-    // active when preset cards are visible, so reuse its project kind/metadata.
-    void usePlugin(record, promptText, {
-      chipId,
-      prototypeSubtypeId: active?.prototypeSubtypeId ?? null,
-      projectKind: active?.projectKind ?? undefined,
-      projectMetadata: active?.projectMetadata ?? null,
-      deferApply: true,
-      explicitPick: true,
-      // An example card is the ONE explicit pick that is a choice of look
-      // rather than of strategy — see `examplePickReference`.
-      examplePick: true,
-    }).then((submittable) => {
+    // Featured cards can be picked before any type is selected. Derive the
+    // route from the card's own type, never from a previously selected one.
+    const chip = findChip(chipId);
+    const action = chip?.action.kind === 'apply-scenario' ? chip.action : null;
+    runWithReplacementConfirmation(localizePluginTitle(locale, record), promptText, async () => {
+      const submittable = await usePlugin(record, promptText, {
+        chipId,
+        prototypeSubtypeId: active?.chipId === chipId ? active.prototypeSubtypeId : null,
+        projectKind: action?.projectKind,
+        projectMetadata: active?.chipId === chipId ? active.projectMetadata : action?.projectMetadata ?? null,
+        deferApply: true,
+        explicitPick: true,
+        examplePick: true,
+      });
+      onApplied?.();
       if (submittable) inputRef.current?.pulseSend();
-    });
-    focusPromptAtEnd();
+      focusPromptAtEnd();
+    }, { before: active?.record.id ?? null, after: record.id });
   }
 
   async function duplicateExamplePlugin(record: InstalledPluginRecord) {
@@ -3126,7 +3107,7 @@ export function HomeView({
   return (
     <div
       className={`home-view${recentProjectsEmpty ? ' home-view--centered' : ''}${
-        variant === 'dock' ? ' home-view--dock' : ''
+        variant === 'dock' ? ' home-view--dock' : ` ${homeStartStyles.page}`
       }`}
       data-testid="home-view"
       data-variant={variant}
@@ -3148,6 +3129,7 @@ export function HomeView({
       )}
       <HomeHero
         variant={variant}
+        onBrowseTemplates={onBrowseTemplates ?? (onOpenNewProject ? () => onOpenNewProject('template') : undefined)}
         collapseSignal={collapseSignal}
         workspaceContext={workspaceContext}
         ref={inputRef}
@@ -3206,6 +3188,8 @@ export function HomeView({
         onRemoveFile={removeStagedFile}
         onImportFigma={() => setFigmaModalOpen(true)}
         pluginOptions={plugins}
+        pluginsLoadFailed={pluginsLoadFailed}
+        onRetryPlugins={() => { setPluginsLoading(true); void pluginCatalogReloadRef.current(true, true); }}
         pluginsLoading={
           pluginsLoading
           || workspaceContextState.loading
@@ -3422,14 +3406,14 @@ export function HomeView({
           includeChromeClassName={false}
           ariaLabelledBy="home-hero-confirm-title"
           closeOnBackdrop={false}
+          onClose={() => setPendingReplacement(null)}
         >
             <DialogTitle id="home-hero-confirm-title">{t('homeHero.confirmReplaceTitle')}</DialogTitle>
             <p>
               {t('homeHero.confirmReplaceBody', { title: pendingReplacement.title })}
             </p>
             <DialogFooter className="home-hero-confirm__actions">
-              <button
-                type="button"
+              <Button
                 className="home-hero-confirm__secondary"
                 onClick={() => {
                   trackPluginReplacementModalClick(analytics.track, {
@@ -3441,9 +3425,8 @@ export function HomeView({
                 }}
               >
                 {t('common.cancel')}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 className="home-hero-confirm__primary"
                 onClick={() => {
                   trackPluginReplacementModalClick(analytics.track, {
@@ -3487,7 +3470,7 @@ export function HomeView({
                 }}
               >
                 {t('homeHero.confirmReplace')}
-              </button>
+              </Button>
             </DialogFooter>
         </Dialog>
       ) : null}

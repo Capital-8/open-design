@@ -32,7 +32,8 @@ const WEB_PROTOTYPE_PLUGIN = {
     title: 'Web Prototype',
     version: '0.1.0',
     description: 'General-purpose desktop web prototype.',
-    od: { kind: 'scenario', taskKind: 'new-generation' },
+    tags: ['prototype'],
+    od: { kind: 'scenario', taskKind: 'new-generation', mode: 'prototype', useCase: { query: 'Build a polished interactive prototype for the product team.' }, preview: { type: 'image', poster: '/test/prototype.webp' } },
   },
 };
 
@@ -101,8 +102,8 @@ describe('use-with-query send pulse gating', () => {
   });
 });
 
-describe('static prompt-example send pulse', () => {
-  it('pulses the send button after clicking a fallback prompt-example card', async () => {
+describe('featured template send pulse', () => {
+  it('pulses the send button after using a real featured template', async () => {
     // Keep the first-run guide quiet so the sheen we assert on is the
     // send button's, not the guide trail's.
     writeHomeGuideStage('done');
@@ -126,12 +127,9 @@ describe('static prompt-example send pulse', () => {
       </I18nProvider>,
     );
 
-    // #5517 removed the inline template rail; templates are picked from the
-    // composer footer's radial Template picker.
-    // The chip's default plugin exists (so the chip binds) but no plugin
-    // matches the example filter → fallback static prompt-example cards.
+    // Pick a task, then use its real catalogue template.
     await pickHomeTemplate('prototype');
-    const exampleCards = await screen.findAllByTestId('home-hero-prompt-example');
+    const exampleCards = await screen.findAllByTestId('home-hero-plugin-preset');
     const firstExample = exampleCards[0];
     if (!firstExample) throw new Error('expected at least one prompt-example card');
 

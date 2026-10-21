@@ -1892,6 +1892,14 @@ const WORKSPACE_CONTEXT_RETRY_BASE_MS = 1_000;
 const WORKSPACE_CONTEXT_RETRY_MAX_MS = 30_000;
 const WORKSPACE_CONTEXT_RETRY_EVENT = 'od:workspace-context-retry';
 
+/** Retry the current identity read without announcing an account switch. */
+export function retryWorkspaceContextRead(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(WORKSPACE_CONTEXT_RETRY_EVENT, {
+    detail: { requestKey: workspaceContextRequestToken },
+  }));
+}
+
 function defaultWorkspaceContextRetryBackoff(): BackoffOptions {
   return {
     initialMs: WORKSPACE_CONTEXT_RETRY_BASE_MS,

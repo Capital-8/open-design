@@ -1,5 +1,6 @@
 import { CodingPlanUsage } from './CodingPlanUsage';
 import planCardStyles from './PersonalPlanCard.module.css';
+import railStyles from './EntryNavRail.module.css';
 // Team-edition entry navigation rail (Lovart/Manus-style labeled column).
 //
 // Structure — faithfully ported from the design demo
@@ -244,6 +245,7 @@ function attributableWorkspaceDirectory(
 export type EntryView = EntryHomeView;
 
 interface Props {
+  iconOnly?: boolean;
   view: EntryView;
   onViewChange: (view: EntryView) => void;
   onNewProject: () => void;
@@ -319,6 +321,7 @@ interface Props {
 }
 
 interface NavButtonProps {
+  iconOnly?: boolean;
   active?: boolean;
   ariaLabel: string;
   label: string;
@@ -333,11 +336,10 @@ interface NavButtonProps {
   children: ReactNode;
 }
 
-// No `data-tooltip` here: every nav item renders its label inline, so the
-// rail's hover bubble (entry-layout.css) would only duplicate visible text.
-// That bubble stays reserved for the rail's icon-only controls (updater,
-// avatar, icon-only sign-out).
+// Compact navigation uses the shared hover/focus tooltip; labeled navigation
+// keeps its inline text without a duplicate bubble.
 function NavButton({
+  iconOnly,
   active,
   ariaLabel,
   label,
@@ -357,6 +359,7 @@ function NavButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
+      data-tooltip={iconOnly ? ariaLabel : undefined}
       aria-current={active ? 'page' : undefined}
       aria-haspopup={ariaHasPopup}
       aria-expanded={ariaHasPopup ? Boolean(ariaExpanded) : undefined}
@@ -2088,6 +2091,7 @@ function RailSocialRow({
 }
 
 export function EntryNavRail({
+  iconOnly = false,
   view,
   onViewChange,
   onNewProject,
@@ -2396,7 +2400,7 @@ export function EntryNavRail({
   return (
     <nav
       ref={railRef}
-      className={`entry-nav-rail${open ? ' is-open' : ''}`}
+      className={`entry-nav-rail${open ? ' is-open' : ''}${iconOnly ? ` ${railStyles.iconOnly}` : ''}`}
       aria-label={t('entry.primaryNavAria')}
       aria-hidden={open ? undefined : true}
     >
@@ -2420,6 +2424,8 @@ export function EntryNavRail({
                 setTeamOpen((v) => !v);
               }}
               aria-expanded={teamOpen}
+              aria-label={workspaceName}
+              title={workspaceName}
               data-testid="workspace-switcher"
             >
               <span className="entry-nav-rail__team-avatar" aria-hidden>{workspaceInitial}</span>
@@ -2554,6 +2560,7 @@ export function EntryNavRail({
             reach EntryShell through window events (entryRailBridge). The rail
             column starts at the workspace switcher. */}
         <NavButton
+          iconOnly={iconOnly}
           active={isHome}
           ariaLabel={homeLabel}
           label={homeLabel}
@@ -2563,6 +2570,7 @@ export function EntryNavRail({
           <Icon name="home" size={16} />
         </NavButton>
         <NavButton
+          iconOnly={iconOnly}
           active={view === 'community'}
           ariaLabel={communityLabel}
           label={communityLabel}
@@ -2572,7 +2580,22 @@ export function EntryNavRail({
           <Icon name="globe" size={16} />
         </NavButton>
 
-        {context ? (
+        {iconOnly ? (
+          <div className={`entry-nav-rail__team-section ${railStyles.destinations}`}>
+            <NavButton iconOnly active={view === 'plugins'} ariaLabel={t('entry.navPlugins')} label={t('entry.navPlugins')} onClick={() => selectView('plugins')} testId="entry-nav-plugins">
+              <Icon name="puzzle" size={18} />
+            </NavButton>
+            <NavButton iconOnly active={view === 'design-systems'} ariaLabel={t('entry.navDesignSystems')} label={t('entry.navDesignSystems')} onClick={() => selectView('design-systems')} testId="entry-nav-design-systems">
+              <Icon name="palette" size={18} />
+            </NavButton>
+            <NavButton iconOnly ariaLabel={t('entry.accountSettings')} label={t('entry.accountSettings')} onClick={() => {
+              trackAccountMenuClick(analytics.track, { page_name: analyticsPage, area: 'account_menu', element: 'settings' });
+              onOpenSettings?.();
+            }} testId="entry-settings-button">
+              <Icon name="settings" size={18} />
+            </NavButton>
+          </div>
+        ) : context ? (
           <div className="entry-nav-rail__team-section">
             {/* 全部项目 is the ONE project destination (OPEND-3108): the page
                 splits into 最近浏览过 / 个人项目 / 团队项目 tabs, so a team

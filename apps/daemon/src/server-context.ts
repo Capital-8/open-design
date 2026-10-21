@@ -1,3 +1,4 @@
+import type { StandaloneConversationService } from './storage/standalone-conversations.js';
 import type { Express } from 'express';
 import type { SkillInfo } from './skills.js';
 import type { DesignSystemSummary } from './design-systems/index.js';
@@ -181,6 +182,7 @@ export interface TelemetryDeps {
 }
 
 export interface ServerContext {
+  standaloneConversations: StandaloneConversationService;
   db: any;
   design: any;
   http: HttpDeps;

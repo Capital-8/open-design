@@ -1,3 +1,4 @@
+import type { RegisterStandaloneConversationRoutesDeps } from './routes/standalone-conversations.js';
 import type { ServerContext } from './server-context.js';
 import type { RegisterActiveContextRoutesDeps } from './routes/active-context.js';
 import type { RegisterAutomationRoutesDeps } from './routes/automation.js';
@@ -22,6 +23,7 @@ import type { RegisterVelaRoutesDeps } from './routes/vela.js';
 import type { RegisterXaiRoutesDeps } from './routes/xai.js';
 
 type AllRegisteredRouteDeps =
+  & RegisterStandaloneConversationRoutesDeps
   & RegisterActiveContextRoutesDeps
   & RegisterAutomationRoutesDeps
   & RegisterChatRoutesDeps

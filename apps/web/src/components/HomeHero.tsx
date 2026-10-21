@@ -57,7 +57,8 @@ import {
   type HomeHeroChip,
 } from './home-hero/chips';
 import { homeHeroChipLabel } from './home-hero/chip-labels';
-import { RotatingTitleWord } from './home-hero/RotatingTitleWord';
+import { HomeStartPanel, type HomeFeaturedTemplate } from './home-hero/HomeStartPanel';
+import homeStartStyles from './home-hero/HomeStartPanel.module.css';
 import { ScenarioArt } from './home-hero/ScenarioArt';
 import { useEdgeAutoScroll, EdgeScrollZones } from './home-hero/EdgeAutoScroll';
 import {
@@ -213,6 +214,9 @@ interface Props {
   onImportFigma?: () => void;
   pluginOptions: InstalledPluginRecord[];
   pluginsLoading: boolean;
+  pluginsLoadFailed?: boolean;
+  onRetryPlugins?: () => void;
+  onBrowseTemplates?: () => void;
   skillOptions?: SkillSummary[];
   skillsLoading?: boolean;
   mcpOptions?: McpServerConfig[];
@@ -230,7 +234,7 @@ interface Props {
   // the Home arrow must stay visually stable until that route unmounts it.
   submitting?: boolean;
   onPickPlugin: (record: InstalledPluginRecord, nextPrompt: string | null) => void;
-  onPickExamplePlugin?: (record: InstalledPluginRecord, chipId: string, promptText: string) => void;
+  onPickExamplePlugin?: (record: InstalledPluginRecord, chipId: string, promptText: string, onApplied?: () => void) => void;
   onPickSkill?: (skill: SkillSummary, nextPrompt: string | null) => void;
   onPickMcp?: (server: McpServerConfig, nextPrompt: string) => void;
   onPickConnector?: (connector: ConnectorDetail, nextPrompt: string) => void;
@@ -288,27 +292,6 @@ const HOME_MENTION_ALL_TAB_PREVIEW = 6;
 // short lead, and let the chip's `title` carry the full one. Counted in code
 // points, so an emoji or a surrogate pair spends one slot, not two.
 const LEAD_CHIP_TITLE_MAX_CHARS = 8;
-// Full-width CJK punctuation whose glyph sits in the left half of a full-em
-// advance, leaving the rest blank. A headline ending in one of these needs the
-// optical nudge above; anything else centres honestly.
-const FULL_WIDTH_TRAILING_PUNCTUATION = /[？！。，、；：）】」』]$/u;
-
-/** The slot a headline translation writes to opt into the rotating noun. A
- *  locale whose `homeHero.title` has no `{word}` renders as a plain sentence,
- *  which is what the 17 non-Chinese ones do today. */
-const TITLE_WORD_SLOT = '{word}';
-/** Separator for `homeHero.titleWords`, the comma-separated list the headline
- *  cycles through. One key rather than a set of chip labels because grammar is
- *  per-language: Chinese takes the composer's own singular type names
- *  (「设计点文档」), English needs plurals for the sentence to read at all
- *  ("Let’s create wireframes?" — "a Image" is what article-splicing gets
- *  you). Each locale therefore owns both halves of its own sentence. */
-const TITLE_WORD_SEPARATOR = ',';
-
-function endsWithFullWidthPunctuation(value: string): boolean {
-  return FULL_WIDTH_TRAILING_PUNCTUATION.test(value.trim());
-}
-
 function leadChipTitle(title: string): string {
   const chars = Array.from(title);
   if (chars.length <= LEAD_CHIP_TITLE_MAX_CHARS) return title;
@@ -397,6 +380,9 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     onRemoveFile = () => undefined,
     pluginOptions,
     pluginsLoading,
+    pluginsLoadFailed = false,
+    onRetryPlugins,
+    onBrowseTemplates,
     skillOptions = EMPTY_SKILLS,
     skillsLoading = false,
     mcpOptions = EMPTY_MCP_OPTIONS,
@@ -831,6 +817,25 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     () => orderedCreateChips().filter((chip) => chip.action.kind === 'apply-scenario'),
     [],
   );
+  const availablePluginIds = useMemo(() => new Set(pluginOptions.map((record) => record.id)), [pluginOptions]);
+  const featuredTemplates = useMemo<HomeFeaturedTemplate[]>(() => {
+    const forChip = (chipId: string): HomeFeaturedTemplate[] => homeHeroExamplePluginsForChip(chipId, pluginOptions, locale)
+      .flatMap((record) => {
+        const poster = presetPreviewPoster(record, workspaceContext);
+        if (!poster) return [];
+        return [{ record, chipId, poster, title: localizeHomePresetTitle(locale, record),
+          prompt: examplePresetSeedPrompt(record, locale, () => pluginPresetPromptPreview(record, locale, chipId)).text }];
+      });
+    if (activeChipId) return forChip(activeChipId).slice(0, 2);
+    // One real example per featured type; do not invent cards to fill a gap.
+    const seen = new Set<string>();
+    return ['prototype', 'motion-design'].flatMap((chipId) => {
+      const first = forChip(chipId).find((item) => !seen.has(item.record.id));
+      if (!first) return [];
+      seen.add(first.record.id);
+      return [first];
+    });
+  }, [activeChipId, pluginOptions, locale, workspaceContext]);
   // A surface outside the hero (e.g. the workspace tabs-bar) can hand off a
   // template pick through this window event; apply the chip exactly as if it
   // was clicked here. Deliberately depless (re-subscribes each render) so the
@@ -846,25 +851,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     window.addEventListener(HOME_APPLY_TEMPLATE_EVENT, onApplyTemplate);
     return () => window.removeEventListener(HOME_APPLY_TEMPLATE_EVENT, onApplyTemplate);
   });
-  const activeExamplePlugins = useMemo(
-    () =>
-      activeChipId
-        ? homeHeroExamplePluginsForChip(activeChipId, pluginOptions, locale)
-        : [],
-    [activeChipId, locale, pluginOptions],
-  );
-  // The examples are the picked type's curated showcase, full stop. There is
-  // no sub-category filter over them any more (see the row's removal below),
-  // so nothing narrows this further.
-  const filteredExamplePlugins = activeExamplePlugins;
-  // 示例提示词 is a first-screen showcase, not a catalog: only the first five
-  // cards ride the row (Community owns the full, browsable list), so it stays a
-  // glanceable strip instead of a long edge-scrolling rail.
-  const examplePluginPresets = useMemo(
-    () => filteredExamplePlugins.slice(0, HOME_HERO_MAX_PLUGIN_PRESETS),
-    [filteredExamplePlugins],
-  );
-
   // First-run guide, beat 1: pulse the Prototype chip for brand-new users only
   // when Home could not bind a default type. A successfully seeded default has
   // already completed that choice, so skip the redundant pulse and let beat 2
@@ -895,24 +881,13 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     if (readHomeGuideStage() !== 'done') writeHomeGuideStage('done');
   }, [firstRunGuide]);
 
-  const activePromptExamples = useMemo(
-    () => activeChipId && activeExamplePlugins.length === 0
-      ? homeHeroChipPromptExamples(activeChipId, locale)
-      : [],
-    [activeChipId, activeExamplePlugins.length, locale],
-  );
-
   // Beat 2: once the picked chip's example cards render, pulse the first
   // card exactly once, then the trail is done (the send pulse takes over
   // after a card pick).
   useEffect(() => {
     if (firstRunGuide !== true) return;
     if (readHomeGuideStage() !== 'card') return;
-    // Either card surface counts: plugin preset tiles, or the static
-    // prompt-example fallback a presetless chip renders instead.
-    const hasExampleCards =
-      filteredExamplePlugins.length > 0 || activePromptExamples.length > 0;
-    if (!activeChipId || !hasExampleCards) return;
+    if (!activeChipId || featuredTemplates.length === 0) return;
     const arm = window.setTimeout(() => {
       setGuidePulseFirstPreset(true);
       writeHomeGuideStage('done');
@@ -922,7 +897,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
       window.clearTimeout(arm);
       window.clearTimeout(disarm);
     };
-  }, [firstRunGuide, activeChipId, filteredExamplePlugins.length, activePromptExamples.length]);
+  }, [firstRunGuide, activeChipId, featuredTemplates.length]);
   const authoringLayoutActive =
     activeChipId === 'create-plugin' || pendingChipId === 'create-plugin';
   const promptMaxHeight = authoringLayoutActive
@@ -1315,48 +1290,18 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     onRemoveFile(index);
   }
 
-  function usePromptExample(example: string) {
-    trackHomeChatComposerClick(analytics.track, {
-      page_name: 'home',
-      area: 'chat_composer',
-      element: 'example_prompt',
-      chip_id: activeChipId ?? 'prototype',
-    });
-    setSelectedPromptExample({
-      label: promptExampleChipLabel(example),
-      promptText: example,
-    });
-    onExamplePromptStatusChange?.({
-      title: promptExampleChipLabel(example),
-      artifactType: activeChipId ?? 'prototype',
-      brief: briefForChipId(activeChipId ?? 'prototype'),
-    });
-    onPromptChange(example);
-    editorRef.current?.setText(example);
-    setSelectedIndex(0);
-    requestAnimationFrame(() => editorRef.current?.focus());
-    triggerSendAttention();
-  }
-
   function pickExamplePluginPreset(record: InstalledPluginRecord, chipId: string, promptText: string) {
-    trackHomeChatComposerClick(analytics.track, {
-      page_name: 'home',
-      area: 'chat_composer',
-      element: 'example_prompt',
-      chip_id: chipId,
-      plugin_id: record.sourceMarketplaceEntryName ?? record.id,
-      plugin_type: record.marketplaceTrust ?? 'official',
+    // The owner may ask before replacing an edited draft. Only mark the
+    // example after it was applied; cancelling must leave all draft state alone.
+    // HomeView owns the one example click event, avoiding duplicate analytics.
+    onPickExamplePlugin(record, chipId, promptText, () => {
+      setSelectedPromptExample({ label: record.title, promptText });
+      onExamplePromptStatusChange?.({
+        title: record.title,
+        artifactType: chipId,
+        brief: briefForPluginPreset(record, chipId),
+      });
     });
-    setSelectedPromptExample({
-      label: record.title,
-      promptText,
-    });
-    onExamplePromptStatusChange?.({
-      title: record.title,
-      artifactType: chipId,
-      brief: briefForPluginPreset(record, chipId),
-    });
-    onPickExamplePlugin(record, chipId, promptText);
   }
 
   // The task-type rail (原型 / 幻灯片 / HyperFrames / 视频 / …). Records which
@@ -1505,40 +1450,12 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
       clear();
     };
   }, [showActivePluginRow]);
-  /* Headline: a locale opts into the rotating noun by writing `{word}` into
-     its own `homeHero.title`. Splitting on the placeholder keeps the whole
-     sentence — particles, punctuation, word order — inside the translation
-     rather than hard-coding a lead/tail pair per language. The nouns reuse the
-     composer's own type labels, so the headline can never name a kind the type
-     row does not offer. */
-  const titleTemplate = t('homeHero.title');
-  const titleSlotIndex = titleTemplate.indexOf(TITLE_WORD_SLOT);
-  const titleParts =
-    titleSlotIndex === -1
-      ? null
-      : {
-          lead: titleTemplate.slice(0, titleSlotIndex),
-          tail: titleTemplate.slice(titleSlotIndex + TITLE_WORD_SLOT.length),
-        };
-  const titleRotatingWords = t('homeHero.titleWords')
-    .split(TITLE_WORD_SEPARATOR)
-    .map((word) => word.trim())
-    .filter(Boolean);
-  /* Once a type is picked below, the headline stops rotating and names it (per
-     product) — the sentence and the selected pill must agree. Same label source
-     as the pill itself (`homeHeroChipLabel`), so the two can never drift. */
-  const titlePinnedWord = activeChipId ? homeHeroChipLabel(activeChipId, t) : null;
-  /* The rotating slot is aria-hidden, so the headline names itself here — the
-     sentence with the pinned type, or with its first noun while it rotates. */
-  const titleAriaLabel = titleParts
-    ? `${titleParts.lead}${titlePinnedWord ?? titleRotatingWords[0] ?? ''}${titleParts.tail}`
-    : undefined;
   let optionRenderIndex = 0;
 
   return (
     <section
       ref={homeHeroRef}
-      className={`home-hero${isDock ? ' home-hero--dock' : ''}`}
+      className={`home-hero${isDock ? ' home-hero--dock' : ` ${homeStartStyles.hero}`}`}
       data-testid="home-hero"
       data-variant={variant}
       /* Docked only: an untouched, unfocused composer shows its input line and
@@ -1559,47 +1476,25 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
         isDock && ((carouselActive && !composerFocused) || forcedCollapsed) ? 'true' : undefined
       }
     >
-      {/* Hero header: one plain question. The animated pixel-scan wordmark that
-          used to stand here is gone (per product) — the headline carries the
-          moment instead, with no motion behind it. */}
-      {/* The headline is box-centred like everything else in this column, but a
-          line that ENDS in full-width CJK punctuation carries ~half an em of
-          blank inside that last glyph's advance — so the ink reads ~0.27em
-          left of the composer card below it. The modifier pulls the margin box
-          in by that blank (see home-hero.css); flex cross-axis centring then
-          lands the ink on the card's own centre line. Keyed off the string, not
-          the locale: any translation that ends in ？！。 gets it, and Latin
-          headlines (a narrow "?") are left alone. */}
-      {isDock ? null : (
-        <>
-          <h1
-            className={
-              'home-hero__title' +
-              (endsWithFullWidthPunctuation(t('homeHero.title'))
-                ? ' home-hero__title--optical-trim'
-                : '')
-            }
-            aria-label={titleAriaLabel}
-          >
-            {/* A locale opts into the rotating noun by putting `{word}` in its
-                own headline string — en / zh-CN / zh-TW do; the other 16 keep a
-                plain sentence and fall straight through to the `else`. Nothing
-                here knows which locale is which, so any translation can join
-                later by editing one string. */}
-            {titleParts ? (
-              <>
-                {titleParts.lead}
-                <RotatingTitleWord words={titleRotatingWords} pinned={titlePinnedWord} />
-                {titleParts.tail}
-              </>
-            ) : (
-              t('homeHero.title')
-            )}
-          </h1>
-          {/* One quiet line under the headline (per product). */}
-          <p className="home-hero__subtitle">{t('homeHero.subtitle')}</p>
-        </>
-      )}
+      {isDock ? null : <HomeStartPanel
+        chips={templateChips}
+        activeChipId={activeChipId}
+        activePluginId={activePluginRecord?.id ?? null}
+        templates={featuredTemplates}
+        loading={pluginsLoading}
+        pulseChipId={guidePulseChipId}
+        pulseTemplate={guidePulseFirstPreset}
+        loadFailed={pluginsLoadFailed}
+        disabled={typeSelectionPending || pendingChipId !== null || pendingPluginId !== null}
+        availablePluginIds={availablePluginIds}
+        labelFor={(id) => homeHeroChipLabel(id, t)}
+        descriptionFor={(id) => homeHeroChipDescription(id, t)}
+        onPickChip={handlePickTaskChip}
+        onPreview={onOpenPluginDetails}
+        onUse={pickExamplePluginPreset}
+        onBrowseTemplates={onBrowseTemplates}
+        onRetry={onRetryPlugins}
+      />}
 
       {/* #5517 wraps the input card + workdir row into one visible composer
           card so they read as a single surface. */}
@@ -2186,7 +2081,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             <ComposerPlusMenu
               workspaceContext={workspaceContext}
               triggerTestId="home-hero-plus-trigger"
-              placementPreference="down"
+              placementPreference={isDock ? "down" : "up"}
               onOpen={() =>
                 trackHomeChatComposerClick(analytics.track, {
                   page_name: 'home',
@@ -2357,6 +2252,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
               onPick={handlePickTaskChip}
               disabled={pluginsLoading || typeSelectionPending || pendingChipId !== null || pendingPluginId !== null}
               activeChipId={activeChipId}
+              onClear={onClearActiveChip}
               labelFor={(id) => homeHeroChipLabel(id, t)}
             />
             {libraryPickerOpen ? (
@@ -2581,57 +2477,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
       </div>
       </div>
 
-      {/* No second-level category row under a picked type (per product,
-          2026-08-25): picking a type already narrows the examples, and a
-          second filter strip between the composer and them re-asked a
-          question the pill had just answered. The examples below now show the
-          picked type's full set. */}
-
       {isDock ? null : recommendationSlot}
-
-      {isDock ? null : examplePluginPresets.length > 0 && activeChipId ? (
-        <PluginPromptPresets
-          chipId={activeChipId}
-          plugins={examplePluginPresets}
-          activePluginId={activePluginRecord?.id ?? null}
-          pendingPluginId={pendingPluginId}
-          locale={locale}
-          onPick={pickExamplePluginPreset}
-          onPreview={onOpenPluginDetails}
-          pulseFirstPreset={guidePulseFirstPreset}
-          workspaceContext={workspaceContext}
-        />
-      ) : activePromptExamples.length > 0 ? (
-        <div
-          className="home-hero__prompt-examples"
-          data-testid="home-hero-prompt-examples"
-        >
-          <div
-            className={`home-hero__prompt-examples-grid${activeChipId === 'web-clone' ? ' home-hero__prompt-examples-grid--sites' : ''}`}
-          >
-            {activePromptExamples.map((example, index) =>
-              webCloneExampleSite(example) ? (
-                <WebClonePromptExampleCard
-                  key={example}
-                  example={example}
-                  pulse={guidePulseFirstPreset && index === 0}
-                  onPick={usePromptExample}
-                />
-              ) : (
-                <button
-                  key={example}
-                  type="button"
-                  className={`home-hero__prompt-example${guidePulseFirstPreset && index === 0 ? ' home-hero__attention-sheen' : ''}`}
-                  data-testid="home-hero-prompt-example"
-                  onClick={() => usePromptExample(example)}
-                >
-                  <span>{example}</span>
-                </button>
-              ),
-            )}
-          </div>
-        </div>
-      ) : null}
 
       {error ? (
         <div role="alert" className="home-hero__error">
@@ -2691,250 +2537,6 @@ function presetPreviewPoster(
   if (baked.kind === 'media' && baked.poster) return baked.poster;
   const plain = inferPluginPreview(record, { workspaceContext });
   return plain.kind === 'media' ? plain.poster : null;
-}
-
-function PluginPromptPresets({
-  activePluginId,
-  chipId,
-  locale,
-  onPick,
-  onPreview,
-  pendingPluginId,
-  plugins,
-  pulseFirstPreset = false,
-  workspaceContext = null,
-}: {
-  activePluginId: string | null;
-  chipId: string;
-  locale: Locale;
-  onPick: (record: InstalledPluginRecord, chipId: string, promptText: string) => void;
-  // Opens the example's own preview — the same details/preview modal the rest
-  // of the home surface raises (`onOpenPluginDetails`).
-  onPreview: (record: InstalledPluginRecord) => void;
-  pendingPluginId: string | null;
-  plugins: InstalledPluginRecord[];
-  workspaceContext?: WorkspaceCollabContext | null;
-  // First-run guide: the first card carries the attention sheen.
-  pulseFirstPreset?: boolean;
-}) {
-  // The list stays a list (per product, 2026-08-21) — no thumbnail grid — and
-  // the poster rides in the row itself, on the left. The cursor-following
-  // preview card that used to rise on hover is gone (per product: 去掉 hover
-  // 展示的弹窗): every row already shows its own still, and the floating copy
-  // covered the rows either side of the one being read. The poster carries no
-  // eye badge either (OPEND-3100): the whole still is the way into the full
-  // preview, with nothing drawn on top of it at rest or on hover.
-  return (
-    <div
-      className="home-hero__prompt-examples home-hero__plugin-presets-wrap"
-      data-testid="home-hero-plugin-presets"
-    >
-      {/* Still a list, not a thumbnail grid — but each row leads with the
-          example's own poster, then its title on the first line and the prompt
-          it seeds on the second. */}
-      <div className="home-hero__plugin-presets" role="list">
-        {plugins.map((record, index) => (
-          <PluginPromptPresetRow
-            key={record.id}
-            chipId={chipId}
-            locale={locale}
-            record={record}
-            poster={presetPreviewPoster(record, workspaceContext)}
-            onPreview={() => onPreview(record)}
-            active={activePluginId === record.id}
-            pending={pendingPluginId === record.id}
-            disabled={pendingPluginId !== null}
-            pulse={pulseFirstPreset && index === 0}
-            onPick={onPick}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// One example per row: its Home-facing title on top — the same label the
-// composer's chip carries once the row is picked — and under it the very text
-// the composer would be seeded with (`examplePresetSeedPrompt`), so the row
-// both names the example and shows the prompt it applies.
-function PluginPromptPresetRow({
-  active,
-  chipId,
-  disabled,
-  locale,
-  onPick,
-  onPreview,
-  pending,
-  poster,
-  pulse = false,
-  record,
-}: {
-  active: boolean;
-  chipId: string;
-  disabled: boolean;
-  locale: Locale;
-  onPick: (record: InstalledPluginRecord, chipId: string, promptText: string) => void;
-  onPreview: () => void;
-  pending: boolean;
-  // The row's own still; null for plugins that have none.
-  poster: string | null;
-  pulse?: boolean;
-  record: InstalledPluginRecord;
-}) {
-  const { t } = useI18n();
-  const seedPrompt = examplePresetSeedPrompt(record, locale, () =>
-    pluginPresetPromptPreview(record, locale, chipId),
-  ).text;
-  // Collapse the seed's own line breaks: the detail is a single line, and a
-  // multi-paragraph seed would otherwise leave its tail invisible mid-clip.
-  const line = seedPrompt.replace(/\s+/g, ' ').trim();
-  const title = localizeHomePresetTitle(locale, record).trim() || line;
-  return (
-    <button
-      type="button"
-      className={`home-hero__plugin-preset-row${active ? ' is-active' : ''}${pending ? ' is-pending' : ''}${pulse ? ' home-hero__attention-sheen' : ''}`}
-      data-testid="home-hero-plugin-preset"
-      data-plugin-id={record.id}
-      role="listitem"
-      disabled={disabled}
-      title={`${title}\n${line}`}
-      onClick={() => onPick(record, chipId, seedPrompt)}
-    >
-      {/* The example's own poster, left of the text, so a row shows what it
-          produces without the pointer going anywhere. The slot is rendered
-          even when a plugin has no poster, so every title in the list still
-          starts on one column. */}
-      {/* The WHOLE poster opens the preview (per product) — and it is bare
-          (OPEND-3100): no eye badge on it and no "Preview" tooltip, at rest or
-          on hover. Only the accessible name says what the click does. A
-          `span`, not a `button`: the row itself IS a button, and a nested one
-          is invalid nesting React warns about — so this carries the role
-          explicitly and stops its click from reaching the row, which would
-          otherwise seed the composer instead of opening the preview. */}
-      <span
-        className="home-hero__plugin-preset-row-thumb"
-        role="button"
-        tabIndex={-1}
-        aria-label={t('common.preview')}
-        onClick={(event) => {
-          event.stopPropagation();
-          event.preventDefault();
-          onPreview();
-        }}
-      >
-        {poster ? (
-          <img src={poster} alt="" draggable={false} loading="lazy" decoding="async" />
-        ) : null}
-      </span>
-      <span className="home-hero__plugin-preset-row-body">
-        <span className="home-hero__plugin-preset-row-head">
-          {/* The mark leads the name (not the row): the prompt line under it
-              stays flush with the chip cluster's left edge above. */}
-          <Icon
-            name="sparkles-filled"
-            size={13}
-            className="home-hero__plugin-preset-row-icon"
-          />
-          <span className="home-hero__plugin-preset-row-title">{title}</span>
-          <svg
-            className="home-hero__plugin-preset-row-arrow"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden
-            focusable="false"
-          >
-            <path d="M16.0037 9.41421L7.39712 18.0208L5.98291 16.6066L14.5895 8H7.00373V6H18.0037V17H16.0037V9.41421Z" />
-          </svg>
-        </span>
-        <span className="home-hero__plugin-preset-row-text">{line}</span>
-      </span>
-    </button>
-  );
-}
-
-const FIRST_PARTY_WEB_CLONE_SITE_ICONS: Record<string, string> = {
-  'open-design.ai': '/logo.svg',
-};
-
-function webCloneFaviconUrl(domain: string): string {
-  return `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(domain)}`;
-}
-
-// A Website-clone text example ("Website URL to clone: https://open-design.ai") —
-// pull the site out so the card can show the site's own mark + bare domain
-// instead of the raw prompt line. First-party bundled examples use local assets
-// so the first screen is stable without waiting on a remote favicon service.
-// Returns null for non-URL examples so the generic text card renders unchanged.
-function webCloneExampleSite(example: string): { domain: string; iconUrl: string; fallbackIconUrl?: string } | null {
-  const match = example.match(/https?:\/\/[^\s"'<>]+/i);
-  if (!match) return null;
-  let hostname: string;
-  try {
-    hostname = new URL(match[0]).hostname.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-  if (!hostname || !hostname.includes('.')) return null;
-  const firstPartyIcon = FIRST_PARTY_WEB_CLONE_SITE_ICONS[hostname];
-  return {
-    domain: hostname,
-    iconUrl: firstPartyIcon ?? webCloneFaviconUrl(hostname),
-    ...(firstPartyIcon ? { fallbackIconUrl: webCloneFaviconUrl(hostname) } : {}),
-  };
-}
-
-function WebClonePromptExampleCard({
-  example,
-  pulse,
-  onPick,
-}: {
-  example: string;
-  pulse: boolean;
-  onPick: (example: string) => void;
-}) {
-  const [iconStage, setIconStage] = useState<'primary' | 'fallback' | 'failed'>('primary');
-  const site = webCloneExampleSite(example);
-  const domain = site?.domain ?? example;
-  const monogram = (domain.replace(/[^a-z0-9]/i, '')[0] ?? '?').toUpperCase();
-  let iconUrl: string | null = null;
-  if (site && iconStage === 'primary') {
-    iconUrl = site.iconUrl;
-  } else if (site && iconStage === 'fallback') {
-    iconUrl = site.fallbackIconUrl ?? null;
-  }
-  return (
-    <button
-      type="button"
-      className={`home-hero__prompt-example home-hero__prompt-example--site${pulse ? ' home-hero__attention-sheen' : ''}`}
-      data-testid="home-hero-prompt-example"
-      onClick={() => onPick(example)}
-      title={domain}
-    >
-      <span className="home-hero__site-badge" aria-hidden>
-        {site && iconUrl ? (
-          <img
-            src={iconUrl}
-            alt=""
-            loading="eager"
-            fetchPriority="high"
-            onError={() => {
-              setIconStage((stage) => (stage === 'primary' && site.fallbackIconUrl ? 'fallback' : 'failed'));
-            }}
-          />
-        ) : (
-          <span className="home-hero__site-monogram">{monogram}</span>
-        )}
-      </span>
-      <span className="home-hero__site-domain">{domain}</span>
-    </button>
-  );
-}
-
-function promptExampleChipLabel(example: string): string {
-  const normalized = example.replace(/\s+/g, ' ').trim();
-  const [beforeDash] = normalized.split(/\s[—-]\s/u, 1);
-  const candidate = beforeDash?.trim() || normalized;
-  return candidate.length > 64 ? `${candidate.slice(0, 61).trimEnd()}...` : candidate;
 }
 
 function homeFileKey(file: File, index: number): string {
@@ -3014,7 +2616,6 @@ function formatFileSize(bytes: number): string {
 // Cards shown in the 示例提示词 row. The showcase set behind it is much larger
 // (18 for most chips, the whole library for decks) — the row shows the first
 // five and leaves the rest to Community.
-const HOME_HERO_MAX_PLUGIN_PRESETS = 5;
 const HOME_HERO_PROMPT_MAX_HEIGHT = 180;
 const HOME_HERO_AUTHORING_PROMPT_MAX_HEIGHT = 132;
 
@@ -4199,15 +3800,13 @@ function homeHeroChipTitle(chip: HomeHeroChip, t: ReturnType<typeof useT>): stri
 // up pre-selected when a media mode is entered.
 //
 // `example-web-clone` is the Website clone chip's own base scenario, not a
-// concrete example. The per-site examples are plain text prompt cards (from
-// HOME_PROMPT_EXAMPLES) rather than plugins, so hide the base plugin to keep the
-// preset rail empty for web-clone and let those text cards show instead.
+// concrete example. Keep the base router out of the real template gallery.
 const EXAMPLE_PRESET_HIDDEN_PLUGIN_IDS = new Set<string>([
   'od-media-generation',
   'example-web-clone',
 ]);
 
-// Keep the five Home recommendations in the selected editorial order;
+// Keep the Home recommendations in the selected editorial order;
 // popularity still orders the remaining library and the Community surface.
 const HOME_PRESET_PLUGIN_IDS_BY_CHIP: Partial<Record<string, readonly string[]>> = {
   deck: [
