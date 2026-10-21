@@ -16,6 +16,7 @@ import {
   resetWorkspaceContextCache,
 } from '../../src/collab/useWorkspaceContext';
 import { I18nProvider } from '../../src/i18n';
+import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { ProjectCreateError } from '../../src/state/projects';
 import type { AgentInfo, AppConfig } from '../../src/types';
@@ -87,6 +88,20 @@ function teamContext(workspaceId: string, workspaceMemberId: string): WorkspaceC
   };
 }
 
+// These auth/context tests have independent, available funds. gen53 requires
+// that fact from the actual preflight HTTP seam before App's handoff.
+function availableFunding(input: RequestInfo | URL, contexts: WorkspaceCollabContext[]): Response {
+  const query = new URL(String(input), 'http://localhost').searchParams;
+  const context = contexts.find((item) => item.workspaceId === query.get('workspaceId'));
+  if (!context || query.get('modelId') !== 'glm-5') throw new Error('Unexpected funding scope in auth fixture');
+  return jsonResponse({ preflight: {
+    schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+    modelId: 'glm-5', generatedAt: new Date().toISOString(), balanceUsd: '25.00',
+    fundingCheck: 'available', funding: 'gateway', modelCovered: true,
+    codingPlan: { workspaceId: context.workspaceId, generatedAt: new Date().toISOString(), eligible: false, tier: null, windows: [] },
+  } });
+}
+
 function amrAgent(): AgentInfo {
   return {
     id: 'amr',
@@ -120,6 +135,7 @@ describe('EntryShell AMR workspace precheck race', () => {
     resetWorkspaceContextCache();
     resetWorkspaceBillingCache();
     resetTeamProjectsCache();
+    invalidateAmrFundingFeedback();
   });
 
   afterEach(() => {
@@ -132,10 +148,11 @@ describe('EntryShell AMR workspace precheck race', () => {
     resetWorkspaceContextCache();
     resetWorkspaceBillingCache();
     resetTeamProjectsCache();
+    invalidateAmrFundingFeedback();
   });
 
   it.each(['get', 'set'] as const)(
-    'starts the team gate from in-memory directory identity when sessionStorage %sItem fails',
+    'preserves the draft until exact funding identity is ready when sessionStorage %sItem fails',
     async (blockedOperation) => {
       window.history.replaceState(null, '', '/');
       if (blockedOperation === 'get') {
@@ -162,11 +179,13 @@ describe('EntryShell AMR workspace precheck race', () => {
           return originalStorageSetItem.call(this, key, value);
         });
       }
-      const workspace = teamContext('workspace-cold', 'member-cold');
+      const workspace = teamContext(`workspace-cold-${blockedOperation}`, `member-cold-${blockedOperation}`);
       const contextRead = deferred<Response>();
       let directoryReads = 0;
+      let fundingReads = 0;
       globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.includes('/billing/preflight?')) { fundingReads++; return availableFunding(input, [workspace]); }
         if (url.endsWith('/api/workspace/directory')) {
           directoryReads += 1;
           return jsonResponse(workspaceDirectoryFixture([workspace]));
@@ -228,6 +247,14 @@ describe('EntryShell AMR workspace precheck race', () => {
       setHomeHeroPrompt('Create a launch poster without waiting for account chrome.');
       fireEvent.click(await screen.findByTestId('home-hero-submit'));
 
+      await waitFor(() => expect(screen.getByTestId('home-hero-submit')).toBeEnabled());
+      expect(mockedCheckAmrBalanceGate).not.toHaveBeenCalled();
+      expect(onCreateProject).not.toHaveBeenCalled();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Create a launch poster without waiting for account chrome.');
+      await act(async () => { contextRead.resolve(jsonResponse({ context: workspace })); });
+      await waitFor(() => expect(fundingReads).toBeGreaterThan(0));
+      expect(onCreateProject).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByTestId('home-hero-submit'));
       await waitFor(() => expect(mockedCheckAmrBalanceGate).toHaveBeenCalled());
       await waitFor(() => expect(onCreateProject).toHaveBeenCalledTimes(1));
       expect(directoryReads).toBe(1);
@@ -243,6 +270,7 @@ describe('EntryShell AMR workspace precheck race', () => {
         directoryReads += 1;
         return jsonResponse(workspaceDirectoryFixture([]));
       }
+      if (url.endsWith('/api/workspace/context')) return jsonResponse({ context: null });
       if (url.endsWith('/api/workspace/projects/team')) {
         return jsonResponse({ projects: [] });
       }
@@ -486,6 +514,7 @@ describe('EntryShell AMR workspace precheck race', () => {
     let contextReads = 0;
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/billing/preflight?')) return availableFunding(input, [workspace]);
       if (url.endsWith('/api/workspace/directory')) {
         return jsonResponse(workspaceDirectoryFixture([workspace]));
       }
@@ -718,6 +747,7 @@ describe('EntryShell AMR workspace precheck race', () => {
     const workspace = teamContext('workspace-auth', 'member-auth');
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/billing/preflight?')) return availableFunding(input, [workspace]);
       if (url.endsWith('/api/workspace/directory')) {
         return jsonResponse(workspaceDirectoryFixture([workspace]));
       }
@@ -814,6 +844,7 @@ describe('EntryShell AMR workspace precheck race', () => {
     let contextReads = 0;
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/billing/preflight?')) return availableFunding(input, [workspaceA, workspaceB]);
       if (url.endsWith('/api/workspace/directory')) {
         return jsonResponse(workspaceDirectoryFixture([workspaceA, workspaceB]));
       }

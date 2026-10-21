@@ -25,6 +25,7 @@ interface Props {
   plan: string | null;
   planResolved: boolean;
   profile: string | null;
+  workspaceId?: string | null;
   metricsConsent: boolean;
   installationId: string | null | undefined;
   homeVisible: boolean;
@@ -84,6 +85,7 @@ export function AmrArtifactUpgradeGate({
   plan,
   planResolved,
   profile,
+  workspaceId,
   metricsConsent,
   installationId,
   homeVisible,
@@ -280,6 +282,7 @@ export function AmrArtifactUpgradeGate({
   return dialogSessionKey ? (
     <AmrArtifactUpgradeDialog
       profile={profile}
+      workspaceId={workspaceId}
       metricsConsent={metricsConsent}
       installationId={installationId}
       onClose={() => settleDialog('cancel')}

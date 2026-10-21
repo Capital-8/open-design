@@ -200,7 +200,8 @@ describe('account menu billing card — workspace-aware upgrade routing', () => 
       expect(target.searchParams.get('billing')).toBe('plan');
       const billingRefreshes = () => dispatch.mock.calls.filter(([event]) => event.type === WORKSPACE_BILLING_REFRESH_EVENT);
       await act(async () => { await vi.advanceTimersByTimeAsync(2999); });
-      expect(billingRefreshes()).toHaveLength(0);
+      // C-04 / DD:1316: opening the quota panel immediately re-reads billing.
+      expect(billingRefreshes()).toHaveLength(1);
       expect(currentWorkspaceAccountGeneration()).toBe(generation);
       expect(currentWorkspaceContextRequestToken()).toBe(requestToken);
       await act(async () => { await vi.advanceTimersByTimeAsync(1); });
@@ -252,11 +253,15 @@ describe('account menu billing card — 积分 row opens the web console (#62)',
       renderRail({
         context: context({ billingState: 'active', planId: 'team_plus' }),
         billing: billing({ membershipTier: 'team_plus', subscriptionStatus: 'active' }),
+        balanceUsd: '24',
       });
 
-      fireEvent.click(action === 'paid pill'
-        ? screen.getByTestId('entry-top-right-credits')
-        : billingCard().getByTestId('entry-nav-credits-row'));
+      // C-01 E-state trigger: pill opens the panel; its amount arrow opens the console.
+      if (action === 'paid pill') {
+        fireEvent.click(screen.getByTestId('entry-top-right-credits'));
+        expect(openSpy).not.toHaveBeenCalled();
+      }
+      fireEvent.click(billingCard().getByTestId('entry-nav-credits-row'));
 
       expect(openSpy).toHaveBeenCalledTimes(1);
       const [url, target, features] = openSpy.mock.calls[0]!;
@@ -269,11 +274,7 @@ describe('account menu billing card — 积分 row opens the web console (#62)',
     },
   );
 
-  // Product ruling: clicking 积分 must jump straight to B's console for the
-  // usage detail — there is NO intermediate credits popover in the client
-  // (the reference #5517 has no such panel either). The destination is the
-  // console dashboard: the wallet page is no longer part of B's information
-  // architecture (balance/top-up were rehomed onto the dashboard, vela #1055).
+  // C-01 / division:65 supersedes #62: the panel's amount arrow views the current workspace console.
   it('opens the console dashboard URL in a new tab instead of an in-client panel', () => {
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
     renderRail({
@@ -281,6 +282,7 @@ describe('account menu billing card — 积分 row opens the web console (#62)',
         workspaceSettingsUrl: 'https://web.example.com/console/settings?workspaceId=ws-new',
       } as Partial<WorkspaceCollabContext>),
       billing: billing({ totalAvailableCredits: 100_000 }),
+      balanceUsd: '24',
     });
 
     const card = billingCard();
@@ -288,9 +290,8 @@ describe('account menu billing card — 积分 row opens the web console (#62)',
 
     expect(openSpy).toHaveBeenCalledTimes(1);
     const [url, target] = openSpy.mock.calls[0]!;
-    // teamConsoleUrl(base, 'billing') → the console's /dashboard page, keeping
-    // the ?workspaceId deep-link param.
-    expect(String(url)).toContain('/console/dashboard');
+    // C-01 TASK B.5: only the shared workspace URL helper chooses the console.
+    expect(new URL(String(url)).pathname).toBe('/cloud/dashboard');
     expect(String(url)).toContain('workspaceId=ws-new');
     expect(target).toBe('_blank');
     // No intermediate panel appears.
@@ -323,22 +324,22 @@ describe('account menu billing card — scoped USD balance (recvqgaMLxEdZX)', ()
     });
 
     const card = billingCard();
-    expect(card.getByText('钱包余额')).toBeTruthy();
-    // The design names the currency on this row (「US$9.99」, zh-CN).
-    expect(card.getByText('US$9.99')).toBeTruthy();
+    expect(card.getByText('按量额度')).toBeTruthy();
+    // C-01 E states use $ with two decimal places; no raw credit conversion.
+    expect(card.getByText('$9.99')).toBeTruthy();
     expect(card.queryByText('999,330')).toBeNull();
     expect(card.queryByText('余额')).toBeNull();
     expect(card.queryByText(/积分/)).toBeNull();
   });
 
-  it('keeps a proven zero visible as US$0.00', () => {
+  it('keeps a proven zero visible as $0.00', () => {
     renderRail({
       context: context(),
       billing: billing({ totalAvailableCredits: 600_000 }),
       balanceUsd: '0',
     });
 
-    expect(billingCard().getByText('US$0.00')).toBeTruthy();
+    expect(billingCard().getByText('$0.00')).toBeTruthy();
   });
 
   it('preserves the team wallet battery icon and chevron', () => {
@@ -350,7 +351,7 @@ describe('account menu billing card — scoped USD balance (recvqgaMLxEdZX)', ()
 
     const row = billingCard().getByTestId('entry-nav-credits-row');
     expect(row.querySelectorAll('svg')).toHaveLength(2);
-    expect(row.textContent?.trim()).toBe('钱包余额US$12.00');
+    expect(row.textContent?.trim()).toBe('按量额度$12.00');
   });
 });
 
@@ -368,6 +369,7 @@ describe('billing card keyboard access', () => {
         workspaceSettingsUrl: 'https://web.example.com/console/settings?workspaceId=ws-new',
       }),
       billing: billing({ membershipTier: 'team_plus', subscriptionStatus: 'active' }),
+      balanceUsd: '24',
     });
     const pill = screen.getByTestId('entry-top-right-credits');
     expect(screen.queryByTestId('entry-top-right-credits-panel')).toBeNull();

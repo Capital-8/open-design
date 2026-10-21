@@ -8021,6 +8021,18 @@ Common options:
   // explicit CLI argument, never daemon active-workspace state: account is the
   // compatibility default; team requires both type + workspace id.
   if (area === 'billing') {
+    if (sub === 'request-concurrency') {
+      const workspaceId = typeof flags.workspace === 'string' ? flags.workspace.trim() : '';
+      if (!workspaceId) {
+        console.error('Usage: od workspace billing request-concurrency --workspace <id> [--json]');
+        process.exit(2);
+      }
+      const query = new URLSearchParams({ workspaceId });
+      const data = await workspaceContextRequest(`/api/workspace/billing/request-concurrency?${query}`);
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      console.log(`Request concurrency: ${data.requestConcurrencyHint?.status ?? 'unknown'} (Link decides admission)`);
+      return;
+    }
     if (sub === 'preflight') {
       const workspaceId = typeof flags.workspace === 'string' ? flags.workspace.trim() : '';
       if (!workspaceId) {

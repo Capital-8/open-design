@@ -12,6 +12,7 @@ vi.mock('../src/integrations/vela-command.js', async (importOriginal) => ({
 import {
   BILLING_PREFLIGHT_TIMEOUT_MS,
   fetchVelaBillingPreflight,
+  fetchVelaRequestConcurrency,
   fetchVelaBillingFundingCheck,
   parseBillingPreflight,
 } from '../src/integrations/vela-billing.js';
@@ -144,5 +145,26 @@ describe('isolated Vela funding-check adapter', () => {
     await expect(fetchVelaBillingFundingCheck('ws', 'model', {
       run: async () => { throw new Error('API request failed with status 403'); },
     })).rejects.toThrow('403');
+  });
+});
+
+
+describe('read-only Link request concurrency adapter', () => {
+  const hint = { workspaceId: 'ws', workspaceMemberId: 'member', observedAt: new Date().toISOString(), status: 'available', running: 0, limit: 10 };
+  it('preserves a real empty Redis count and uses only the dedicated command', async () => {
+    const run = vi.fn(async () => JSON.stringify(hint));
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toEqual(hint);
+    expect(run).toHaveBeenCalledExactlyOnceWith(['request-concurrency', '--workspace-id', 'ws', '--format', 'json']);
+  });
+  it('never converts missing capability or malformed evidence into available', async () => {
+    for (const change of [{ workspaceId: 'other' }, { running: undefined }, { limit: 0 }, { status: 'full' }, { status: 'unknown' }, { observedAt: 'bad' }]) {
+      expect(await fetchVelaRequestConcurrency('ws', { run: async () => JSON.stringify({ ...hint, ...change }) })).toBeNull();
+    }
+    const run = vi.fn(async () => { throw new Error('unknown command request-concurrency'); });
+    expect(await fetchVelaRequestConcurrency('ws', { run })).toBeNull();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+  it('preserves authorization rejection instead of offering another workspace', async () => {
+    await expect(fetchVelaRequestConcurrency('ws', { run: async () => { throw new Error('API request failed with status 403: forbidden'); } })).rejects.toThrow('403');
   });
 });

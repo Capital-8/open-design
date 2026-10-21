@@ -1,0 +1,22 @@
+/* Inherit current OD PersonalPlanCard / CodingPlanUsage tokens and layout. */
+.contact {
+  color: #bdbdbd;
+  text-align: end;
+}
+.details {
+  display: block;
+  margin-top: 6px;
+  color: #bdbdbd;
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.balance {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

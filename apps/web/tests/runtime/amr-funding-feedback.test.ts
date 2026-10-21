@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cachedHomeAmrFundingBlock, invalidateAmrFundingFeedback, checkAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, invalidateAmrFundingFeedback, checkAmrFundingFeedback, readFreshAmrFundingEvidence } from '../../src/runtime/amr-funding-feedback';
 import { advanceWorkspaceAccountGeneration, resetWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 
 let sequence = 0;
@@ -222,5 +222,36 @@ describe('Home cached funding gate', () => {
     finish(new Response(JSON.stringify({ preflight })));
     expect(await request).toBe('unknown');
     expect(cachedHomeAmrFundingBlock(scope, 'model')).toBeNull();
+  });
+});
+
+
+describe('Home uncached funding evidence before handoff', () => {
+  it('does not reuse a warm available result when a new send is insufficient', async () => {
+    const { scope, preflight, fetchMock } = fixture('available');
+    expect(await checkAmrFundingFeedback(scope, 'model')).toBe('available');
+    preflight.fundingCheck = 'insufficient';
+    expect(await readFreshAmrFundingEvidence(scope, 'model')).toEqual({ kind: 'insufficient', preflight });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+  it.each(['workspace', 'member', 'model', 'stale', 'missing', 'offline'] as const)('cannot authorize Home using %s evidence', async (change) => {
+    const { scope, preflight, fetchMock } = fixture('available');
+    if (change === 'workspace') preflight.workspaceId = 'previous-space';
+    if (change === 'member') preflight.workspaceMemberId = 'previous-member';
+    if (change === 'model') preflight.modelId = 'previous-model';
+    if (change === 'stale') preflight.generatedAt = new Date(Date.now() - 31_000).toISOString();
+    if (change === 'missing') fetchMock.mockResolvedValue(new Response('{}'));
+    if (change === 'offline') fetchMock.mockRejectedValue(new Error('offline'));
+    expect(await readFreshAmrFundingEvidence(scope, 'model')).toEqual({ kind: 'unknown', preflight: null });
+  });
+  it('cancels a response if the route/model/draft owner is no longer current', async () => {
+    const { scope, preflight, fetchMock } = fixture('available');
+    let finish!: (response: Response) => void;
+    fetchMock.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    let current = true;
+    const result = readFreshAmrFundingEvidence(scope, 'model', () => current);
+    current = false;
+    finish(new Response(JSON.stringify({ preflight })));
+    expect(await result).toEqual({ kind: 'unknown', preflight: null });
   });
 });

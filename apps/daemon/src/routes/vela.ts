@@ -17,6 +17,7 @@ import {
 } from '../agents.js';
 import { readAnalyticsContext } from '../analytics.js';
 import { agentCliEnvForAgent, type AppConfigPrefs, writeAppConfig } from '../app-config.js';
+import { stripAmrEndpointOverrides } from '../integrations/amr-endpoint-binding.js';
 import {
   validateExternalPluginContext,
   validatePluginWorkflowId,
@@ -1597,7 +1598,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       delete env.VELA_RUNTIME_KEY;
       delete env.VELA_LINK_URL;
       const agentCliEnv = { ...(appConfig.agentCliEnv ?? {}) };
-      const amrEnv = { ...(agentCliEnv.amr ?? {}) };
+      const amrEnv = stripAmrEndpointOverrides({ ...(agentCliEnv.amr ?? {}) });
       delete amrEnv.VELA_RUNTIME_KEY;
       delete amrEnv.VELA_LINK_URL;
       if (Object.keys(amrEnv).length > 0) {

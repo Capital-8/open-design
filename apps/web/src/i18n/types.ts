@@ -30,6 +30,12 @@ export const LOCALE_LABEL: Record<Locale, string> = {
 // flat (not deeply nested) so missing-key TS errors point straight at the
 // offending string instead of a generic object mismatch.
 export interface Dict {
+  'workspaceQuota.unavailable': string;
+  'workspaceQuota.unsubscribed': string;
+  'workspaceQuota.contactOwner': string;
+  'workspaceQuota.payAsYouGo': string;
+  'workspaceQuota.resetAt': string;
+  'workspaceQuota.viewBalance': string;
   'workspaceInvite.deliveryPending': string;
   'workspaceInvite.deliveryFailed': string;
   'workspaceInvite.invalidResponse': string;
@@ -2930,6 +2936,12 @@ export interface Dict {
   'chat.amrError.balanceMessage': string;
   'chat.amrError.authorizeCta': string;
   'chat.amrError.rechargeCta': string;
+  'chat.amrConcurrencyGate.title': string;
+  'chat.amrConcurrencyGate.message': string;
+  'chat.amrConcurrencyGate.benefit1': string;
+  'chat.amrConcurrencyGate.benefit2': string;
+  'chat.amrConcurrencyGate.benefit3': string;
+  'chat.amrConcurrencyGate.benefit4': string;
   'chat.amrBalanceGate.title': string;
   'chat.amrBalanceGate.message': string;
   'chat.amrBalanceGate.benefitsTitle': string;
@@ -2943,6 +2955,7 @@ export interface Dict {
   'chat.amrBalanceGate.signedOutMessage': string;
   'chat.amrBalanceGate.signInCta': string;
   'chat.amrBalanceGate.watchingWallet': string;
+  'chat.amrBalanceGate.watchingWalletManual': string;
   'chat.amrArtifactUpgrade.title': string;
   'chat.amrArtifactUpgrade.message': string;
   'chat.amrArtifactUpgrade.benefit1': string;
@@ -3041,6 +3054,7 @@ export interface Dict {
   'chat.runError.modelWindowLimitMessageNoTime': string;
   'chat.runError.membershipConcurrencyLimitMessage': string;
   'chat.runError.membershipConcurrencyLimitMessageNoTime': string;
+  'chat.runError.membershipConcurrencyLimitOwnerMessage': string;
   'chat.runError.upstreamUnavailableMessage': string;
   'chat.runError.toolLoopMessage': string;
   'chat.runError.outputInvalidMessage': string;

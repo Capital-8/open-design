@@ -12,7 +12,7 @@
 // `docs/ui-previews/plan-panels/`, and its `electron-panel.png`): the paid
 // capsule carries the plan WORDMARK ALONE at every balance. The money did not
 // move — it reads in the card the capsule opens, with the currency named
-// (「US$10.00」), which is where a number belongs next to an allowance. The
+// (「$10.00」), which is where a number belongs next to an allowance. The
 // original ruling's goal (no permanent alarm beside the avatar) is strictly
 // better served. Free plans still sell the upgrade on the pill instead.
 
@@ -122,13 +122,13 @@ describe('top-right credits pill', () => {
   it('keeps a funded balance in the CARD, with the pill still wordmark-only', async () => {
     renderRail({ balanceUsd: '120' });
     expect(creditsPill()?.textContent ?? '').not.toMatch(/\d/);
-    expect((await creditsRow()).textContent).toContain('US$120.00');
+    expect((await creditsRow()).textContent).toContain('$120.00');
   });
 
   it('keeps an overdrawn balance visible in the card', async () => {
     renderRail({ balanceUsd: '-1.25' });
     expect(creditsPill()?.textContent ?? '').not.toMatch(/\d/);
-    expect((await creditsRow()).textContent).toContain('-US$1.25');
+    expect((await creditsRow()).textContent).toContain('-$1.25');
   });
 
   it.each(['team_basic', 'team_plus', 'team_max_yearly'])(
@@ -143,7 +143,7 @@ describe('top-right credits pill', () => {
       // The capsule is wordmark-only at every team tier now; the wallet row
       // under it is where the zero reads.
       expect(creditsPill()?.textContent ?? '').not.toMatch(/\d/);
-      expect((await creditsRow()).textContent).toContain('US$0.00');
+      expect((await creditsRow()).textContent).toContain('$0.00');
     },
   );
 
@@ -156,7 +156,7 @@ describe('top-right credits pill', () => {
     // The free pill IS the upgrade CTA (per product): no balance on it.
     expect(creditsPill()?.textContent).toContain('升级');
     expect(creditsPill()?.textContent).not.toContain('0.00');
-    expect((await creditsRow()).textContent).toContain('US$0.00');
+    expect((await creditsRow()).textContent).toContain('$0.00');
   });
 
   it('keeps the pill and the zero balance while the plan is still unknown', async () => {
@@ -170,6 +170,6 @@ describe('top-right credits pill', () => {
       balanceUsd: '0',
     });
     expect(creditsPill()?.textContent).toContain('升级');
-    expect((await creditsRow()).textContent).toContain('US$0.00');
+    expect((await creditsRow()).textContent).toContain('$0.00');
   });
 });

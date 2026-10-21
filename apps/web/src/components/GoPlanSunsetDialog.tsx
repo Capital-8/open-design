@@ -18,6 +18,7 @@ interface Props {
   active: boolean;
   currentPlanId?: string;
   profile?: string | null;
+  workspaceId?: string | null;
   metricsConsent?: boolean;
   onDismiss: (element: DismissElement) => Promise<void>;
 }
@@ -29,6 +30,7 @@ export function GoPlanSunsetDialog({
   active,
   currentPlanId = 'unknown',
   profile,
+  workspaceId,
   metricsConsent = false,
   onDismiss,
 }: Props) {
@@ -154,7 +156,7 @@ export function GoPlanSunsetDialog({
       },
     );
     window.open(
-      attributedAmrUrl(amrPlansUrlForProfile(profile), attribution),
+      attributedAmrUrl(amrPlansUrlForProfile(profile, workspaceId), attribution),
       '_blank',
       'noopener,noreferrer',
     );

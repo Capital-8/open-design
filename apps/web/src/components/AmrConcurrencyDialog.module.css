@@ -1,0 +1,47 @@
+.panel {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* F04 reuses the original Cloud invitation frame and image. The approved
+ * concurrency offer has a black CTA and neutral benefit labels/checkmarks. */
+.offerPanel h2 {
+  margin: 0 0 10px;
+}
+
+.offerPanel p,
+.offerPanel li {
+  font-weight: 400;
+}
+
+.benefitsTitle {
+  color: var(--text-strong);
+}
+
+.benefitIcon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill, 999px);
+  color: var(--text);
+  background: var(--bg-subtle);
+}
+
+.upgradeButton {
+  color: var(--bg-panel);
+  background: var(--text-strong);
+  border-color: var(--text-strong);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--text-strong) 20%, transparent);
+}
+
+.upgradeButton:hover:not(:disabled) {
+  background: var(--text);
+  border-color: var(--text);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--text-strong) 26%, transparent);
+}

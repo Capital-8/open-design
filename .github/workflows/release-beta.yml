@@ -38,13 +38,6 @@ on:
         required: false
         type: string
         default: ""
-      release_origin:
-        description: "Release storage origin."
-        required: true
-        type: choice
-        options:
-          - cloudflare-r2
-        default: cloudflare-r2
       release_public_origin:
         description: "Optional public release origin override."
         required: false
@@ -57,6 +50,11 @@ on:
         default: ""
       amr_profile:
         description: "Optional AMR profile baked into the build (e.g. feature-test to point the packaged app at that profile's AMR backend and enable the workspace-team transport). Empty leaves the default (prod)."
+        required: false
+        type: string
+        default: ""
+      amr_endpoint_binding:
+        description: "Optional complete test AMR endpoint binding JSON (profile, apiUrl, linkUrl, webUrl, credentialScope). Overrides profile endpoint defaults for this build."
         required: false
         type: string
         default: ""
@@ -216,6 +214,10 @@ on:
         type: string
         default: ""
       amr_profile:
+        required: false
+        type: string
+        default: ""
+      amr_endpoint_binding:
         required: false
         type: string
         default: ""
@@ -392,6 +394,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate AMR endpoint binding
+        if: ${{ inputs.amr_endpoint_binding != '' }}
+        env:
+          OPEN_DESIGN_AMR_ENDPOINT_BINDING: ${{ inputs.amr_endpoint_binding }}
+        run: pnpm exec tsx -e "import { parseAmrEndpointBinding } from './packages/contracts/src/amr-endpoint-binding.ts'; parseAmrEndpointBinding(process.env.OPEN_DESIGN_AMR_ENDPOINT_BINDING);"
+
       - name: Resolve built identity
         id: identity
         env:
@@ -431,7 +439,7 @@ jobs:
       - name: Validate beta inputs
         run: |
           set -euo pipefail
-          if [ "${{ inputs.release_origin }}" != "cloudflare-r2" ]; then
+          if [ "${{ inputs.release_origin || 'cloudflare-r2' }}" != "cloudflare-r2" ]; then
             echo "release-beta supports release_origin=cloudflare-r2 only" >&2
             exit 1
           fi
@@ -476,6 +484,8 @@ jobs:
       smoke_result: ${{ steps.mac_arm64_smoke.outcome }}
     env:
       RELEASE_COMMIT: ${{ needs.metadata.outputs.commit }}
+      # Keep JSON as environment data; tools-pack owns endpoint validation and precedence.
+      OPEN_DESIGN_AMR_ENDPOINT_BINDING: ${{ inputs.amr_endpoint_binding }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -551,7 +561,7 @@ jobs:
           # matching console origin arrives via the workflow-level
           # OD_VELA_WEB_URL. Empty = default (prod) — the normal beta pipeline is
           # unaffected.
-          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_profile }}
+          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_endpoint_binding != '' && 'test' || inputs.amr_profile }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/release-build/mac_arm64"
@@ -589,7 +599,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_profile }}
+          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_endpoint_binding != '' && 'test' || inputs.amr_profile }}
         run: |
           set -euo pipefail
           rm -rf "$RUNNER_TEMP/tools-pack-cache"
@@ -848,6 +858,9 @@ jobs:
     runs-on: macos-15-intel
     env:
       RELEASE_COMMIT: ${{ needs.metadata.outputs.commit }}
+      # Keep JSON as environment data; tools-pack owns endpoint validation and precedence.
+      OPEN_DESIGN_AMR_ENDPOINT_BINDING: ${{ inputs.amr_endpoint_binding }}
+      OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_endpoint_binding != '' && 'test' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -1119,6 +1132,8 @@ jobs:
       win_x64_url: ${{ steps.win_x64_platform_outputs.outputs.installer_url }}
     env:
       RELEASE_COMMIT: ${{ needs.metadata.outputs.commit }}
+      # Keep JSON as environment data; tools-pack owns endpoint validation and precedence.
+      OPEN_DESIGN_AMR_ENDPOINT_BINDING: ${{ inputs.amr_endpoint_binding }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -1200,7 +1215,7 @@ jobs:
           # mac_arm64 build step above; this was missing here, so every win_x64
           # dogfood build silently fell back to prod and could not sign in to a
           # feature-test AMR environment.
-          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_profile }}
+          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_endpoint_binding != '' && 'test' || inputs.amr_profile }}
         run: |
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\release-build\win_x64" | Out-Null
@@ -1218,7 +1233,7 @@ jobs:
         if: ${{ steps.win_tools_pack_build.outcome == 'failure' }}
         shell: pwsh
         env:
-          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_profile }}
+          OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_endpoint_binding != '' && 'test' || inputs.amr_profile }}
         run: |
           $ErrorActionPreference = "Stop"
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "${{ runner.temp }}\tools-pack-cache"
@@ -1431,6 +1446,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_COMMIT: ${{ needs.metadata.outputs.commit }}
+      # Keep JSON as environment data; tools-pack owns endpoint validation and precedence.
+      OPEN_DESIGN_AMR_ENDPOINT_BINDING: ${{ inputs.amr_endpoint_binding }}
+      OPEN_DESIGN_AMR_PROFILE: ${{ inputs.amr_endpoint_binding != '' && 'test' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2

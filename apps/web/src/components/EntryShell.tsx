@@ -25,6 +25,7 @@ import {
 import {
   automaticStrategyTaskProfileForProjectMetadata,
   defaultScenarioPluginIdForProjectMetadata,
+  type AmrWalletSnapshot,
   type ChatSessionMode,
   type ConnectorDetail,
   type CreateProjectExampleReference,
@@ -113,6 +114,8 @@ import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
 import { DeepSeekHarnessSetupDialog } from './DeepSeekHarnessSetupDialog';
 import type { HomeAmrBalanceGateBlock } from './HomeAmrBalanceGateDialogs';
+import { AmrConcurrencyDialog } from './AmrConcurrencyDialog';
+import { readAmrRequestConcurrency } from '../runtime/amr-request-concurrency';
 import {
   amrBalanceBlockedDialog,
   amrBalanceDialogUpgradeIntent,
@@ -120,13 +123,12 @@ import {
 } from '../runtime/amr-balance-branch';
 import { installDeepSeekHarnessCompanion } from '../providers/agent-companion';
 import {
-  amrBalanceGateFromMemory,
   amrBalanceGateScopeForWorkspaceContext,
   checkAmrBalanceGate,
   retryUnavailableAmrBalanceGate,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback } from '../runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback, readFreshAmrFundingEvidence } from '../runtime/amr-funding-feedback';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { HomeInviteSurface, HomeInviteTrigger } from './HomeInviteSurface';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
@@ -771,10 +773,21 @@ export function EntryShell({
   const homeFundingIdentityRef = useRef(homeFundingIdentity);
   homeFundingIdentityRef.current = homeFundingIdentity;
   const cancelHomeFundingDialogRef = useRef<(() => void) | null>(null);
+  const homeConcurrencyPendingRef = useRef(false);
+  const homeConcurrencyEpochRef = useRef(0);
+  const [homeConcurrencyBlock, setHomeConcurrencyBlock] = useState<{
+    identity: string | null;
+    branch: ReturnType<typeof resolveAmrBalanceBranch>;
+    workspaceContext: ReturnType<typeof workspaceResourceReadContext>;
+  } | null>(null);
+  useEffect(() => {
+    homeConcurrencyEpochRef.current++;
+    return () => { homeConcurrencyEpochRef.current++; };
+  }, [homeFundingIdentity]);
   useEffect(() => {
     if (!homeFundingIdentity) return;
-    // Warm once per Home/account/member/model selection. Never poll or wait
-    // for this read on a cache miss in the submit path.
+    // Warm for display/recovery only. Home sends still require their own
+    // uncached evidence before handing the draft to project creation.
     void checkAmrFundingFeedback(homeFundingScope, homeFundingModelId);
     const invalidate = () => invalidateAmrFundingFeedback();
     window.addEventListener(WORKSPACE_BILLING_REFRESH_EVENT, invalidate);
@@ -1490,7 +1503,7 @@ export function EntryShell({
   // submits now arrive with the hidden od-default router plugin and
   // projectKind='other', so the agent infers the task type and asks only
   // when the brief cannot be routed reliably.
-  async function handlePluginLoopSubmit(payload: PluginLoopSubmit) {
+  async function handlePluginLoopSubmit(payload: PluginLoopSubmit, isSubmitCurrent: () => boolean = () => true) {
     if (amrAuthRequired) {
       navigate({ kind: 'home', view: 'onboarding' }, { replace: true });
       return 'blocked' as const;
@@ -1508,14 +1521,50 @@ export function EntryShell({
         workspaceContextStateRef.current.failure === 'unsupported'
           ? null : workspaceResourceReadContext(workspaceContextStateRef.current),
       );
-      // Restore #8240's pre-handoff memory gate using both the wallet and
-      // Coding Plan projection. The existing billing stream/fallback refreshes
-      // this projection; confirmed backend insufficiency survives cache refreshes.
-      const memoryBlock = amrBalanceGateFromMemory(
-        workspaceBillingBalanceUsd(workspaceBillingResponse, homeFundingContext),
-        { scope, modelId: amrModelId, preflight: workspaceBillingResponse?.preflight, profile: amrProfile },
-      );
-      const cachedBlock = cachedHomeAmrFundingBlock(scope, amrModelId ?? null, memoryBlock?.snapshot);
+      if (!scope && (workspaceContextStateRef.current.loading || workspaceContextStateRef.current.failure === 'unavailable')) {
+        throw new Error(t('home.amrGateUnavailable'));
+      }
+      if (homeConcurrencyPendingRef.current) return 'blocked' as const;
+      const hintEpoch = homeConcurrencyEpochRef.current;
+      const hintIdentity = homeFundingIdentityRef.current;
+      const hintAccountGeneration = currentWorkspaceAccountGeneration();
+      homeConcurrencyPendingRef.current = true;
+      const hint = await readAmrRequestConcurrency(scope);
+      homeConcurrencyPendingRef.current = false;
+      // A workspace, model, identity, route change or unmount while reading must
+      // never dispatch the earlier payload under the new principal.
+      if (!isSubmitCurrent() || hintEpoch !== homeConcurrencyEpochRef.current || hintIdentity !== homeFundingIdentityRef.current
+        || hintAccountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
+      if (hint?.status === 'full') {
+        setHomeConcurrencyBlock({
+          identity: hintIdentity,
+          branch: resolveAmrBalanceBranch({ context: homeFundingContext, billing: workspaceBilling }),
+          workspaceContext: homeFundingContext,
+        });
+        return 'blocked' as const;
+      }
+      // Unknown is not proof of an available slot. Preserve the existing real
+      // Link request path and named-rejection fallback rather than inventing a
+      // client quota or blocking legitimate old CLI deployments.
+      // client VIEW-015/RUN-003: a current scoped Home draft must not create
+      // even an optimistic project while its funds remain unconfirmed. This is
+      // independent of the immediately expirable concurrency hint above.
+      let cachedBlock: AmrWalletSnapshot | null = null;
+      if (scope) {
+        const fundingIsCurrent = () => isSubmitCurrent() && hintEpoch === homeConcurrencyEpochRef.current
+          && hintIdentity === homeFundingIdentityRef.current
+          && hintAccountGeneration === currentWorkspaceAccountGeneration();
+        const evidence = await readFreshAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent);
+        if (!fundingIsCurrent()) return 'blocked' as const;
+        if (evidence.kind === 'unknown' || !evidence.preflight) throw new Error(t('home.amrGateUnavailable'));
+        if (evidence.kind === 'insufficient') {
+          cachedBlock = {
+            status: 'available', profile: amrProfile ?? 'default', user: null,
+            balanceUsd: evidence.preflight.balanceUsd, updatedAt: evidence.preflight.generatedAt,
+            fetchedAt: new Date().toISOString(), stale: false, source: 'daemon_cache',
+          };
+        }
+      }
       if (cachedBlock) {
         const identity = homeFundingIdentityRef.current;
         const accountGeneration = currentWorkspaceAccountGeneration();
@@ -1541,18 +1590,20 @@ export function EntryShell({
           });
         });
         onAmrBalanceGateBlockChange(null);
-        if (decision === 'dismiss' || identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
+        if (!isSubmitCurrent() || decision === 'dismiss' || identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
         invalidateAmrFundingFeedback();
       }
     }
-    // Without known negative evidence, the project frame opens on the click tick,
-    // before any admission check. Everything below runs behind that frame —
+    // A scoped AMR Home send reaches this point only after fresh funds proof;
+    // other local creation/legacy paths keep their existing handoff. Everything
+    // below runs behind that frame —
     // this shell is unmounted the moment the hand-off navigates, so nothing
     // after this line may rely on this instance's state or DOM. App owns the
     // hand-off and the way back.
+    if (!isSubmitCurrent()) return 'blocked' as const;
     const handoff = onBeginProjectCreation(createInput);
-    // Confirm sign-in behind the pending frame. Workspace billing is not a
-    // send prerequisite: Link admits funding when the run starts, and
+    // Confirm sign-in behind the pending frame. The earlier Home observation
+    // can expire: Link still admits funding when the run starts, and
     // ProjectView presents any live funding rejection without waiting on a
     // display-wallet read. Dismissing a sign-in block restores the Home draft.
     let amrGatePrecheckWitness: AmrBalanceGateScope | undefined;
@@ -1903,6 +1954,7 @@ export function EntryShell({
     designSystemsLoading,
     defaultDesignSystemId,
     onSubmit: handlePluginLoopSubmit,
+    onSubmitWithDraftGuard: handlePluginLoopSubmit,
     onOpenProject,
     // The Add menu's "Add plugin" row lands on the plugins page.
     onBrowseRegistry: () => changeView('plugins'),
@@ -1926,6 +1978,11 @@ export function EntryShell({
 
   return (
     <div className={`entry-shell entry-shell--no-header${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
+      {homeConcurrencyBlock && homeConcurrencyBlock.identity === homeFundingIdentity ? (
+        <AmrConcurrencyDialog branch={homeConcurrencyBlock.branch}
+          workspaceContext={homeConcurrencyBlock.workspaceContext}
+          onClose={() => setHomeConcurrencyBlock(null)} />
+      ) : null}
       <div
         className={`entry${railOpen ? ' entry--rail-open' : ''}`}
         // The team/local shell is a labeled Manus-style rail, so widen the rail
@@ -2004,6 +2061,7 @@ export function EntryShell({
           onPriorityAnnouncementPendingChange={setGoPlanSunsetMessagePending}
           priorityAnnouncementCurrentPlanId={deepSeekCampaignPlan}
           priorityAnnouncementAmrProfile={amrProfile}
+          workspaceQuotaStatus={amrRegistrationStatus}
           priorityAnnouncementMetricsConsent={config.telemetry?.metrics === true}
         />
         {projectSearchOpen ? (

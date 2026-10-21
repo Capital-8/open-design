@@ -265,7 +265,7 @@ describe('正文', () => {
   it('居中、400,下面留 18px 到按钮', () => {
     renderDialog();
     const message = screen.getByText(
-      '当前团队额度不足，请联系团队管理员充值或升级订阅。',
+      '当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。',
     );
     const computed = getComputedStyle(message);
     expect(computed.textAlign).toBe('center');
@@ -274,13 +274,14 @@ describe('正文', () => {
   });
 
   /*
-   * ⚠️ OPEND-2849 换过:原来这里钉「Owner 名字加粗成一档」。产品《报错文案》S06 团队那格
-   * 定稿句「当前团队额度不足，请联系团队管理员充值或升级订阅。」里没有名字的位置,于是名字不再出现 —— 加粗那一档无从谈起。
+   * 本期冻结稿 r271 / QA RUN-004 将付款联系人校准为 Owner（admin 无账单权限）。
+   * OPEND-2849 原定稿仍不插 Owner 名字；这里只校准角色，不改变排版和名字行为。
+   * 定稿句「当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。」里没有名字的位置,于是名字不再出现 —— 加粗那一档无从谈起。
    * 改为钉住「拿得到名字也不插、正文仍是一整段 400」,防止有人把名字拼回定稿句。
    */
   it('拿得到 Owner 名字时正文仍是定稿那一整段,名字不出现', () => {
     renderDialog({ ownerName: '张三' });
-    const message = screen.getByText('当前团队额度不足，请联系团队管理员充值或升级订阅。');
+    const message = screen.getByText('当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。');
     expect(getComputedStyle(message).fontWeight).toBe('400');
     expect(message.querySelector('strong')).toBeNull();
     expect(screen.queryByText('张三')).toBeNull();

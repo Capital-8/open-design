@@ -1,5 +1,6 @@
 import type {
   WorkspaceBillingPreflight,
+  WorkspaceRequestConcurrencyHint,
   WorkspaceBillingCatalog,
   WorkspaceBillingRevisionClock,
   WorkspaceBillingSnapshot,
@@ -50,6 +51,30 @@ export async function fetchVelaBillingFundingCheck(
   options: FetchVelaBillingOptions = {},
 ): Promise<WorkspaceBillingPreflight | null> {
   return fetchVelaFundingPreview('funding-check', workspaceId, modelId, options);
+}
+
+/** Read only Link's existing request counter through the runtime-key CLI path. */
+export async function fetchVelaRequestConcurrency(
+  workspaceId: string,
+  options: FetchVelaBillingOptions = {},
+): Promise<WorkspaceRequestConcurrencyHint | null> {
+  try {
+    const stdout = await resolveVelaBillingRunner(options)([
+      'request-concurrency', '--workspace-id', workspaceId, '--format', 'json',
+    ]);
+    const raw = JSON.parse(stdout) as WorkspaceRequestConcurrencyHint;
+    if (raw.workspaceId !== workspaceId || !raw.workspaceMemberId?.trim()
+      || !Number.isFinite(Date.parse(raw.observedAt))) return null;
+    if (raw.status === 'unknown') return raw.running === undefined && raw.limit === undefined ? raw : null;
+    if ((raw.status !== 'available' && raw.status !== 'full')
+      || !Number.isSafeInteger(raw.running) || raw.running < 0
+      || !Number.isSafeInteger(raw.limit) || raw.limit < 1
+      || (raw.status === 'full') !== (raw.running >= raw.limit)) return null;
+    return raw;
+  } catch (error) {
+    if (isVelaWorkspaceAuthorizationError(error)) throw error;
+    return null;
+  }
 }
 
 async function fetchVelaFundingPreview(
@@ -613,6 +638,7 @@ const defaultRunVelaBilling = async (
         VELA_INVOCATION_SOURCE: 'open-design',
       },
       maxBuffer: 4 * 1024 * 1024,
+      ...(args[0] === 'request-concurrency' ? { timeoutMs: 450 } : {}),
       ...(args[0] === 'preflight' || args[0] === 'funding-check' ? { timeoutMs: BILLING_PREFLIGHT_TIMEOUT_MS } : {}),
       onStderr: (value) => {
         stderr = value;

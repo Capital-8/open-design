@@ -14,6 +14,7 @@ import styles from './AmrArtifactUpgradeHomeCard.module.css';
 
 interface Props {
   profile: string | null;
+  workspaceId?: string | null;
   metricsConsent: boolean;
   installationId: string | null | undefined;
   onDismiss: () => void;
@@ -22,6 +23,7 @@ interface Props {
 
 export function AmrArtifactUpgradeHomeCard({
   profile,
+  workspaceId,
   metricsConsent,
   installationId,
   onDismiss,
@@ -45,7 +47,7 @@ export function AmrArtifactUpgradeHomeCard({
       installationId,
     });
     window.open(
-      attributedAmrUrl(amrPlansUrlForProfile(profile), attribution, deviceId),
+      attributedAmrUrl(amrPlansUrlForProfile(profile, workspaceId), attribution, deviceId),
       '_blank',
       'noopener,noreferrer',
     );

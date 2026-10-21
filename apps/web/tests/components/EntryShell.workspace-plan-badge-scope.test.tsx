@@ -3,7 +3,7 @@
 // Switching workspaces must move the PLAN nameplate, not just the money.
 //
 // Reported shape: a workspace Vela Web shows as 免费 (订阅状态:免费, 升级团队套餐
-// CTA, US$0.00) rendered as 专业版 Plus in the client's account menu — while the
+// CTA, $0.00) rendered as 专业版 Plus in the client's account menu — while the
 // 额度 row in that same card correctly read $0.00. "为啥额度是对的?" is the whole
 // diagnosis: money and plan travel different paths, and only money is partitioned
 // by workspace.
@@ -360,7 +360,7 @@ describe('account menu plan nameplate follows the selected workspace', () => {
   it('names the workspace subscription, not the account subscription', async () => {
     const home = await mountHomeShell(PAID_TEAM);
 
-    await waitFor(() => expect(home.card().getByText('US$12.34')).toBeTruthy());
+    await waitFor(() => expect(home.card().getByText('$12.34')).toBeTruthy());
     const card = home.card();
     expect(card.queryByText('专业版')).toBeNull();
     expect(card.getByText('团队版')).toBeTruthy();
@@ -371,13 +371,13 @@ describe('account menu plan nameplate follows the selected workspace', () => {
   // workspace must move the nameplate, not only the wallet.
   it('moves both the wallet and the nameplate when the workspace switches', async () => {
     const home = await mountHomeShell(PAID_TEAM);
-    await waitFor(() => expect(home.card().getByText('US$12.34')).toBeTruthy());
+    await waitFor(() => expect(home.card().getByText('$12.34')).toBeTruthy());
 
     await home.switchTo(FREE_TEAM);
 
     // The money half already follows the switch — that is the half the reporter
     // saw working ("但是额度是对的").
-    await waitFor(() => expect(home.card().getByText('US$0.00')).toBeTruthy());
+    await waitFor(() => expect(home.card().getByText('$0.00')).toBeTruthy());
 
     // The plan half must follow it too. Before the fix this still read
     // 专业版 + the PLUS wordmark, because it came from the account summary

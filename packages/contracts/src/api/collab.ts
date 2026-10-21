@@ -1037,6 +1037,21 @@ export interface WorkspaceBillingResponse {
   authoritativeWorkspaceRead?: WorkspaceBillingAuthoritativeRead;
 }
 
+/** Immediately expirable Link read; it does not reserve or authorize a request. */
+export type WorkspaceRequestConcurrencyHint = {
+  workspaceId: string;
+  workspaceMemberId: string;
+  observedAt: string;
+} & (
+  | { status: 'available' | 'full'; running: number; limit: number }
+  | { status: 'unknown'; running?: never; limit?: never }
+);
+
+export interface WorkspaceRequestConcurrencyResponse {
+  /** Absent/null includes old CLI or an unavailable read; never implies idle. */
+  requestConcurrencyHint?: WorkspaceRequestConcurrencyHint | null;
+}
+
 export interface WorkspaceBillingPreflight {
   schemaVersion: 1;
   workspaceId: string;

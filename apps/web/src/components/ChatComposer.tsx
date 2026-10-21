@@ -467,9 +467,19 @@ export interface ChatComposerDraftOptions {
 /** Which of the two standalone quick-pill popovers is open, if either. */
 export type ComposerStandalonePanel = 'plugins' | 'toolbox' | null;
 
+export interface RejectedComposerSend {
+  nonce: string;
+  text: string;
+  attachments?: ChatAttachment[];
+  commentAttachments?: ChatCommentAttachment[];
+  meta?: ChatSendMeta;
+}
+
 export interface ChatComposerHandle {
   setDraft: (text: string, options?: ChatComposerDraftOptions) => void;
   restoreDraft: (draft: {
+    /** Late server rejection must never overwrite a newer unsent draft. */
+    onlyIfEmpty?: boolean;
     /**
      * 队列里存的正文 —— 里面**可能已经折着**一段 `> 原文` 的引文前缀。
      * 传 `quotes` 进来,restoreDraft 会把那段拆掉;不传就原样进输入框。
@@ -490,7 +500,7 @@ export interface ChatComposerHandle {
      * them.
      */
     meta?: ChatSendMeta;
-  }) => void;
+  }) => boolean | void;
   focus: () => void;
   /**
    * Run a design-toolbox action by id from outside the composer (e.g. the
@@ -1463,7 +1473,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           editorRef.current?.focus();
           seededRef.current = true;
         },
-        restoreDraft: ({ text, attachments = [], commentAttachments = [], quotes: restoredQuotes = [], meta }) => {
+        restoreDraft: ({ text, attachments = [], commentAttachments = [], quotes: restoredQuotes = [], meta, onlyIfEmpty }) => {
+          const current = latestComposerContentRef.current;
+          if (onlyIfEmpty && (
+            !editorRef.current || (editorRef.current.getText() ?? draftRef.current).trim()
+            || (current && (current.staged.length > 0 || current.stagedVisualComments.length > 0
+              || current.stagedSkills.length > 0 || current.stagedMcpServers.length > 0
+              || current.stagedConnectors.length > 0 || current.activeAppliedPlugin !== null
+              || current.quotes.length > 0))
+          )) return false;
           /*
            * 引用是发送时**折进正文**的(`submit()` 里那个 `> 原文` 前缀),所以
            * 取回来要做两件事,缺一不可:把芯片还给宿主,并把正文里那段引文拆掉。
@@ -1511,6 +1529,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           editorRef.current?.setText(body);
           editorRef.current?.focus();
           seededRef.current = true;
+          return true;
         },
         focus: () => {
           editorRef.current?.focus();

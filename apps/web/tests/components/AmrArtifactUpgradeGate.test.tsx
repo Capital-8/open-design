@@ -70,6 +70,23 @@ describe('AmrArtifactUpgradeGate', () => {
     await expect(decision).resolves.toBe('proceed');
   });
 
+  it('forwards the workspace to the artifact upgrade dialog', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(<AmrArtifactUpgradeGate {...BASE_PROPS} plan="free" planResolved workspaceId="workspace-project" />);
+
+    act(() => publishFinishedRun());
+    const decision = requestSend();
+    await waitFor(() => expect(screen.getByTestId('amr-artifact-upgrade-dialog')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('amr-artifact-upgrade-plans'));
+
+    expect(open).toHaveBeenCalledWith(
+      expect.stringContaining('https://open-design.ai/cloud/dashboard?workspaceId=workspace-project&source=open_design&billing=plan&'),
+      '_blank',
+      'noopener,noreferrer',
+    );
+    await expect(decision).resolves.toBe('cancel');
+  });
+
   it('proceeds immediately for a Send in another conversation', async () => {
     render(<AmrArtifactUpgradeGate {...BASE_PROPS} plan="free" planResolved />);
 

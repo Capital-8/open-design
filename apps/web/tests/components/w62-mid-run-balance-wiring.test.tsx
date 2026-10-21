@@ -30,7 +30,7 @@ import type { ProjectWorkspaceScopeState } from '../../src/collab/useProjectWork
 import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext';
 import { advanceWorkspaceAccountGeneration, resetWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 import { fetchAmrWalletSnapshot, fetchChatRunStatus, reattachDaemonRun, streamViaDaemon } from '../../src/providers/daemon';
-import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
+import { checkAmrBalanceGate, hasAmrFundingRecovered } from '../../src/runtime/amr-balance-gate';
 import { checkAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
 import {
   createConversation,
@@ -165,7 +165,7 @@ vi.mock('../../src/runtime/amr-balance-gate', async () => {
   const actual = await vi.importActual<typeof import('../../src/runtime/amr-balance-gate')>(
     '../../src/runtime/amr-balance-gate',
   );
-  return { ...actual, checkAmrBalanceGate: vi.fn().mockResolvedValue({ kind: 'allow' }) };
+  return { ...actual, checkAmrBalanceGate: vi.fn().mockResolvedValue({ kind: 'allow' }), hasAmrFundingRecovered: vi.fn().mockResolvedValue(false) };
 });
 
 vi.mock('../../src/providers/project-events', () => ({
@@ -569,6 +569,53 @@ describe('跑到一半余额不足:谁点亮升级卡', () => {
     resetWorkspaceContextCache();
   });
 
+  // Current QA client:RUN-012 step 2: inputs not yet sent must not be
+  // submitted by funding recovery. This is an existing user queue paused by
+  // the real gateway failure, not a new queue for rejected composer drafts.
+  it('keeps gateway-paused text and files until the user explicitly sends after recharge', async () => {
+    mockedStreamViaDaemon.mockImplementation(() => new Promise(() => {}));
+    mockedFetchAmrWalletSnapshot.mockResolvedValue(snapshot('0'));
+    workspaceBillingResponse = provenWorkspaceBilling('0');
+    vi.mocked(hasAmrFundingRecovered).mockResolvedValue(true);
+    vi.spyOn(window, 'open').mockImplementation(() => null);
+    await sendOnce();
+    const active = mockedStreamViaDaemon.mock.calls[0]![0];
+    const file = { path: 'original-brief.pdf', name: 'original-brief.pdf', kind: 'file' };
+    await act(async () => {
+      active.onRunCreated?.('funding-active-run');
+      active.handlers.onDelta('Keep this existing output.');
+      await chatPaneSpy.mock.calls.at(-1)![0].onSend('keep queued follow-up', [file], []);
+    });
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(1);
+    await act(async () => {
+      await active.handlers.onError(Object.assign(new Error('insufficient balance'), { code: 'AMR_INSUFFICIENT_BALANCE' }));
+    });
+    await screen.findByTestId('amr-balance-dialog');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-plans'));
+    const hint = screen.getByTestId('amr-balance-dialog-watching').textContent;
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    expect(hasAmrFundingRecovered).toHaveBeenCalled();
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+    // A recharge is not the user's permission to dispatch queued requests.
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
+    expect(hint).toBe('chat.amrBalanceGate.watchingWalletManual');
+    const queued = chatPaneSpy.mock.calls.at(-1)![0].queuedItems;
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ prompt: 'keep queued follow-up', attachments: [file] });
+    const history = chatPaneSpy.mock.calls.at(-1)![0].messages;
+    expect(history.some((message: ChatMessage) => message.content.includes('Keep this existing output.'))).toBe(true);
+    await act(async () => { chatPaneSpy.mock.calls.at(-1)![0].onSendQueuedNow(queued[0].id); });
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2);
+    const retry = mockedStreamViaDaemon.mock.calls[1]![0];
+    expect(retry.history.at(-1)).toMatchObject({ role: 'user', content: 'keep queued follow-up', attachments: [file] });
+    expect(retry.attachments).toEqual([file.path]);
+    expect(retry.workspaceContext?.workspaceId).toBe(TEAM_WORKSPACE);
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2);
+  });
+
   it('跑到一半的余额不足:把钱包读数交给升级卡', async () => {
     mockedFetchAmrWalletSnapshot.mockResolvedValue(snapshot('0'));
     workspaceBillingResponse = provenWorkspaceBilling('0');
@@ -589,29 +636,67 @@ describe('跑到一半余额不足:谁点亮升级卡', () => {
     await waitFor(() => expect(screen.queryByTestId('amr-balance-dialog')).not.toBeNull());
   });
 
-  it('shows independent funding feedback while agent startup is still pending, without cancellation', async () => {
-    vi.mocked(checkAmrFundingFeedback).mockResolvedValue('insufficient');
+  // QA client:RUN-003/011/012: unknown while the read is pending is not a
+  // dispatch permit. Confirmed insufficiency preserves the composer's payload;
+  // the 25043 expectation that startup raced this read was obsolete (two
+  // original failures retained in runtime-funding-manual-retry-20261021).
+  it.each(['owner', 'admin', 'member'] as const)('%s waits for funding, retains text/files on rejection and retries only explicitly', async (role) => {
+    workspaceScopeMocks.ambientContext = {
+      ...CALLER_CONTEXT, role,
+      permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }),
+    };
+    let finish!: (result: 'insufficient') => void;
+    vi.mocked(checkAmrFundingFeedback).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     mockedStreamViaDaemon.mockImplementation(() => new Promise(() => {}));
-    await sendOnce();
-    await screen.findByTestId('amr-balance-dialog');
-    const options = mockedStreamViaDaemon.mock.calls[0]![0];
-    expect(options.signal?.aborted).toBe(false);
-    expect(options.cancelSignal?.aborted).toBe(false);
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect((screen.getByTestId('normal-send') as HTMLButtonElement).disabled).toBe(false));
+    const file = { path: 'funding-draft.pdf', name: 'funding-draft.pdf', kind: 'file' };
+    let sending!: Promise<unknown>;
+    act(() => { sending = chatPaneSpy.mock.calls.at(-1)![0].onSend('keep original funding draft', [file], []); });
+    await waitFor(() => expect(checkAmrFundingFeedback).toHaveBeenCalled());
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    let outcome: unknown;
+    await act(async () => { finish('insufficient'); outcome = await sending; });
+    expect(outcome).toBe('restore-draft');
+    await screen.findByTestId(role === 'owner' ? 'amr-balance-dialog' : 'amr-balance-owner-dialog');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(0);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toHaveLength(0);
     expect(screen.getByTestId('failed-assistant-id').textContent).toBe('');
+    // A later available observation itself does not execute the retained draft.
+    vi.mocked(checkAmrFundingFeedback).mockResolvedValue('available');
+    await act(async () => { await Promise.resolve(); });
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    await act(async () => { await chatPaneSpy.mock.calls.at(-1)![0].onSend('keep original funding draft', [file], []); });
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
+    const dispatched = mockedStreamViaDaemon.mock.calls[0]![0];
+    expect(dispatched.history.at(-1)).toMatchObject({ content: 'keep original funding draft', attachments: [file] });
+    expect(dispatched.attachments).toEqual([file.path]);
+    expect(dispatched.workspaceContext?.workspaceId).toBe(TEAM_WORKSPACE);
   });
 
-  it('starts the run while preflight is pending and ignores its negative result after output', async () => {
-    let finish!: (result: 'insufficient') => void;
-    vi.mocked(checkAmrFundingFeedback).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  it.each([false, true])('a deferred available response starts once only for its original account (changed=%s)', async (changed) => {
+    let finish!: (result: 'available') => void;
+    vi.mocked(checkAmrFundingFeedback).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     mockedStreamViaDaemon.mockImplementation(() => new Promise(() => {}));
-    await sendOnce();
-    const options = mockedStreamViaDaemon.mock.calls[0]![0];
-    await act(async () => {
-      options.handlers.onDelta('The task is already generating.');
-      finish('insufficient');
-    });
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect((screen.getByTestId('normal-send') as HTMLButtonElement).disabled).toBe(false));
+    let sending!: Promise<unknown>;
+    act(() => { sending = chatPaneSpy.mock.calls.at(-1)![0].onSend('wait for exact funding', [], []); });
+    await waitFor(() => expect(checkAmrFundingFeedback).toHaveBeenCalled());
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    if (changed) advanceWorkspaceAccountGeneration('account-changed-during-preflight');
+    await act(async () => { finish('available'); await sending; });
+    expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(changed ? 0 : 1);
     expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
-    expect(options.cancelSignal?.aborted).toBe(false);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(0);
+    if (!changed) {
+      const options = mockedStreamViaDaemon.mock.calls[0]![0];
+      expect(options.workspaceContext?.workspaceId).toBe(TEAM_WORKSPACE);
+      await act(async () => { options.handlers.onDelta('Only the confirmed run produces output.'); });
+      expect(options.cancelSignal?.aborted).toBe(false);
+      expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('does not check funding for a local agent', async () => {

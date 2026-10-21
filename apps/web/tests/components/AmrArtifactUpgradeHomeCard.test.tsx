@@ -46,6 +46,28 @@ describe('AmrArtifactUpgradeHomeCard', () => {
     expect(onDismiss).toHaveBeenCalledTimes(2);
   });
 
+  it('opens the plans view for the supplied workspace', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(
+      <AmrArtifactUpgradeHomeCard
+        profile="prod"
+        workspaceId="workspace-home"
+        metricsConsent={false}
+        installationId={null}
+        onDismiss={vi.fn()}
+        onViewArtifact={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('amr-artifact-upgrade-home-plans'));
+
+    expect(open).toHaveBeenCalledWith(
+      expect.stringContaining('https://open-design.ai/cloud/dashboard?workspaceId=workspace-home&source=open_design&billing=plan&'),
+      '_blank',
+      'noopener,noreferrer',
+    );
+  });
+
   it('allows a Home offer for every newly eligible artifact session', () => {
     const first = render(
       <AmrArtifactUpgradeHomeCard

@@ -1,4 +1,6 @@
 import { WorkspaceRemovalBoundary } from './components/WorkspaceRemovalBoundary';
+import { homeAutoSendIdentity, type HomeRequestConcurrencyRejection } from './runtime/home-auto-send-identity';
+import { AmrConcurrencyDialog } from './components/AmrConcurrencyDialog';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
@@ -1343,6 +1345,37 @@ function AppInner() {
     },
     [],
   );
+  const initialHomeRequestSourcesRef = useRef(new Map<string, {
+    prompt: string; files: readonly File[]; accountGeneration: number;
+    workspaceKey: string; workspaceId: string | null; workspaceMemberId: string | null;
+  }>());
+  const [homeConcurrencyRejection, setHomeConcurrencyRejection] = useState<HomeRequestConcurrencyRejection | null>(null);
+  const handleInitialHomeRequestConcurrencyRejected = useCallback((input: HomeRequestConcurrencyRejection): boolean => {
+    const original = initialHomeRequestSourcesRef.current.get(input.projectId);
+    const liveContext = workspaceResourceReadContext(workspaceContextStateRef.current);
+    if (!original || routeRef.current.kind !== 'project' || routeRef.current.projectId !== input.projectId
+      || input.clientRequestId !== homeAutoSendIdentity(input.projectId).clientRequestId
+      || input.accountGeneration !== original.accountGeneration
+      || input.accountGeneration !== currentWorkspaceAccountGeneration()
+      || original.workspaceKey !== workspaceIdentityCacheKey(liveContext)
+      || original.workspaceId !== (input.workspaceContext?.workspaceId ?? null)
+      || (original.workspaceMemberId && original.workspaceMemberId !== input.workspaceContext?.workspaceMemberId)) return false;
+    initialHomeRequestSourcesRef.current.delete(input.projectId);
+    // The project and failed run already exist. Keep both, and never call the
+    // optimistic-create rollback that would hide a persisted project row.
+    try { window.sessionStorage.removeItem(`od:auto-send-first:${input.projectId}`); } catch { /* private mode */ }
+    seedHomeComposerPrompt(original.prompt);
+    stashHomeComposerAttachments(original.files);
+    setPendingProjectCreation((current) => current?.projectId === input.projectId ? null : current);
+    setHomeConcurrencyRejection(input);
+    navigate({ kind: 'home', view: 'home' });
+    return true;
+  }, []);
+  const handleInitialHomeRequestProgress = useCallback((projectId: string, clientRequestId: string) => {
+    if (clientRequestId === homeAutoSendIdentity(projectId).clientRequestId) {
+      initialHomeRequestSourcesRef.current.delete(projectId);
+    }
+  }, []);
   const handleCreationHandoffSettled = useCallback((projectId: string) => {
     setPendingProjectCreation((current) =>
       current?.projectId === projectId ? null : current,
@@ -1797,6 +1830,7 @@ function AppInner() {
   const onLoginUpdateRequestHandled = useCallback((nonce: number) => {
     setLoginUpdateRequest((current) => current?.nonce === nonce ? null : current);
   }, []);
+
 
   const testRuntimeAuthenticated = isAmrSessionAuthenticated(amrLoginStatus);
   const testRuntimeOwner = amrLoginStatus?.user?.id ?? null;
@@ -3293,6 +3327,7 @@ function AppInner() {
       let createWorkspaceContext: WorkspaceCollabContext | null = null;
       let optimisticProjectId: string | null = input.optimisticProjectId ?? null;
       let result;
+      const creationAccountGeneration = currentWorkspaceAccountGeneration();
       const stagedFiles = Array.isArray(input.pendingFiles)
         ? input.pendingFiles.filter((file): file is File => file instanceof File)
         : [];
@@ -3402,6 +3437,13 @@ function AppInner() {
             appliedPluginSnapshotId: result.appliedPluginSnapshotId,
           }
         : result.project;
+      if (input.autoSendFirstMessage) initialHomeRequestSourcesRef.current.set(project.id, {
+        prompt: derivedPendingPrompt ?? '', files: stagedFiles,
+        accountGeneration: creationAccountGeneration,
+        workspaceKey: workspaceIdentityCacheKey(createWorkspaceContext),
+        workspaceId: project.workspaceId ?? createWorkspaceContext?.workspaceId ?? null,
+        workspaceMemberId: createWorkspaceContext?.workspaceMemberId ?? null,
+      });
       if (optimisticProjectId) {
         // The files now belong to this project (uploaded below); a later Home
         // visit must not revive them into the composer.
@@ -5779,6 +5821,8 @@ function AppInner() {
               : null
           }
           onCreationHandoffSettled={handleCreationHandoffSettled}
+          onInitialHomeRequestConcurrencyRejected={handleInitialHomeRequestConcurrencyRejected}
+          onInitialHomeRequestProgress={handleInitialHomeRequestProgress}
         />
         </div>
       );
@@ -5863,6 +5907,7 @@ function AppInner() {
             <AmrArtifactUpgradeHomeCard
               key={amrArtifactUpgradeHomeOffer.sessionKey}
               profile={amrLoginStatus?.profile ?? null}
+              workspaceId={amrUpgradeWorkspaceContext?.workspaceId}
               metricsConsent={config.telemetry?.metrics === true}
               installationId={config.installationId}
               onViewArtifact={() => {
@@ -5931,6 +5976,7 @@ function AppInner() {
             the routes are mutually exclusive, so exactly one is on screen. */}
         {route.kind === 'project' ? (
           <WorkspaceTopRightAccountCluster
+            workspaceQuotaStatus={amrLoginStatus}
             onOpenSettings={openSettings}
             onSignedOut={handleActiveCloudSignOut}
             updaterSlot={
@@ -6020,6 +6066,7 @@ function AppInner() {
         }
         profile={amrLoginStatus?.profile ?? null}
         metricsConsent={config.telemetry?.metrics === true}
+        workspaceId={amrUpgradeWorkspaceContext?.workspaceId}
         installationId={config.installationId}
         onHomeOfferChange={
           amrArtifactUpgradeHomeMock
@@ -6066,6 +6113,12 @@ function AppInner() {
           tone="error"
           onDismiss={() => setProjectCreateError(null)}
         />
+      ) : null}
+      {homeConcurrencyRejection && route.kind === 'home'
+        && homeConcurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration() ? (
+        <AmrConcurrencyDialog branch={homeConcurrencyRejection.branch}
+          workspaceContext={homeConcurrencyRejection.workspaceContext}
+          onClose={() => setHomeConcurrencyRejection(null)} />
       ) : null}
       <HomeAmrBalanceGateDialogs
         block={homeAmrBalanceGateBlock}

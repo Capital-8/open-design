@@ -12,6 +12,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/App';
+import { homeAutoSendIdentity } from '../../src/runtime/home-auto-send-identity';
 import { notifyAmrLoginStatusChanged } from '../../src/components/amrLoginPolling';
 import type { ShareLoginReturn } from '../../src/components/share/share-login-return';
 import type {
@@ -85,6 +86,10 @@ const workspaceInvalidationHarness = vi.hoisted(() => ({
 const iframePoolHarness = vi.hoisted(() => ({
   evictMatching: vi.fn(),
   evictProject: vi.fn(),
+}));
+
+const requestLimitHandoff = vi.hoisted(() => ({
+  reject: undefined as undefined | ((input: { projectId: string; clientRequestId: string; accountGeneration: number; workspaceContext: WorkspaceCollabContext | null; branch: { tier: 'below_max' | 'max'; audience: 'owner' | 'member' } }) => boolean),
 }));
 
 const projectViewRenameFenceHarness = vi.hoisted(() => ({
@@ -411,7 +416,9 @@ vi.mock('../../src/components/ProjectView', () => ({
     onCreationHandoffSettled,
     shareLoginReturn,
     onShareLoginReturnChange,
+    onInitialHomeRequestConcurrencyRejected,
   }: {
+    onInitialHomeRequestConcurrencyRejected?: typeof requestLimitHandoff.reject;
     onBack: () => void;
     onCreateProjectFromDesignSystem?: (designSystemId: string, title: string) => Promise<void> | void;
     onCreateDesignSystemFromProject?: (
@@ -456,6 +463,7 @@ vi.mock('../../src/components/ProjectView', () => ({
     useEffect(() => {
       onCreationHandoffSettled?.(project.id);
     }, [onCreationHandoffSettled, project.id]);
+    requestLimitHandoff.reject = onInitialHomeRequestConcurrencyRejected;
     projectViewRetryScopeHarness.latest = {
       context: workspaceContextOverride ?? null,
       continuation: amrAuthRetryContinuation ?? null,
@@ -856,6 +864,7 @@ function stubWorkspaceContext(
 
 describe('App project creation routing', () => {
   beforeEach(() => {
+    requestLimitHandoff.reject = undefined;
     resetCoalescedGet();
     resetWorkspaceContextCache();
     resetTeamProjectsCache();
@@ -942,6 +951,68 @@ describe('App project creation routing', () => {
     resetCoalescedGet();
     workspaceInvalidationHarness.handlers.length = 0;
     workspaceInvalidationHarness.onActive.length = 0;
+  });
+
+  it('returns a first request rejected by Link to Home with the original files, without deleting the created project', async () => {
+    mockedListProjects.mockResolvedValue([]);
+    let createdId = '';
+    mockedCreateProject.mockImplementation(async (input) => {
+      createdId = input.id!;
+      return { project: { ...freshProject, id: createdId }, conversationId: 'conv-new' };
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Create prompted project' }));
+    await screen.findByTestId('project-view');
+    await waitFor(() => expect(mockedUploadProjectFiles).toHaveBeenCalledTimes(1));
+    expect(requestLimitHandoff.reject).toBeTypeOf('function');
+    let restored = false;
+    await act(async () => {
+      restored = requestLimitHandoff.reject!({ projectId: createdId, clientRequestId: homeAutoSendIdentity(createdId).clientRequestId,
+        accountGeneration: currentWorkspaceAccountGeneration(), workspaceContext: null,
+        branch: { tier: 'below_max', audience: 'owner' } });
+    });
+    expect(restored).toBe(true);
+    expect(await screen.findByTestId('entry-home-surface')).toBeTruthy();
+    expect(screen.getByTestId('amr-concurrency-dialog')).toBeTruthy();
+    expect(window.localStorage.getItem('open-design:home-composer:prompt')).toContain('Build the retained artifact prompt');
+    const files = peekHomeComposerAttachments();
+    expect(files.map((f) => f.name)).toEqual(['brief.txt']);
+    expect(files[0]).toBe(mockedUploadProjectFiles.mock.calls[0]![1][0]);
+    expect(files[0]!.size).toBe(5);
+    expect(mockedDeleteProject).not.toHaveBeenCalled();
+    expect(mockedCreateProject).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    expect(mockedCreateProject).toHaveBeenCalledOnce();
+  });
+
+  it.each(['request', 'account', 'workspace', 'route'] as const)('rejects stale Home recovery across %s boundaries without overwriting the current draft', async (boundary) => {
+    mockedListProjects.mockResolvedValue([]);
+    let createdId = '';
+    mockedCreateProject.mockImplementation(async (input) => {
+      createdId = input.id!;
+      return { project: { ...freshProject, id: createdId }, conversationId: 'conv-new' };
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Create prompted project' }));
+    await screen.findByTestId('project-view');
+    await waitFor(() => expect(mockedUploadProjectFiles).toHaveBeenCalledTimes(1));
+    const reject = requestLimitHandoff.reject!;
+    if (boundary === 'route') {
+      act(() => navigate({ kind: 'home', view: 'home' }));
+      await screen.findByTestId('entry-home-surface');
+    }
+    window.localStorage.setItem('open-design:home-composer:prompt', 'new unsent Home draft');
+    let restored = true;
+    await act(async () => { restored = reject({ projectId: createdId,
+      clientRequestId: boundary === 'request' ? 'another-request' : homeAutoSendIdentity(createdId).clientRequestId,
+      accountGeneration: currentWorkspaceAccountGeneration() + (boundary === 'account' ? 1 : 0),
+      workspaceContext: boundary === 'workspace' ? workspaceContext('other-space', 'other-member') : null,
+      branch: { tier: 'below_max', audience: 'owner' } }); });
+    expect(restored).toBe(false);
+    expect(window.localStorage.getItem('open-design:home-composer:prompt')).toBe('new unsent Home draft');
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+    expect(mockedDeleteProject).not.toHaveBeenCalled();
+    expect(mockedCreateProject).toHaveBeenCalledOnce();
   });
 
   it('routes mutations and limits global focus catch-up to Skills and Design Systems', async () => {

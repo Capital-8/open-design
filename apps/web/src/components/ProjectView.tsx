@@ -1,3 +1,4 @@
+import { homeAutoSendIdentity, stableIdentityDigest, type HomeRequestConcurrencyRejection } from '../runtime/home-auto-send-identity';
 import { readRetriedErrorSurface, retriedErrorSurfaceKey, writeRetriedErrorSurface } from '../runtime/chat/retried-error-surface';
 import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './share/observed-public-share-link';
 import type { ShareLoginReturn } from './share/share-login-return';
@@ -187,9 +188,12 @@ import {
   amrBalanceDialogUpgradeIntent,
   amrBalanceUpgradeIntent,
   resolveAmrBalanceBranch,
+  type AmrBalanceBranch,
   type AmrBalanceBlockedDialogKind,
 } from '../runtime/amr-balance-branch';
 import { AmrBalanceDialog } from './AmrBalanceDialog';
+import { AmrConcurrencyDialog } from './AmrConcurrencyDialog';
+import { isMembershipConcurrencyLimitFailure } from '@open-design/contracts';
 import { AmrOwnerTopUpDialog } from './chat/AmrOwnerTopUpDialog';
 import { markHistoryReplayLanded } from './chat/useCharReveal';
 import { workspaceAutoRechargeUrl, workspaceUpgradeUrl } from './EntryNavRail';
@@ -344,7 +348,7 @@ import { DesignSystemPreviewModal } from './DesignSystemPreviewModal';
 import { ChatPane, foldStrategyTaskTurns } from './ChatPane';
 import { trailingMessageIgnoringHostCards } from '../runtime/chat/host-authored-message';
 import historyDockStyles from './chat/ConversationHistoryDock.module.css';
-import type { ChatSendMeta, ChatSendOutcome } from './ChatComposer';
+import type { ChatSendMeta, ChatSendOutcome, RejectedComposerSend } from './ChatComposer';
 import {
   CritiqueTheaterMount,
   useCritiqueTheaterEnabled,
@@ -492,6 +496,8 @@ type ProjectChatSendMeta = ChatSendMeta & {
    * 交给队列项保管了,回放时再声称「输入框在等它」就是撒谎。
    */
   composerOwnedDraft?: true;
+  /** Only Home auto-send owns the original Home input and initial request. */
+  initialHomeSend?: true;
   /** Stable task lineage for retries, resumes and clarification answers. */
   taskAnalytics?: ChatTaskExecutionAnalytics;
   /** Explicit daemon-issued OD Next continuation handle. */
@@ -995,6 +1001,8 @@ interface Props {
   creationHandoff?: { prompt: string; files?: readonly File[] } | null;
   /** The first transcript is on screen (or failed to load): drop the card. */
   onCreationHandoffSettled?: (projectId: string) => void;
+  onInitialHomeRequestConcurrencyRejected?: (input: HomeRequestConcurrencyRejection) => boolean;
+  onInitialHomeRequestProgress?: (projectId: string, clientRequestId: string) => void;
 }
 
 export type ProjectRenameFenceToken = Readonly<{
@@ -1423,29 +1431,6 @@ function designSystemNeedsWorkPrompt(
 
 function autoSendFirstMessageKey(projectId: string): string {
   return `od:auto-send-first:${projectId}`;
-}
-
-function stableIdentityDigest(value: string): string {
-  // FNV-1a 64-bit keeps the daemon-facing id bounded while preserving a
-  // deterministic identity across retries and ProjectView remounts.
-  let hash = 0xcbf29ce484222325n;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= BigInt(value.charCodeAt(index));
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
-  }
-  return hash.toString(36).padStart(13, '0');
-}
-
-function homeAutoSendIdentity(projectId: string): Pick<
-  ProjectChatSendMeta,
-  'assistantMessageId' | 'clientRequestId' | 'userMessageId'
-> {
-  const handoffId = `home-auto-send-${stableIdentityDigest(projectId)}`;
-  return {
-    clientRequestId: handoffId,
-    userMessageId: `${handoffId}-user`,
-    assistantMessageId: `${handoffId}-assistant`,
-  };
 }
 
 /**
@@ -2195,6 +2180,8 @@ export function ProjectView({
   onRunActivityChange,
   creationHandoff = null,
   onCreationHandoffSettled,
+  onInitialHomeRequestConcurrencyRejected,
+  onInitialHomeRequestProgress,
 }: Props) {
   const { locale, t } = useI18n();
   const amrAuthRetryMountIdRef = useRef<string | null>(null);
@@ -2931,9 +2918,17 @@ export function ProjectView({
   const autoOpenedBrandDesignSystemRef = useRef<string | null>(null);
   const brandEmptyTranscriptRetriesRef = useRef<Map<string, number>>(new Map());
   const [chatSeed, setChatSeed] = useState<{ id: string; value: string } | null>(null);
+  const [concurrencyRejection, setConcurrencyRejection] = useState<{
+    conversationId: string; authorityKey: string; accountGeneration: number;
+    branch: AmrBalanceBranch; workspaceContext: WorkspaceCollabContext | null;
+    draft: RejectedComposerSend | null;
+    initialHomeSend: boolean;
+  } | null>(null);
+  const [concurrencyDialogOpen, setConcurrencyDialogOpen] = useState(false);
+  const latestRequestSendRef = useRef(new Map<string, string>());
   // Sign-in blocks and live gateway funding rejections share these dialogs.
-  // `conversationId` remembers whose
-  // queue to resume when the dialog resolves (sign-in done / recharge landed).
+  // `conversationId` remembers whose sign-in queue may resume. Funding
+  // recovery leaves paused sends under explicit user control.
   const [amrBalanceGateBlock, setAmrBalanceGateBlock] = useState<
     {
       reason: 'insufficient' | 'signed_out';
@@ -3644,6 +3639,15 @@ export function ProjectView({
       setAmrBalanceGateBlock(null);
     }
   }, [activeConversationId, projectRunAuthorityKey, amrBalanceGateBlock, config.mode, config.agentId]);
+  useEffect(() => {
+    if (concurrencyRejection && (concurrencyRejection.conversationId !== activeConversationId
+      || concurrencyRejection.authorityKey !== projectRunAuthorityKey
+      || concurrencyRejection.accountGeneration !== currentWorkspaceAccountGeneration()
+      || config.mode !== 'daemon' || config.agentId !== 'amr')) {
+      setConcurrencyDialogOpen(false);
+      setConcurrencyRejection(null);
+    }
+  }, [concurrencyRejection, activeConversationId, projectRunAuthorityKey, config.mode, config.agentId]);
   const conversationsLoadedProjectIdRef = useRef<string | null>(null);
   // Live mirror of the full project prop, for async handlers whose useCallback
   // deps only track `project.id` (e.g. the project-events handler below):
@@ -8825,8 +8829,7 @@ export function ProjectView({
        */
       const amrGateApplies =
         config.mode === 'daemon'
-        && config.agentId === 'amr'
-        && !meta?.amrGatePrechecked;
+        && config.agentId === 'amr';
       // The gate's await opens a window where the conversation is not yet
       // marked busy. A second send arriving during that window behaves like
       // a busy conversation: it queues instead of racing a duplicate run.
@@ -8845,6 +8848,9 @@ export function ProjectView({
         return meta?.acceptDurableQueue === true;
       }
       const runConversationId = activeConversationId;
+      latestRequestSendRef.current.set(runConversationId, clientRequestId);
+      setConcurrencyDialogOpen(false);
+      setConcurrencyRejection(null);
       // This is the accepted retry boundary: all synchronous refusal paths are
       // above it. A later preflight/POST failure supplies its own current surface.
       if (retryTarget && meta?.retryOfAssistantId) {
@@ -8989,21 +8995,19 @@ export function ProjectView({
         setAmrBalanceGateBlock((previous) => previous?.fundingSource === 'preflight'
           && previous.fundingRunKey === assistantId ? null : previous);
       };
-      if (config.mode === 'daemon' && assistantAgentId === 'amr') {
-        const modelId = effectiveAgentModelId(selectedAgent, selectedAgentChoice);
-        // Start alongside send preparation, before any agent spawn or run POST.
-        // A stalled/unsupported preflight has no effect on sending.
-        void checkAmrFundingFeedback(amrBalanceCardScope, modelId).then((result) => {
-          if (result !== 'insufficient' || !fundingHintRelevant ||
-            streamingConversationIdRef.current !== runConversationId ||
-            memoryTurnAssistantRef.current?.assistantId !== assistantId) return;
-          showAmrFundingFailure({
-            code: AMR_INSUFFICIENT_BALANCE_CODE, runKey: assistantId,
-            conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
-            accountGeneration: sendAccountGeneration, source: 'preflight', modelId,
-          });
-        });
-      }
+      const fundingModelId = effectiveAgentModelId(selectedAgent, selectedAgentChoice);
+      // Start the exact member/model read alongside preparation, but a known
+      // insufficiency must settle before run persistence or provider dispatch.
+      // Unknown/unavailable reads still defer authority to the backend.
+      const fundingIdentityIsCurrent = () => mountedRef.current
+        && projectIdRef.current === project.id
+        && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
+        && currentWorkspaceAccountGeneration() === sendAccountGeneration
+        && fundingDialogContextRef.current.isAmr
+        && fundingDialogContextRef.current.modelId === fundingModelId;
+      const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
+        ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
+        : Promise.resolve('unknown' as const);
       /**
        * 把刚画出去的那一轮收回 —— 只有预检拒绝时才走这里。
        *
@@ -9013,16 +9017,20 @@ export function ProjectView({
        */
       const retractPaintedTurn = () => {
         retireFundingHint();
-        const restore = paintedFrom.messages;
-        paintedFrom.messages = null;
         clearStreamingMarker(runConversationId);
-        if (restore === null) return;
         if (messagesConversationIdRef.current !== runConversationId) return;
-        setMessages(restore);
+        // A cached verdict can settle before React flushes the paint updater.
+        // Queue the rollback behind it so that its original transcript exists.
+        setMessages((current) => {
+          const restore = paintedFrom.messages;
+          paintedFrom.messages = null;
+          return messagesConversationIdRef.current === runConversationId
+            ? restore ?? current : current;
+        });
       };
-      // The send check confirms sign-in only; funding is decided by Link as
-      // the run starts. Home sends that already checked the same identity skip
-      // the duplicate sign-in read here.
+      // A Home witness skips only the duplicate sign-in read. Every actual
+      // send still waits for its scoped funding verdict; Link remains the
+      // final authority when the read is unsupported or unavailable.
       if (amrGateApplies) {
         const gateConversationId = runConversationId;
         amrGateInFlightConversationsRef.current.add(gateConversationId);
@@ -9052,7 +9060,7 @@ export function ProjectView({
             config.agentModels?.amr,
           );
           const gate =
-            deferAmrPreflightToDaemon
+            deferAmrPreflightToDaemon || meta?.amrGatePrechecked
               ? { kind: 'allow' as const }
               : await checkAmrBalanceGate(
                   projectRunPreflightContext
@@ -9136,6 +9144,29 @@ export function ProjectView({
           // the original conversation instead of dropping it.
           if (messagesConversationIdRef.current !== activeConversationId) {
             return acceptedDurableQueue(queueGateSend());
+          }
+          const funding = await fundingFeedback;
+          if (!fundingIdentityIsCurrent()) {
+            if (meta?.composerOwnedDraft) amrGateBlockedRequestRef.current = clientRequestId;
+            if (mountedRef.current) retractPaintedTurn();
+            return false;
+          }
+          if (messagesConversationIdRef.current !== activeConversationId) {
+            return acceptedDurableQueue(queueGateSend());
+          }
+          if (streamingConversationIdRef.current !== runConversationId) return false;
+          if (funding === 'insufficient' && gate.kind !== 'hard') {
+            const accepted = meta?.composerOwnedDraft
+              ? rejectBlockedSend()
+              : acceptedDurableQueue(parkBlockedSend());
+            // Retraction retires the provisional turn. Present the rejection
+            // after it so the current draft owns the dialog, not a phantom run.
+            showAmrFundingFailure({
+              code: AMR_INSUFFICIENT_BALANCE_CODE, runKey: assistantId,
+              conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
+              accountGeneration: sendAccountGeneration, source: 'preflight', modelId: fundingModelId,
+            });
+            return accepted;
           }
           if (gate.kind === 'hard') {
             const recoveryActionInstanceId = `blocked:${taskAnalytics.taskExecutionId}`;
@@ -9485,6 +9516,13 @@ export function ProjectView({
       let parsedArtifact: Artifact | null = null;
       let liveHtml = '';
       let streamedText = '';
+      let observedModelWork = false;
+      let homeRejectionSourceRetired = false;
+      const retireHomeRejectionSource = () => {
+        if (homeRejectionSourceRetired || !meta?.initialHomeSend) return;
+        homeRejectionSourceRetired = true;
+        onInitialHomeRequestProgress?.(project.id, clientRequestId);
+      };
 
       const updateAssistant = (updater: (prev: ChatMessage) => ChatMessage) => {
         setMessages((curr) => {
@@ -9774,6 +9812,7 @@ export function ProjectView({
       cancelRef.current = cancelController;
       const handlers = {
         onDelta: (delta: string) => {
+          if (delta.trim()) { observedModelWork = true; retireHomeRejectionSource(); }
           if (delta.trim()) retireFundingHint();
           // See reattach-path comment above for rationale.  PR #4651 round 9.
           if (currentRunId) {
@@ -9785,6 +9824,7 @@ export function ProjectView({
           textBuffer.appendContent(delta);
         },
         onAgentEvent: (ev: AgentEvent) => {
+          if (ev.kind === 'text' || ev.kind === 'thinking' || ev.kind === 'tool_use' || ev.kind === 'tool_result') { observedModelWork = true; retireHomeRejectionSource(); }
           if (ev.kind === 'text' || ev.kind === 'thinking' || ev.kind === 'tool_use') retireFundingHint();
           if (currentRunId) {
             transientFailedRetriesRef.current.delete(currentRunId);
@@ -9847,6 +9887,7 @@ export function ProjectView({
           });
         },
         onDone: (fullText = '') => {
+          retireHomeRejectionSource();
           retireFundingHint();
           liveFocusClosed = true;
           // The daemon delivers onDone even for a canceled run, so a run
@@ -10187,6 +10228,37 @@ export function ProjectView({
               conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
               accountGeneration: sendAccountGeneration,
             });
+          }
+          const limitDetail = (err as Error & { failureDetail?: string }).failureDetail;
+          const requestLimit = limitDetail === 'membership_concurrency_limit'
+            || (limitDetail == null && isMembershipConcurrencyLimitFailure(err.message));
+          if (!requestLimit) retireHomeRejectionSource();
+          if (requestLimit && runMayFinalize && latestRequestSendRef.current.get(runConversationId) === clientRequestId
+            && fundingIdentityIsCurrent()
+            && messagesConversationIdRef.current === runConversationId) {
+            const key = `request-limit:${sendAccountGeneration}:${runConversationId}:${assistantId}`;
+            if (!shownFundingFailuresRef.current.has(key)) {
+              shownFundingFailuresRef.current.add(key);
+              // A later model in an active tool workflow can also hit Link's
+              // limit. Keep its history, but never re-inject the whole prompt.
+              const unstarted = !observedModelWork && !streamedText.trim() && !latestAssistantMsg.content.trim()
+                // The daemon emits done_key before spawning the child. Its
+                // nonce identifies this run, but is not evidence of model work.
+                && !(latestAssistantMsg.events ?? []).some((event) => event.kind !== 'status' && event.kind !== 'done_key');
+              setConcurrencyRejection({
+                conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
+                accountGeneration: sendAccountGeneration,
+                branch: amrBalanceBranchRef.current,
+                workspaceContext: fundingDialogContextRef.current.workspaceContext,
+                initialHomeSend: meta?.initialHomeSend === true,
+                draft: (meta?.composerOwnedDraft || meta?.initialHomeSend) && unstarted ? {
+                  nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
+                  commentAttachments, meta,
+                } : null,
+              });
+              setConcurrencyDialogOpen(true);
+              amrGatePausedQueueConversationsRef.current.add(runConversationId);
+            }
           }
           if (currentRunId && runMayFinalize && isGenericDaemonDisconnect(err)) {
             manualFileWriteRegistration.release(true);
@@ -11017,6 +11089,7 @@ export function ProjectView({
       projectMutationReadOnly,
       projectWorkspaceScopeState.scope,
       showAmrFundingFailure,
+      onInitialHomeRequestProgress,
       amrBalanceCardScope,
     ],
   );
@@ -13839,6 +13912,7 @@ export function ProjectView({
     void handleSend(seed, attachments, [], {
         ...(context ? { context } : {}),
         ...homeAutoSendIdentity(project.id),
+        initialHomeSend: true,
         acceptDurableQueue: true,
         // Only reuse Home's decision for the exact persisted project scope.
         // A workspace/member mismatch falls through to handleSend's normal gate.
@@ -14086,6 +14160,24 @@ export function ProjectView({
               onAttachComment={attachPreviewComment}
               onDetachComment={detachPreviewComment}
               onDeleteComment={(commentId) => void removePreviewComment(commentId)}
+              rejectedComposerSend={concurrencyRejection
+                && concurrencyRejection.conversationId === activeConversationId
+                && concurrencyRejection.authorityKey === projectRunAuthorityKey
+                && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
+                ? concurrencyRejection.draft ?? undefined : undefined}
+              onRejectedComposerSendRestored={(nonce, restored) => {
+                if (!restored || !concurrencyRejection?.initialHomeSend
+                  || concurrencyRejection.draft?.nonce !== nonce
+                  || concurrencyRejection.conversationId !== activeConversationId
+                  || concurrencyRejection.authorityKey !== projectRunAuthorityKey
+                  || concurrencyRejection.accountGeneration !== currentWorkspaceAccountGeneration()) return;
+                onInitialHomeRequestConcurrencyRejected?.({
+                  projectId: project.id, clientRequestId: nonce,
+                  accountGeneration: concurrencyRejection.accountGeneration,
+                  workspaceContext: concurrencyRejection.workspaceContext,
+                  branch: concurrencyRejection.branch,
+                });
+              }}
               onSend={handleComposerSend}
               onResendUserMessage={handleResendUserMessage}
               onRetry={handleRetry}
@@ -14523,6 +14615,15 @@ export function ProjectView({
       {onboardingEntryRef.current && hasPreviewableArtifact && !currentConversationStreaming ? (
         <FirstArtifactHint />
       ) : null}
+      {concurrencyDialogOpen && concurrencyRejection
+        && concurrencyRejection.conversationId === activeConversationId
+        && concurrencyRejection.authorityKey === projectRunAuthorityKey
+        && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
+        && config.mode === 'daemon' && config.agentId === 'amr' ? (
+        <AmrConcurrencyDialog branch={concurrencyRejection.branch}
+          workspaceContext={concurrencyRejection.workspaceContext}
+          onClose={() => setConcurrencyDialogOpen(false)} />
+      ) : null}
       {amrBalanceGateBlock?.dialog === 'ask_owner' || amrOwnerTopUpFromCard ? (
         /*
          * 非 owner 的成员。他拿不到账单动作,所以这张弹窗不外跳,而是给他一句
@@ -14539,6 +14640,7 @@ export function ProjectView({
       {amrBalanceGateBlock?.dialog === 'upgrade' ? (
         <AmrBalanceDialog
           reason={amrBalanceGateBlock.reason}
+          manualSendOnRecovery={amrBalanceGateBlock.reason === 'insufficient'}
           modelId={amrBalanceGateBlock.modelId}
           fundingScope={amrBalanceGateBlock.fundingScope}
           balanceUsd={amrBalanceGateBlock.snapshot?.balanceUsd ?? null}
@@ -14555,12 +14657,14 @@ export function ProjectView({
           installationId={config.installationId}
           onClose={() => setAmrBalanceGateBlock(null)}
           onResolved={() => {
-            // Resume pending sends after sign-in or funding recovery. A run
-            // that already failed remains in history for an explicit retry;
-            // this only releases other sends waiting in the queue. Link still
-            // makes the final funding decision for each new run.
             const conversationId = amrBalanceGateBlock.conversationId;
             setAmrBalanceGateBlock(null);
+            // Current QA RUN-012: funding recovery does not submit inputs
+            // that have not been sent. Preserve the gateway-paused queue and
+            // its full payload for the existing manual "send now" action;
+            // the failed run also remains in history for explicit retry.
+            // Sign-in recovery retains its original queue behavior.
+            if (amrBalanceGateBlock.reason === 'insufficient') return;
             amrGatePausedQueueConversationsRef.current.delete(conversationId);
             setQueuedAutoStartTick((tick) => tick + 1);
           }}
@@ -15054,6 +15158,7 @@ function stripQueueOnlyFromMeta(
     // 回放走,否则一条排过队的输入框消息在回放时被拦下,会去撤一个早就清空的
     // 草稿,而队列里那条反而被扔掉。见 `composerOwnedDraft` 的说明。
     composerOwnedDraft: _composerOwnedDraft,
+    initialHomeSend: _initialHomeSend,
     ...rest
   } = meta as ProjectChatSendMeta;
   return Object.keys(rest).length > 0 ? rest : undefined;

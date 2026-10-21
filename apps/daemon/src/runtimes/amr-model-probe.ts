@@ -30,6 +30,8 @@ export function buildAmrModelCacheKey({
     home: env.HOME ?? env.USERPROFILE ?? '',
     openDesignAmrProfile: env.OPEN_DESIGN_AMR_PROFILE ?? '',
     velaProfile: env.VELA_PROFILE ?? '',
+    amrHome: env.AMR_HOME ?? '',
+    velaApiUrl: env.VELA_API_URL ?? '',
     velaLinkUrl: env.VELA_LINK_URL ?? '',
     velaRuntimeKey: env.VELA_RUNTIME_KEY ?? '',
     velaOpencodeBin: env.VELA_OPENCODE_BIN ?? '',

@@ -15,6 +15,7 @@ import styles from './AmrArtifactUpgradeDialog.module.css';
 
 interface Props {
   profile: string | null;
+  workspaceId?: string | null;
   metricsConsent: boolean;
   installationId: string | null | undefined;
   onClose: () => void;
@@ -65,6 +66,7 @@ function twoDigits(value: number): string {
 
 export function AmrArtifactUpgradeDialog({
   profile,
+  workspaceId,
   metricsConsent,
   installationId,
   onClose,
@@ -155,7 +157,7 @@ export function AmrArtifactUpgradeDialog({
       installationId,
     });
     window.open(
-      attributedAmrUrl(amrPlansUrlForProfile(profile), attribution, deviceId),
+      attributedAmrUrl(amrPlansUrlForProfile(profile, workspaceId), attribution, deviceId),
       '_blank',
       'noopener,noreferrer',
     );
