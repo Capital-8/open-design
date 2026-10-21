@@ -58,10 +58,10 @@ export function assertConcurrencyBinding(value: unknown, binding: ConcurrencyBin
 }
 
 export function assertConcurrencyReceipt(
-  marker: Record<string, unknown>, binding: ConcurrencyBinding, bytes: Buffer, phase: 'held' | 'released',
+  marker: Record<string, unknown>, binding: ConcurrencyBinding, bytes: Buffer, phase: 'held' | 'one-released' | 'released',
 ) {
   assertConcurrencyBinding(marker, binding);
-  const expectedName = phase === 'held' ? 'server-held-receipt.safe.json' : 'server-released-receipt.safe.json';
+  const expectedName = `server-${phase}-receipt.safe.json`;
   if (marker.receiptPath !== expectedName
     || createHash('sha256').update(bytes).digest('hex') !== marker.receiptSha256) {
     throw new Error('Coordinator receipt path or content digest mismatch');
@@ -73,6 +73,14 @@ export function assertConcurrencyReceipt(
   }
   if (phase === 'released' && (marker.released !== true || marker.remaining !== 0 || receipt.remaining !== 0)) {
     throw new Error('Actual zero remaining requests required');
+  }
+  if (phase === 'one-released') {
+    const held = Array.from({ length: 9 }, (_, index) => `${binding.tag}-${index + 1}`);
+    if (marker.released !== true || marker.remaining !== 9 || receipt.remaining !== 9
+      || receipt.releasedCount !== 1 || JSON.stringify(receipt.releasedRequestIds) !== JSON.stringify([`${binding.tag}-0`])
+      || JSON.stringify(receipt.heldRequestIds) !== JSON.stringify(held)) {
+      throw new Error('Exactly one completed request and nine held requests required');
+    }
   }
 }
 

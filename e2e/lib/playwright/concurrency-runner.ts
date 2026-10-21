@@ -21,6 +21,8 @@ async function main() {
   const selected = process.env.F04_SURFACE;
   if (selected && selected !== 'home' && selected !== 'project') throw new Error('F04_SURFACE must be home or project');
   const surfaces = selected ? [selected] : ['home', 'project'];
+  const releaseOne = process.env.F04_RELEASE_ONE === '1';
+  if (releaseOne && (surfaces.length !== 1 || surfaces[0] !== 'home')) throw new Error('Single-release witness requires F04_SURFACE=home');
   const fixturePath = process.env.OD_FUNDING_FIXTURE!;
   const fixtureSha256 = createHash('sha256').update(await readFile(fixturePath)).digest('hex');
   const receipts: unknown[] = [];
@@ -45,7 +47,7 @@ async function main() {
       const sourceHashes = await Promise.all(paths.map(async path => ({ path,
         sha256: createHash('sha256').update(await readFile(join(e2eRoot, path))).digest('hex') })));
       receipts.push({ odHead: result.stdout.trim(), sourceHashes, attemptId, runId: fixture.isolation.runId,
-        fixtureSha256, workspaceId: fixture.concurrency!.space.workspaceId, surfaces });
+        fixtureSha256, workspaceId: fixture.concurrency!.space.workspaceId, surfaces, releaseOne });
       const environment = { ...process.env, OD_CONCURRENCY_OWNER_RUNNER: 'active',
         OD_CONCURRENCY_ATTEMPT_ID: attemptId, F04_OD_SHA: result.stdout.trim(), YANG_UI_EVIDENCE_DIR: output,
         YANG_UI_ACTOR: 'od', YANG_UI_SPACE: 'concurrency',
@@ -53,6 +55,7 @@ async function main() {
       const helperArgs = [fixture.concurrency!.coordinator.helperPath,
         '--fixture', fixturePath, '--evidence-dir', output, '--run-id', fixture.isolation.runId,
         '--attempt-id', attemptId, '--surfaces', surfaces.join(','), '--fixture-sha256', fixtureSha256];
+      if (releaseOne) helperArgs.push('--release-one');
       const results = await Promise.allSettled([
         runFundingCommand(helperArgs, fixture.owner.sourceRoot, environment, join(output, 'coordinator.private.log'), 'python3'),
         runFundingCommand(['pnpm', 'exec', 'playwright', 'test', '-c', 'lib/playwright/concurrency.config.ts'],

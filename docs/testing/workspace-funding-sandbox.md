@@ -189,3 +189,11 @@ the Owner/Member runtime keys. No control token is recorded in receipts or argv.
 The browser verifies the authoritative workspace snapshot is the intended Go
 space before using the Go10 capacity witness; legacy summary fields are not used
 to fabricate that precondition.
+
+For F04 step 2's explicit single-call recovery check, add `F04_RELEASE_ONE=1`
+and `F04_SURFACE=home` to the same canonical concurrency runner command. This
+keeps nine real Link requests held while checking draft and attachment retention,
+no automatic submission, and a successful explicit manual send. The separate
+hashed `server-one-released-receipt.safe.json` proves the intermediate count of
+nine; the final released receipt proves cleanup to zero. It does not cover the
+remaining tier/surface matrix, visual requirements, or RUN-003 timing targets.

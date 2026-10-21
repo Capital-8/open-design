@@ -15,6 +15,8 @@ test.use({ video: 'on', viewport: { width: 1280, height: 800 } });
 test('[P0] F04 Owner actual Go10 Link full refuses Home and Project with retained input', async ({ page }, testInfo) => {
   test.setTimeout(PLAYWRIGHT_TOOLS_DEV_FIXTURE_TIMEOUT_MS);
   const canonical = process.env.OD_CONCURRENCY_OWNER_RUNNER === 'active' ? await readConcurrencyFixture() : null;
+  const releaseOne = process.env.F04_RELEASE_ONE === '1';
+  if (releaseOne && (!canonical || process.env.F04_SURFACE !== 'home')) throw new Error('Single-release witness requires the canonical Home runner');
   const fixturePath = canonical ? process.env.OD_FUNDING_FIXTURE : process.env.YANG_UI_FIXTURE_PATH;
   if (!fixturePath) throw new Error('Explicit current server-owned private fixture required');
   if (((await stat(fixturePath)).mode & 0o077) !== 0) throw new Error('Private fixture0600 required');
@@ -108,12 +110,13 @@ test('[P0] F04 Owner actual Go10 Link full refuses Home and Project with retaine
         const value = JSON.parse(await readFile(join(attemptDir, name), 'utf8'));
         if (binding) {
           assertConcurrencyBinding(value, binding);
-          const expectedReceipt = name === 'C-held.json' ? 'server-held-receipt.safe.json' : 'server-released-receipt.safe.json';
+          const phase = name === 'C-held.json' ? 'held' : name === 'C-one-released.json' ? 'one-released' : 'released';
+          const expectedReceipt = `server-${phase}-receipt.safe.json`;
           if (value.receiptPath !== expectedReceipt || !/^[a-f0-9]{64}$/.test(value.receiptSha256 ?? '')) {
             throw new Error('Exact local coordinator receipt and digest required');
           }
           const bytes = await readFile(join(attemptDir, value.receiptPath));
-          assertConcurrencyReceipt(value, binding, bytes, name === 'C-held.json' ? 'held' : 'released');
+          assertConcurrencyReceipt(value, binding, bytes, phase);
         }
         return value;
       };
@@ -183,16 +186,21 @@ test('[P0] F04 Owner actual Go10 Link full refuses Home and Project with retaine
           await expect.soft(currentInput).toHaveText(prompt,{timeout:T.short});
           await expect.soft(currentInput).toBeEditable({timeout:T.short});
         }
-        await writeMarker('C-release-ready.json', { at: new Date().toISOString(), reason: 'QA step2 release then manual recovery' });
+        const releasedMarker = releaseOne ? 'C-one-released.json' : 'C-released.json';
+        await writeMarker(releaseOne ? 'C-release-one-ready.json' : 'C-release-ready.json', { at: new Date().toISOString(), reason: 'QA step2 release then manual recovery' });
         // This marker includes the owner's HTTP-thread join, Redis readback and
         // lease postcheck; it is not the product dialog/slot-release timer.
-        await expect.poll(async () => { try { return (await readMarker('C-released.json')).released; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; } }, { timeout: T.long, intervals: [250, 500] }).toBe(true);
-        if (binding) expect((await readMarker('C-released.json')).remaining).toBe(0);
+        await expect.poll(async () => { try { return (await readMarker(releasedMarker)).released; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; } }, { timeout: T.long, intervals: [250, 500] }).toBe(true);
+        if (binding) expect((await readMarker(releasedMarker)).remaining).toBe(releaseOne ? 9 : 0);
         const releaseCompleteAt = new Date().toISOString();
         const autoPost = await page.waitForEvent('request', { predicate: r => r.method() === 'POST' && new URL(r.url()).pathname === '/api/runs', timeout: 2000 }).catch(() => null);
-        const recovery: Record<string, unknown> = {releaseCompleteAt, negativeObservationMs:2000, automaticallyPosted:!!autoPost, manualAttempted:false};
+        const recovery: Record<string, unknown> = {releaseCompleteAt, releaseOne, remainingBeforeManual:releaseOne ? 9 : 0, negativeObservationMs:2000, automaticallyPosted:!!autoPost, manualAttempted:false};
         await writeFile(join(attemptDir, 'step2-recovery.json'),JSON.stringify(recovery,null,2));
         expect.soft(autoPost, 'Freeing Link capacity must not automatically submit the rejected draft').toBeNull();
+        if (releaseOne) {
+          await expect(currentInput).toHaveText(prompt, { timeout: T.short });
+          await expect(currentStaged).toContainText(attachment, { timeout: T.short });
+        }
         if(dialogVisible && await currentInput.textContent({timeout:T.short}) === prompt) {
           const currentSend = new URL(page.url()).pathname.startsWith('/projects/') ? page.getByTestId('chat-send') : page.getByTestId('home-hero-submit');
           await expect(currentSend).toBeEnabled({timeout:T.short});

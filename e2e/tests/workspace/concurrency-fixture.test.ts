@@ -83,4 +83,22 @@ describe('restricted provider control fixture', () => {
       receiptSha256: createHash('sha256').update(bytes).digest('hex') };
     expect(() => assertConcurrencyReceipt(marker, binding, bytes, 'held')).toThrow('path');
   });
+  it.each(['zero-left', 'short-held', 'other-tag', 'wrong-released'] as const)('rejects invalid single-release evidence: %s', variant => {
+    const held = Array.from({ length: 9 }, (_, i) => `${binding.tag}-${i + 1}`);
+    const data = { ...binding, releasedCount: 1, remaining: variant === 'zero-left' ? 0 : 9,
+      releasedRequestIds: [variant === 'wrong-released' ? `${binding.tag}-1` : `${binding.tag}-0`],
+      heldRequestIds: variant === 'short-held' ? held.slice(0, 8) : variant === 'other-tag' ? [...held.slice(0, 8), 'another-attempt-9'] : held };
+    const bytes = Buffer.from(JSON.stringify(data));
+    const marker = { ...binding, released: true, remaining: 9, receiptPath: 'server-one-released-receipt.safe.json',
+      receiptSha256: createHash('sha256').update(bytes).digest('hex') };
+    expect(() => assertConcurrencyReceipt(marker, binding, bytes, 'one-released')).toThrow('nine held');
+  });
+  it('accepts the separate immutable single-release phase and rejects final zero as a substitute', () => {
+    const bytes = Buffer.from(JSON.stringify({ ...binding, remaining: 9, releasedCount: 1,
+      releasedRequestIds: [`${binding.tag}-0`], heldRequestIds: Array.from({ length: 9 }, (_, i) => `${binding.tag}-${i + 1}`) }));
+    const marker = { ...binding, released: true, remaining: 9, receiptPath: 'server-one-released-receipt.safe.json',
+      receiptSha256: createHash('sha256').update(bytes).digest('hex') };
+    expect(() => assertConcurrencyReceipt(marker, binding, bytes, 'one-released')).not.toThrow();
+    expect(() => assertConcurrencyReceipt({ ...marker, receiptPath: 'server-released-receipt.safe.json' }, binding, bytes, 'one-released')).toThrow('path');
+  });
 });
