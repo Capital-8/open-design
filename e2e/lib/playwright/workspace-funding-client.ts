@@ -206,7 +206,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
         expect(response.ok).toBe(true);
         return id;
       },
-      async close() {
+      async close(closeOptions: { preserveScratch?: boolean } = {}) {
         await info.attach(options.freeWallet ? `VIEW021-${options.freeWallet}-final-observed-page` : 'final-observed-page', { body: await page.screenshot(), contentType: 'image/png' }).catch(() => undefined);
         await attach('actual-POST-scopes', posts);
         let pageClosed = false;
@@ -226,7 +226,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
         } finally {
           await attach('canonical-owner-live-post', (await verifyFundingLease(fixture, 0)).safe);
         }
-        if (pageClosed && info.status === info.expectedStatus) {
+        if (pageClosed && info.status === info.expectedStatus && !closeOptions.preserveScratch) {
           await rm(root, { recursive: true, force: true });
         }
       },

@@ -21,6 +21,7 @@ test('[P0] WS-005 switching to B preserves original A task and settles both exac
   const runs: Partial<Record<'a' | 'b', { runId: string; terminal: boolean; reads: RunRead[] }>> = {};
   const snapshots: unknown[] = [];
   const cleanup: unknown[] = [];
+  let bodyCompleted = false;
   const providerState = async () => {
     expect((await stat(given.provider.statePath)).mode & 0o077).toBe(0);
     const state = JSON.parse(await readFile(given.provider.statePath, 'utf8')) as ProviderState;
@@ -136,9 +137,15 @@ test('[P0] WS-005 switching to B preserves original A task and settles both exac
     await expect.soft(panel.getByTestId('entry-nav-credits-row')).toContainText('$17.00', { timeout: T.long });
     await info.attach('WS005-current-B-settled-wallet', { body: await page.screenshot(), contentType: 'image/png' });
     await client.attach('WS005-current-B-context', current);
+    bodyCompleted = true;
   } finally {
     const cancellations = await Promise.allSettled((['a', 'b'] as const).map(async alias => {
       const run = runs[alias];
+      if (run && !run.terminal) {
+        // Read the original terminal state before cancellation can change it.
+        try { await readRun(alias); }
+        catch (error) { cleanup.push({ alias, beforeCancelReadError: error instanceof Error ? error.name : 'unknown' }); }
+      }
       if (run && !run.terminal) {
         const response = await fetch(client.runtime.url.web(`/api/runs/${run.runId}/cancel`), {
           method: 'POST', headers: fundingHeaders(given.spaces[alias]), signal: AbortSignal.timeout(T.short),
@@ -152,7 +159,7 @@ test('[P0] WS-005 switching to B preserves original A task and settles both exac
       await client.attach('WS005-original-two-step-observations', { attemptId: given.attemptId, tags, proof,
         runs, snapshots, stateReads, cleanup, wholeQaPassed: false,
         independentAccountingRequired: 'Every actual main/aux usage and unique ledger must bind original run/workspace/member and total2/3; no fixed auxiliary invocation count' });
-    } finally { await client.close(); }
+    } finally { await client.close({ preserveScratch: !bodyCompleted || info.errors.length > 0 }); }
     expect.soft(cancellations.every(result => result.status === 'fulfilled'), 'All owned cancellation calls completed').toBe(true);
     // A failed B submission may leave only this attempt's bounded upstream A
     // hold. Observe its terminal cleanup; never release unrelated requests.
