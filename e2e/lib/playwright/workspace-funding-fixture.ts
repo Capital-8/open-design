@@ -78,6 +78,8 @@ export type FundingFixture = {
   };
 };
 
+export type FundingRuntimeFixture = Pick<FundingFixture, 'version' | 'isolation' | 'upstream' | 'owner' | 'runtime' | 'actor'>;
+
 export type FreeWalletGiven = {
   actor: FundingFixture['actor'];
   space: FundingSpace & { workspaceName: string; workspaceKind: 'personal'; actorRole: 'owner'; actorMemberId: string };
@@ -93,8 +95,8 @@ function requireValue(value: unknown, label: string): asserts value is string {
   }
 }
 
-export function validateFundingFixture(value: unknown, expectedRunId: string): FundingFixture {
-  const fixture = value as FundingFixture | undefined;
+export function validateFundingRuntimeFixture(value: unknown, expectedRunId: string): FundingRuntimeFixture {
+  const fixture = value as FundingRuntimeFixture | undefined;
   if (![1, 2].includes(fixture?.version ?? 0) || fixture?.isolation?.exclusive !== true) {
     throw new Error('Requires version 1 or 2 exclusively leased disposable sandbox fixture');
   }
@@ -129,6 +131,12 @@ export function validateFundingFixture(value: unknown, expectedRunId: string): F
       throw new Error(`Requires explicit absolute ${key} binary and SHA256`);
     }
   }
+  return fixture;
+}
+
+export function validateFundingFixture(value: unknown, expectedRunId: string): FundingFixture {
+  validateFundingRuntimeFixture(value, expectedRunId);
+  const fixture = value as FundingFixture;
   for (const alias of ['funded', 'empty', 'dp'] as const) {
     for (const key of ['workspaceId', 'ownerMemberId', 'runtimeKey'] as const) {
       requireValue(fixture.spaces?.[alias]?.[key], `spaces.${alias}.${key}`);
@@ -152,12 +160,12 @@ export function validateFundingFixture(value: unknown, expectedRunId: string): F
   return fixture;
 }
 
-export async function readFundingFixture(): Promise<FundingFixture> {
+export async function readFundingRuntimeFixture(): Promise<FundingRuntimeFixture> {
   const path = process.env.OD_FUNDING_FIXTURE;
   if (!path || !isAbsolute(path)) throw new Error('OD_FUNDING_FIXTURE must be an explicit absolute private fixture path');
   const info = await stat(path);
   if (process.platform !== 'win32' && (info.mode & 0o077) !== 0) throw new Error('Fixture must be private (0600)');
-  const fixture = validateFundingFixture(JSON.parse(await readFile(path, 'utf8')), process.env.OD_FUNDING_RUN_ID ?? '');
+  const fixture = validateFundingRuntimeFixture(JSON.parse(await readFile(path, 'utf8')), process.env.OD_FUNDING_RUN_ID ?? '');
   for (const key of ['vela', 'openCode'] as const) {
     const binary = fixture.runtime[`${key}Bin`];
     await access(binary, constants.X_OK);
@@ -165,6 +173,10 @@ export async function readFundingFixture(): Promise<FundingFixture> {
     if (hash !== fixture.runtime[`${key}Sha256`]) throw new Error(`${key} executable hash mismatch`);
   }
   return fixture;
+}
+
+export async function readFundingFixture(): Promise<FundingFixture> {
+  return validateFundingFixture(await readFundingRuntimeFixture(), process.env.OD_FUNDING_RUN_ID ?? '');
 }
 
 export function fundingHeaders(space: FundingSpace): Record<string, string> {

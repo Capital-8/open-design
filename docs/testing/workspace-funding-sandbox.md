@@ -293,3 +293,24 @@ initiator. The environment owner remains the only fixture/route writer. A
 shared auxiliary route may be borrowed only in the explicitly coordinated
 window, with before/after snapshots and normal restoration; fault experiments
 on the same environment must not overlap that route change.
+
+### Free shared Link concurrency (QA RUN-013-CLIENT)
+
+Use `corepack pnpm --filter @open-design/e2e exec tsx lib/playwright/free-concurrency-runner.ts`
+with the existing private `OD_FUNDING_FIXTURE`, `OD_FUNDING_RUN_ID`, and a fresh
+absolute `OD_FUNDING_EVIDENCE_DIR`. The runtime-only fixture carries actual
+Owner/Observer DeviceAuthorization pairs, W1/W2, authoritative Free=3 policy
+provenance, immutable repository helpers, and an already-owned canonical sandbox.
+The command borrows its lease; it never allocates or starts AMR.
+
+The independent observer uses the real authenticated workspace SSE and the
+actual quota realtime health, while the initiating Home surface is blocked
+before a project/run POST. Three actual Link model requests occupy the shared
+pool. The owner coordinator releases exactly one, the browser observes the
+original QA's real one-minute idle period, and manual submission rereads
+concurrency and funding. W2 runs while W1 is full. A real invitation/acceptance
+adds a W1 member, and a request by that member still encounters Link's shared
+limit. Provider usage is controlled and positive; model prices and catalog
+permissions stay unchanged. Per-phase immutable receipts, screenshots, HTTP
+observations, real terminal runs, financial snapshots, and owned cleanup remain
+in the evidence output. Offline guards do not establish QA acceptance.

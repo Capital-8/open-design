@@ -17,7 +17,7 @@ export type ConcurrencyBinding = {
   fixtureSha256: string;
 };
 
-export function requireConcurrencyFixture(fixture: FundingFixture) {
+export function requireConcurrencyFixture(fixture: Pick<FundingFixture, 'concurrency'>) {
   const c = fixture.concurrency;
   if (!c) throw new Error('Explicit server-owned concurrency fixture required');
   if (!c.space.workspaceId || !c.space.ownerMemberId || !c.space.runtimeKey

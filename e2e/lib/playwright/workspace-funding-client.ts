@@ -11,7 +11,7 @@ import { verifyFundingLease } from './workspace-funding-lease.ts';
 import { createToolsDevSuite, e2eWorkspaceRoot } from '../tools-dev/runtime.ts';
 import { T } from '../timeouts.ts';
 
-type Preflight = {
+export type Preflight = {
   workspaceId: string;
   workspaceMemberId: string;
   modelId: string;
@@ -36,8 +36,65 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
   const switchGiven = options.scopeSwitch ? loaded.scopeSwitch : undefined;
   if (options.scopeSwitch && !switchGiven?.deviceRuntimeKey) throw new Error('Explicit WS-005 account DeviceAuthorization credential required');
   const fixture = wallet ? { ...loaded, actor: wallet.actor } : loaded;
-  const initialSpace = wallet?.space ?? switchGiven?.spaces.a ?? fixture.spaces[options.initialSpace ?? 'dp'];
-  const checkedSpaces = wallet ? { wallet: wallet.space } : switchGiven?.spaces ?? fixture.spaces;
+  const client = await startScopedFundingClient(page, info, {
+    fixture,
+    initialSpace: wallet?.space ?? switchGiven?.spaces.a ?? fixture.spaces[options.initialSpace ?? 'dp'],
+    checkedSpaces: wallet ? { wallet: wallet.space } : switchGiven?.spaces ?? fixture.spaces,
+    runtimeKey: wallet?.space.runtimeKey ?? switchGiven?.deviceRuntimeKey ?? fixture.spaces.dp.runtimeKey,
+    ...(options.freeWallet ? { identitySuffix: options.freeWallet } : {}),
+    attachmentPrefix: options.freeWallet ? `VIEW021-${options.freeWallet}-` : '',
+    requireNamePrefix: !wallet,
+    ...(options.preserveSelectedLocale !== undefined ? { preserveSelectedLocale: options.preserveSelectedLocale } : {}),
+    checkPreflight(alias, space, preflight) {
+      // Free has no subscription-backed Design Plan descriptor.
+      if (!switchGiven) expect(preflight.codingPlan.tier).toBe(wallet ? null : 'go');
+      if (switchGiven) expect(Number(preflight.balanceUsd)).toBe(alias === 'a' ? 10 : 20);
+      if (wallet) {
+        expect(preflight.codingPlan.eligible).toBe(false);
+        expect(preflight.codingPlan.windows).toEqual([]);
+        expect(space.workspaceKind).toBe('personal');
+        expect(space.actorRole).toBe('owner');
+        expect(Number(preflight.balanceUsd)).toBe(Number(options.freeWalletPhase === 'after' ? wallet.afterBalanceUsd : wallet.beforeBalanceUsd));
+      }
+      // `unknown` is a legitimate advisory result for funded/DP-eligible
+      // inputs. Only B needs a reliable insufficient verdict; Link remains
+      // authoritative for actual model admission.
+      if (alias === 'funded') expect(Number(preflight.balanceUsd)).toBe(100);
+      if (alias === 'empty') {
+        expect(Number(preflight.balanceUsd)).toBe(0);
+        expect(preflight.fundingCheck).toBe('insufficient');
+        expect(preflight.codingPlan.windows.length).toBe(2);
+        expect(preflight.codingPlan.windows.every(w => Number(w.remainingCredits) === 0)).toBe(true);
+      }
+      if (alias === 'dp') {
+        expect(Number(preflight.balanceUsd)).toBe(0);
+        requireDpModelCoverage(preflight.modelCovered);
+        expect(preflight.codingPlan.eligible).toBe(true);
+        expect(preflight.codingPlan.windows.length).toBe(2);
+        expect(preflight.codingPlan.windows.every(w => Number(w.remainingCredits) > 0)).toBe(true);
+        expect(preflight.fundingCheck).not.toBe('insufficient');
+      }
+    },
+  });
+  return { ...client, fixture };
+}
+
+/** Shared owned runtime, real directory and close path for scoped billing witnesses. */
+export async function startScopedFundingClient(page: Page, info: TestInfo, options: {
+  fixture: Pick<FundingFixture, 'isolation' | 'owner' | 'upstream' | 'runtime' | 'actor'>;
+  initialSpace: FundingSpace;
+  checkedSpaces: Record<string, FundingSpace>;
+  runtimeKey: string;
+  identitySuffix?: string;
+  attachmentPrefix?: string;
+  requireNamePrefix: boolean;
+  preserveSelectedLocale?: boolean;
+  checkPreflight: (alias: string, space: FundingSpace, preflight: Preflight) => void | Promise<void>;
+}) {
+  if (process.env.OD_FUNDING_OWNER_RUNNER !== 'active') {
+    throw new Error('Use the mandatory funding-runner entrypoint; direct Playwright invocation is not owned');
+  }
+  const { fixture, initialSpace, checkedSpaces } = options;
   const ownerPre = await verifyFundingLease(fixture, T.xlong * 7);
   const namespace = `funding-${process.pid}-${randomUUID().slice(0, 8)}`;
   const root = join(e2eWorkspaceRoot(), '.tmp', 'e2e', namespace);
@@ -53,7 +110,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
   await mkdir(runtime.dataDir, { recursive: true });
   await writeFile(join(amrHome, 'config.json'), JSON.stringify({ profiles: { local: {
     controlKey: fixture.actor.controlKey,
-    runtimeKey: wallet?.space.runtimeKey ?? switchGiven?.deviceRuntimeKey ?? fixture.spaces.dp.runtimeKey,
+    runtimeKey: options.runtimeKey,
     apiUrl: fixture.upstream.apiUrl,
     linkUrl: fixture.upstream.linkUrl,
     user: { id: fixture.actor.userId, email: fixture.actor.email, name: 'Disposable funding QA' },
@@ -85,7 +142,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
     return !url.protocol.startsWith('http') || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
       ? route.continue() : route.abort();
   });
-  const identityPath = info.outputPath(options.freeWallet ? `owned-runtime-identity-${options.freeWallet}.safe.json` : 'owned-runtime-identity.safe.json');
+  const identityPath = info.outputPath(`owned-runtime-identity${options.identitySuffix ? `-${options.identitySuffix}` : ''}.safe.json`);
   await mkdir(dirname(identityPath), { recursive: true });
   await writeFile(identityPath, JSON.stringify({ namespace, root, dataDir: runtime.dataDir,
     toolsDevRoot: runtime.toolsDevRoot, testPid: process.pid }, null, 2), { mode: 0o600 });
@@ -98,7 +155,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
     await runtime.stopWeb(env);
     throw error;
   }
-  const attach = async (name: string, value: unknown) => info.attach(options.freeWallet ? `VIEW021-${options.freeWallet}-${name}` : name, {
+  const attach = async (name: string, value: unknown) => info.attach(`${options.attachmentPrefix ?? ''}${name}`, {
     body: JSON.stringify(value, null, 2), contentType: 'application/json',
   });
   try {
@@ -112,7 +169,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
     for (const space of Object.values(checkedSpaces)) {
       const item = items.find(item => item.workspaceId === space.workspaceId);
       expect(item, 'Every sandbox workspace must be authorized for the explicit actor').toBeTruthy();
-      if (!wallet) expect(item!.workspaceName.startsWith(fixture.isolation.workspaceNamePrefix), 'Sandbox workspace isolation prefix').toBe(true);
+      if (options.requireNamePrefix) expect(item!.workspaceName.startsWith(fixture.isolation.workspaceNamePrefix), 'Sandbox workspace isolation prefix').toBe(true);
       expect(item!.workspaceMemberId).toBe(space.actorMemberId ?? space.ownerMemberId);
       expect(item!.role).toBe(space.actorRole ?? 'owner');
     }
@@ -128,34 +185,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
       expect(preflight.workspaceMemberId).toBe(space.actorMemberId ?? space.ownerMemberId);
       expect(preflight.modelId).toBe(fixture.runtime.modelId);
       expect(preflight.billingMode).toBe('shared');
-      // Free has no subscription-backed Design Plan descriptor.
-      if (!switchGiven) expect(preflight.codingPlan.tier).toBe(wallet ? null : 'go');
-      if (switchGiven) expect(Number(preflight.balanceUsd)).toBe(alias === 'a' ? 10 : 20);
-      if (wallet) {
-        expect(preflight.codingPlan.eligible).toBe(false);
-        expect(preflight.codingPlan.windows).toEqual([]);
-        expect(space.workspaceKind).toBe('personal');
-        expect(space.actorRole).toBe('owner');
-        expect(Number(preflight.balanceUsd)).toBe(Number(options.freeWalletPhase === 'after' ? wallet.afterBalanceUsd : wallet.beforeBalanceUsd));
-      }
-      // `unknown` is a legitimate advisory result for funded/DP-eligible
-      // inputs. Only B needs a reliable insufficient verdict; Link remains
-      // authoritative for actual model admission.
-      if (alias === 'funded') expect(Number(preflight.balanceUsd)).toBe(100);
-      if (alias === 'empty') {
-        expect(Number(preflight.balanceUsd)).toBe(0);
-        expect(preflight.fundingCheck).toBe('insufficient');
-        expect(preflight.codingPlan.windows.length).toBe(2);
-        expect(preflight.codingPlan.windows.every(w => Number(w.remainingCredits) === 0)).toBe(true);
-      }
-      if (alias === 'dp') {
-        expect(Number(preflight.balanceUsd)).toBe(0);
-        requireDpModelCoverage(preflight.modelCovered);
-        expect(preflight.codingPlan.eligible).toBe(true);
-        expect(preflight.codingPlan.windows.length).toBe(2);
-        expect(preflight.codingPlan.windows.every(w => Number(w.remainingCredits) > 0)).toBe(true);
-        expect(preflight.fundingCheck).not.toBe('insufficient');
-      }
+      await options.checkPreflight(alias, space, preflight);
       preconditions[alias] = preflight;
     }
     await attach('real-sandbox-preconditions', { runId: fixture.isolation.runId,
@@ -207,7 +237,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
         return id;
       },
       async close(closeOptions: { preserveScratch?: boolean } = {}) {
-        await info.attach(options.freeWallet ? `VIEW021-${options.freeWallet}-final-observed-page` : 'final-observed-page', { body: await page.screenshot(), contentType: 'image/png' }).catch(() => undefined);
+        await info.attach(`${options.attachmentPrefix ?? ''}final-observed-page`, { body: await page.screenshot(), contentType: 'image/png' }).catch(() => undefined);
         await attach('actual-POST-scopes', posts);
         let pageClosed = false;
         try {

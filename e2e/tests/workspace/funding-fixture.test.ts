@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateFundingFixture, requireDpModelCoverage, fundingHeaders, type FundingFixture } from '@/playwright/workspace-funding-fixture';
+import { validateFundingFixture, validateFundingRuntimeFixture, requireDpModelCoverage, fundingHeaders, type FundingFixture } from '@/playwright/workspace-funding-fixture';
 import { assertFundingLeaseIdentity, withFundingLease } from '@/playwright/workspace-funding-lease';
 import type { FundingRuntimeReceipt, CanonicalFundingStatus } from '@/playwright/workspace-funding-lease';
 
@@ -21,6 +21,12 @@ describe('explicit disposable funding sandbox guard', () => {
   it('accepts a matching loopback lease without consulting a host profile', () => {
     const fixture = disposableFixture();
     expect(validateFundingFixture(fixture, 'unit-run')).toBe(fixture);
+  });
+
+  it('shares canonical runtime guards without inventing legacy funding spaces for another QA case', () => {
+    const { spaces: _legacySpaces, ...runtimeOnly } = disposableFixture();
+    expect(validateFundingRuntimeFixture(runtimeOnly, 'unit-run')).toBe(runtimeOnly);
+    expect(() => validateFundingFixture(runtimeOnly, 'unit-run')).toThrow('spaces.funded.workspaceId');
   });
 
   const roleFixture = () => {
