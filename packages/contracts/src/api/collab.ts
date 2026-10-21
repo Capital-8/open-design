@@ -400,6 +400,8 @@ export interface WorkspaceCollabContext {
   workspaceId: string;
   workspaceType: WorkspaceType;
   workspaceMemberId: string;
+  /** Active member count from the same authorized workspace snapshot; omitted when unknown. */
+  memberCount?: number;
   role: CollabMemberRole;
   memberStatus: WorkspaceMemberStatus;
   lifecycleState: WorkspaceLifecycleState;

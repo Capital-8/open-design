@@ -8530,6 +8530,7 @@ export async function startServer({
   const runAnalyticsLifecycle = createRunAnalyticsLifecycle({
     db,
     design,
+    workspaceContext: collab.workspaceContext,
     paths: { PROJECTS_DIR, RUNTIME_DATA_DIR },
     agents: { detectAgents },
     telemetry: {
