@@ -103,7 +103,7 @@ test('[P0] RUN-002 actual Link refusal, one release, preserved input and manual 
     results.manual = { clickedAt, created: manualCreated, terminal: manualTerminal, requests: manualRequests };
     await save('step2-manual-recheck.safe.json', { binding, ...results });
     await page.screenshot({ path: join(output, 'after-manual-retry-success.png') });
-    await marker('manual-complete.json'); results.manualPhase = await phase('manual-complete', 2);
+    await marker('manual-finished.json'); results.manualPhase = await phase('manual-complete', 2);
     await marker('release-ready.json'); results.final = await phase('released0', 0);
     results.completedAllOriginalSteps = true;
   } finally {

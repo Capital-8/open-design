@@ -314,3 +314,24 @@ limit. Provider usage is controlled and positive; model prices and catalog
 permissions stay unchanged. Per-phase immutable receipts, screenshots, HTTP
 observations, real terminal runs, financial snapshots, and owned cleanup remain
 in the evidence output. Offline guards do not establish QA acceptance.
+
+### Manual retry after an actual Link refusal (QA RUN-002)
+
+The same canonical `free-concurrency-runner.ts` command selects a separate
+RUN-002 browser witness only when the private fixture explicitly carries
+`freeConcurrency.manualRetry.caseKey = "server:RUN-002"` and its immutable
+repository coordinator. It does not transfer a RUN013 passing result: the
+RUN013 advisory block alone is insufficient for RUN002's actual Link refusal
+precondition.
+
+This lane reads the genuine two-of-three advisory response, holds only its
+delivery until a third actual Link request arrives, and delivers the unchanged
+bytes. The real project submission must then fail at Link, preserve its input,
+and show the concurrency dialog. Exactly one held request completes; no task
+restarts during a real minute. Manual submission rereads funds and concurrency,
+starts one successful run and keeps every charge in its original scope.
+Financial audit uses a fresh per-attempt baseline, preserving prior attempts'
+funds and request history. UI signals and immutable receipt filenames occupy
+disjoint namespaces. Original failures remain frozen; upgrades are the other
+allowed trigger in QA, rather than a mandatory extra matrix for this release
+branch.
