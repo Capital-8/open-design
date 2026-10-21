@@ -535,6 +535,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /** 用给定身份发一条,并把余额门钉在给定判定上。 */
@@ -590,6 +591,17 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     const dialogUrl = String(mockedWindowOpen.mock.calls[1]?.[0]);
     expect(dialogUrl).toContain('billing=plan');
     expect(dialogUrl).not.toContain('billing=auto-recharge');
+  });
+
+  it('wallet snapshot profile takes priority over the authenticated fallback', async () => {
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');
+    mockedCheckAmrBalanceGate.mockResolvedValue(EMPTY_WALLET as never);
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never, amrProfile: 'local' });
+    await clickSendWhenReady();
+    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+    expect(new URL(String(mockedWindowOpen.mock.calls[0]![0])).origin).toBe('https://open-design.ai');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
   });
 
   it('非 Max · 非 owner:卡 + 找所有者充值弹窗,不外跳', async () => {
@@ -771,6 +783,7 @@ describe('死胡同:没有账单权限的成员必须拿到一条前进的路', 
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /**
@@ -831,6 +844,7 @@ describe('守卫:判定放行时四种分支一个都不许冒出来', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /**
@@ -875,7 +889,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
     workspaceScopeMocks.billingResponse = null; projectCollabMocks.writerAuthority = 'allowed'; projectCollabMocks.viewerOnly = false;
     mockedStreamViaDaemon.mockResolvedValue(undefined);
   });
-  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); setRuntimeAmrConsoleOrigin(null); });
 
   it('StrictMode funding rejection retracts the provisional turn without replacing existing output', async () => {
     const context = callerContext('owner', 'team_go');
@@ -968,7 +982,9 @@ describe('Link request concurrency rejection preserves the original send', () =>
     ['local', 'http://127.0.0.1:49195'],
     ['test', 'http://127.0.0.1:49195'],
     ['prod', 'https://open-design.ai'],
-  ] as const)('snapshot-less funding failure freezes authenticated %s profile and payer', async (profile, origin) => {
+    ['unrecognized', 'https://open-design.ai'],
+    [null, 'https://open-design.ai'],
+  ] as const)('snapshot-less funding failure freezes supplied %s profile and payer', async (profile, origin) => {
     const context = callerContext('owner', 'team_pro');
     workspaceScopeMocks.ambientContext = context;
     setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');

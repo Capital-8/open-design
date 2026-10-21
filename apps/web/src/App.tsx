@@ -5654,6 +5654,9 @@ function AppInner() {
             activeProjectWorkspaceContext,
           )}
           project={activeProject}
+          amrProfile={amrProfileForConfig(config) ?? (
+            isAmrSessionAuthenticated(amrLoginStatus) ? amrLoginStatus?.profile ?? null : null
+          )}
           workspaceContextOverride={
             activeProject.workspaceId
               ? activeProjectWorkspaceContext
