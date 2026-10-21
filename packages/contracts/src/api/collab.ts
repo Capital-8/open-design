@@ -865,6 +865,14 @@ export interface WorkspaceBillingSnapshot {
     expiresAt: string | null;
     updatedAt: string | null;
   };
+  /** Original backend windows; absence means this producer has no window data. */
+  designPlanWindows?: Array<{
+    kind: '5h' | '7d';
+    windowStart: string | null;
+    resetsAt: string | null;
+    remainingCredits: string;
+    limitCredits: string;
+  }>;
   revisions: {
     billing: string;
     wallet: string;

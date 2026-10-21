@@ -9008,11 +9008,12 @@ export function ProjectView({
       // Start the exact member/model read alongside preparation, but a known
       // insufficiency must settle before run persistence or provider dispatch.
       // Unknown/unavailable reads still defer authority to the backend.
-      const fundingIdentityIsCurrent = () => mountedRef.current
+      const modelRequestIdentityIsCurrent = () => mountedRef.current
         && projectIdRef.current === project.id
         && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
         && currentWorkspaceAccountGeneration() === sendAccountGeneration
-        && fundingDialogContextRef.current.isAmr
+        && fundingDialogContextRef.current.isAmr;
+      const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
         && fundingDialogContextRef.current.modelId === fundingModelId;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
         ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
@@ -10242,8 +10243,9 @@ export function ProjectView({
           const requestLimit = limitDetail === 'membership_concurrency_limit'
             || (limitDetail == null && isMembershipConcurrencyLimitFailure(err.message));
           if (!requestLimit) retireHomeRejectionSource();
+          // Link's refusal belongs to the original workspace, even if another model is selected meanwhile.
           if (requestLimit && runMayFinalize && latestRequestSendRef.current.get(runConversationId) === clientRequestId
-            && fundingIdentityIsCurrent()
+            && modelRequestIdentityIsCurrent()
             && messagesConversationIdRef.current === runConversationId) {
             const key = `request-limit:${sendAccountGeneration}:${runConversationId}:${assistantId}`;
             if (!shownFundingFailuresRef.current.has(key)) {
