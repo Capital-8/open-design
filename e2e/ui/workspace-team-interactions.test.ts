@@ -1011,7 +1011,7 @@ test.describe('UISTATE-E12-CLIENT cold-start loading', () => {
   ] as const;
 
   for (const { tier, fixture } of cases) {
-    test(`${tier} shows the unified loading block until workspace billing returns`, async ({ page }) => {
+    test(`[P0] ${tier} shows the unified loading block until workspace billing returns`, async ({ page }) => {
       await wireWorkspaceMocks(page, fixture, [fixture]);
 
       let markPending!: () => void;
@@ -1042,6 +1042,8 @@ test.describe('UISTATE-E12-CLIENT cold-start loading', () => {
 
       releaseBilling();
       await expect(loading).toHaveCount(0);
+      await expect(panel).toBeVisible();
+      await expect(panel.getByTestId('entry-nav-credits-row')).toContainText('$0.00');
     });
   }
 });
