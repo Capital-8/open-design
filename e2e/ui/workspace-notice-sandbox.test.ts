@@ -44,6 +44,7 @@ test('[P0] VIEW-020 real admin or member funding notice stays above empty and ar
         await page.setViewportSize({ width: 1280, height: 800 });
         await page.goto(client.runtime.url.web(`/projects/${projectId}`), { waitUntil: 'domcontentloaded', timeout: T.xlong });
         await expect(page.getByTestId('chat-composer-input')).toBeVisible({ timeout: T.xlong });
+        await expect(page.locator('html')).toHaveAttribute('lang', locale);
         const contextResponse = await fetch(client.runtime.url.web('/api/workspace/context'), { headers: fundingHeaders(space) });
         expect(contextResponse.ok).toBe(true);
         const context = await contextResponse.json();
@@ -79,7 +80,7 @@ test('[P0] VIEW-020 real admin or member funding notice stays above empty and ar
           const message = dialog.locator('p');
           const dismiss = dialog.getByTestId('amr-balance-owner-dismiss');
           const close = dialog.getByRole('button', { name: locale === 'en' ? 'Close' : '关闭', exact: true });
-          await expect(message).toContainText(locale === 'en' ? /Owner|owner/ : /所有者/);
+          await expect(message).toContainText(locale === 'en' ? /(?:contact|ask)[\s\S]*owner/i : /联系[\s\S]*所有者/);
           await expect(message).toBeInViewport({ ratio: 1 });
           await expect(dismiss).toBeInViewport({ ratio: 1 });
           await expect(close).toBeInViewport({ ratio: 1 });
@@ -93,11 +94,15 @@ test('[P0] VIEW-020 real admin or member funding notice stays above empty and ar
               const r = target.getBoundingClientRect();
               const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
               return { text: target.textContent, x: r.x, y: r.y, width: r.width, height: r.height,
+                clientWidth: target.clientWidth, scrollWidth: target.scrollWidth,
+                clientHeight: target.clientHeight, scrollHeight: target.scrollHeight,
                 topmost: !!hit && target.contains(hit) };
             });
             return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, targets };
           });
           expect(geometry.targets.every(t => t.topmost), 'Contact text and close controls must be above project content').toBe(true);
+          expect(geometry.targets.every(t => t.scrollWidth <= t.clientWidth + 1 && t.scrollHeight <= t.clientHeight + 1),
+            'Contact text and close controls must not be clipped inside their own boxes').toBe(true);
           const name = `${role}-${projectState}-${locale}-${viewport.width}`;
           await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
           rows.push({ name, geometry, context: context.context, viewport,
