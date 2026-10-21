@@ -3567,6 +3567,20 @@ export function ProjectView({
   };
   const fundingDialogContextRef = useRef(fundingDialogContext);
   fundingDialogContextRef.current = fundingDialogContext;
+  // A → B → A is still a new selection intent. Comparing only the current
+  // model/workspace would let A's first, delayed preflight authorize or block
+  // the later A draft. Gateway feedback remains owned by its admitted run.
+  const fundingSelectionKey = JSON.stringify([
+    project.id, projectRunAuthorityKey, config.mode, config.agentId,
+    fundingDialogContext.modelId,
+  ]);
+  const fundingSelectionRef = useRef({ key: fundingSelectionKey, generation: 0 });
+  if (fundingSelectionRef.current.key !== fundingSelectionKey) {
+    fundingSelectionRef.current = {
+      key: fundingSelectionKey, generation: fundingSelectionRef.current.generation + 1,
+    };
+  }
+
   // AMR funding feedback owns one dialog in its original conversation/account.
   // Display-wallet reads and historical replays cannot open or reopen it.
   const showAmrFundingFailure = useCallback((input: {
@@ -8886,8 +8900,10 @@ export function ProjectView({
         && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
         && currentWorkspaceAccountGeneration() === sendAccountGeneration
         && fundingDialogContextRef.current.isAmr;
+      const fundingSelectionGeneration = fundingSelectionRef.current.generation;
       const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
-        && fundingDialogContextRef.current.modelId === fundingModelId;
+        && fundingDialogContextRef.current.modelId === fundingModelId
+        && fundingSelectionRef.current.generation === fundingSelectionGeneration;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
         ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
         : Promise.resolve('unknown' as const);
