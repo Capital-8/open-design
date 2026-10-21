@@ -23,15 +23,17 @@ async function main() {
     }, async () => {
       const verified = await verifyFundingLease(fixture, 720_000);
       const env = { ...process.env, ...verified.env, OD_FUNDING_OWNER_RUNNER: 'active',
-        OD_FREE_CONCURRENCY_RUNNER: 'active', OD_CONCURRENCY_ATTEMPT_ID: fixture.freeConcurrency.attemptId };
+        OD_FREE_CONCURRENCY_RUNNER: 'active', OD_MANUAL_RETRY_RUNNER: fixture.freeConcurrency.manualRetry ? 'active' : '',
+        OD_CONCURRENCY_ATTEMPT_ID: fixture.freeConcurrency.attemptId };
       const e2eRoot = fileURLToPath(new URL('../..', import.meta.url));
       const sources = ['free-concurrency-runner.ts', 'free-concurrency.config.ts', 'workspace-free-concurrency-fixture.ts',
         'workspace-funding-client.ts', 'workspace-funding-fixture.ts', 'workspace-funding-lease.ts'];
       receipts.push({ fixtureSha256, sources: await Promise.all(sources.map(async path => ({ path,
         sha256: createHash('sha256').update(await readFile(join(e2eRoot, 'lib/playwright', path))).digest('hex') }))),
-        testSha256: createHash('sha256').update(await readFile(join(e2eRoot, 'ui/workspace-free-concurrency-sandbox.test.ts'))).digest('hex') });
+        testSha256: createHash('sha256').update(await readFile(join(e2eRoot, fixture.freeConcurrency.manualRetry
+          ? 'ui/workspace-manual-retry-sandbox.test.ts' : 'ui/workspace-free-concurrency-sandbox.test.ts'))).digest('hex') });
       const commands = await Promise.allSettled([
-        runFundingCommand([fixture.freeConcurrency.coordinator.helperPath, '--fixture', fixturePath,
+        runFundingCommand([(fixture.freeConcurrency.manualRetry?.coordinator ?? fixture.freeConcurrency.coordinator).helperPath, '--fixture', fixturePath,
           '--evidence-dir', output, '--run-id', fixture.isolation.runId, '--attempt-id', fixture.freeConcurrency.attemptId,
           '--fixture-sha256', fixtureSha256], fixture.owner.sourceRoot, env, join(output, 'coordinator.private.log'), 'python3'),
         runFundingCommand(['pnpm', 'exec', 'playwright', 'test', '-c', 'lib/playwright/free-concurrency.config.ts'],

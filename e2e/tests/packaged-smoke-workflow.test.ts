@@ -2038,6 +2038,7 @@ process.stdin.on("end", () => {
       "visual-*.test.ts",
       "api-security-view016.test.ts",
       "workspace-free-concurrency-sandbox.test.ts",
+      "workspace-manual-retry-sandbox.test.ts",
       "workspace-funding-sandbox.test.ts",
       "workspace-notice-sandbox.test.ts",
       "workspace-free-wallet-sandbox.test.ts",
