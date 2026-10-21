@@ -146,7 +146,7 @@ test('[P0] RUN-013-CLIENT Free three Link slots, manual recovery and independent
     await save('step2-completed.safe.json', { binding, minute: results.minute, manual: results.manual });
     const rechecks = requests.slice(recheckIndex);
     expect(rechecks.some(r => r.path === '/api/workspace/billing/request-concurrency')).toBe(true);
-    expect(rechecks.some(r => r.path.includes('/billing'))).toBe(true);
+    expect(rechecks.some(r => r.path === '/api/workspace/billing/preflight')).toBe(true);
     await marker('refill-ready.json'); results.refilled = await phase('refilled3', 3);
     await page.goto(owner.runtime.url.web('/'), { waitUntil: 'domcontentloaded', timeout: T.xlong });
     await expect(page.getByTestId('home-hero-input')).toBeVisible({ timeout: T.xlong });
