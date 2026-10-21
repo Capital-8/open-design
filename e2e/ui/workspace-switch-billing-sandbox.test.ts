@@ -46,7 +46,7 @@ test('[P0] WS-005 switching to B preserves original A task and settles both exac
   };
   const submit = async (target: Page, alias: 'a' | 'b') => {
     await expect(target.getByTestId('home-hero-input')).toBeVisible({ timeout: T.xlong });
-    await target.getByTestId('home-hero-input').fill(`QA:${JSON.stringify({ id: tags[alias], scenario: 'WS-005', task: alias })}`);
+    await target.getByTestId('home-hero-input').fill(`QA:${JSON.stringify({ id: tags[alias], scenario: 'WS-005', task: alias })}`, { timeout: T.medium });
     const created = target.waitForResponse(response => new URL(response.url()).pathname === '/api/runs'
       && response.request().method() === 'POST', { timeout: T.long });
     await target.getByTestId('home-hero-submit').click({ timeout: T.medium });
@@ -91,12 +91,14 @@ test('[P0] WS-005 switching to B preserves original A task and settles both exac
     await page.getByRole('button', { name: 'Home', exact: true }).click({ timeout: T.medium });
     await expect(page.getByTestId('home-hero-input')).toBeVisible({ timeout: T.xlong });
     await client.select(given.spaces.b);
-    await page.getByTestId('workspace-switcher').click();
+    await page.getByTestId('workspace-switcher').click({ timeout: T.medium });
     const selected = page.getByTestId('workspace-switcher-list').getByRole('menuitem').filter({ hasText: given.spaces.b.workspaceName! });
-    await selected.scrollIntoViewIfNeeded();
+    await selected.scrollIntoViewIfNeeded({ timeout: T.medium });
     await expect(selected).toHaveAttribute('aria-current', 'true');
     await info.attach('WS005-visible-selected-B-row', { body: await page.screenshot(), contentType: 'image/png' });
-    await page.locator('.entry-nav-rail__menu-backdrop').click();
+    // A populated menu can cover the rail-scoped backdrop center. Click its exposed corner.
+    await page.locator('.entry-nav-rail__menu-backdrop').click({ position: { x: 2, y: 2 }, timeout: T.medium });
+    await expect(page.getByTestId('workspace-switcher')).toHaveAttribute('aria-expanded', 'false');
     expect((await providerState()).held).toContain(tags.a);
     await submit(page, 'b');
     await expect.poll(async () => {
@@ -127,10 +129,10 @@ test('[P0] WS-005 switching to B preserves original A task and settles both exac
     const current = (await context.json()).context;
     expect(current.workspaceId).toBe(given.spaces.b.workspaceId);
     expect(current.workspaceMemberId).toBe(given.spaces.b.actorMemberId ?? given.spaces.b.ownerMemberId);
-    await page.getByTestId('entry-top-right-credits').click();
+    await page.getByTestId('entry-top-right-credits').click({ timeout: T.medium });
     const panel = page.getByTestId('entry-top-right-credits-panel');
     await expect(panel).toBeVisible();
-    await panel.hover();
+    await panel.hover({ timeout: T.medium });
     await expect.soft(panel.getByTestId('entry-nav-credits-row')).toContainText('$17.00', { timeout: T.long });
     await info.attach('WS005-current-B-settled-wallet', { body: await page.screenshot(), contentType: 'image/png' });
     await client.attach('WS005-current-B-context', current);

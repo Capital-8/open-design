@@ -182,7 +182,8 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
         .filter({ hasText: item.workspaceName });
       if (selected === space.workspaceId) {
         await expect(row).toHaveAttribute('aria-current', 'true');
-        await page.locator('.entry-nav-rail__menu-backdrop').click({ timeout: T.medium });
+        // This backdrop is scoped to the rail: its center may be covered by a long menu.
+        await page.locator('.entry-nav-rail__menu-backdrop').click({ position: { x: 2, y: 2 }, timeout: T.medium });
         await expect(switcher).toHaveAttribute('aria-expanded', 'false');
         return; // Selecting the already-current workspace correctly sends no PUT.
       }
