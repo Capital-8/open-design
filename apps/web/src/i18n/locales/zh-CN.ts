@@ -78,6 +78,7 @@ export const zhCN: Dict = {
   "workspaceInvite.onboardingBody2": "加入后能互相看项目、在设计稿上评论。",
   "workspaceInvite.onboardingEmailLabel": "通过电子邮件邀请成员",
   "workspaceInvite.batchSent": "已邀请 {count} 位同事",
+  "workspaceInvite.enterWorkspace": "进入工作台",
   "workspaceInvite.skip": "暂时跳过",
   "workspaceInvite.cancel": "取消",
   "workspaceInvite.helpLabel": "邀请成员说明",

@@ -94,6 +94,7 @@ export interface Dict {
   'workspaceInvite.onboardingBody2': string;
   'workspaceInvite.onboardingEmailLabel': string;
   'workspaceInvite.batchSent': string;
+  'workspaceInvite.enterWorkspace': string;
   'workspaceInvite.skip': string;
   'workspaceInvite.cancel': string;
   'workspaceInvite.helpLabel': string;

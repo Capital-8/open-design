@@ -78,6 +78,7 @@ export const ja: Dict = {
   "workspaceInvite.onboardingBody2": "See each other’s projects and comment on designs.",
   "workspaceInvite.onboardingEmailLabel": "Invite members by email",
   "workspaceInvite.batchSent": "Invited {count} colleagues",
+  "workspaceInvite.enterWorkspace": "Enter workspace",
   "workspaceInvite.skip": "Skip for now",
   "workspaceInvite.cancel": "Cancel",
   "workspaceInvite.helpLabel": "About inviting members",

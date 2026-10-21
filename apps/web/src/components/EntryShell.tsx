@@ -1860,7 +1860,7 @@ export function EntryShell({
   // carries a redundant one.
 
 
-  const [registrationInviteExit, setRegistrationInviteExit] = useState<{ count: number; context: import('@open-design/contracts').WorkspaceCollabContext; accountId: string; credentialRevision: string | undefined; profile: string | undefined } | null>(null);
+  const [registrationSkipNotice, setRegistrationSkipNotice] = useState<{ count: number; accountId: string; workspaceId: string; workspaceMemberId: string; credentialRevision: string | undefined; profile: string | undefined } | null>(null);
   const [registrationEntryFade, setRegistrationEntryFade] = useState(false);
   useEffect(() => {
     if (!registrationEntryFade) return;
@@ -1873,9 +1873,9 @@ export function EntryShell({
     identityUnavailable: Boolean(workspaceContextState.failure && !workspaceContextState.loading && !workspaceContextState.identityChangePending),
     onRetryIdentity: () => notifyWorkspaceContextRefresh(),
     allowHost: view !== 'onboarding' || (config.mode === 'daemon' && config.agentId === 'amr'),
-    onExit: (count, context) => {
+    onExit: (count, context, completion) => {
       if (!amrAccountId) return;
-      setRegistrationInviteExit({ count, context, accountId: amrAccountId, credentialRevision: amrRegistrationStatus?.credentialRevision, profile: amrRegistrationStatus?.profile });
+      if (completion === 'skipped' && count > 0) setRegistrationSkipNotice({ count, accountId: amrAccountId, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId, credentialRevision: amrRegistrationStatus?.credentialRevision, profile: amrRegistrationStatus?.profile });
       setRegistrationEntryFade(true);
       finishOnboarding();
     },
@@ -1886,21 +1886,17 @@ export function EntryShell({
     return () => onRegistrationInviteActiveChange?.(false);
   }, [registrationInviteActive, onRegistrationInviteActiveChange]);
   useEffect(() => {
-    if (!registrationInviteExit || view !== 'home' || registrationInvite) return;
-    const completed = registrationInviteExit;
-    if (completed.accountId === amrAccountId && (workspaceContextState.loading || workspaceContextState.identityChangePending)) return;
-    setRegistrationInviteExit(null);
-    if (completed.count > 0 && completed.accountId === amrAccountId
-      && amrRegistrationStatus?.sessionState === 'authenticated'
-      && completed.credentialRevision === amrRegistrationStatus.credentialRevision && completed.profile === amrRegistrationStatus.profile
-      && completed.context.workspaceId === railWorkspaceContext?.workspaceId
-      && completed.context.workspaceMemberId === railWorkspaceContext?.workspaceMemberId) {
-      window.dispatchEvent(new CustomEvent('od:workspace-invites-sent', { detail: {
-        workspaceId: completed.context.workspaceId, workspaceMemberId: completed.context.workspaceMemberId,
-        count: completed.count, totalCount: completed.count,
-      } }));
-    }
-  }, [registrationInviteExit, view, registrationInvite, amrAccountId, amrRegistrationStatus, railWorkspaceContext, workspaceContextState.loading, workspaceContextState.identityChangePending]);
+    if (!registrationSkipNotice || registrationInvite || view !== 'home') return;
+    if (workspaceContextState.loading || workspaceContextState.identityChangePending) return;
+    const completed = registrationSkipNotice;
+    setRegistrationSkipNotice(null);
+    if (completed.accountId !== amrAccountId || amrRegistrationStatus?.sessionState !== 'authenticated'
+      || completed.credentialRevision !== amrRegistrationStatus.credentialRevision || completed.profile !== amrRegistrationStatus.profile
+      || completed.workspaceId !== railWorkspaceContext?.workspaceId || completed.workspaceMemberId !== railWorkspaceContext?.workspaceMemberId) return;
+    window.dispatchEvent(new CustomEvent('od:workspace-invites-sent', { detail: {
+      workspaceId: completed.workspaceId, workspaceMemberId: completed.workspaceMemberId, count: completed.count, totalCount: completed.count,
+    } }));
+  }, [registrationSkipNotice, registrationInvite, view, workspaceContextState.loading, workspaceContextState.identityChangePending, amrAccountId, amrRegistrationStatus, railWorkspaceContext]);
   if (registrationInvite) return registrationInvite;
 
   if (view === 'onboarding') {
