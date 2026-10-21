@@ -10,7 +10,7 @@ import type {
   WorkspaceWalletBalance,
 } from '@open-design/contracts';
 import { runVelaCommand, velaCommandStderr } from './vela-command.js';
-import { readVelaControlApiContext } from './vela.js';
+import { readVelaControlApiContext, readVelaRuntimeLinkContext } from './vela.js';
 
 // A-lane billing 收口. Instead of the daemon holding billing credentials, it
 // shells out to `vela billing summary --format json`, which authenticates with
@@ -54,15 +54,31 @@ export async function fetchVelaBillingFundingCheck(
   return fetchVelaFundingPreview('funding-check', workspaceId, modelId, options);
 }
 
-/** Read only Link's existing request counter through the runtime-key CLI path. */
+/** Read Link's existing counter with the same runtime identity as the CLI. */
 export async function fetchVelaRequestConcurrency(
   workspaceId: string,
   options: FetchVelaBillingOptions = {},
 ): Promise<WorkspaceRequestConcurrencyHint | null> {
+  let stdout: string;
   try {
-    const stdout = await resolveVelaBillingRunner(options)([
+    stdout = await resolveVelaBillingRunner(options)([
       'request-concurrency', '--workspace-id', workspaceId, '--format', 'json',
     ]);
+  } catch (error) {
+    if (isVelaWorkspaceAuthorizationError(error)) throw error;
+    if (await isBillingCommandMissing(error, 'request-concurrency', options)) {
+      return fetchAuthenticatedRequestConcurrency(workspaceId, options);
+    }
+    return null;
+  }
+  if (isBillingParentHelp(stdout, 'request-concurrency')) {
+    return fetchAuthenticatedRequestConcurrency(workspaceId, options);
+  }
+  return parseRequestConcurrency(stdout, workspaceId);
+}
+
+function parseRequestConcurrency(stdout: string, workspaceId: string): WorkspaceRequestConcurrencyHint | null {
+  try {
     const raw = JSON.parse(stdout) as WorkspaceRequestConcurrencyHint;
     if (raw.workspaceId !== workspaceId || !raw.workspaceMemberId?.trim()
       || !Number.isFinite(Date.parse(raw.observedAt))) return null;
@@ -72,6 +88,28 @@ export async function fetchVelaRequestConcurrency(
       || !Number.isSafeInteger(raw.limit) || raw.limit < 1
       || (raw.status === 'full') !== (raw.running >= raw.limit)) return null;
     return raw;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAuthenticatedRequestConcurrency(
+  workspaceId: string,
+  options: FetchVelaBillingOptions,
+): Promise<WorkspaceRequestConcurrencyHint | null> {
+  try {
+    const session = readVelaRuntimeLinkContext(process.env, options.configuredEnv);
+    if (!session) return null;
+    const response = await fetch(new URL('/billing/request-concurrency', session.linkUrl), {
+      headers: { authorization: `Bearer ${session.runtimeKey}`, 'x-vela-workspace-id': workspaceId },
+      // Match the CLI's advisory counter budget; this read reserves no slot.
+      signal: AbortSignal.timeout(400),
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`API request failed with status ${response.status}: workspace request concurrency authorization rejected`);
+    }
+    if (!response.ok) return null;
+    return parseRequestConcurrency(await response.text(), workspaceId);
   } catch (error) {
     if (isVelaWorkspaceAuthorizationError(error)) throw error;
     return null;
@@ -91,36 +129,39 @@ async function fetchVelaFundingPreview(
     stdout = await resolveVelaBillingRunner(options)(args);
   } catch (error) {
     if (isVelaWorkspaceAuthorizationError(error)) throw error;
-    if (command === 'funding-check' && await isFundingCheckCommandMissing(error, options)) {
+    if (command === 'funding-check' && await isBillingCommandMissing(error, command, options)) {
       return fetchAuthenticatedFundingCheck(workspaceId, modelId, options);
     }
     // Server, transport and unrecognized CLI failures carry no quota evidence.
     return null;
   }
-  if (command === 'funding-check' && isBillingParentHelp(stdout)) {
+  if (command === 'funding-check' && isBillingParentHelp(stdout, command)) {
     return fetchAuthenticatedFundingCheck(workspaceId, modelId, options);
   }
   return parseBillingPreflight(stdout, workspaceId, modelId);
 }
 
-function isBillingParentHelp(stdout: string): boolean {
+type OptionalBillingCommand = 'funding-check' | 'request-concurrency';
+
+function isBillingParentHelp(stdout: string, command: OptionalBillingCommand): boolean {
   return /^\s*vela billing \[command\]\s*$/m.test(stdout)
     && /^Available Commands:\s*$/m.test(stdout)
-    && !/^\s+funding-check(?:\s|$)/m.test(stdout);
+    && !new RegExp(`^\\s+${command}(?:\\s|$)`, 'm').test(stdout);
 }
 
-async function isFundingCheckCommandMissing(
+async function isBillingCommandMissing(
   error: unknown,
+  command: OptionalBillingCommand,
   options: FetchVelaBillingOptions,
 ): Promise<boolean> {
   const detail = `${velaCommandStderr(error)}\n${error instanceof Error ? error.message : String(error)}`;
-  if (/unknown command\s+["']?funding-check(?:["']|\s|$)/i.test(detail)) return true;
+  if (new RegExp(`unknown command\\s+["']?${command}(?:["']|\\s|$)`, 'i').test(detail)) return true;
   if (!/unknown flag:\s+--workspace-id\b/i.test(detail)) return false;
   // Older Cobra rejects flags before resolving the absent subcommand. Prove
   // that case with this same binary's help; a bad flag alone is not capability.
   try {
-    const help = await resolveVelaBillingRunner(options)(['funding-check', '--help']);
-    return isBillingParentHelp(help);
+    const help = await resolveVelaBillingRunner(options)([command, '--help']);
+    return isBillingParentHelp(help, command);
   } catch (helpError) {
     if (isVelaWorkspaceAuthorizationError(helpError)) throw helpError;
     return false;

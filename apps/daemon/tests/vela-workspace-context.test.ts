@@ -18,9 +18,11 @@ import {
 import { createActiveWorkspaceSelectionStore } from '../src/collab/active-workspace-selection.js';
 import {
   clearVelaAuthorizationState,
+  markVelaAuthorizationExpired,
   readVelaControlApiContext,
   readVelaCredentialRevision,
   readVelaLoginStatus,
+  readVelaRuntimeLinkContext,
 } from '../src/integrations/vela.js';
 
 // A well-formed rich workspace-context body, as returned inside flows such as
@@ -1716,6 +1718,64 @@ describe('Settings-selected AMR credential directory isolation', () => {
       profile: 'local', apiUrl: 'https://settings-api.example', controlKey: 'selected-local-control',
       user: { id: 'selected-local-user' },
     });
+  });
+
+  it('reads the runtime key and Link origin from the same selected directory and profile', () => {
+    const inheritedHome = fixture('inherited');
+    const selectedHome = fixture('selected');
+    const inherited = { AMR_HOME: inheritedHome.directory, VELA_PROFILE: 'prod' };
+    const configured = { AMR_HOME: selectedHome.directory, VELA_PROFILE: 'local' };
+    expect(readVelaRuntimeLinkContext(inherited, configured)).toEqual({
+      profile: 'local', linkUrl: 'https://selected-local-link.example', runtimeKey: 'selected-local-runtime',
+    });
+    expect(fs.readFileSync(join(selectedHome.directory, 'config.json'), 'utf8')).toBe(selectedHome.contents);
+    expect(fs.readFileSync(join(inheritedHome.directory, 'config.json'), 'utf8')).toBe(inheritedHome.contents);
+  });
+
+  it('uses the CLI environment precedence for complete and partial runtime overrides', () => {
+    const home = fixture('selected');
+    const env = { AMR_HOME: home.directory, VELA_PROFILE: 'local' };
+    expect(readVelaRuntimeLinkContext(env, { VELA_LINK_URL: 'https://settings-link.example' })).toEqual({
+      profile: 'local', linkUrl: 'https://settings-link.example', runtimeKey: 'selected-local-runtime',
+    });
+    expect(readVelaRuntimeLinkContext(env, { VELA_RUNTIME_KEY: 'settings-runtime' })).toEqual({
+      profile: 'local', linkUrl: 'https://selected-local-link.example', runtimeKey: 'settings-runtime',
+    });
+    expect(readVelaRuntimeLinkContext(env, { VELA_RUNTIME_KEY: 'settings-runtime', VELA_LINK_URL: 'https://settings-link.example' })).toEqual({
+      profile: 'local', linkUrl: 'https://settings-link.example', runtimeKey: 'settings-runtime',
+    });
+  });
+
+  it('does not borrow the inherited home or another saved profile for a missing runtime key', () => {
+    const home = fixture('inherited');
+    const emptyHome = mkdtempSync(join(tmpdir(), 'od-vela-empty-runtime-'));
+    tempDirs.push(emptyHome);
+    expect(readVelaRuntimeLinkContext({ AMR_HOME: home.directory, VELA_PROFILE: 'prod' }, { AMR_HOME: emptyHome, VELA_PROFILE: 'local' })).toBeNull();
+    expect(readVelaRuntimeLinkContext({ AMR_HOME: home.directory, VELA_PROFILE: 'test' })).toBeNull();
+  });
+
+  it.each([
+    ['prod', 'https://amr-link.open-design.ai'], ['test', 'https://vela-link.powerformer.net'],
+    ['feature-test', 'https://amr-feature-link.powerformer.net'], ['local', 'http://localhost:18081'],
+  ])('uses only the CLI builtin Link endpoint for %s when no saved endpoint exists', (profile, linkUrl) => {
+    const home = mkdtempSync(join(tmpdir(), 'od-vela-builtin-link-'));
+    tempDirs.push(home);
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ profiles: { [profile]: { runtimeKey: 'own-runtime' } } }));
+    expect(readVelaRuntimeLinkContext({ AMR_HOME: home, VELA_PROFILE: profile })).toEqual({ profile, linkUrl, runtimeKey: 'own-runtime' });
+  });
+
+  it.each(['not a URL', 'file:///tmp/link', 'https://user:secret@link.example'])('rejects an invalid Link override without falling back: %s', (linkUrl) => {
+    const home = fixture('selected');
+    expect(readVelaRuntimeLinkContext({ AMR_HOME: home.directory, VELA_PROFILE: 'local' }, { VELA_LINK_URL: linkUrl })).toBeNull();
+  });
+
+  it('does not return an explicitly expired runtime credential revision', () => {
+    const home = fixture('selected');
+    const env = { AMR_HOME: home.directory, VELA_PROFILE: 'local' };
+    expect(readVelaRuntimeLinkContext(env)).not.toBeNull();
+    markVelaAuthorizationExpired(env);
+    expect(readVelaRuntimeLinkContext(env)).toBeNull();
+    expect(readVelaRuntimeLinkContext(env, { VELA_RUNTIME_KEY: 'rotated-runtime', VELA_LINK_URL: 'https://rotated-link.example' })).toMatchObject({ runtimeKey: 'rotated-runtime' });
   });
 
 });
