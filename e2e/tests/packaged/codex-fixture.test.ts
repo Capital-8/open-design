@@ -119,7 +119,7 @@ describe('packaged Codex fixture transport', () => {
           } else {
             expect(text).toContain(PACKAGED_HOME_FIRST_RUN_OUTPUT);
             expect(text).not.toContain('open-design-runtime-state');
-            expect(await readFile(join(root, 'od-next-active-canary.html'), 'utf8')).toContain('Delayed Daemon Smoke');
+            expect(await readFile(join(root, 'delayed-daemon-smoke.html'), 'utf8')).toContain('Delayed Daemon Smoke');
           }
         } finally {
           if (child.exitCode == null && child.signalCode == null) child.kill();

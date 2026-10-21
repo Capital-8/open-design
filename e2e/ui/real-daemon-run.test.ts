@@ -888,6 +888,7 @@ test('[P0] real daemon run restores a delayed artifact turn after reload', async
 
   await expectRestoredDelayedAssistantMessage(page, projectId, conversationId, {
     expectedUserMessages: 1,
+    expectedAssistantMessages: 2,
     expectedThinking: false,
   });
 });
@@ -1016,6 +1017,7 @@ test('[P1] real daemon run survives reload before the create response reaches th
 
   await expectRestoredDelayedAssistantMessage(page, projectId, conversationId, {
     requireRunId: true,
+    expectedAssistantMessages: 2,
     expectedThinking: false,
   });
 });
@@ -2021,6 +2023,7 @@ async function expectRestoredDelayedAssistantMessage(
   conversationId: string,
   options: {
     expectedUserMessages?: number;
+    expectedAssistantMessages?: number;
     requireRunId?: boolean;
     expectedThinking?: boolean;
     producedFiles?: string[];
@@ -2029,7 +2032,7 @@ async function expectRestoredDelayedAssistantMessage(
   await expect
     .poll(async () => {
       const messages = await listConversationMessages(page, projectId, conversationId);
-      const assistant = messages.find((message) => message.role === 'assistant');
+      const assistant = messages.filter((message) => message.role === 'assistant').at(-1);
       return {
         userMessages: messages.filter((message) => message.role === 'user').length,
         assistantMessages: messages.filter((message) => message.role === 'assistant').length,
@@ -2041,7 +2044,7 @@ async function expectRestoredDelayedAssistantMessage(
     }, { timeout: 15_000 })
     .toEqual({
       userMessages: options.expectedUserMessages ?? expect.any(Number),
-      assistantMessages: 1,
+      assistantMessages: options.expectedAssistantMessages ?? 1,
       hasRunId: options.requireRunId ? true : expect.any(Boolean),
       runStatus: 'succeeded',
       producedFiles: options.producedFiles ?? [DELAYED_FILE],
@@ -2057,7 +2060,7 @@ async function expectPersistedAssistantContent(
 ) {
   await expect.poll(async () => {
     const messages = await listConversationMessages(page, projectId, conversationId);
-    return messages.find((message) => message.role === 'assistant')?.content ?? '';
+    return messages.filter((message) => message.role === 'assistant').at(-1)?.content ?? '';
   }, { timeout: 15_000 }).toContain(expectedContent);
 }
 
