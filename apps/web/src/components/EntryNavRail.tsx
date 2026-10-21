@@ -838,7 +838,7 @@ function formatWalletBalance(raw: string | null | undefined): string | null {
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
   billing: WorkspaceBillingSummary | null | undefined,
-  options: { fallbackProfile: string | null | undefined },
+  options: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null;
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
@@ -847,13 +847,15 @@ export function workspaceUpgradeUrl(
 export function workspaceUpgradeUrl(
   context: WorkspaceCollabContext | null | undefined,
   _billing: WorkspaceBillingSummary | null | undefined,
-  options?: { fallbackProfile: string | null | undefined },
+  options?: { fallbackProfile: string | null | undefined; consoleOrigin?: string | null },
 ): string | null {
   // Missing context can use the caller's fallback profile because there is no
   // workspace identity to authorize yet.
   if (context && !canReachWorkspaceBillingEntrance(context)) return null;
   if (!context && !options) return null;
-  return amrPlansUrlForProfile(options?.fallbackProfile, context?.workspaceId);
+  // Explicit runtime callers wait for a profile rather than guessing production.
+  if (options && !options.fallbackProfile?.trim()) return null;
+  return amrPlansUrlForProfile(options?.fallbackProfile, context?.workspaceId, options?.consoleOrigin);
 }
 
 /**
@@ -965,6 +967,7 @@ function formatBillingTier(tier: string, t: ReturnType<typeof useI18n>['t']): st
 }
 
 interface EntryTopRightClusterProps {
+  amrProfile?: string | null;
   /** Analytics page the cluster reports from: the entry views map through
    *  `entryViewToTracking`, the workspace mount reports 'project'. */
   page: TrackingWorkspacePage;
@@ -1012,6 +1015,7 @@ interface EntryTopRightClusterProps {
  * mutually exclusive.
  */
 export function EntryTopRightCluster({
+  amrProfile,
   page,
   context,
   billing,
@@ -1262,7 +1266,10 @@ export function EntryTopRightCluster({
 
   // One public comparison destination shared with the rail's invite dialog.
   // Pricing owns plan choice; only a selected card hands off to checkout.
-  const upgradeUrl = workspaceUpgradeUrl(context, billing);
+  const upgradeUrl = workspaceUpgradeUrl(context, billing, {
+    fallbackProfile: workspaceQuotaStatus?.profile?.trim() || amrProfile,
+    consoleOrigin: workspaceQuotaStatus?.consoleOrigin,
+  });
   const billingUpgradeUrl =
     context?.billingRecovery?.recoveryUrl?.trim() || upgradeUrl;
   // #62: the 积分 row links straight OUT to B's console dashboard (usage detail
@@ -1740,6 +1747,7 @@ export function EntryTopRightCluster({
  * authority explicitly; an unbound local project deliberately falls back to
  * the shell's ambient account context. */
 export function WorkspaceTopRightAccountCluster({
+  amrProfile,
   workspaceQuotaStatus,
   onOpenSettings,
   onSignedOut,
@@ -1752,6 +1760,7 @@ export function WorkspaceTopRightAccountCluster({
   metricsConsent = false,
   installationId,
 }: {
+  amrProfile?: string | null;
   workspaceQuotaStatus?: Pick<VelaLoginStatus, 'profile' | 'consoleOrigin'> | null;
   onOpenSettings?: (section?: EntrySettingsSection) => void;
   onSignedOut?: () => void | Promise<void>;
@@ -1802,6 +1811,7 @@ export function WorkspaceTopRightAccountCluster({
       : deepSeekCampaignAudience;
   return (
     <EntryTopRightCluster
+      amrProfile={amrProfile}
       page="project"
       workspaceQuotaStatus={workspaceQuotaStatus}
       context={context}
@@ -2713,6 +2723,7 @@ export function EntryNavRail({
           project route can mount the same cluster without the rail (see
           `EntryTopRightCluster`). */}
       <EntryTopRightCluster
+        amrProfile={priorityAnnouncementAmrProfile}
         page={analyticsPage}
         context={context}
         billing={billing}

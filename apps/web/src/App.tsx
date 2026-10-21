@@ -5739,6 +5739,7 @@ function AppInner() {
             activeProjectWorkspaceContext,
           )}
           project={activeProject}
+          workspaceQuotaStatus={amrLoginStatus}
           workspaceContextOverride={
             activeProject.workspaceId
               ? activeProjectWorkspaceContext
@@ -5976,6 +5977,7 @@ function AppInner() {
             the routes are mutually exclusive, so exactly one is on screen. */}
         {route.kind === 'project' ? (
           <WorkspaceTopRightAccountCluster
+            amrProfile={amrProfileForConfig(config)}
             workspaceQuotaStatus={amrLoginStatus}
             onOpenSettings={openSettings}
             onSignedOut={handleActiveCloudSignOut}
@@ -6118,6 +6120,8 @@ function AppInner() {
         && homeConcurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration() ? (
         <AmrConcurrencyDialog branch={homeConcurrencyRejection.branch}
           workspaceContext={homeConcurrencyRejection.workspaceContext}
+          profile={amrLoginStatus?.profile?.trim() || amrProfileForConfig(config)}
+          consoleOrigin={amrLoginStatus?.consoleOrigin}
           onClose={() => setHomeConcurrencyRejection(null)} />
       ) : null}
       <HomeAmrBalanceGateDialogs
