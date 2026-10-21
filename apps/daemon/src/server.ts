@@ -12060,7 +12060,10 @@ export async function startServer({
     } catch {
       configuredAgentEnv = {};
     }
-    const requestedLiveModelScope = def.id === 'amr'
+    const requestedAmrModelActor = def.id === 'amr'
+      ? authenticatedRunActor(process.env, configuredAgentEnv)
+      : null;
+    let requestedLiveModelScope = def.id === 'amr'
       ? amrModelScope({
           ...process.env,
           ...(def.env || {}),
@@ -12068,6 +12071,19 @@ export async function startServer({
           ...(run.workspaceScope ? { VELA_WORKSPACE_ID: run.workspaceScope.workspaceId } : {}),
         }, readVelaCredentialRevision(process.env, configuredAgentEnv))
       : null;
+    // Normal device-login token rotation preserves the actor. Opaque key
+    // overrides have no actor proof, so only their unchanged revision is safe
+    // during preparation. This guard never terminates an already-spawned run.
+    const amrModelIdentityMatches = (env, configuredEnv = {}) => {
+      const currentActor = authenticatedRunActor(env, configuredEnv);
+      if (requestedAmrModelActor && currentActor) return requestedAmrModelActor === currentActor;
+      return amrModelScope({
+        ...env,
+        ...configuredEnv,
+        ...(run.workspaceScope ? { VELA_WORKSPACE_ID: run.workspaceScope.workspaceId } : {}),
+      }, readVelaCredentialRevision(env, configuredEnv)) === requestedLiveModelScope;
+    };
+    const amrModelIdentityChangedMessage = 'AMR sign-in changed during run setup. Retry with the current account.';
     const configuredModel =
       typeof appConfigForRun?.agentModels?.[def.id]?.model === 'string'
         ? appConfigForRun.agentModels[def.id].model
@@ -12117,9 +12133,10 @@ export async function startServer({
       // stored concrete session models from comparing against raw `default`.
       try {
         const resumeProbe = await resolveAmrModelProbe({ dataDir: RUNTIME_DATA_DIR, env: process.env, readAppConfig, workspaceId: run.workspaceScope?.workspaceId });
-        if (resumeProbe.modelScope !== requestedLiveModelScope) {
-          throw new Error('AMR model catalog identity changed during run setup');
+        if (!amrModelIdentityMatches(resumeProbe.env, resumeProbe.configuredEnv)) {
+          throw new Error(amrModelIdentityChangedMessage);
         }
+        requestedLiveModelScope = resumeProbe.modelScope;
         const askedForDefault =
           typeof model !== 'string' || !model.trim() || model.trim().toLowerCase() === 'default';
         const resumeFetchers = {
@@ -12149,8 +12166,10 @@ export async function startServer({
           agentOptions.model = safeModel;
         }
       } catch {
-        // Degrade silently: keep the requested value. The preflight below records
-        // the probe failure and applies the identical fallback.
+        // Same-actor catalog failures retain the normal fallback below.
+      }
+      if (!amrModelIdentityMatches(process.env, configuredAgentEnv)) {
+        return failRun('AMR_AUTH_REQUIRED', amrModelIdentityChangedMessage);
       }
     }
     const previousMarkerTask = isOdNextInitialRun && strategyTaskAtStart?.continuedFromTaskExecutionId
@@ -13567,7 +13586,7 @@ export async function startServer({
             agentLaunch,
           )
         : null;
-      const liveAmrModelScope = requestedLiveModelScope;
+      let liveAmrModelScope = requestedLiveModelScope;
       // Resolve the AMR model catalog through the SAME shared cache the UI's
       // `/api/amr/models` endpoint serves (AmrModelLoadingCache): a cached
       // authoritative `vela model list` when it is hot, otherwise the offline
@@ -13591,9 +13610,11 @@ export async function startServer({
       let liveModels = [];
       try {
         const probe = await resolveAmrModelProbe({ dataDir: RUNTIME_DATA_DIR, env: process.env, readAppConfig, workspaceId: run.workspaceScope?.workspaceId });
-        if (probe.modelScope !== liveAmrModelScope) {
-          throw new Error('AMR model catalog identity changed during run setup');
+        if (!amrModelIdentityMatches(probe.env, probe.configuredEnv)) {
+          throw new Error(amrModelIdentityChangedMessage);
         }
+        requestedLiveModelScope = probe.modelScope;
+        liveAmrModelScope = probe.modelScope;
         const fetchers = {
           fetchPreset: () => fetchVelaPresetModels(probe.launchPath, probe.env),
           fetchRemote: () => fetchVelaRemoteModelsWithRetry(probe.launchPath, probe.env),
@@ -13608,7 +13629,13 @@ export async function startServer({
         // trace in any log or diagnostics bundle). Record it and degrade to the
         // remembered catalog below.
         console.warn('[amr] model catalog preflight probe failed', error);
-        liveModels = getRememberedLiveModels(def.id, liveAmrModelScope);
+        if (amrModelIdentityMatches(process.env, configuredAgentEnv)) {
+          liveModels = getRememberedLiveModels(def.id, liveAmrModelScope);
+        }
+      }
+      if (!amrModelIdentityMatches(process.env, configuredAgentEnv)) {
+        sendAmrAccountFailure({ code: 'AMR_AUTH_REQUIRED', message: amrModelIdentityChangedMessage, action: 'relogin' });
+        return finishStrategyAwarePhysicalRun('failed', 1, null);
       }
       const liveModelIds = new Set(
         liveModels.map((candidate) => candidate?.id).filter(Boolean),
@@ -14586,6 +14613,14 @@ export async function startServer({
         } catch (error) {
           console.warn('[opencode] optional tool previews unavailable:', error instanceof Error ? error.message : String(error));
         }
+      }
+      if (def.id === 'amr' && !amrModelIdentityMatches(env)) {
+        cleanupPromptFile();
+        revokeToolToken('child_exit');
+        unregisterChatAgentEventSink();
+        cleanupOdNextRunInputProjection();
+        sendAmrAccountFailure({ code: 'AMR_AUTH_REQUIRED', message: amrModelIdentityChangedMessage, action: 'relogin' });
+        return finishStrategyAwarePhysicalRun('failed', 1, null);
       }
       // Re-read the actual launch session without re-pinning this Run. A
       // profile/account change during setup cannot charge a different actor.

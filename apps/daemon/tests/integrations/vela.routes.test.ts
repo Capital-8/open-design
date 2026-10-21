@@ -3627,6 +3627,54 @@ describe('parseAmrEntryAnalyticsPayload — entry sources added in this PR', () 
 // Model entitlements must use the request's verified selection, never the
 // daemon's ambient CLI workspace or a different tab's current selection.
 describe('GET /api/amr/models explicit workspace authority', () => {
+  it.each(['replacement', 'rotation'] as const)('preserves the catalog actor boundary through %s credential changes', async (mode) => {
+    const dataDir = process.env.OD_DATA_DIR as string;
+    const previous = await readAppConfig(dataDir);
+    seedLogin('local', { controlKey: 'actor-a-control', runtimeKey: 'actor-a-runtime', user: { id: 'actor-a', email: 'a@example.test' } });
+    const binary = path.join(tmpHome, 'changing-actor-vela.mjs');
+    const changed = path.join(tmpHome, 'changed');
+    const launched = path.join(tmpHome, 'agent-launched');
+    writeFileSync(binary, `#!/usr/bin/env node
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+if (args[0] === 'model') {
+  if (args[1] === 'preset' && !existsSync(${JSON.stringify(changed)})) {
+    const config = JSON.parse(readFileSync(${JSON.stringify(configPath())}, 'utf8'));
+    Object.assign(config.profiles.local, { controlKey: 'actor-b-control', runtimeKey: 'actor-b-runtime', user: { id: ${JSON.stringify(mode === 'rotation' ? 'actor-a' : 'actor-b')}, email: 'b@example.test' } });
+    writeFileSync(${JSON.stringify(configPath())}, JSON.stringify(config));
+    writeFileSync(${JSON.stringify(changed)}, 'yes');
+  }
+  console.log(JSON.stringify({ source: args[1] === 'preset' ? 'preset' : 'remote', data: [{ id: 'public_model_deepseek_v4_flash', enabled: true, default: true }] }));
+} else {
+  if (args[0] === 'agent') writeFileSync(${JSON.stringify(launched)}, 'yes');
+  await import(${JSON.stringify(new URL('../fixtures/fake-vela.mjs', import.meta.url).href)});
+}
+`);
+    chmodSync(binary, 0o755);
+    await setSettingsAmrEnv({ VELA_BIN: binary });
+    try {
+      const project = await postJson(`${baseUrl}/api/projects`, { id: `model-actor-${Date.now()}`, name: 'Catalog actor boundary' });
+      expect(project.status).toBe(200);
+      const projectId = (project.body as { project: { id: string } }).project.id;
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: 'amr', projectId, message: 'never run as replacement actor', model: 'default' }),
+      });
+      expect(response.ok).toBe(true);
+      const events = await response.text();
+      expect(existsSync(changed)).toBe(true);
+      expect(existsSync(launched)).toBe(mode === 'rotation');
+      if (mode === 'replacement') expect(events).toContain('AMR_AUTH_REQUIRED');
+      else {
+        expect(events).not.toContain('AMR_AUTH_REQUIRED');
+        expect(events).toContain('event: end');
+      }
+    } finally {
+      await writeAppConfig(dataDir, { ...previous });
+    }
+  });
+
+
   it('keeps verified A to B to A entitlements separate from the ambient CLI workspace', async () => {
     const binary = path.join(tmpHome, 'scoped-model-vela.mjs');
     const reads = path.join(tmpHome, 'model-reads.jsonl');
