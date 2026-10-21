@@ -318,7 +318,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pack-cost-baseline-20261022
+  group: ${{ inputs.enable_mac_x64 && 'pack-cost-baseline-20261022' || 'pack-cost-baseline-warm-20261022' }}
   cancel-in-progress: false
 
 env:
