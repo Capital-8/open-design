@@ -9,6 +9,7 @@ import { createUserDesignSystem } from './design-systems/index.js';
 import { resolveWorkspaceScope } from './collab/workspace-scope.js';
 import { cancelRevokedWorkspaceRuns, createWorkspaceMembershipRevocationObserver } from './collab/cancel-revoked-workspace-runs.js';
 import { startEvidenceDelivery } from './services/evidence-delivery.js';
+import { createRevokedWorkspaceRunCancellation, workspaceRunActorKey } from './services/cancel-revoked-workspace-runs.js';
 import type {
   DesktopExportArtifactInput,
   DesktopExportArtifactResult,
@@ -982,6 +983,7 @@ import {
   fetchVelaWorkspaceDirectory,
   resolveVelaWorkspaceHubEventsEndpoint,
   velaWorkspaceDirectoryIdentity,
+  velaWorkspaceDirectoryIdentityForSession,
   workspaceContextFromDirectoryItem,
 } from './collab/vela-workspace-context.js';
 import { verifyWorkspaceRequestContext } from './collab/request-workspace-context.js';
@@ -1782,9 +1784,11 @@ export function handleHubWorkspaceAccessRevoked(
   invalidateWorkspaceDirectory: () => void,
   revokeWorkspaceBilling: (workspaceId: string) => void,
   memberRemoval?: { workspaceId: string; workspaceMemberId: string; reason: 'member-removed' },
+  cancelWorkspaceRuns: (workspaceId: string) => Promise<void> = async () => {},
 ): void {
   invalidateWorkspaceDirectory();
   revokeWorkspaceBilling(workspaceId);
+  void cancelWorkspaceRuns(workspaceId).catch(() => undefined);
   emitWorkspaceEvent(
     workspaceId,
     { type: 'workspace-context-changed', at: Date.now(), ...(memberRemoval ? { memberRemoval } : {}) },
@@ -1950,12 +1954,18 @@ export function createOpenDesignToolEnv({
   projectDir,
   projectId,
   workspaceScope,
+  runId,
+  conversationId,
+  analyticsContext,
 }: {
   daemonUrl: string;
   hyperFramesBin?: string;
   projectDir?: string | null;
   projectId?: string | null;
   workspaceScope?: RunWorkspaceScope | null;
+  runId?: string | null;
+  conversationId?: string | null;
+  analyticsContext?: AnalyticsContext | null;
 }): NodeJS.ProcessEnv {
   const scope = workspaceScope?.projectId === projectId ? workspaceScope : null;
   return {
@@ -1964,6 +1974,12 @@ export function createOpenDesignToolEnv({
     OD_HYPERFRAMES_BIN: hyperFramesBin,
     OD_NODE_BIN,
     OD_DAEMON_URL: daemonUrl,
+    OD_STOCK_RUN_ID: runId ?? '',
+    OD_STOCK_SESSION_ID: conversationId ?? '',
+    OD_STOCK_ANALYTICS_DEVICE_ID: analyticsContext?.deviceId ?? '',
+    OD_STOCK_ANALYTICS_SESSION_ID: analyticsContext?.sessionId ?? '',
+    OD_STOCK_ANALYTICS_CLIENT_TYPE: analyticsContext?.clientType ?? '',
+    OD_STOCK_ANALYTICS_LOCALE: analyticsContext?.locale ?? '',
     // Always overwrite ambient/configured identities, including unbound runs.
     // An older bound Run without a member keeps its Workspace id so the CLI
     // rejects the incomplete pair rather than silently reading another library.
@@ -3856,6 +3872,7 @@ export async function startServer({
   // The subscriber can connect while later asynchronous startup is still
   // constructing the run service. Retain exact account-scoped revocations
   // until that service exists instead of closing over its temporal dead zone.
+  let revokedWorkspaceRuns = null;
   const pendingRunRevocations: Array<{ workspaceId: string; identityKey: string; workspaceMemberId?: string }> = [];
   let stopRevokedWorkspaceRuns = (workspaceId: string, workspaceMemberId?: string, identityKey = velaWorkspaceDirectoryIdentity(readVelaControlApiContext, configuredAmrEnv())) => {
     pendingRunRevocations.push({ workspaceId, identityKey, ...(workspaceMemberId ? { workspaceMemberId } : {}) });
@@ -6484,17 +6501,40 @@ export async function startServer({
       await teamProjectsForDisplay(context);
     },
   });
+  const hubRunActors = new Map<string, { identityKey: string; actorKey: string | null }>();
+  const authenticatedRunActor = (
+    env,
+    configuredEnv = {},
+    control = readVelaControlApiContext(env, configuredEnv),
+    login = readVelaLoginStatus(env, configuredEnv),
+  ) => {
+    const merged = { ...env, ...configuredEnv };
+    return workspaceRunActorKey({
+      login,
+      control,
+      credentialOverrides: Boolean(merged.VELA_RUNTIME_KEY?.trim() || merged.VELA_CONTROL_KEY?.trim()),
+    });
+  };
   const startWorkspaceHubSubscriber = (subscribedWorkspaceId: string) =>
     startHubEventsSubscriber({
     resolveEndpoint: async () => {
       // Same gating as the workspace-context provider: only the vela source
       // has a hub to subscribe to (dev daemons must not dial production).
       if (process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() !== 'vela') return null;
-      return resolveVelaWorkspaceHubEventsEndpoint(
+      const configuredEnv = configuredAmrEnv();
+      const session = readVelaControlApiContext(process.env, configuredEnv);
+      const endpoint = resolveVelaWorkspaceHubEventsEndpoint(
         subscribedWorkspaceId,
         process.env,
-        configuredAmrEnv(),
+        configuredEnv,
       );
+      if (endpoint?.identityKey === velaWorkspaceDirectoryIdentityForSession(session)) {
+        hubRunActors.set(subscribedWorkspaceId, {
+          identityKey: endpoint.identityKey,
+          actorKey: authenticatedRunActor(process.env, configuredEnv, session),
+        });
+      }
+      return endpoint;
     },
     onStateChange: (state, connection) => {
       if (state === 'disconnected') {
@@ -6636,9 +6676,9 @@ export async function startServer({
       ) {
         return;
       }
-      // Revocation frames do not identify the former member. Revalidate the
-      // complete directory below; only its old/new principal diff may stop a
-      // run, so a delayed old stream cannot cancel a newly rejoined member.
+      // Only the subscriber-verified former member may be stopped immediately.
+      // Legacy frames without that proof retain the complete directory diff
+      // fallback, so an old stream cannot stop a newly rejoined member.
       const revocationReceivedAt = performance.now();
       const exactWorkspaceId = workspaceId ?? subscribedWorkspaceId;
       console.info(
@@ -6663,6 +6703,11 @@ export async function startServer({
         reason === 'member-removed' && workspaceId && workspaceMemberId
           ? { workspaceId, workspaceMemberId, reason: 'member-removed' }
           : undefined,
+        async (revokedWorkspaceId) => {
+          const actor = hubRunActors.get(revokedWorkspaceId);
+          if (!identityKey || actor?.identityKey !== identityKey || !workspaceMemberId) return;
+          await revokedWorkspaceRuns?.revoke(revokedWorkspaceId, actor.actorKey, workspaceMemberId);
+        },
       );
       recordWorkspaceAuthorityRevocationClear(
         workspaceAuthorityCacheMode,
@@ -8411,13 +8456,34 @@ export async function startServer({
     getAppVersion: currentAppVersion,
     readAnalyticsContext,
   };
-  stopRevokedWorkspaceRuns = (workspaceId: string, workspaceMemberId?: string) => {
-    void cancelRevokedWorkspaceRuns(design.runs, workspaceId, workspaceMemberId)
+  revokedWorkspaceRuns = createRevokedWorkspaceRunCancellation({
+    listRuns: () => design.runs.list({ status: 'active' }),
+    isTerminal: (status) => design.runs.isTerminal(status),
+    cancel: (run, origin) => run.cancelRequested ? Promise.resolve() : design.runs.cancel(run, origin),
+    onError: (run) => console.warn('[od] revoked workspace run cancellation failed', { runId: run.id }),
+  });
+  stopRevokedWorkspaceRuns = (
+    workspaceId: string,
+    workspaceMemberId?: string,
+    expectedIdentity = currentWorkspaceDirectoryIdentity(),
+  ) => {
+    const configuredEnv = configuredAmrEnv();
+    const session = readVelaControlApiContext(process.env, configuredEnv);
+    if (velaWorkspaceDirectoryIdentityForSession(session) !== expectedIdentity) return;
+    // Keep the legacy project/member behavior for other agents. AMR must use
+    // its actual launch actor/member proof, never the project's creator.
+    void cancelRevokedWorkspaceRuns({
+      list: (filter) => design.runs.list(filter).filter(run => run.agentId !== 'amr'),
+      cancel: (run, origin) => design.runs.cancel(run, origin),
+    }, workspaceId, workspaceMemberId)
       .catch(error => console.error('[od] failed to stop removed Workspace runs', error));
+    if (workspaceMemberId) void revokedWorkspaceRuns.revoke(
+      workspaceId, authenticatedRunActor(process.env, configuredEnv, session), workspaceMemberId,
+    );
   };
   for (const revocation of pendingRunRevocations.splice(0)) {
     if (revocation.identityKey === currentWorkspaceDirectoryIdentity()) {
-      stopRevokedWorkspaceRuns(revocation.workspaceId, revocation.workspaceMemberId);
+      stopRevokedWorkspaceRuns(revocation.workspaceId, revocation.workspaceMemberId, revocation.identityKey);
     }
   }
   const taskObservationRollout = createTaskObservationRolloutService({
@@ -11555,6 +11621,7 @@ export async function startServer({
           : null;
       design.runs.persistState(run);
     }
+    revokedWorkspaceRuns.begin(run);
     // Stash the original user prompt + per-turn config so the
     // langfuse-bridge report path can include them without reaching back
     // into chatBody across the createChatRunService boundary. Each field
@@ -14779,9 +14846,37 @@ export async function startServer({
       undefined,
       { resolvedBin: agentLaunch.selectedPath },
     );
+    const runControlSession = def.id === 'amr'
+      ? readVelaControlApiContext(agentSpawnEnv, configuredAgentSpawnEnv)
+      : null;
+    const runLoginStatus = def.id === 'amr'
+      ? readVelaLoginStatus(agentSpawnEnv, configuredAgentSpawnEnv)
+      : null;
+    const runActorKey = def.id === 'amr'
+      ? authenticatedRunActor(agentSpawnEnv, configuredAgentSpawnEnv, runControlSession, runLoginStatus)
+      : null;
+    let runActualWorkspaceMemberId: string | null = null;
+    const runActorWorkspaceId = run.workspaceScope?.workspaceId?.trim();
+    if (runActorKey && runControlSession && runActorWorkspaceId) {
+      const sessionIdentity = velaWorkspaceDirectoryIdentityForSession(runControlSession);
+      // Reuse only a still-valid lease from this exact captured account. The
+      // cached-only method cannot start I/O with a later global account.
+      let directory = sessionIdentity === currentWorkspaceDirectoryIdentity()
+        ? await workspaceDirectoryAuthority.cached()
+        : { ok: false, items: [] };
+      if (sessionIdentity !== currentWorkspaceDirectoryIdentity()) directory = { ok: false, items: [] };
+      if (!directory.ok) directory = await fetchVelaWorkspaceDirectory({ readSession: () => runControlSession });
+      const membership = directory.ok ? directory.items.find(item =>
+        item.workspaceId === runActorWorkspaceId && item.memberStatus === 'active'
+        && item.lifecycleState !== 'deleted' && item.workspaceMemberId.trim(),
+      ) : null;
+      runActualWorkspaceMemberId = membership?.workspaceMemberId ?? null;
+    }
+    const runActorPinned = def.id !== 'amr' || revokedWorkspaceRuns.pin(
+      run, runActorKey, runActualWorkspaceMemberId,
+    );
     if (def.id === 'amr') {
-      const loginStatus = readVelaLoginStatus(agentSpawnEnv, configuredAgentSpawnEnv);
-      if (!loginStatus.loggedIn) {
+      if (!runLoginStatus.loggedIn) {
         cleanupPromptFile();
         revokeToolToken('child_exit');
         unregisterChatAgentEventSink();
@@ -14798,8 +14893,11 @@ export async function startServer({
       projectDir: cwd,
       projectId: typeof projectId === 'string' ? projectId : null,
       workspaceScope: run.workspaceScope,
+      runId: run.id,
+      conversationId: run.conversationId,
+      analyticsContext: run.analyticsContext ?? null,
     });
-    if (run.cancelRequested || design.runs.isTerminal(run.status)) {
+    if (!runActorPinned || run.cancelRequested || design.runs.isTerminal(run.status)) {
       cleanupPromptFile();
       revokeToolToken('child_exit');
       unregisterChatAgentEventSink();
@@ -14967,9 +15065,15 @@ export async function startServer({
           console.warn('[opencode] optional tool previews unavailable:', error instanceof Error ? error.message : String(error));
         }
       }
+      // Re-read the actual launch session without re-pinning this Run. A
+      // profile/account change during setup cannot charge a different actor.
+      const launchActorMatches = def.id !== 'amr' || revokedWorkspaceRuns.pin(
+        run,
+        authenticatedRunActor(env),
+      );
       // Version detection and plugin staging above can yield while a cancel
       // request arrives. Never spawn a child after that cancellation.
-      if (run.cancelRequested || design.runs.isTerminal(run.status)) {
+      if (!launchActorMatches || run.cancelRequested || design.runs.isTerminal(run.status)) {
         cleanupPromptFile();
         revokeToolToken('child_exit');
         unregisterChatAgentEventSink();
@@ -18431,6 +18535,7 @@ export async function startServer({
         }
         await terminalService.shutdownActive();
         await browserSessionService.shutdownActive();
+        await telemetry.flushStockTelemetry();
         await design.analytics.shutdown();
       })();
       return daemonShutdownPromise;
