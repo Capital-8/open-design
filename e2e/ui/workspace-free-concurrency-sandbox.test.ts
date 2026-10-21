@@ -94,7 +94,25 @@ test('[P0] RUN-013-CLIENT Free three Link slots, manual recovery and independent
     await connected(page); await connected(observerPage);
     const observerBillingUrl = observer.runtime.url.web(`/api/workspace/billing?scope=workspace&workspaceId=${encodeURIComponent(free.spaces.w1.workspaceId)}&includePreflight=1&modelId=${encodeURIComponent(f.runtime.modelId)}`);
     let observerRealtime: unknown;
-    await expect.poll(async () => { const response = await fetch(observerBillingUrl, { headers: fundingHeaders(free.observer.space) }); expect(response.ok).toBe(true); const body = await response.json(); observerRealtime = body; return body.quotaRealtime?.healthy; }, { timeout: T.xlong, intervals: [250, 500] }).toBe(true);
+    const healthResponse = await fetch(observerBillingUrl, { headers: fundingHeaders(free.observer.space) });
+    const healthBody = await healthResponse.text();
+    observerRealtime = { at: new Date().toISOString(), status: healthResponse.status, body: healthBody };
+    await save('observer-realtime-health-diagnostic.safe.json', observerRealtime);
+    // The original QA needs a live recipient, not this advisory health DTO.
+    // Prove both hops: the actual browser SSE ready above and a verified hub
+    // connection receiving a real same-workspace wallet event below.
+    let observerHubLines: string[] = [];
+    await expect.poll(async () => {
+      const logs = await observer!.runtime.logs();
+      const daemon = logs.daemon; if (!daemon) return false;
+      const lines = (await readFile(daemon.logPath, 'utf8')).split('\n');
+      observerHubLines = lines.filter(line => line.includes(`workspaceId=${free.spaces.w1.workspaceId}`)
+        && (line.includes('hub events workspace verified') || line.includes('hub workspace event received')));
+      return observerHubLines.some(line => line.includes('hub events workspace verified'))
+        && observerHubLines.some(line => line.includes('type=wallet-balance-changed'));
+    }, { timeout: T.medium, intervals: [500, 1000] }).toBe(true);
+    await save('observer-real-hub-receipt.safe.json', { workspaceId: free.spaces.w1.workspaceId, memberId: free.observer.space.actorMemberId,
+      at: new Date().toISOString(), actualLines: observerHubLines, browserStreams: await streams(observerPage) });
     results.observerRealtime = observerRealtime;
     results.streamsBefore = { owner: await streams(page), observer: await streams(observerPage) };
     const originalPrompt = `QA:${JSON.stringify({ id: binding.tag + '-manual', tokens: 1, hold: false })} Reply ok only.`;
@@ -113,6 +131,7 @@ test('[P0] RUN-013-CLIENT Free three Link slots, manual recovery and independent
     await page.screenshot({ path: join(output, 'step1-owner-full.png') });
     await observerPage.screenshot({ path: join(output, 'step1-observer-no-notice.png') });
     results.step1 = { actualHint, startedAt, endedAt: Date.now(), ownerDraft: await page.getByTestId('home-hero-input').textContent(), observerStreams: await streams(observerPage) };
+    await save('step1-completed.safe.json', { binding, step1: results.step1, requests: requests.slice(beforeSend), observerRealtime });
     await page.getByTestId('amr-concurrency-close').click();
     await marker('release-one-ready.json'); results.releasedOne = await phase('released-one', 2);
     const idleStart = Date.now(); const idleIndex = requests.length;
