@@ -24,7 +24,7 @@ it.each(['free', 'go', 'plus', 'pro', 'max'].flatMap((tier) =>
     const open = vi.fn(); vi.stubGlobal('open', open);
     const onClose = vi.fn();
     render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
-      workspaceContext={context} onClose={onClose} />);
+      workspaceContext={context} profile="local" onClose={onClose} />);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent(role === 'owner' && tier !== 'max'
       ? 'Concurrency limit reached' : 'Concurrent request limit reached');
@@ -52,7 +52,7 @@ it('renders the complete F04 design for a paid upgradable Owner', () => {
     role: 'owner', planId: 'team_pro',
     permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
   render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
-    workspaceContext={context} onClose={vi.fn()} />);
+    workspaceContext={context} profile="local" onClose={vi.fn()} />);
   const dialog = screen.getByRole('dialog');
   expect(dialog.querySelector('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
   expect(screen.getAllByRole('listitem')).toHaveLength(4);

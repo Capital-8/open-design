@@ -344,6 +344,7 @@ const mockedFetchBrands = vi.mocked(fetchBrands);
 
 /** AMR on a daemon runtime — the reported configuration. */
 const config: AppConfig = {
+  agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'local' } },
   mode: 'daemon',
   apiProtocol: 'openai',
   apiKey: '',

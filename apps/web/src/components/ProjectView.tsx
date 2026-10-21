@@ -3595,6 +3595,27 @@ export function ProjectView({
   };
   const fundingDialogContextRef = useRef(fundingDialogContext);
   fundingDialogContextRef.current = fundingDialogContext;
+  // A → B → A is still a new selection intent. Comparing only the current
+  // model/workspace would let A's first, delayed preflight authorize or block
+  // the later A draft. Gateway feedback remains owned by its admitted run.
+  const fundingSelectionKey = JSON.stringify([
+    project.id,
+    projectRunAuthorityKey,
+    config.mode,
+    config.agentId,
+    fundingDialogContext.modelId,
+  ]);
+  const fundingSelectionRef = useRef({
+    key: fundingSelectionKey,
+    generation: 0,
+  });
+  if (fundingSelectionRef.current.key !== fundingSelectionKey) {
+    fundingSelectionRef.current = {
+      key: fundingSelectionKey,
+      generation: fundingSelectionRef.current.generation + 1,
+    };
+  }
+
   // AMR funding feedback owns one dialog in its original conversation/account.
   // Display-wallet reads and historical replays cannot open or reopen it.
   const showAmrFundingFailure = useCallback((input: {
@@ -9013,8 +9034,10 @@ export function ProjectView({
         && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
         && currentWorkspaceAccountGeneration() === sendAccountGeneration
         && fundingDialogContextRef.current.isAmr;
+      const fundingSelectionGeneration = fundingSelectionRef.current.generation;
       const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
-        && fundingDialogContextRef.current.modelId === fundingModelId;
+        && fundingDialogContextRef.current.modelId === fundingModelId
+        && fundingSelectionRef.current.generation === fundingSelectionGeneration;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
         ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
         : Promise.resolve('unknown' as const);
@@ -9032,10 +9055,19 @@ export function ProjectView({
         // A cached verdict can settle before React flushes the paint updater.
         // Queue the rollback behind it so that its original transcript exists.
         setMessages((current) => {
-          const restore = paintedFrom.messages;
-          paintedFrom.messages = null;
-          return messagesConversationIdRef.current === runConversationId
-            ? restore ?? current : current;
+          if (messagesConversationIdRef.current !== runConversationId) return current;
+          // React can replay this updater. Keep the snapshot reusable and
+          // remove only this send's provisional rows; preserve transcript
+          // updates and messages that arrived while the preflight was pending.
+          const restore = paintedFrom.messages ?? [];
+          const originalIds = new Set(restore.map((message) => message.id));
+          const currentById = new Map(current.map((message) => [message.id, message]));
+          return [
+            ...restore.map((message) => message.id === userMsg.id || message.id === assistantId
+              ? message : currentById.get(message.id) ?? message),
+            ...current.filter((message) => !originalIds.has(message.id)
+              && message.id !== userMsg.id && message.id !== assistantId),
+          ];
         });
       };
       // A Home witness skips only the duplicate sign-in read. Every actual
@@ -14657,7 +14689,10 @@ export function ProjectView({
           modelId={amrBalanceGateBlock.modelId}
           fundingScope={amrBalanceGateBlock.fundingScope}
           balanceUsd={amrBalanceGateBlock.snapshot?.balanceUsd ?? null}
-          profile={amrBalanceGateBlock.snapshot?.profile ?? null}
+          profile={amrBalanceGateBlock.snapshot?.profile
+            || workspaceQuotaStatus?.profile?.trim()
+            || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE
+            || null}
           entrySource="chat_balance_gate_upgrade"
           upgradeIntent={amrBalanceGateBlock.upgradeIntent}
           // 弹窗和卡上那颗必须从**同一份**上下文算落点。默认那条(环境里选中
