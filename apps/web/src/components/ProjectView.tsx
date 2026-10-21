@@ -8928,10 +8928,19 @@ export function ProjectView({
         // A cached verdict can settle before React flushes the paint updater.
         // Queue the rollback behind it so that its original transcript exists.
         setMessages((current) => {
-          const restore = paintedFrom.messages;
-          paintedFrom.messages = null;
-          return messagesConversationIdRef.current === runConversationId
-            ? restore ?? current : current;
+          if (messagesConversationIdRef.current !== runConversationId) return current;
+          // React can replay this updater. Keep the snapshot reusable and
+          // remove only this send's provisional rows; preserve transcript
+          // updates and messages that arrived while the preflight was pending.
+          const restore = paintedFrom.messages ?? [];
+          const originalIds = new Set(restore.map((message) => message.id));
+          const currentById = new Map(current.map((message) => [message.id, message]));
+          return [
+            ...restore.map((message) => message.id === userMsg.id || message.id === assistantId
+              ? message : currentById.get(message.id) ?? message),
+            ...current.filter((message) => !originalIds.has(message.id)
+              && message.id !== userMsg.id && message.id !== assistantId),
+          ];
         });
       };
       // A Home witness skips only the duplicate sign-in read. Every actual

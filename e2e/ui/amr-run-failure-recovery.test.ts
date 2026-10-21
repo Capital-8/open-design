@@ -290,7 +290,15 @@ test('[P0] @critical AMR project preflight retains text and files, rejects other
   await expect(attachment).toBeVisible();
   await expect(page).toHaveURL(originalProjectUrl);
   await expect(existingOutput).toBeVisible();
+  await expect(page.getByTestId('user-message')).toHaveCount(0);
+  await expect(page.getByTestId('chat-run-error-card')).toHaveCount(0);
   await runs.expectNone();
+  const persistedAfterRejection = await page.request.get(
+    `/api/projects/${amr.projectId}/conversations/${amr.conversationId}/messages`,
+    { headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS } },
+  );
+  expect(persistedAfterRejection.ok()).toBeTruthy();
+  expect((await persistedAfterRejection.json()).messages).toEqual([]);
   await testInfo.attach('project-preflight-rejection', { body: await page.screenshot(), contentType: 'image/png' });
   await testInfo.attach('project-preflight-timing', { body: JSON.stringify({ rejectionElapsedMs,
     source: 'isolated browser and daemon, local fake Vela funding-check; no real AMR writer' }), contentType: 'application/json' });
@@ -336,6 +344,12 @@ test('[P0] @critical AMR project preflight retains text and files, rejects other
   await expect(attachment).toBeVisible();
   await runs.expectNone();
   await expect(existingOutput).toBeVisible();
+  const persistedAfterRecovery = await page.request.get(
+    `/api/projects/${amr.projectId}/conversations/${amr.conversationId}/messages`,
+    { headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS } },
+  );
+  expect(persistedAfterRecovery.ok()).toBeTruthy();
+  expect((await persistedAfterRecovery.json()).messages).toEqual([]);
   await testInfo.attach('recovered-project-awaits-manual-send', { body: await page.screenshot(), contentType: 'image/png' });
 
   await writeFakeVelaBin(join(amr.root, 'bin'), {
