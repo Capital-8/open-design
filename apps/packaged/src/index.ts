@@ -345,7 +345,7 @@ async function main(): Promise<void> {
   }
   await app.whenReady();
   // Preserve a user's Dock/Finder open while daemon/web startup is pending.
-  if (deferredHeadless) watchUserDesktopIntent(app, requestDeferredDesktop);
+  if (deferredHeadless && launcherHost != null) watchUserDesktopIntent(app, requestDeferredDesktop);
 
   // Show the brand splash IMMEDIATELY, before we await the daemon/web sidecars
   // below. Cold boot otherwise leaves the user staring at no window at all for
@@ -572,7 +572,9 @@ async function main(): Promise<void> {
     void confirmPackagedLauncherRuntime(launcherRuntime).catch((error: unknown) => {
       packagedLogger?.warn("failed to confirm packaged launcher runtime", { error });
     });
-    if (pendingDesktopIntent) restoreDeferredDesktop();
+    if (launcherHost == null) {
+      watchUserDesktopIntent(app, restoreDeferredDesktop);
+    } else if (pendingDesktopIntent) restoreDeferredDesktop();
   }
 }
 
