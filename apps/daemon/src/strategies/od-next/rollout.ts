@@ -42,6 +42,7 @@ const DEFAULT_TASK_TYPES: readonly OdNextRolloutTaskType[] = [
   'ppt',
   'marketing',
   'hyperframes',
+  'motion-design',
 ];
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -113,7 +114,7 @@ export function readOdNextRolloutPolicy(
 ): OdNextRolloutPolicy {
   const taskTypes = list(env.OD_NEXT_STRATEGY_TASK_TYPES).filter(
     (value): value is OdNextRolloutTaskType => (
-      value === 'prototype' || value === 'ppt' || value === 'marketing' || value === 'hyperframes'
+      value === 'prototype' || value === 'ppt' || value === 'marketing' || value === 'hyperframes' || value === 'motion-design'
     ),
   );
   const percent = Number(env.OD_NEXT_STRATEGY_ASSIGNMENT_PERCENT ?? '100');
@@ -142,6 +143,7 @@ export function odNextTaskTypeForProjectScenarioBinding(
     || binding.taskProfile === 'ppt'
     || binding.taskProfile === 'marketing'
     || binding.taskProfile === 'hyperframes'
+    || binding.taskProfile === 'motion-design'
     ? binding.taskProfile
     : null;
 }

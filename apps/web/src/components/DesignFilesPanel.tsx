@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { TrackingProjectKind } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import { trackFileManagerClick } from '../analytics/events';
-import { useT } from '../i18n';
+import { useI18n, useT } from '../i18n';
+import { communityForLocale } from '../lib/community-links';
 import { LIBRARY_UI_VISIBLE } from '../features/libraryUi';
 import type { Dict } from '../i18n/types';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
@@ -355,7 +356,7 @@ const USEFUL_TIPS: ReadonlyArray<{ key: keyof Dict; url?: string }> = [
   { key: 'designFiles.usefulInfoTip14' },
   { key: 'designFiles.usefulInfoTip15' },
   { key: 'designFiles.usefulInfoTip5' },
-  { key: 'designFiles.usefulInfoTip6', url: 'https://discord.gg/mHAjSMV6gz' },
+  { key: 'designFiles.usefulInfoTip6' },
   { key: 'designFiles.usefulInfoTip7', url: 'https://github.com/nexu-io/open-design' },
   { key: 'designFiles.usefulInfoTip8', url: 'https://x.com/OpenDesignHQ' },
   { key: 'designFiles.usefulInfoTip16', url: 'https://www.threads.com/@opendesign.ai' },
@@ -384,11 +385,12 @@ function prefersReducedMotion(): boolean {
 // progress and recovery feedback. Under prefers-reduced-motion the full tip is
 // shown immediately and just cycles.
 function RotatingTip({ auxiliary = false }: { auxiliary?: boolean }) {
-  const t = useT();
+  const { t, locale } = useI18n();
+  const community = communityForLocale(locale);
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState('');
   // Resolve tips each render but read them through a ref so the typing effect
-  // depends only on `index` — depending on the (re-created) array would reset
+  // restarts on tip or locale changes — depending on the (re-created) array would reset
   // the typewriter on every render and never advance.
   const tipsRef = useRef<string[]>([]);
   tipsRef.current = USEFUL_TIPS.map(({ key }) => t(key));
@@ -429,7 +431,10 @@ function RotatingTip({ auxiliary = false }: { auxiliary?: boolean }) {
       window.clearInterval(typeTimer);
       window.clearTimeout(holdTimer);
     };
-  }, [index]);
+  }, [index, locale]);
+
+  const tip = USEFUL_TIPS[index];
+  const tipUrl = tip?.key === 'designFiles.usefulInfoTip6' ? community.href : tip?.url;
 
   return (
     <div className={`df-useful-info${auxiliary ? ' df-useful-info-auxiliary' : ''}`}>
@@ -438,8 +443,8 @@ function RotatingTip({ auxiliary = false }: { auxiliary?: boolean }) {
         <span className="df-useful-info-label">{t('designFiles.usefulInfoLabel')}</span>
       </div>
       <span className="df-useful-info-tip">
-        {USEFUL_TIPS[index]?.url ? (
-          <a className="df-tip-link" href={USEFUL_TIPS[index].url} target="_blank" rel="noreferrer">
+        {tipUrl ? (
+          <a className="df-tip-link" href={tipUrl} target="_blank" rel="noreferrer">
             {typed}
           </a>
         ) : (
@@ -2064,7 +2069,9 @@ function HtmlCardThumbnail({
         thumbnailIdentity.refreshKey,
       )?.source
       ?? getHtmlThumbnailSource(thumbnailIdentity);
-    return source === null ? null : buildSrcdoc(source, { baseHref });
+    // A thumbnail never owns playback. Only marked motion videos wait for a
+    // host grant, which this static card intentionally never provides.
+    return source === null ? null : buildSrcdoc(source, { baseHref, motionPreview: true });
   });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState<number | null>(null);
@@ -2111,7 +2118,7 @@ function HtmlCardThumbnail({
       )?.source
       ?? getHtmlThumbnailSource(thumbnailIdentity);
     if (cachedSource !== null) {
-      setSrcDoc(buildSrcdoc(cachedSource, { baseHref }));
+      setSrcDoc(buildSrcdoc(cachedSource, { baseHref, motionPreview: true }));
       return;
     }
     // Only an actual network load waits for viewport proximity (cached
@@ -2131,7 +2138,7 @@ function HtmlCardThumbnail({
         },
       ).then((html) => {
           if (cancelled || html === null) return;
-          const nextSrcDoc = buildSrcdoc(html, { baseHref });
+          const nextSrcDoc = buildSrcdoc(html, { baseHref, motionPreview: true });
           if (!cancelled) setSrcDoc(nextSrcDoc);
         })
         .catch(() => {
