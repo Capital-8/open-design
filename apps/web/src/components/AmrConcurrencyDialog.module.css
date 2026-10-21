@@ -66,10 +66,12 @@
 .offerPanel .laterButton {
   font-size: 13.5px;
   font-weight: 400;
+  line-height: normal;
   color: var(--text);
 }
 
 .upgradeButton {
+  line-height: normal;
   color: var(--bg);
   background: var(--accent);
   border: 0;
