@@ -27,6 +27,13 @@ describe('RUN013 actual identity, independent spaces and policy provenance', () 
   it('accepts one DeviceAuth Owner across two independent spaces and real member observer', () => {
     expect(() => validateFreeConcurrencyFixture(fixture())).not.toThrow();
   });
+  it('keeps RUN002 an explicit mapping instead of renaming RUN013 evidence', () => {
+    const f = fixture();
+    f.freeConcurrency.manualRetry = { caseKey: 'server:RUN-002', coordinator: f.concurrency!.coordinator };
+    expect(() => validateFreeConcurrencyFixture(f)).not.toThrow();
+    Object.assign(f.freeConcurrency.manualRetry, { caseKey: 'client:RUN-013-CLIENT' });
+    expect(() => validateFreeConcurrencyFixture(f)).toThrow('Explicit RUN002');
+  });
   it.each(['same-space', 'key-swap', 'same-observer', 'owner-as-observer', 'invented-limit', 'wrong-policy'] as const)('rejects %s before browser startup', field => {
     const f = fixture(); const c = f.freeConcurrency;
     if (field === 'same-space') c.spaces.w2.workspaceId = c.spaces.w1.workspaceId;

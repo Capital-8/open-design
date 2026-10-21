@@ -17,6 +17,7 @@ export type FreeConcurrencyFixture = FundingRuntimeFixture & Pick<FundingFixture
     coordinator: Source; fixtureHelper: Source;
     authoritativePolicy: { path: string; sha256: string };
     identityProofs: Array<{ path: string; sha256: string }>;
+    manualRetry?: { caseKey: 'server:RUN-002'; coordinator: Source };
   };
 };
 export function validateFreeConcurrencyFixture(fixture: FreeConcurrencyFixture) {
@@ -29,13 +30,14 @@ export function validateFreeConcurrencyFixture(fixture: FreeConcurrencyFixture) 
     || f.observer.space.workspaceId !== f.spaces.w1.workspaceId || f.observer.runtimeKey === f.ownerRuntimeKey
     || f.observer.space.actorMemberId === f.spaces.w1.ownerMemberId) throw new Error('Actual Owner W1/W2 and independent real Member Observer required');
   if (!isAbsolute(f.givenDirectory) || !f.identityProofs.length || f.authoritativePolicy.sha256 !== 'c115ac299e9e63aa4dc2f528997ec87bac8fd9fbd6fb0454d3b9e50d61741b56') throw new Error('Original production Free limit provenance and real identities required');
+  if (f.manualRetry && f.manualRetry.caseKey !== 'server:RUN-002') throw new Error('Explicit RUN002 mapping required');
 }
 export async function readFreeConcurrencyFixture(): Promise<FreeConcurrencyFixture> {
   const fixture = await readFundingRuntimeFixture() as FreeConcurrencyFixture;
   validateFreeConcurrencyFixture(fixture);
   const f = fixture.freeConcurrency;
   const digest = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
-  for (const source of [fixture.concurrency!.coordinator, f.coordinator, f.fixtureHelper]) {
+  for (const source of [fixture.concurrency!.coordinator, f.coordinator, f.fixtureHelper, ...(f.manualRetry ? [f.manualRetry.coordinator] : [])]) {
     if (!isAbsolute(source.helperPath) || !/^[a-f0-9]{40}$/.test(source.helperSourceSha) || isAbsolute(source.helperRepoPath) || source.helperRepoPath.split('/').includes('..')) throw new Error('Immutable repository helper required');
     const raw = await readFile(source.helperPath);
     const original = await promisify(execFile)('git', ['show', `${source.helperSourceSha}:${source.helperRepoPath}`], { cwd: fixture.owner.sourceRoot, timeout: T.long });
