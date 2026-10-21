@@ -402,9 +402,14 @@ export class WorkspaceBillingRuntimeCoordinator {
     if (
       entry.status === 'fresh' &&
       entry.observedAt != null &&
-      this.scheduler.now() - entry.observedAt >= softTtlMs
+      (this.scheduler.now() - entry.observedAt >= softTtlMs ||
+        this.isProjectionExpired(entry))
     ) {
-      this.markStatus(entry, 'stale', 'soft-ttl-expired');
+      this.markStatus(
+        entry,
+        'stale',
+        this.isProjectionExpired(entry) ? 'wallet-expired' : 'soft-ttl-expired',
+      );
     }
     if (entry.retryTimer && !forceForInterest && !requireFresh) {
       return this.result(entry);
@@ -522,6 +527,7 @@ export class WorkspaceBillingRuntimeCoordinator {
       if (
         reason === 'poll-floor' &&
         this.realtimeHealthyWorkspaces.has(entry.key.workspaceId) &&
+        !this.isProjectionExpired(entry) &&
         entry.observedAt != null &&
         this.scheduler.now() - entry.observedAt < this.realtimePollFloorMs
       ) {
@@ -943,6 +949,14 @@ export class WorkspaceBillingRuntimeCoordinator {
         if (entry.attempt !== attempt || this.disposed) return;
         validateProjectionScope(entry.key, projection);
         validateProjectionRevision(entry, projection);
+        // Time alone can invalidate funds without advancing an SSE revision.
+        // A read begun before expiry must not publish its old quote afterwards.
+        const expiresAt = projectionExpiresAt(projection);
+        if (expiresAt != null && expiresAt <= this.scheduler.now()) {
+          throw Object.assign(new Error('workspace billing projection expired'), {
+            code: 'workspace_billing_projection_expired',
+          });
+        }
         recordProjectionRevisions(entry, projection);
         entry.projection = cloneProjection(projection);
         entry.observedAt = this.scheduler.now();
@@ -1092,14 +1106,22 @@ export class WorkspaceBillingRuntimeCoordinator {
     return {
       workspaceId: entry.key.workspaceId,
       workspaceMemberId: entry.key.workspaceMemberId,
-      status: entry.status,
+      status: entry.status === 'fresh' && this.isProjectionExpired(entry)
+        ? 'stale'
+        : entry.status,
       revision: entry.revision.toString(),
       observedAt: timestamp(entry.observedAt),
       softExpiresAt: timestamp(
-        entry.observedAt == null ? null : entry.observedAt + softTtlMs,
+        entry.observedAt == null ? null : Math.min(
+          entry.observedAt + softTtlMs,
+          projectionExpiresAt(entry.projection) ?? Infinity,
+        ),
       ),
       hardExpiresAt: timestamp(
-        entry.observedAt == null ? null : entry.observedAt + hardTtlMs,
+        entry.observedAt == null ? null : Math.min(
+          entry.observedAt + hardTtlMs,
+          projectionExpiresAt(entry.projection) ?? Infinity,
+        ),
       ),
       retryAt: timestamp(entry.retryAt),
       errorCode: entry.errorCode,
@@ -1114,9 +1136,16 @@ export class WorkspaceBillingRuntimeCoordinator {
 
   private isHardExpired(entry: RuntimeEntry): boolean {
     return (
-      entry.observedAt != null &&
-      this.scheduler.now() - entry.observedAt >= this.effectiveHardTtlMs(entry)
+      this.isProjectionExpired(entry) || (
+        entry.observedAt != null &&
+        this.scheduler.now() - entry.observedAt >= this.effectiveHardTtlMs(entry)
+      )
     );
+  }
+
+  private isProjectionExpired(entry: RuntimeEntry): boolean {
+    const expiresAt = projectionExpiresAt(entry.projection);
+    return expiresAt != null && expiresAt <= this.scheduler.now();
   }
 
   private effectiveSoftTtlMs(entry: RuntimeEntry): number {
@@ -1398,6 +1427,19 @@ function retireRevisionClockEpoch(
       retired.delete(oldest);
     }
   }
+}
+
+/** Earliest server-provided validity boundary. Never subtract gift money here:
+ * a mixed wallet must be re-read so ordinary recharge funds remain intact. */
+function projectionExpiresAt(projection: VelaWorkspaceBillingProjection): number | null {
+  const deadlines = [
+    projection.snapshot?.wallet.expiresAt,
+    projection.workspaceBalance?.expiresAt,
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => Date.parse(value))
+    .filter(Number.isFinite);
+  return deadlines.length ? Math.min(...deadlines) : null;
 }
 
 function cloneProjection(
