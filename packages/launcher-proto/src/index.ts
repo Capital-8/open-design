@@ -699,9 +699,16 @@ export {
   readLauncherHost,
   publishLauncherHost,
   type LauncherHostIdentity,
-  type LauncherHostRelaunchRequest,
+  type LauncherHost,
+  type LauncherLifecycle,
+  type LauncherLifecycleStatus,
   type LauncherHostRunningCode,
   type LauncherHostSelection,
 } from "./host.js";
 
 export { normalizeNamespace } from "@open-design/sidecar-proto";
+
+export {
+  validateLauncherHostEnvironment, validateLauncherApplicationArtifact,
+  type LauncherHostEnvironment, type LauncherApplicationArtifact,
+} from "./artifact.js";

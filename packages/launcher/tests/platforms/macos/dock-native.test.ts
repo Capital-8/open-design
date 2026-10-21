@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { expect, it } from "vitest";
-import { repairMacDockEntries } from "../src/mac-dock-entry.js";
+import { repairMacDockEntries } from "../../../src/platforms/macos/dock-entry.js";
 
 const exec = promisify(execFile);
 it.skipIf(process.platform !== "darwin")("repairs native typed preferences in an isolated domain without touching the user's Dock", async () => {

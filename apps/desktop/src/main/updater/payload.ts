@@ -83,17 +83,14 @@ export type LauncherPayloadManifest = {
  * Version overrides and rollback bookkeeping must not weaken this protection.
  */
 async function isRunningLauncherPayload(versionRoot: string): Promise<boolean> {
-  if (containsPath(versionRoot, process.execPath)) return true;
-  // A payload hosted by the thin launcher runs on the installed outer's
-  // executable; its own payload directory is still in use and must stay intact.
   const host = readLauncherHost();
-  if (host?.running.source === "payload" && containsPath(versionRoot, host.running.appRoot)) return true;
+  if (host != null) return host.protectsResource(versionRoot);
+  if (containsPath(versionRoot, process.execPath)) return true;
   const [physicalRoot, executable] = await Promise.all([
     realpath(versionRoot).catch(() => versionRoot),
     realpath(process.execPath).catch(() => process.execPath),
   ]);
-  if (containsPath(physicalRoot, executable)) return true;
-  return host?.running.source === "payload" && containsPath(physicalRoot, await realpath(host.running.appRoot).catch(() => host.running.appRoot));
+  return containsPath(physicalRoot, executable);
 }
 
 export function validateLauncherPayloadManifest(value: unknown, expected: {
@@ -178,6 +175,11 @@ export async function assertPreparedLauncherPayloadRelease(input: {
   root: string;
   version: string;
 }): Promise<string> {
+  const host = readLauncherHost();
+  if (host != null) {
+    await host.prepareCandidate(input.version, input.root);
+    return host.installedAppPath;
+  }
   const manifest = validateLauncherPayloadManifest(await readJsonStrict<unknown>(join(input.root, "manifest.json")), {
     channel: input.config.channel,
     namespace: input.config.namespace ?? "",
@@ -296,6 +298,7 @@ export async function prepareLauncherPayloadRelease(input: {
     await rm(versionPaths.versionRoot, { force: true, recursive: true });
     await rename(stagingRoot, versionPaths.versionRoot);
     promoted = true;
+    await host?.prepareCandidate(input.activeRelease.ref.version);
     await cleanupLauncherPayloadRoots({
       config: input.config,
       currentRuntime,
@@ -329,7 +332,7 @@ export async function activatePreparedLauncherPayloadRelease(input: {
 
   const host = readLauncherHost();
   const currentRuntime = validateLauncherRuntimeDescriptor(
-    await readJsonStrict<LauncherRuntimeDescriptor>(input.config.launcherRuntimePath),
+    host?.snapshot() ?? await readJsonStrict<LauncherRuntimeDescriptor>(input.config.launcherRuntimePath),
     { channel: input.config.channel, namespace: input.config.namespace },
   );
   const versionPaths = resolveLauncherVersionPaths({
@@ -338,6 +341,15 @@ export async function activatePreparedLauncherPayloadRelease(input: {
     root: input.config.launcherRoot,
     version: input.activeRelease.ref.version,
   });
+  if (host != null) {
+    const activated = await host.activateCandidate(input.activeRelease.ref.version);
+    await cleanupLauncherPayloadRoots({
+      ...input, currentRuntime: activated,
+      keepVersions: new Set([activated.active?.version, activated.lastSuccessful?.version, currentRuntime.active?.version].filter((value): value is string => value != null)),
+      trigger: "activate", versionPaths,
+    });
+    return { launchPath: host.installedAppPath, runtime: activated };
+  }
   const launchPath = await assertPreparedLauncherPayloadRelease({
     config: input.config,
     root: versionPaths.versionRoot,
@@ -377,15 +389,6 @@ export async function activatePreparedLauncherPayloadRelease(input: {
     schemaVersion: LAUNCHER_SCHEMA_VERSION,
     updatedAt: input.now().toISOString(),
   };
-  if (host != null) {
-    const activated = await host.activate(input.activeRelease.ref.version);
-    await cleanupLauncherPayloadRoots({
-      ...input, currentRuntime: activated,
-      keepVersions: new Set([activated.active?.version, activated.lastSuccessful?.version, currentRuntime.active?.version].filter((value): value is string => value != null)),
-      trigger: "activate", versionPaths,
-    });
-    return { launchPath: host.installedAppPath, runtime: activated };
-  }
   await writeJson(input.config.launcherRuntimePath, nextRuntime);
   // Pre-arm the launch attempt for the activated pointer: the relaunched
   // payload carries the matching delegated pointer and treats this attempt as
@@ -630,18 +633,19 @@ export async function clearLauncherStateForManualClear(input: {
     root: config.launcherRoot,
   });
 
+  const host = readLauncherHost();
   // The app is running its active payload right now, so an unconfirmed attempt
   // is leftover state from an interrupted transition. Removing it means the
   // next cold start retries the active pointer instead of rolling back — the
   // deliberate trade of a manual reset.
-  await (readLauncherHost()?.clearAttempt() ?? rm(launcherPaths.attemptsPath, { force: true })).catch((error: unknown) => {
+  await (host?.resetFailedLaunch() ?? rm(launcherPaths.attemptsPath, { force: true })).catch((error: unknown) => {
     logger.warn("[open-design updater] failed to clear stale launcher attempt", {
       error: error instanceof Error ? error.message : String(error),
       path: launcherPaths.attemptsPath,
     });
   });
 
-  const rawHandoff = await readFile(launcherPaths.handoffPath, "utf8").catch(() => null);
+  const rawHandoff = host != null ? null : await readFile(launcherPaths.handoffPath, "utf8").catch(() => null);
   if (rawHandoff != null) {
     let confirmed = false;
     try {
@@ -663,7 +667,7 @@ export async function clearLauncherStateForManualClear(input: {
   let runtime: LauncherRuntimeDescriptor;
   try {
     runtime = validateLauncherRuntimeDescriptor(
-      await readJsonStrict<LauncherRuntimeDescriptor>(config.launcherRuntimePath),
+      host?.snapshot() ?? await readJsonStrict<LauncherRuntimeDescriptor>(config.launcherRuntimePath),
       { channel: config.channel, namespace: config.namespace },
     );
   } catch (error) {

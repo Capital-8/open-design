@@ -110,9 +110,47 @@ floor or Electron version.
 | Headless duplicate-instance restore and unchanged installed identity | U, P, M | launcher + packaged managed-headless tests; mac full spec real LaunchServices headless restore; signed Dock acceptance required |
 | Adopted sidecar discovery, convergence, stop, monitor-loss exit | U (real subprocess) | sidecar `adopted-lifecycle.test.ts`, `adoption.test.ts` |
 | Running hosted resources survive pointer changes and cleanup | U | desktop `hosted-payload.test.ts` |
-| Persistent/recent Dock entry repair and namespace-scoped LaunchServices cleanup | U, M | packaged `mac-dock-entry.test.ts`, `mac-launch-services.test.ts`; signed macOS acceptance required |
+| Persistent/recent Dock entry repair and namespace-scoped LaunchServices cleanup | U, M | launcher `platforms/macos/dock-entry.test.ts`, `platforms/macos/launch-services.test.ts`; signed macOS acceptance required |
 | Installed physical executable with payload logical identity across update/cold start | P | mac full spec checks both identities |
 
 Developer ID signing/notarization, Dock behavior across login/reboot and
 Background Task Management on affected macOS versions remain release gates.
 Unsigned local artifacts alone do not satisfy those gates.
+
+### Lifecycle ownership and artifact topology
+
+`launcher-proto` defines the main-process lifecycle interface and the portable
+artifact contract. `tools-pack` describes code/resource/entry paths plus host
+contract, OS, architecture and exact Electron compatibility. `launcher` validates
+those descriptions and owns the next-start journal; application packages never
+own a second hosted state machine.
+
+```text
+build:   tools-pack -> launcher-proto contract + launcher source -> installer / payload
+runtime: installed Electron -> launcher lifecycle -> selected application entry
+                                      |                     |
+                                      v                     v
+                               platform adapter       ready / candidate / relaunch intents
+```
+
+- Preparing a candidate validates bytes without changing runtime pointers.
+- Activating a candidate selects and pre-arms the next start; it does not replace
+  the currently running code or restart the process.
+- A relaunch request uses the host's own PID and selected pointer. The platform
+  adapter validates and opens the installed carrier after predecessor exit.
+- Readiness confirms only the running generation, is idempotent, and never
+  confirms a failed successor. Headless readiness does not require a window.
+- Cold start recovers from an unconfirmed attempt using last-good or bundled
+  code inside the installed host. Only explicit manual recovery resets failure
+  evidence; cleanup asks the host whether resources are still in use.
+- System entry repair belongs to the platform adapter and cannot block business
+  readiness or cause rollback.
+
+`launcher/tests/lifecycle.test.ts` runs this protocol with injected Windows and
+Linux layouts that have no `.app`, `Contents`, or LaunchServices. These are core
+contract tests, not Windows/Linux native acceptance. Only macOS packaging opts
+into hosting in this delivery; Windows and historical outers retain legacy
+assembly, state handling and executable handoff. An old outer receiving a new
+payload remains legacy, while same-version installer replacement claims the new
+host contract and retains a newer compatible payload. Electron and the installer
+version floor are unchanged.

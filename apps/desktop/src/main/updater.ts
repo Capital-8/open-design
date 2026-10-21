@@ -1112,15 +1112,16 @@ export function createDesktopUpdater(
   ): Promise<DeferredLaunchResult & { launchPath?: string }> {
     if (config.openDryRun) return {};
     if (config.platform !== "darwin" && config.platform !== "win32") return {};
-    try {
-      await access(launchPath);
-      const launcherTarget = await lstat(launchPath);
-      const hostedBundle = config.platform === "darwin" && readLauncherHost()?.installedAppPath === launchPath;
-      if (launcherTarget.isSymbolicLink() || !(hostedBundle ? launcherTarget.isDirectory() : launcherTarget.isFile())) {
-        return { error: `launcher payload executable is not a plain file: ${launchPath}` };
+    if (readLauncherHost() == null) {
+      try {
+        await access(launchPath);
+        const launcherTarget = await lstat(launchPath);
+        if (launcherTarget.isSymbolicLink() || !launcherTarget.isFile()) {
+          return { error: `launcher payload executable is not a plain file: ${launchPath}` };
+        }
+      } catch (launchPathError) {
+        return { error: launchPathError instanceof Error ? launchPathError.message : String(launchPathError) };
       }
-    } catch (launchPathError) {
-      return { error: launchPathError instanceof Error ? launchPathError.message : String(launchPathError) };
     }
     const result = await launchAppAfterQuit({
       appPid: processPid,

@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { refreshMacApplicationRegistration } from "../src/mac-launch-services.js";
+import { refreshMacApplicationRegistration } from "../../../src/platforms/macos/launch-services.js";
 
 const roots: string[] = [];
 

@@ -2,7 +2,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { selectAppEntry } from "../src/index.js";
+import { selectAppEntry, startLauncher } from "../src/index.js";
+vi.mock("../src/platforms/macos/dock-entry.js", () => ({ repairMacDockEntries: vi.fn(async () => ({status:"unchanged"})) }));
+vi.mock("../src/platforms/macos/launch-services.js", () => ({ refreshMacApplicationRegistration: vi.fn(async () => ({status:"skipped"})) }));
+const environment = {contractVersion:1, platform:"darwin", arch:process.arch, electronVersion:"41.3.0"};
+import { createMacLauncherPlatform } from "../src/platforms/macos/index.js";
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(p => rm(p, {recursive:true,force:true}))); });
 async function fixture() {
@@ -10,7 +14,7 @@ async function fixture() {
  const resources=join(root,"Open Design.app","Contents","Resources");
  const appRoot=join(resources,"app"); await mkdir(appRoot,{recursive:true});
  const base=join(root,"data","namespaces");
- await writeFile(join(resources,"open-design-config.json"),JSON.stringify({appVersion:"1.0.0",namespace:"default",namespaceBaseRoot:base}));
+ await writeFile(join(resources,"open-design-config.json"),JSON.stringify({appVersion:"1.0.0",namespace:"default",namespaceBaseRoot:base,launcherHost:environment}));
  const trace: string[]=[]; const listeners=new Map<string,(...args:unknown[])=>void>();
  const app={getPath:()=>join(root,"default-user-data"),setPath:vi.fn(()=>trace.push("path")),setAppPath:vi.fn(),requestSingleInstanceLock:vi.fn(()=>{trace.push("lock");return true;}),on:vi.fn((event:string,fn:(...args:unknown[])=>void)=>{listeners.set(event,fn);}),exit:vi.fn()};
  const published:unknown[]=[];
@@ -45,33 +49,33 @@ async function addPayload(f: Awaited<ReturnType<typeof fixture>>, version: strin
  await mkdir(join(root,"prebundled"),{recursive:true}); await mkdir(join(bundle,"Contents","MacOS"),{recursive:true});
  await writeFile(join(bundle,"Contents","MacOS","Open Design"),"binary");
  await writeFile(join(root,"prebundled","packaged-main.mjs"),"export const version = '"+version+"';");
- await writeFile(join(resources,"open-design-config.json"),JSON.stringify({appVersion:version,namespace:"default",namespaceBaseRoot:f.base,launcherHostContract:1}));
- await writeFile(join(versionRoot,"manifest.json"),JSON.stringify({schemaVersion:1,platform:"darwin",channel:"stable",namespace:"default",version,electronVersion:"41.3.0",launcherHostContract:1,entry:{cwd:"payload/Open Design.app",executable:"payload/Open Design.app/Contents/MacOS/Open Design"},...overrides}));
+ await writeFile(join(resources,"open-design-config.json"),JSON.stringify({appVersion:version,namespace:"default",namespaceBaseRoot:f.base,launcherHostContract:1,launcherHost:environment}));
+ await writeFile(join(versionRoot,"manifest.json"),JSON.stringify({schemaVersion:1,platform:"darwin",channel:"stable",namespace:"default",version,electronVersion:"41.3.0",launcherHostContract:1,host:{...environment,appRoot:`payload/Open Design.app/Contents/Resources/app`,resourcesPath:`payload/Open Design.app/Contents/Resources`,entry:`payload/Open Design.app/Contents/Resources/app/prebundled/packaged-main.mjs`},entry:{cwd:"payload/Open Design.app",executable:"payload/Open Design.app/Contents/MacOS/Open Design"},...overrides}));
  return {root,resources,versionRoot};
 }
 async function boot(f: Awaited<ReturnType<typeof fixture>>, argv: string[] = []) {
  await selectAppEntry({...f.options,argv});
- return f.published.at(-1) as import("@open-design/launcher-proto").LauncherHostIdentity;
+ return f.published.at(-1) as import("@open-design/launcher-proto").LauncherHost;
 }
 it("loads newer code in the installed process and confirms the delegated generation",async()=>{
- const f=await fixture(); const initial=await boot(f); await initial.confirm(); const next=await addPayload(f,"1.1.0");
- const activated=await initial.activate("1.1.0");
+ const f=await fixture(); const initial=await boot(f); await initial.reportReady(); const next=await addPayload(f,"1.1.0");
+ const activated=await initial.activateCandidate("1.1.0");
  const host=await boot(f,["--od-launcher-delegated-version","1.1.0","--od-launcher-delegated-generation",String(activated.active!.generation)]);
  expect(host.running).toMatchObject({version:"1.1.0",source:"payload",appRoot:next.root,resourcesPath:next.resources});
  expect(host.installedAppPath).toBe(join(f.root,"Open Design.app")); expect(f.app.setAppPath).toHaveBeenCalledWith(next.root);
- await host.confirm();expect(host.snapshot().lastSuccessful).toEqual(activated.active);
+ await host.reportReady();expect(host.snapshot().lastSuccessful).toEqual(activated.active);
  await expect(readFile(join(f.launcher,"state","attempt.json"))).rejects.toThrow();
 });
 it("rolls an unconfirmed generation back to bundled code, then accepts a later good update",async()=>{
- const f=await fixture();const initial=await boot(f);await initial.confirm();await addPayload(f,"1.1.0");
- const active=await initial.activate("1.1.0");
+ const f=await fixture();const initial=await boot(f);await initial.reportReady();await addPayload(f,"1.1.0");
+ const active=await initial.activateCandidate("1.1.0");
  // A normal cold start sees the unconfirmed attempt and must not retry it.
  const rollback=await boot(f); expect(rollback.running.source).toBe("bundled");expect(rollback.rolledBackFromVersion).toBe("1.1.0");
- await rollback.confirm(); expect(rollback.snapshot().lastSuccessful?.version).toBe("1.0.0");
+ await rollback.reportReady(); expect(rollback.snapshot().lastSuccessful?.version).toBe("1.0.0");
  expect(JSON.parse(await readFile(join(f.launcher,"state","attempt.json"),"utf8"))).toMatchObject(active.active!);
- await addPayload(f,"1.2.0");const good=await rollback.activate("1.2.0");
+ await addPayload(f,"1.2.0");const good=await rollback.activateCandidate("1.2.0");
  const recovered=await boot(f,["--od-launcher-delegated-version","1.2.0","--od-launcher-delegated-generation",String(good.active!.generation)]);
- await recovered.confirm();expect(recovered.snapshot().lastSuccessful?.version).toBe("1.2.0");
+ await recovered.reportReady();expect(recovered.snapshot().lastSuccessful?.version).toBe("1.2.0");
 });
 it("keeps a physical newer compatible payload when a same-version installer is applied",async()=>{
  const f=await fixture();await addPayload(f,"1.2.0");await mkdir(join(f.launcher,"state"),{recursive:true});
@@ -79,14 +83,14 @@ it("keeps a physical newer compatible payload when a same-version installer is a
  const host=await boot(f);expect(host.running.version).toBe("1.2.0");expect(host.snapshot().lastSuccessful?.version).toBe("1.0.0");
 });
 it("rejects incompatible payload activation before changing the active journal",async()=>{
- const f=await fixture();const host=await boot(f);await host.confirm();await addPayload(f,"1.1.0",{electronVersion:"42.0.0"});
+ const f=await fixture();const host=await boot(f);await host.reportReady();await addPayload(f,"1.1.0",{electronVersion:"42.0.0"});
  const before=await readFile(join(f.launcher,"runtime.json"),"utf8");
- await expect(host.activate("1.1.0")).rejects.toThrow("not compatible");
+ await expect(host.activateCandidate("1.1.0")).rejects.toThrow("not compatible");
  expect(await readFile(join(f.launcher,"runtime.json"),"utf8")).toBe(before);
 });
 it("rejects manifest paths escaping the version directory before activation",async()=>{
  const f=await fixture();const host=await boot(f); await addPayload(f,"1.1.0",{entry:{cwd:"../../../../Open Design.app",executable:"../../../../Open Design.app/Contents/MacOS/Open Design"}});
- await expect(host.activate("1.1.0")).rejects.toThrow();expect(host.snapshot().active?.version).toBe("1.0.0");
+ await expect(host.activateCandidate("1.1.0")).rejects.toThrow();expect(host.snapshot().active?.version).toBe("1.0.0");
 });
 it("buffers duplicate-instance arguments until the payload can focus or restore its window",async()=>{
  const f=await fixture();const host=await boot(f);f.listeners.get("second-instance")?.({},["opendesign://workspace/open"]);
@@ -94,11 +98,11 @@ it("buffers duplicate-instance arguments until the payload can focus or restore 
 });
 it("redirects a directly opened cached app only after a new installer owns that namespace",async()=>{
  const f=await fixture();const cached=await addPayload(f,"1.1.0"); const open=vi.fn(async()=>{});
- const options={...f.options,appRoot:cached.root,resourcesPath:cached.resources,executablePath:join(cached.resources,"..","MacOS","Open Design"),openInstalled:open};
- expect(await selectAppEntry(options)).toMatchObject({source:"legacy"});expect(open).not.toHaveBeenCalled();
- await writeFile(join(f.resources,"open-design-config.json"),JSON.stringify({appVersion:"1.0.0",namespace:"default",namespaceBaseRoot:f.base,launcherHostContract:1}));
+ const options={...f.options,appRoot:cached.root,resourcesPath:cached.resources,executablePath:join(cached.resources,"..","MacOS","Open Design"),adapter:{...createMacLauncherPlatform("41.3.0",process.arch),openInstalled:open}};
+ expect(await startLauncher(options)).toMatchObject({source:"legacy"});expect(open).not.toHaveBeenCalled();
+ await writeFile(join(f.resources,"open-design-config.json"),JSON.stringify({appVersion:"1.0.0",namespace:"default",namespaceBaseRoot:f.base,launcherHostContract:1,launcherHost:environment}));
  await boot(f);
- expect(await selectAppEntry({...options,env:{OD_PACKAGED_NAMESPACE_BASE_ROOT:f.base},argv:["opendesign://workspace/open"]})).toBeNull();
+ expect(await startLauncher({...options,env:{OD_PACKAGED_NAMESPACE_BASE_ROOT:f.base},argv:["opendesign://workspace/open"]})).toBeNull();
  expect(open).toHaveBeenCalledWith(join(f.root,"Open Design.app"),["opendesign://workspace/open"]);
 });
 it("keeps headless in the same host and never publishes identity through the environment",async()=>{
@@ -107,11 +111,11 @@ it("keeps headless in the same host and never publishes identity through the env
 });
 
 it("falls back in the installed host when an activated payload disappears before startup",async()=>{
- const f=await fixture();const initial=await boot(f);await initial.confirm();const next=await addPayload(f,"1.1.0");
- const activated=await initial.activate("1.1.0");await rm(next.root,{recursive:true,force:true});
+ const f=await fixture();const initial=await boot(f);await initial.reportReady();const next=await addPayload(f,"1.1.0");
+ const activated=await initial.activateCandidate("1.1.0");await rm(next.root,{recursive:true,force:true});
  const host=await boot(f,["--od-launcher-delegated-version","1.1.0","--od-launcher-delegated-generation",String(activated.active!.generation)]);
  expect(host.running.source).toBe("bundled");expect(host.rolledBackFromVersion).toBe("1.1.0");
- await host.confirm();expect(host.snapshot().lastSuccessful?.version).toBe("1.0.0");
+ await host.reportReady();expect(host.snapshot().lastSuccessful?.version).toBe("1.0.0");
  expect(JSON.parse(await readFile(join(f.launcher,"state","attempt.json"),"utf8"))).toMatchObject(activated.active!);
 });
 it("inventories orphaned legacy caches without scheduling newer versions or foreign directories",async()=>{

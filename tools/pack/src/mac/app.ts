@@ -1,3 +1,4 @@
+import { buildLauncherHostEnvironment } from "../launcher/artifacts.js";
 import { MAC_THIN_LAUNCHER_FILE } from "./thin-launcher.js";
 import { finalizeRuntimeManifest } from "../resources/runtime-manifest.js";
 import { cp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
@@ -170,6 +171,7 @@ export function renderMacPackagedConfig(options: {
       ...(options.config.amrProfile == null ? {} : { amrProfile: options.config.amrProfile }),
       appVersion: options.appVersion,
       launcherHostContract: 1,
+      launcherHost: buildLauncherHostEnvironment({ platform: "darwin", arch: process.arch, electronVersion: options.config.electronVersion }),
       ...(options.usePrebundledStandaloneWeb ? { daemonCliEntryRelative: MAC_PREBUNDLED_DAEMON_CLI_RELATIVE_PATH } : {}),
       ...(options.usePrebundledStandaloneWeb
         ? { daemonSidecarEntryRelative: MAC_PREBUNDLED_DAEMON_SIDECAR_RELATIVE_PATH }

@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { resolveLauncherPaths, resolveLauncherVersionPaths, type LauncherHostIdentity } from "@open-design/launcher-proto";
-const mocked=vi.hoisted(()=>({host:null as LauncherHostIdentity|null}));
+import { resolveLauncherPaths, resolveLauncherVersionPaths, type LauncherHost } from "@open-design/launcher-proto";
+const mocked=vi.hoisted(()=>({host:null as LauncherHost|null}));
 vi.mock("@open-design/launcher-proto",async original=>({...await original<object>(),readLauncherHost:()=>mocked.host}));
 import { cleanupLauncherPayloadRoots, activatePreparedLauncherPayloadRelease } from "../../../src/main/updater/payload.js";
 import { launchPayloadAppAfterQuit } from "../../../src/main/updater/deferred-launch.js";
@@ -25,7 +25,7 @@ async function fixture(){
  const running=join(paths.versionsRoot,"0.9.0","payload","Open Design.app","Contents","Resources","app");await mkdir(running,{recursive:true});
  const config=resolveDesktopUpdaterConfig({source:"packaged",platform:"darwin",namespace:"test",launcherRoot:root,launcherRuntimePath:paths.runtimePath,downloadRoot:join(root,"updates"),env:{OD_UPDATE_CURRENT_VERSION:"1.0.0"}});
  const activated={...runtime,active:{version:"1.1.0",generation:1}};
- const host={contractVersion:1,installedAppPath:join(root,"installed.app"),namespaceBaseRoot:join(root,"namespaces"),selection:null,rolledBackFromVersion:null,running:{version:"0.9.0",source:"payload",appRoot:running,resourcesPath:dirname(running),executablePath:join(running,"unused")},snapshot:()=>runtime,confirm:vi.fn(),clearAttempt:vi.fn(),activate:vi.fn(async()=>activated),onSecondInstance:vi.fn(),requestRelaunch:vi.fn(async()=>{})} satisfies LauncherHostIdentity;
+ const host={contractVersion:1,installedAppPath:join(root,"installed.app"),namespaceBaseRoot:join(root,"namespaces"),selection:null,rolledBackFromVersion:null,running:{version:"0.9.0",source:"payload",appRoot:running,resourcesPath:dirname(running),executablePath:join(running,"unused")},snapshot:()=>runtime,status:()=>({phase:"ready",candidateVersion:null}),prepareCandidate:vi.fn(async()=>{}),protectsResource:vi.fn(async path=>path===join(paths.versionsRoot,"0.9.0")),reportReady:vi.fn(),resetFailedLaunch:vi.fn(),activateCandidate:vi.fn(async()=>activated),onSecondInstance:vi.fn(),requestRelaunch:vi.fn(async()=>{})} satisfies LauncherHost;
  mocked.host=host;
  return {root,paths,next,running,config,runtime,host,activated};
 }
@@ -37,13 +37,13 @@ it("keeps hosted code after pointers have advanced and the physical executable i
 it("delegates activation to the host without writing the legacy runtime or attempt journal",async()=>{
  const f=await fixture();const before=await readFile(f.paths.runtimePath,"utf8");
  const result=await activatePreparedLauncherPayloadRelease({config:f.config,activeRelease:{ref:{version:"1.1.0"}} as LoadedRelease,logger:{warn:vi.fn(),info:vi.fn(),error:vi.fn()},now:()=>new Date(),removeLauncherPayloadRoot:path=>rm(path,{recursive:true,force:true})});
- expect(f.host.activate).toHaveBeenCalledWith("1.1.0");expect(result).toEqual({launchPath:f.host.installedAppPath,runtime:f.activated});
+ expect(f.host.activateCandidate).toHaveBeenCalledWith("1.1.0");expect(result).toEqual({launchPath:f.host.installedAppPath,runtime:f.activated});
  expect(await readFile(f.paths.runtimePath,"utf8")).toBe(before);await expect(readFile(f.paths.attemptsPath)).rejects.toThrow();
 });
 it("reopens through the installed host after update rather than spawning the payload executable",async()=>{
  const f=await fixture();const spawnDetached=vi.fn();const delegated={version:"1.1.0",generation:1};
  const result=await launchPayloadAppAfterQuit({appPid:1234,cwd:f.root,launchPath:"payload.exe",root:f.root,timeoutMs:5000,delegated},{now:()=>new Date(),spawnDetached});
- expect(result).toEqual({});expect(f.host.requestRelaunch).toHaveBeenCalledWith({appPid:1234,delegated});expect(spawnDetached).not.toHaveBeenCalled();
+ expect(result).toEqual({});expect(f.host.requestRelaunch).toHaveBeenCalledWith();expect(spawnDetached).not.toHaveBeenCalled();
 });
 
 it("downloads and installs through a hosted app directory, and does not silently reinstall a rolled-back release", async () => {

@@ -276,7 +276,7 @@ export async function launchPayloadAppAfterQuit(
   const host = readLauncherHost();
   if (host != null) {
     try {
-      await host.requestRelaunch({ appPid: input.appPid, delegated: input.delegated ?? null });
+      await host.requestRelaunch();
       return {};
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };

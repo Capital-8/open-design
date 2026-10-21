@@ -3,9 +3,12 @@ import { dirname, join } from "node:path";
 
 import {
   LAUNCHER_SCHEMA_VERSION,
+  type LauncherApplicationArtifact,
   resolveLauncherVersionPaths,
 } from "@open-design/launcher-proto";
 
+import { buildLauncherApplicationArtifact, buildLauncherHostEnvironment } from "../launcher/artifacts.js";
+import { shouldUseMacStandalonePrebundle } from "./prebundle.js";
 import type { ToolPackConfig } from "../config/index.js";
 import {
   resolveToolPackLauncherChannel,
@@ -30,6 +33,7 @@ export type MacLauncherPayloadManifest = {
   version: string;
   electronVersion?: string;
   launcherHostContract?: number;
+  host?: LauncherApplicationArtifact;
 };
 
 export function buildMacLauncherPayloadManifest(input: {
@@ -39,10 +43,20 @@ export function buildMacLauncherPayloadManifest(input: {
   publicAppBundleName: string;
   version: string;
   electronVersion?: string;
+  arch?: string;
+  prebundled?: boolean;
 }): MacLauncherPayloadManifest {
+  const appRoot = `payload/${input.publicAppBundleName}/Contents/Resources/app`;
   return {
     appBundleName: input.publicAppBundleName,
-    ...(input.electronVersion == null ? {} : { electronVersion: input.electronVersion, launcherHostContract: 1 }),
+    ...(input.electronVersion == null ? {} : {
+      electronVersion: input.electronVersion, launcherHostContract: 1,
+      host: buildLauncherApplicationArtifact({
+        ...buildLauncherHostEnvironment({ platform: "darwin", arch: input.arch ?? process.arch, electronVersion: input.electronVersion }),
+        appRoot, resourcesPath: `payload/${input.publicAppBundleName}/Contents/Resources`,
+        entry: input.prebundled === false ? `${appRoot}/node_modules/@open-design/packaged/dist/index.mjs` : `${appRoot}/prebundled/packaged-main.mjs`,
+      }),
+    }),
     channel: input.channel,
     entry: {
       cwd: `payload/${input.publicAppBundleName}`,
@@ -81,6 +95,8 @@ export async function createMacLauncherPayloadArchive(
     publicAppBundleName: identity.publicAppBundleName,
     version: packagedVersion,
     electronVersion: config.electronVersion,
+    arch: process.arch,
+    prebundled: shouldUseMacStandalonePrebundle(config.webOutputMode),
   });
 
   await rm(stageRoot, { force: true, recursive: true });

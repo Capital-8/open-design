@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { planMacDockEntries, planMacDockRecentEntries, repairMacDockEntries, type MacDockTile } from "../src/mac-dock-entry.js";
+import { planMacDockEntries, planMacDockRecentEntries, repairMacDockEntries, type MacDockTile } from "../../../src/platforms/macos/dock-entry.js";
 
 const canonicalAppBundlePath = "/Applications/Open Design Beta.app";
 const versionsRoot = "/Users/test/Library/Application Support/Open Design/launcher/channels/beta/namespaces/release-beta-mac/versions";

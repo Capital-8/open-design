@@ -14,7 +14,10 @@ export type LauncherHostRunningCode = Readonly<{
   resourcesPath: string;
   executablePath: string;
 }>;
-export type LauncherHostRelaunchRequest = { appPid: number; delegated?: LauncherVersionPointer | null };
+export type LauncherLifecycleStatus = Readonly<{
+  phase: "starting" | "ready" | "relaunch-pending";
+  candidateVersion: string | null;
+}>;
 export type LauncherHostIdentity = Readonly<{
   contractVersion: typeof LAUNCHER_HOST_CONTRACT_VERSION;
   installedAppPath: string;
@@ -22,21 +25,33 @@ export type LauncherHostIdentity = Readonly<{
   running: LauncherHostRunningCode;
   selection: LauncherHostSelection | null;
   rolledBackFromVersion: string | null;
-  snapshot(): LauncherRuntimeDescriptor;
-  confirm(): Promise<void>;
-  activate(version: string): Promise<LauncherRuntimeDescriptor>;
-  clearAttempt(): Promise<void>;
-  onSecondInstance(listener: (argv: readonly string[]) => void): void;
-  requestRelaunch(request: LauncherHostRelaunchRequest): Promise<void>;
 }>;
-export function readLauncherHost(): LauncherHostIdentity | null {
+
+/** Application-facing intentions; journal and OS operations stay private to the host. */
+export interface LauncherLifecycle {
+  snapshot(): LauncherRuntimeDescriptor;
+  status(): LauncherLifecycleStatus;
+  reportReady(): Promise<void>;
+  /** Validate prepared bytes without changing the next-start pointer. */
+  prepareCandidate(version: string, artifactRoot?: string): Promise<void>;
+  /** Select a validated candidate for the next start; does not restart this process. */
+  activateCandidate(version: string): Promise<LauncherRuntimeDescriptor>;
+  /** Explicit user recovery action; normal readiness must never erase failure evidence. */
+  resetFailedLaunch(): Promise<void>;
+  protectsResource(path: string): Promise<boolean>;
+  onSecondInstance(listener: (argv: readonly string[]) => void): void;
+  requestRelaunch(): Promise<void>;
+}
+export type LauncherHost = LauncherHostIdentity & Readonly<LauncherLifecycle>;
+
+export function readLauncherHost(): LauncherHost | null {
   const value = (globalThis as Record<symbol, unknown>)[LAUNCHER_HOST_KEY];
   if (value == null || typeof value !== "object") return null;
-  const host = value as LauncherHostIdentity;
+  const host = value as LauncherHost;
   return host.contractVersion === LAUNCHER_HOST_CONTRACT_VERSION ? host : null;
 }
 /** Publish once, without environment/argv propagation to children. */
-export function publishLauncherHost(host: LauncherHostIdentity): void {
+export function publishLauncherHost(host: LauncherHost): void {
   Object.defineProperty(globalThis, LAUNCHER_HOST_KEY, {
     configurable: false, enumerable: false, writable: false,
     value: Object.freeze({ ...host, running: Object.freeze({ ...host.running }),

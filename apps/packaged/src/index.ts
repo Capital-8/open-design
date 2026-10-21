@@ -32,7 +32,7 @@ import {
   type DesktopMainHandle,
 } from "@open-design/desktop/main";
 import { releaseChannelFromNamespace, releaseChannelFromVersion } from "@open-design/release";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { app, dialog } from "electron";
 
 import { readPackagedConfig } from "./config.js";
@@ -80,8 +80,6 @@ import { packagedEntryUrl, registerOdProtocol } from "./protocol.js";
 import { resolvePackagedElectronNodeCommand, startPackagedSidecars } from "./sidecars.js";
 import { reportStartupFailure, resolveStartupDistinctId } from "./startup-telemetry.js";
 import { resolvePackagedWindowTitle } from "./window-title.js";
-import { repairMacDockEntries } from "./mac-dock-entry.js";
-import { refreshMacApplicationRegistration } from "./mac-launch-services.js";
 import { syncWindowsUninstallDisplayVersion } from "./windows-lifecycle.js";
 
 let packagedLogger: PackagedDesktopLogger | null = null;
@@ -552,14 +550,6 @@ async function main(): Promise<void> {
     },
   });
   await client.start();
-  if (launcherHost != null) {
-    // OS entry repair is independent of ready/confirmation; errors must not
-    // block the main window or turn a successful launch into a rollback.
-    void refreshMacApplicationRegistration({ executablePath: process.execPath, appBundleName: `${basename(process.execPath)}.app`, versionsRoot: launcherRuntime.launcherPaths.versionsRoot });
-    void repairMacDockEntries({ canonicalAppBundlePath: launcherHost.installedAppPath, appBundleName: `${basename(process.execPath)}.app`, versionsRoot: launcherRuntime.launcherPaths.versionsRoot }).then(result => {
-      if (result.status === "failed") packagedLogger?.warn("failed to repair owned Dock entries", { error: result.error });
-    });
-  }
 
   if (deferredDesktop != null) {
     restoreDeferredDesktop = () => { void deferredDesktop.restore().catch(() => undefined); };

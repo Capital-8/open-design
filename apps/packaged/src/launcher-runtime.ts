@@ -9,7 +9,7 @@ import {
   type LauncherChannel,
   type LauncherDesktopHandoffDescriptor,
   type LauncherHandoffResumeRequest,
-  type LauncherHostIdentity,
+  type LauncherHost,
   type LauncherPaths,
   type LauncherRuntimeDescriptor,
   type LauncherVersionPaths,
@@ -94,7 +94,7 @@ export type ResolvePackagedLauncherRuntimeOptions = {
    * payload, its selection is authoritative: the launcher already selected,
    * pre-armed or rolled back, so this process must not re-derive any of it.
    */
-  host?: LauncherHostIdentity | null;
+  host?: LauncherHost | null;
   /**
    * Pointer from `--od-launcher-delegated-*` argv: the spawning parent
    * pre-armed attempt.json for this pointer, so a matching attempt marks the
@@ -647,7 +647,7 @@ export async function recordPackagedLauncherRuntimeFailedAttempt(
 
 export async function confirmPackagedLauncherRuntime(runtime: PackagedLauncherRuntime): Promise<void> {
   const host = readLauncherHost();
-  if (host != null) { await host.confirm(); return; }
+  if (host != null) { await host.reportReady(); return; }
   if (runtime.source !== "payload") return;
   if (!runtime.payloadDesktopProcess) return;
   if (runtime.desktopExecutablePath == null) return;
