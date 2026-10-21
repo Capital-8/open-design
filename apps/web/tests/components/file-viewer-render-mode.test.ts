@@ -4,6 +4,7 @@ import {
   hasTweaksTemplate,
   hasUrlModeBridge,
   htmlNeedsFocusGuard,
+  htmlNeedsLocalInteractionBridge,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
   htmlNeedsSandboxShim,
@@ -16,6 +17,13 @@ describe('shouldUrlLoadHtmlPreview', () => {
 
   it('URL-loads a plain HTML preview by default', () => {
     expect(shouldUrlLoadHtmlPreview(base)).toBe(true);
+  });
+
+  it('uses the current client bridge for strict local forms and hash routers', () => {
+    expect(htmlNeedsLocalInteractionBridge('<form><input><button>Save</button></form>')).toBe(true);
+    expect(htmlNeedsLocalInteractionBridge('<a href="#/details/7">Details</a>')).toBe(true);
+    expect(htmlNeedsLocalInteractionBridge('<a href="#contact">Contact</a>')).toBe(false);
+    expect(shouldUrlLoadHtmlPreview({ ...base, needsLocalInteractionBridge: true })).toBe(false);
   });
 
   it('falls back to srcDoc when the file is a deck (deck bridge required)', () => {
@@ -368,9 +376,9 @@ describe('htmlNeedsPoweredPreview', () => {
     expect(htmlNeedsPoweredPreview('const b = new SharedArrayBuffer(16);')).toBe(true);
   });
 
-  it('uses real Web Storage for artifacts that save browser state across reloads', () => {
-    expect(htmlNeedsPoweredPreview('<script>localStorage.setItem("task", "saved")</script>')).toBe(true);
-    expect(htmlNeedsPoweredPreview('<script>window.sessionStorage.getItem("task")</script>')).toBe(true);
+  it('keeps Web Storage artifacts in the host-managed sandbox', () => {
+    expect(htmlNeedsPoweredPreview('<script>localStorage.setItem("task", "saved")</script>')).toBe(false);
+    expect(htmlNeedsPoweredPreview('<script>window.sessionStorage.getItem("task")</script>')).toBe(false);
     expect(htmlNeedsPoweredPreview('<p>Persistent form</p>')).toBe(false);
   });
 

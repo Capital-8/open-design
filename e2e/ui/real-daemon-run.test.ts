@@ -394,7 +394,7 @@ test('[P0] local OD Next public canaries preserve normal no-artifact endings and
   });
 });
 
-test('[P0] OD Next app-config switch takes effect immediately and rejects invalid modes atomically', async ({ page }) => {
+test('[P0] OD Next retired app-config preference preserves the active default and rejects invalid modes atomically', async ({ page }) => {
   const readRollout = async () => {
     const response = await page.request.get('/api/strategies/od-next/rollout');
     expect(response.ok(), await response.text()).toBeTruthy();
@@ -413,7 +413,7 @@ test('[P0] OD Next app-config switch takes effect immediately and rejects invali
   expect(activeWrite.ok(), await activeWrite.text()).toBeTruthy();
   await expect.poll(readRollout).toMatchObject({
     requestedMode: 'active',
-    requestedModeSource: 'app_config',
+    requestedModeSource: 'default',
     effectiveMode: 'active',
   });
 
@@ -433,7 +433,7 @@ test('[P0] OD Next app-config switch takes effect immediately and rejects invali
   });
   await expect.poll(readRollout).toMatchObject({
     requestedMode: 'active',
-    requestedModeSource: 'app_config',
+    requestedModeSource: 'default',
     effectiveMode: 'active',
   });
   const afterInvalid = await page.request.get('/api/app-config');
@@ -445,9 +445,9 @@ test('[P0] OD Next app-config switch takes effect immediately and rejects invali
   });
   expect(offWrite.ok(), await offWrite.text()).toBeTruthy();
   await expect.poll(readRollout).toMatchObject({
-    requestedMode: 'off',
-    requestedModeSource: 'app_config',
-    effectiveMode: 'off',
+    requestedMode: 'active',
+    requestedModeSource: 'default',
+    effectiveMode: 'active',
   });
 });
 
@@ -889,6 +889,7 @@ test('[P0] real daemon run restores a delayed artifact turn after reload', async
 
   await expectRestoredDelayedAssistantMessage(page, projectId, conversationId, {
     expectedUserMessages: 1,
+    expectedAssistantMessages: 2,
     expectedThinking: false,
   });
 });
@@ -1017,6 +1018,7 @@ test('[P1] real daemon run survives reload before the create response reaches th
 
   await expectRestoredDelayedAssistantMessage(page, projectId, conversationId, {
     requireRunId: true,
+    expectedAssistantMessages: 2,
     expectedThinking: false,
   });
 });
@@ -2022,6 +2024,7 @@ async function expectRestoredDelayedAssistantMessage(
   conversationId: string,
   options: {
     expectedUserMessages?: number;
+    expectedAssistantMessages?: number;
     requireRunId?: boolean;
     expectedThinking?: boolean;
     producedFiles?: string[];
@@ -2030,7 +2033,7 @@ async function expectRestoredDelayedAssistantMessage(
   await expect
     .poll(async () => {
       const messages = await listConversationMessages(page, projectId, conversationId);
-      const assistant = messages.find((message) => message.role === 'assistant');
+      const assistant = messages.filter((message) => message.role === 'assistant').at(-1);
       return {
         userMessages: messages.filter((message) => message.role === 'user').length,
         assistantMessages: messages.filter((message) => message.role === 'assistant').length,
@@ -2042,7 +2045,7 @@ async function expectRestoredDelayedAssistantMessage(
     }, { timeout: 15_000 })
     .toEqual({
       userMessages: options.expectedUserMessages ?? expect.any(Number),
-      assistantMessages: 1,
+      assistantMessages: options.expectedAssistantMessages ?? 1,
       hasRunId: options.requireRunId ? true : expect.any(Boolean),
       runStatus: 'succeeded',
       producedFiles: options.producedFiles ?? [DELAYED_FILE],
@@ -2058,7 +2061,7 @@ async function expectPersistedAssistantContent(
 ) {
   await expect.poll(async () => {
     const messages = await listConversationMessages(page, projectId, conversationId);
-    return messages.find((message) => message.role === 'assistant')?.content ?? '';
+    return messages.filter((message) => message.role === 'assistant').at(-1)?.content ?? '';
   }, { timeout: 15_000 }).toContain(expectedContent);
 }
 

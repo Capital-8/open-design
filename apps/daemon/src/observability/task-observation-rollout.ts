@@ -1,6 +1,9 @@
+import { taskTraceReceipts } from './task-telemetry-receipt.js';
+import type { TaskTelemetryStatus } from '@open-design/contracts';
 import { evidenceStore, reconcileTaskObjectReasons } from '../services/evidence-delivery.js';
 import { createHash } from 'node:crypto';
 import { taskRunUsage, projectTaskTrace, type TaskRunTraceProjection } from './task-trace-projection.js';
+import { preserveDiscoveryObservation } from '../strategies/od-next/discovery-observation.js';
 import { getConversation } from '../db.js';
 import { redactPromptText } from '../prompt-telemetry.js';
 import { evidenceMode, type EvalContextV2 } from './eval-context.js';
@@ -175,6 +178,7 @@ export interface TaskObservationRolloutResult {
 export interface TaskObservationRolloutService {
   readonly config: TaskObservationRolloutConfig;
   diagnostic(): TaskObservationRolloutDiagnostic;
+  telemetryForRun(runId: string): TaskTelemetryStatus | undefined;
   modeForRun(runId: string): TaskObservationRolloutMode;
   representationForRun(runId: string):
     | 'single_run'
@@ -534,7 +538,7 @@ async function taskAggregate(
       ? await buildSafeRunQualityProjectionFromDaemon({
           db: options.db,
           dataDir: options.dataDir,
-          run: {
+          run: preserveDiscoveryObservation(run, {
             ...run,
             model: run.model ?? '',
             projectId: task.projectId,
@@ -546,7 +550,7 @@ async function taskAggregate(
             error: run.error ?? null,
             errorCode: run.errorCode ?? null,
             events: run.events.map((event, index) => ({ id: index + 1, ...event })),
-          },
+          }),
           prefs: telemetry.prefs,
           exactPrompt: { ...exactFinalText, stage: mapping.inputStage },
           onTraceProjection: projection => traceProjections.set(run.id, { runId: run.id, ...projection }),
@@ -719,6 +723,7 @@ export function createTaskObservationRolloutService(
   >();
   const taskAttemptOutcomes = new Map<string, TaskObservationRolloutResult>();
 
+  const traceReceipts = taskTraceReceipts(options.dataDir);
   const effectiveSink = (): RunTelemetrySinkConfig | null => {
     const sink = readTaskTelemetrySinkConfig(env);
     return sink ? capSinkRetries(sink) : null;
@@ -1066,7 +1071,11 @@ export function createTaskObservationRolloutService(
           config: { ...direct, retries: Math.min(direct.retries, 1) },
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           deliveryIdempotencyKey: idempotencyKey,
-          onDeliveryAttempt: onAttempt,
+          onDeliveryAttempt: (trace) => {
+            if (trace) traceReceipts.write({ ...trace, taskExecutionId: aggregate.root.taskExecutionId,
+              idempotencyKey, transport: 'langfuse' });
+            onAttempt();
+          },
           context,
         });
       }
@@ -1105,6 +1114,10 @@ export function createTaskObservationRolloutService(
         attemptCount += 1;
         onAttempt();
       },
+    });
+    if (result.traceReceipt) traceReceipts.write({
+      ...result.traceReceipt, taskExecutionId: aggregate.root.taskExecutionId,
+      idempotencyKey, protocol: 'legacy-v1',
     });
     return { ...result, langfuse_attempt_count: attemptCount };
   };
@@ -1441,6 +1454,22 @@ export function createTaskObservationRolloutService(
   return {
     config,
     diagnostic,
+    telemetryForRun(runId) {
+      try {
+        const task = getStrategyTaskExecutionByRunId(options.db, runId);
+        if (!task) return undefined;
+        const row = readDeliveryRow(options.db, task.taskExecutionId);
+        const receipt = row ? traceReceipts.read(task.taskExecutionId, row.idempotencyKey) : undefined;
+        return {
+          version: 1, taskExecutionId: task.taskExecutionId,
+          status: row?.status === 'pending' && row.dropReason ? 'failed' : row?.status ?? 'unknown',
+          traceId: receipt?.traceId ?? null, protocol: receipt?.protocol ?? null,
+          transport: receipt?.transport ?? null, attemptCount: row?.attemptCount ?? null,
+          reason: row?.dropReason ?? (row ? null : 'delivery_not_recorded'),
+          environment: row?.environment ?? null, sampledAt: now(), remoteVerification: 'not_checked',
+        };
+      } catch { return undefined; }
+    },
     modeForRun(runId) {
       const representation = ensureRepresentation(runId);
       if (!representation) return 'off';
