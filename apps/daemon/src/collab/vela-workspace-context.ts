@@ -413,7 +413,7 @@ export function workspaceContextFromDirectoryItem(
   configuredEnv: Record<string, string> = {},
 ): WorkspaceCollabContext {
   const context: WorkspaceCollabContext = {
-    ...(item.memberCount !== undefined ? { memberCount: item.memberCount } : {}),
+    ...(typeof item.memberCount === 'number' && Number.isSafeInteger(item.memberCount) && item.memberCount > 0 ? { memberCount: item.memberCount } : {}),
     workspaceId: item.workspaceId,
     workspaceType: item.workspaceType,
     workspaceMemberId: item.workspaceMemberId,
