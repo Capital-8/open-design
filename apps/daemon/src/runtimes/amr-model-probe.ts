@@ -5,13 +5,14 @@ import {
   spawnEnvForAgent,
 } from '../agents.js';
 import { agentCliEnvForAgent, type readAppConfig } from '../app-config.js';
-import { readVelaCredentialRevision } from '../integrations/vela.js';
+import { readVelaCredentialRevision, resolveAmrProfile } from '../integrations/vela.js';
 import type { VelaCredentialRevision } from '../integrations/vela.js';
 
 export interface ResolveAmrModelProbeDeps {
   dataDir: string;
   env: NodeJS.ProcessEnv;
   readAppConfig: typeof readAppConfig;
+  workspaceId?: string;
 }
 
 export interface BuildAmrModelCacheKeyInput {
@@ -30,9 +31,19 @@ export function buildAmrModelCacheKey({
     home: env.HOME ?? env.USERPROFILE ?? '',
     openDesignAmrProfile: env.OPEN_DESIGN_AMR_PROFILE ?? '',
     velaProfile: env.VELA_PROFILE ?? '',
+    workspaceId: env.VELA_WORKSPACE_ID?.trim() ?? '',
     velaLinkUrl: env.VELA_LINK_URL ?? '',
     velaRuntimeKey: env.VELA_RUNTIME_KEY ?? '',
     velaOpencodeBin: env.VELA_OPENCODE_BIN ?? '',
+    credentialRevision,
+  });
+}
+
+/** Partition remembered catalogs by caller credentials and exact billing space. */
+export function amrModelScope(env: NodeJS.ProcessEnv, credentialRevision: VelaCredentialRevision): string {
+  return JSON.stringify({
+    profile: resolveAmrProfile(env),
+    workspaceId: env.VELA_WORKSPACE_ID?.trim() ?? '',
     credentialRevision,
   });
 }
@@ -41,6 +52,7 @@ export async function resolveAmrModelProbe({
   dataDir,
   env: baseEnv,
   readAppConfig,
+  workspaceId,
 }: ResolveAmrModelProbeDeps) {
   const appConfig = await readAppConfig(dataDir);
   const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
@@ -61,11 +73,12 @@ export async function resolveAmrModelProbe({
     ),
     agentLaunch,
   );
+  if (workspaceId !== undefined) env.VELA_WORKSPACE_ID = workspaceId;
   const credentialRevision = readVelaCredentialRevision(baseEnv, configuredEnv);
   const cacheKey = buildAmrModelCacheKey({
     launchPath,
     env,
     credentialRevision,
   });
-  return { launchPath, env, configuredEnv, cacheKey };
+  return { launchPath, env, configuredEnv, cacheKey, modelScope: amrModelScope(env, credentialRevision) };
 }

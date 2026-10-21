@@ -585,7 +585,11 @@ export function resolveSettingsCloseConfig(
 function mergeAmrModelsIntoAgents(
   agents: AgentInfo[],
   amrModels: AmrModelsResponse | null,
+  requireScopedCatalog = false,
 ): AgentInfo[] {
+  if (requireScopedCatalog && (amrModels?.source !== 'remote' || amrModels.models.length === 0)) {
+    return agents.map((agent) => agent.id === 'amr' ? { ...agent, models: [] } : agent);
+  }
   if (!amrModels || amrModels.models.length === 0) return agents;
   return agents.map((agent) => {
     if (agent.id !== 'amr') return agent;
@@ -1113,8 +1117,35 @@ function AppInner() {
   const [settingsHighlight, setSettingsHighlight] = useState<SettingsHighlight>(null);
   const [integrationInitialTab, setIntegrationInitialTab] = useState<IntegrationTab>('mcp');
   const [daemonLive, setDaemonLive] = useState(false);
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [agentCatalog, setAgents] = useState<AgentInfo[]>([]);
   const amrModelsRef = useRef<AmrModelsResponse | null>(null);
+  const amrModelContext = workspaceResourceReadContext(workspaceContextState);
+  const requireScopedAmrCatalog = workspaceContextState.failure !== 'unsupported' && (
+    amrModelContext !== null
+    || workspaceContextState.identityChangePending === true
+    || workspaceContextState.resourceReadIdentity !== undefined
+  );
+  const amrCatalogIdentity = JSON.stringify([
+    currentWorkspaceCatalogIdentity,
+    workspaceIdentityCacheKey(amrModelContext),
+    requireScopedAmrCatalog,
+    requireScopedAmrCatalog ? config.agentCliEnv?.amr ?? null : null,
+  ]);
+  const amrCatalogScopeRef = useRef({ identity: amrCatalogIdentity, scoped: false });
+  if (amrCatalogScopeRef.current.identity !== amrCatalogIdentity) {
+    amrModelsRef.current = null;
+  }
+  amrCatalogScopeRef.current = {
+    identity: amrCatalogIdentity,
+    scoped: requireScopedAmrCatalog,
+  };
+  // Agent detection carries an ambient catalog. A selected Workspace may only
+  // expose the remote catalog requested for that exact principal.
+  const agents = useMemo(() => mergeAmrModelsIntoAgents(
+    agentCatalog,
+    amrModelsRef.current,
+    amrCatalogScopeRef.current.scoped,
+  ), [agentCatalog, amrCatalogIdentity]);
   const amrPollGenerationRef = useRef(0);
   const agentStreamRequestSeqRef = useRef(0);
   const agentStreamAbortRef = useRef<AbortController | null>(null);
@@ -2036,7 +2067,8 @@ function AppInner() {
   }, [activeProjectId, activeFileName]);
 
   useEffect(() => {
-    if (!daemonLive) return;
+    if (!daemonLive || (amrCatalogScopeRef.current.scoped && !amrModelContext)) return;
+    const issuedIdentity = amrCatalogIdentity;
     let cancelled = false;
     let timer: number | null = null;
     const pollGeneration = amrPollGenerationRef.current + 1;
@@ -2046,10 +2078,11 @@ function AppInner() {
     let presetPolls = 0;
 
     const applyAmrModels = async () => {
-      const result = await fetchAmrModels();
+      const result = amrModelContext ? await fetchAmrModels(amrModelContext) : await fetchAmrModels();
       if (
         cancelled ||
         amrPollGenerationRef.current !== pollGeneration ||
+        amrCatalogScopeRef.current.identity !== issuedIdentity ||
         !result ||
         !Array.isArray(result.models) ||
         result.models.length === 0
@@ -2057,7 +2090,7 @@ function AppInner() {
         return;
       }
       amrModelsRef.current = result;
-      setAgents((current) => mergeAmrModelsIntoAgents(current, result));
+      setAgents((current) => mergeAmrModelsIntoAgents(current, result, amrCatalogScopeRef.current.scoped));
       const shouldPollPreset =
         result.source === 'preset' &&
         !result.remoteError &&
@@ -2075,7 +2108,7 @@ function AppInner() {
       cancelled = true;
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [amrPollRestartToken, daemonLive]);
+  }, [amrPollRestartToken, daemonLive, amrCatalogIdentity]);
 
   // App-level AMR sign-in state. Feeds two analytics globals: the
   // `amr` configure_type bucket (deriveConfigureGlobals below) and the
@@ -2203,6 +2236,7 @@ function AppInner() {
             mergeAmrModelsIntoAgents(
               upsertAgent(current, agent),
               amrModelsRef.current,
+              amrCatalogScopeRef.current.scoped,
             ),
           );
         },
@@ -2214,6 +2248,7 @@ function AppInner() {
             mergeAmrModelsIntoAgents(
               orderAgentsByRegistry(list),
               amrModelsRef.current,
+              amrCatalogScopeRef.current.scoped,
             ),
           );
         })
@@ -3042,6 +3077,7 @@ function AppInner() {
               mergeAmrModelsIntoAgents(
                 upsertAgent(current, agent),
                 amrModelsRef.current,
+                amrCatalogScopeRef.current.scoped,
               ),
             );
           },
@@ -3049,7 +3085,7 @@ function AppInner() {
         const ordered = orderAgentsByRegistry(next);
         reportAgentDetectDiagnostics(analytics.track, ordered);
         if (isCurrentAgentStreamRequest(agentRequestId)) {
-          setAgents(mergeAmrModelsIntoAgents(ordered, amrModelsRef.current));
+          setAgents(mergeAmrModelsIntoAgents(ordered, amrModelsRef.current, amrCatalogScopeRef.current.scoped));
           setAgentsLoading(false);
         }
         return ordered;

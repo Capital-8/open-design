@@ -12,7 +12,7 @@
 // writing the config file with the active VELA_PROFILE and exiting 0 —
 // mirroring real vela's on-disk side-effect without the device-auth loop.
 
-import { mkdtempSync, existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, chmodSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { createServer } from 'node:http';
 import https from 'node:https';
@@ -38,6 +38,7 @@ import {
   velaLiveAccountCacheKey,
 } from '../../src/integrations/vela.js';
 import { registerVelaRoutes } from '../../src/routes/vela.js';
+import { workspaceContextFromDirectoryItem } from '../../src/collab/vela-workspace-context.js';
 
 interface StartedServer {
   url: string;
@@ -3626,6 +3627,72 @@ describe('parseAmrEntryAnalyticsPayload — entry sources added in this PR', () 
 // Model entitlements must use the request's verified selection, never the
 // daemon's ambient CLI workspace or a different tab's current selection.
 describe('GET /api/amr/models explicit workspace authority', () => {
+  it('keeps verified A to B to A entitlements separate from the ambient CLI workspace', async () => {
+    const binary = path.join(tmpHome, 'scoped-model-vela.mjs');
+    const reads = path.join(tmpHome, 'model-reads.jsonl');
+    writeFileSync(binary, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+if (process.argv[2] !== 'model') { console.log('1.0.0'); process.exit(0); }
+const source = process.argv[3] === 'preset' ? 'preset' : 'remote';
+if (process.argv[3] === 'list' && !process.argv.includes('--help')) appendFileSync(${JSON.stringify(reads)}, JSON.stringify({ workspaceId: process.env.VELA_WORKSPACE_ID, argv: process.argv.slice(2) }) + '\\n');
+console.log(JSON.stringify({ source, data: [
+  { id: 'public_model_deepseek_v4_1_flash', enabled: true },
+  { id: 'public_model_deepseek_v4_pro', enabled: source === 'remote' && process.env.VELA_WORKSPACE_ID === 'go-b' },
+] }));
+`);
+    chmodSync(binary, 0o755);
+    const config = await readAppConfig(process.env.OD_DATA_DIR as string);
+    const app = express();
+    const lifecycle = registerVelaRoutes(app, {
+      paths: { RUNTIME_DATA_DIR: process.env.OD_DATA_DIR as string },
+      appConfig: { readAppConfig: async () => ({
+        ...config, agentCliEnv: { amr: { VELA_BIN: binary, VELA_WORKSPACE_ID: 'ambient-go' } },
+      }) },
+      http: {},
+      env: process.env,
+      verifyWorkspaceReadAuthority: async (req) => {
+        const headers = req as { get(name: string): string };
+        return { ok: true, context: workspaceContextFromDirectoryItem({
+          workspaceId: headers.get('x-od-workspace-id'),
+          workspaceMemberId: headers.get('x-od-workspace-member-id'),
+          workspaceName: 'scoped fixture', workspaceType: 'team', role: 'member',
+          memberStatus: 'active', lifecycleState: 'active',
+        }) };
+      },
+    });
+    const scopedServer = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => scopedServer.once('listening', resolve));
+    try {
+      const address = scopedServer.address() as AddressInfo;
+      let beforeReturnReads = '';
+      for (const workspaceId of ['free-a', 'go-b', 'free-a']) {
+        await vi.waitFor(async () => {
+          const response = await fetch(`http://127.0.0.1:${address.port}/api/amr/models`, {
+            headers: { 'x-od-workspace-id': workspaceId, 'x-od-workspace-member-id': `member-${workspaceId}` },
+          });
+          expect(response.status).toBe(200);
+          const catalog = await response.json() as { source: string; models: Array<{ id: string; enabled?: boolean }> };
+          expect(catalog.source).toBe('remote');
+          expect(catalog.models.find((model) => model.id === 'deepseek-v4-pro')?.enabled).toBe(workspaceId === 'go-b');
+        });
+        if (workspaceId === 'go-b') beforeReturnReads = readFileSync(reads, 'utf8');
+      }
+      // A-return must reuse A's own catalog. A B-refresh already in flight
+      // may still finish, so compare A commands rather than all child writes.
+      const parseReads = (value: string): Array<{ workspaceId: string; argv: string[] }> => value.trim().split('\n').map((line) => JSON.parse(line));
+      const calls = parseReads(readFileSync(reads, 'utf8'));
+      expect(calls.filter((call) => call.workspaceId === 'free-a')).toEqual(
+        parseReads(beforeReturnReads).filter((call) => call.workspaceId === 'free-a'),
+      );
+      expect(new Set(calls.map((call) => call.workspaceId))).toEqual(new Set(['free-a', 'go-b']));
+      expect(calls.every((call) => JSON.stringify(call.argv) === JSON.stringify(['model', 'list', '--all', '--format', 'json']))).toBe(true);
+    } finally {
+      await lifecycle.close();
+      await new Promise<void>((resolve) => scopedServer.close(() => resolve()));
+    }
+  });
+
+
   it('rejects a denied selected principal before reading a model catalog', async () => {
     const app = express();
     const verifyWorkspaceReadAuthority = vi.fn(async () => ({
