@@ -78,7 +78,7 @@ vi.mock('../../src/components/EntryView', () => ({
 }));
 
 vi.mock('../../src/components/ProjectView', () => ({
-  ProjectView: () => <div>Project view</div>,
+  ProjectView: ({ amrProfile }: { amrProfile?: string | null }) => <div data-testid="project-amr-profile">{amrProfile ?? 'none'}</div>,
 }));
 
 vi.mock('../../src/components/pet/PetOverlay', () => ({
@@ -414,6 +414,21 @@ describe('App AMR polling', () => {
       expect(screen.getByTestId('amr-model').textContent).toBe('unlocked-model');
     });
     expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands the authenticated daemon profile to a project when Settings has no override', async () => {
+    const project = { id: 'profile-project', name: 'Profile project', skillId: null,
+      designSystemId: null, customInstructions: '', createdAt: 1, updatedAt: 1 };
+    useRouteMock.mockReturnValue({ kind: 'project', projectId: project.id, conversationId: null, fileName: null });
+    mockedListProjects.mockResolvedValue([project]);
+    mockedLoadConfig.mockReturnValue({ ...baseConfig, mode: 'daemon', agentId: 'amr', agentCliEnv: {} });
+    mockedFetchVelaLoginStatus.mockResolvedValue({
+      loggedIn: true, loginInFlight: false, profile: 'local',
+      sessionState: 'authenticated', user: { id: 'profile-user', email: 'profile@example.test' },
+      configPath: '/isolated/amr/config.json',
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('project-amr-profile').textContent).toBe('local'));
   });
 
   it('returns every authenticated surface to onboarding when Cloud auth definitively expires', async () => {

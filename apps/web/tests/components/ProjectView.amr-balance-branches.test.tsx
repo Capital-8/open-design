@@ -48,6 +48,7 @@ import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext
 import { streamViaDaemon } from '../../src/providers/daemon';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
+import { setRuntimeAmrConsoleOrigin } from '../../src/runtime/amr-guidance';
 import {
   createConversation,
   listConversations,
@@ -505,6 +506,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     window.sessionStorage.clear();
     window.localStorage.clear();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
     stubFetch();
     vi.stubGlobal('open', mockedWindowOpen);
     mockedListConversations.mockImplementation(async (projectId: string) => [
@@ -962,6 +964,37 @@ describe('Link request concurrency rejection preserves the original send', () =>
     await clickSendWhenReady();
     await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2));
   });
+  it.each([
+    ['local', 'http://127.0.0.1:49195'],
+    ['test', 'http://127.0.0.1:49195'],
+    ['prod', 'https://open-design.ai'],
+  ] as const)('snapshot-less funding failure freezes authenticated %s profile and payer', async (profile, origin) => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    const props = { project: { ...project(), pendingPrompt: null } as never, amrProfile: profile };
+    const view = renderProjectView(props);
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('profile-funding-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link insufficient funding'), {
+        code: 'AMR_INSUFFICIENT_BALANCE',
+      }));
+    });
+    await screen.findByTestId('amr-balance-dialog-plans');
+    // A later status/profile render cannot change the failure's billing link.
+    view.rerender(projectViewElement({ ...props, amrProfile: profile === 'prod' ? 'local' : 'prod' }));
+    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+    const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+    expect(target.origin).toBe(origin);
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+    setRuntimeAmrConsoleOrigin(null);
+  });
+
   it.each([
     ['local', 'http://localhost:5173'],
     ['test', 'https://open-design.powerformer.net'],
