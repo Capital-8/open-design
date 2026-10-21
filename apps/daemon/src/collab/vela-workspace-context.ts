@@ -155,6 +155,13 @@ export function mapVelaWorkspaceContext(
   };
   const billingRecovery = parseBillingRecovery(raw.billingRecovery);
   if (billingRecovery) context.billingRecovery = billingRecovery;
+  if (
+    typeof raw.memberCount === 'number'
+    && Number.isSafeInteger(raw.memberCount)
+    && raw.memberCount > 0
+  ) {
+    context.memberCount = raw.memberCount;
+  }
   const lastActive = str(raw.lastActiveWorkspaceId);
   if (lastActive) context.lastActiveWorkspaceId = lastActive;
   // The team workspace IS the team scope; carry its id as teamId so the resource

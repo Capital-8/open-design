@@ -76,6 +76,53 @@ afterEach(() => {
 });
 
 describe('mapVelaWorkspaceContext', () => {
+  it.each(['owner', 'admin', 'member'] as const)(
+    'carries the same authorized workspace active member count for %s without changing permissions',
+    (role) => {
+      const mapped = mapVelaWorkspaceContext({ ...B_TEAM_CONTEXT, role, memberCount: 7 });
+      expect(mapped).toMatchObject({
+        workspaceId: 'ws-team-1',
+        workspaceMemberId: 'wm-1',
+        memberCount: 7,
+        permissions: B_TEAM_CONTEXT.permissions,
+      });
+      expect(mapped?.seatSummary.usedSeats).toBe(2);
+    },
+  );
+
+  it.each([undefined, null, 0, -1, 1.5, '7', NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+    'omits unknown or invalid active member count %s rather than deriving it from seats',
+    (memberCount) => {
+      const mapped = mapVelaWorkspaceContext({ ...B_TEAM_CONTEXT, memberCount });
+      expect(mapped).not.toBeNull();
+      expect(mapped).not.toHaveProperty('memberCount');
+    },
+  );
+
+  it('keeps member counts bound to each rich context across A to B to A', () => {
+    const inputs = [
+      { ...B_TEAM_CONTEXT, memberCount: 2 },
+      { ...B_TEAM_CONTEXT, workspaceId: 'ws-team-2', workspaceMemberId: 'wm-2', memberCount: 5 },
+      { ...B_TEAM_CONTEXT, memberCount: 3 },
+    ];
+    expect(inputs.map((input) => {
+      const mapped = mapVelaWorkspaceContext(input);
+      return [mapped?.workspaceId, mapped?.workspaceMemberId, mapped?.memberCount];
+    })).toEqual([
+      ['ws-team-1', 'wm-1', 2],
+      ['ws-team-2', 'wm-2', 5],
+      ['ws-team-1', 'wm-1', 3],
+    ]);
+  });
+
+  it('does not synthesize an active member count from a directory entry or its seat placeholder', () => {
+    expect(workspaceContextFromDirectoryItem(B_DIRECTORY_ITEM)).not.toHaveProperty('memberCount');
+    expect(mapVelaWorkspaceContext({ ...B_TEAM_CONTEXT, memberCount: 0, seatSummary: undefined }))
+      .not.toHaveProperty('memberCount');
+    expect(mapVelaWorkspaceContext({ ...B_TEAM_CONTEXT, workspaceMemberId: '', memberCount: 7 }))
+      .toBeNull();
+  });
+
   it('maps a team context, deriving teamId from workspaceId and preserving BYOK', () => {
     const mapped = mapVelaWorkspaceContext(B_TEAM_CONTEXT);
     expect(mapped).not.toBeNull();
