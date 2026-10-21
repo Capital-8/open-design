@@ -1,5 +1,7 @@
 name: pack-cost-experiment
 on:
+  push:
+    branches: [experiment/pack-cost-20261022]
   workflow_dispatch:
 permissions:
   contents: read
