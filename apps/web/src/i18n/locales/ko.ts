@@ -107,7 +107,7 @@ export const ko: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "이메일 주소 입력…",
   "workspaceInvite.onboardingErrorAlreadyMember": "이미 워크스페이스 멤버인 이메일이므로 초대가 필요하지 않습니다",
   "workspaceInvite.onboardingErrorPendingInvite": "이 이메일에는 이미 수락 대기 중인 초대가 있습니다",
-  "workspaceInvite.onboardingPartialSummary": "동료 {count}명을 초대했습니다. 실패한 주소를 확인하세요.",
+  "workspaceInvite.onboardingPartialSummary": "동료 {count}명을 초대했습니다. {failed}개 주소에 전송하지 못했습니다. 실패한 주소를 확인하세요.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

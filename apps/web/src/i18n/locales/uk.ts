@@ -107,7 +107,7 @@ export const uk: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "Введіть адресу електронної пошти…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Ця адреса вже належить учаснику простору; запрошення не потрібне",
   "workspaceInvite.onboardingErrorPendingInvite": "Для цієї адреси вже є запрошення, що очікує прийняття",
-  "workspaceInvite.onboardingPartialSummary": "Запрошено колег: {count}; перевірте адреси з помилками.",
+  "workspaceInvite.onboardingPartialSummary": "Запрошено колег: {count}; адрес із помилками: {failed}. Перевірте їх.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

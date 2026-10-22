@@ -107,7 +107,7 @@ export const esES: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "Introduce una dirección de correo…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Este correo ya pertenece al espacio de trabajo; no necesita invitación",
   "workspaceInvite.onboardingErrorPendingInvite": "Este correo ya tiene una invitación pendiente",
-  "workspaceInvite.onboardingPartialSummary": "Se ha invitado a {count} colegas; revisa las direcciones fallidas.",
+  "workspaceInvite.onboardingPartialSummary": "Se ha invitado a {count} colegas; {failed} direcciones fallaron. Revísalas.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

@@ -107,7 +107,7 @@ export const ar: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "أدخل عنوان البريد الإلكتروني…",
   "workspaceInvite.onboardingErrorAlreadyMember": "هذا البريد عضو في مساحة العمل بالفعل ولا يحتاج إلى دعوة",
   "workspaceInvite.onboardingErrorPendingInvite": "توجد دعوة معلقة لهذا البريد بالفعل",
-  "workspaceInvite.onboardingPartialSummary": "تمت دعوة {count} من الزملاء؛ يرجى معالجة العناوين غير الناجحة.",
+  "workspaceInvite.onboardingPartialSummary": "تمت دعوة {count} من الزملاء؛ فشل إرسال {failed} دعوات. يرجى معالجة العناوين غير الناجحة.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

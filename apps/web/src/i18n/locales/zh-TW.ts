@@ -107,7 +107,7 @@ export const zhTW: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "輸入電子郵件地址……",
   "workspaceInvite.onboardingErrorAlreadyMember": "此信箱已是工作空間成員，無需邀請",
   "workspaceInvite.onboardingErrorPendingInvite": "此信箱已有待接受的邀請",
-  "workspaceInvite.onboardingPartialSummary": "已邀請 {count} 位同事；請處理未成功的信箱。",
+  "workspaceInvite.onboardingPartialSummary": "已邀請 {count} 位同事；{failed} 位未成功。請處理未成功的信箱。",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

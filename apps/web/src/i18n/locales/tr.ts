@@ -107,7 +107,7 @@ export const tr: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "E-posta adresini girin…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Bu e-posta zaten çalışma alanının üyesi; davet gerekmez",
   "workspaceInvite.onboardingErrorPendingInvite": "Bu e-posta için zaten bekleyen bir davet var",
-  "workspaceInvite.onboardingPartialSummary": "{count} çalışma arkadaşı davet edildi; başarısız adresleri kontrol edin.",
+  "workspaceInvite.onboardingPartialSummary": "{count} çalışma arkadaşı davet edildi; {failed} adres başarısız oldu. Başarısız adresleri kontrol edin.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

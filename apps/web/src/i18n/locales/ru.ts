@@ -107,7 +107,7 @@ export const ru: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "Введите адрес электронной почты…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Этот адрес уже принадлежит участнику пространства; приглашение не требуется",
   "workspaceInvite.onboardingErrorPendingInvite": "Для этого адреса уже есть ожидающее приглашение",
-  "workspaceInvite.onboardingPartialSummary": "Приглашено коллег: {count}; проверьте адреса с ошибками.",
+  "workspaceInvite.onboardingPartialSummary": "Приглашено коллег: {count}; адресов с ошибками: {failed}. Проверьте их.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

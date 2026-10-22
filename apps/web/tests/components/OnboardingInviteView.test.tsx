@@ -29,16 +29,16 @@ describe('registration invitation guidance', () => {
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('member@example.com');
     expect(finish).not.toHaveBeenCalled();
   });
-  it('waits for explicit workspace entry after success without emitting the ordinary-dialog event', async () => {
+  it('enters the workspace after the success countdown without emitting the ordinary-dialog event', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn(async () => response([{ email: 'a@example.com', ok: true }])));
     const event = vi.fn(); window.addEventListener('od:workspace-invites-sent', event);
     try {
       const finish = mount(); email('a@example.com'); await send();
-      expect(screen.getByRole('status').textContent).toContain('1');
+      expect(screen.getByRole('heading', { name: '邀请已发送' })).toBeTruthy();
       expect(finish).not.toHaveBeenCalled(); expect(event).not.toHaveBeenCalled();
-      act(() => vi.advanceTimersByTime(5000)); expect(finish).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole('button', { name: '进入工作台' })); expect(finish).toHaveBeenCalledWith(1, 'sent'); expect(event).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(3000)); expect(finish).toHaveBeenCalledWith(1, 'sent'); expect(event).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: '进入工作台' })); expect(finish).toHaveBeenCalledTimes(1);
     } finally { window.removeEventListener('od:workspace-invites-sent', event); }
   });
   it('retains only failed rows, briefly shows batch success and returns the confirmed cumulative count on skip', async () => {
@@ -48,7 +48,7 @@ describe('registration invitation guidance', () => {
     ])));
     const finish = mount(); email('sent@example.com'); fireEvent.click(screen.getByRole('button', { name: '添加成员' })); email('retry@example.com', 1); await send();
     expect((screen.getByRole('button', { name: '已邀请 1 位同事' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole('status').textContent).toBe('已邀请 1 位同事；请处理未成功的邮箱。');
+    expect(screen.getByText('已发送 1 位，1 位未发送。请修改或重试失败项，已发送项不会重复发送。')).toBeTruthy();
     expect(screen.getAllByRole('textbox')).toHaveLength(1);
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('retry@example.com');
     act(() => vi.advanceTimersByTime(650));
@@ -65,7 +65,7 @@ describe('registration invitation guidance', () => {
     act(() => vi.advanceTimersByTime(650)); await send();
     expect(finish).not.toHaveBeenCalled();
     expect(JSON.parse(fetcher.mock.calls[1]![1].body)).toEqual({ invites: [{ email: 'retry@example.com', role: 'member', idempotencyKey: expect.any(String) }] });
-    act(() => vi.advanceTimersByTime(5000)); expect(finish).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(3000)); expect(finish).toHaveBeenCalledWith(2, 'sent');
     fireEvent.click(screen.getByRole('button', { name: '进入工作台' })); expect(finish).toHaveBeenCalledTimes(1); expect(finish).toHaveBeenCalledWith(2, 'sent');
   });
   it('keeps all input and restores sending after complete failure without counting unsent rows', async () => {
