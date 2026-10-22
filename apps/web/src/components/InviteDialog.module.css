@@ -51,7 +51,7 @@
 .onboarding .panel { display:flex;flex-direction:column;justify-content:center;align-items:stretch;width:auto;max-width:none;max-height:none;min-width:0;padding:32px 54px;border-radius:0;box-shadow:none;overflow-y:auto; }
 .onboarding .panel > header,.onboarding .panel > p,.onboarding form,.onboarding .skip { width:440px;max-width:100%;align-self:center;box-sizing:border-box; }
 .onboarding .heading { justify-content:center;padding:0; }
-.onboarding .heading h2 { font-size:28px;line-height:37.8px;font-weight:700;letter-spacing:-.6px; }
+.onboarding .heading h2 { font-size:clamp(24px,2vw,28px);line-height:1.35;font-weight:700;letter-spacing:-.6px; }
 .onboarding .context { text-align:center;margin:12px 0 24px;font-size:14px;line-height:21px;color:#666; }
 .onboarding .labels,.onboarding .row { grid-template-columns:minmax(0,1fr) 112px;gap:8px;position:relative; }
 .onboarding .labels { width:calc(100% - 14px);font-size:13px;line-height:18px; }
@@ -63,7 +63,7 @@
 .onboarding .rows::-webkit-scrollbar-thumb { background:#c7c7c7;border-radius:4px; }
 .onboarding .input,.onboarding .role,.onboarding .fixedRole { height:48px;min-height:48px;font-size:14px;font-weight:600;line-height:17.5px;border-radius:9px; }
 .onboarding .input { background:#fafafa;color:#494949; }
-.onboarding .role:not(:disabled) { color:#494949; }
+.onboarding .role:not(:disabled),.onboarding .role:is(:hover,:active):not(:disabled) { color:#494949;border-color:#dedede; }
 .onboarding .input::placeholder { color:#bdbdbd;opacity:1; }
 .onboarding .remove { position:absolute;left:calc(100% + 6px);top:12px;width:24px;min-width:24px;height:24px;min-height:24px;font-size:17px;font-weight:600;line-height:17px; }
 .onboarding .add { color:#666;line-height:13px;height:36px;min-height:36px;margin:12px 0 24px;font-size:13px;font-weight:600;gap:6px; }
