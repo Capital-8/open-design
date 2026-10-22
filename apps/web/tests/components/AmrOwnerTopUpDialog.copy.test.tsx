@@ -69,6 +69,7 @@ afterEach(() => {
  */
 // 席位一期：团队 Admin 不管理充值或订阅，额度不足应联系工作空间 Owner。
 // 本次只同步该联系对象；原逐字、名字不插值、单出口和语言完整性断言保留。
+// 2026-10-20 frozen client/r506 supersedes the earlier wording with the same Owner-only role.
 describe('AmrOwnerTopUpDialog 的正式文案', () => {
   it('标题逐字照产品稿', () => {
     renderDialog();
@@ -77,7 +78,7 @@ describe('AmrOwnerTopUpDialog 的正式文案', () => {
 
   it('拿得到 Owner 名字时仍是定稿那一句,名字不插进去', () => {
     renderDialog({ ownerName: '张三' });
-    expect(textOf('当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。')).toBeTruthy();
+    expect(textOf('当前团队额度不足，请联系团队空间所有者充值或升级订阅。')).toBeTruthy();
     expect(screen.queryByText('张三')).toBeNull();
   });
 
@@ -90,7 +91,7 @@ describe('AmrOwnerTopUpDialog 的正式文案', () => {
     '拿不到名字(%s)时也是定稿那一句',
     (ownerName) => {
       renderDialog({ ownerName: ownerName as string | null | undefined });
-      expect(textOf('当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。')).toBeTruthy();
+      expect(textOf('当前团队额度不足，请联系团队空间所有者充值或升级订阅。')).toBeTruthy();
     },
   );
 });
