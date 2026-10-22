@@ -126,11 +126,19 @@ const MAX_BUFFER_SIZE = 50;
 const FRAME_PLATFORM = 'web:javascript';
 
 let context: ExceptionTrackingContext | null = null;
+// Installation identity pushed by the provider; survives a late bootstrap.
+let installationDistinctId: string | null = null;
 const buffer: BufferedSafetyEvent[] = [];
 let installed = false;
 
 export function setExceptionTrackingContext(next: ExceptionTrackingContext): void {
-  context = { ...next, appSessionId: next.appSessionId ?? context?.appSessionId };
+  context = {
+    ...next,
+    // An installation id learned via setIdentity outranks a bootstrap that
+    // resolved its config before the id was minted (OPEND-4220).
+    distinctId: installationDistinctId ?? next.distinctId,
+    appSessionId: next.appSessionId ?? context?.appSessionId,
+  };
   if (buffer.length === 0) return;
   const drain = buffer.splice(0, buffer.length);
   for (const item of drain) {
@@ -144,6 +152,19 @@ export function clearExceptionTrackingContext(): void {
   // until the page unloads — no key, nowhere to send them, but also
   // nothing leaks.
   context = null;
+  installationDistinctId = null;
+}
+
+// Switches the safety channel to the installation identity once it exists.
+// On a fresh install bootstrap runs before the installation id is minted and
+// falls back to the anonymous id; without this patch every stability event in
+// that session keeps the anonymous id while native events use the
+// installation id (OPEND-4220). No-op until a context exists.
+export function patchExceptionTrackingDistinctId(distinctId: string | null): void {
+  if (!distinctId) return;
+  installationDistinctId = distinctId;
+  if (!context || context.distinctId === distinctId) return;
+  context = { ...context, distinctId };
 }
 
 // Patches only the appVersion field on an existing context. Safe to call

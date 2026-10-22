@@ -7,6 +7,7 @@ import {
   clearExceptionTrackingContext,
   installErrorHandlers,
   patchExceptionTrackingAppVersion,
+  patchExceptionTrackingDistinctId,
   reportHandledException,
   reportSafetyEvent,
   reportClientMetricEvent,
@@ -677,4 +678,31 @@ it('keeps legacy preview/app-white-screen/firstpaint events on the safety channe
   expect(fetchMock).not.toHaveBeenCalled();
   setExceptionTrackingContext({ apiKey: 'phc_test', host: 'https://ingest.invalid', distinctId: 'install' });
   expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).event)).toEqual(names);
+});
+
+describe('safety identity on a fresh install (OPEND-4220)', () => {
+  const base = { apiKey: 'phc_test', host: 'https://ingest.invalid', appVersion: '1.2.3', sessionId: 'session-1', telemetryEnv: 'test' };
+
+  it('switches renderer stability events to the installation id minted after bootstrap', () => {
+    setExceptionTrackingContext({ ...base, distinctId: 'anon-bootstrap' });
+    patchExceptionTrackingDistinctId('install-1');
+    reportSafetyEvent('client_boot_timing', { duration_ms: 1 });
+    const body = lastFetchedBody();
+    expect(body.distinct_id).toBe('install-1');
+    expect((body.properties as Record<string, unknown>).device_id).toBe('install-1');
+  });
+
+  it('keeps the installation id when bootstrap resolves after setIdentity', () => {
+    patchExceptionTrackingDistinctId('install-1');
+    setExceptionTrackingContext({ ...base, distinctId: 'anon-bootstrap' });
+    reportSafetyEvent('client_boot_timing', { duration_ms: 1 });
+    expect((lastFetchedBody().properties as Record<string, unknown>).device_id).toBe('install-1');
+  });
+
+  it('ignores a missing installation id', () => {
+    setExceptionTrackingContext({ ...base, distinctId: 'anon-bootstrap' });
+    patchExceptionTrackingDistinctId(null);
+    reportSafetyEvent('client_boot_timing', { duration_ms: 1 });
+    expect((lastFetchedBody().properties as Record<string, unknown>).device_id).toBe('anon-bootstrap');
+  });
 });
