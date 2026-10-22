@@ -1,5 +1,5 @@
 import type { WorkspaceBillingResponse, WorkspaceCollabContext } from '@open-design/contracts';
-import { workspaceBillingBalanceUsd, workspaceBillingSnapshotForContext } from './useWorkspaceContext';
+import { workspaceBillingBalanceUsd, workspaceBillingSnapshotForContext, workspaceBillingRuntimeProjectionIsUsable } from './useWorkspaceContext';
 
 export type WorkspaceQuotaTier = 'free' | 'go' | 'plus' | 'pro' | 'max';
 
@@ -7,6 +7,8 @@ export type WorkspaceQuotaTier = 'free' | 'go' | 'plus' | 'pro' | 'max';
 export interface WorkspaceQuotaView {
   tier: WorkspaceQuotaTier | null;
   planKnown: boolean;
+  /** Only a fresh, exact-principal preflight may opt into the shared UI. */
+  sharedBilling?: boolean;
   loading: boolean;
   balanceUsd: string | null;
   /** Only a server status may populate this; never dates. */
@@ -103,8 +105,23 @@ export function workspaceQuotaView({ context, response, tier, balanceUsd }: {
   const scopedTier = snapshotTier || context?.planId?.trim()
     || (context?.billingState === 'free' ? 'free' : null)
     || (response == null ? tier : null);
+  // Snapshot scope/version and the global rollout switch do not prove migration.
+  // The existing preflight producer excludes legacy Teams before returning shared.
+  const preflight = response?.preflight;
+  const mode = preflight && typeof preflight === 'object' ? Reflect.get(preflight, 'billingMode') : null;
+  const preflightAge = preflight ? Date.now() - Date.parse(preflight.generatedAt) : Number.NaN;
+  const runtime = response?.workspaceRuntime;
+  const runtimeUsable = !runtime || (runtime.workspaceId === context?.workspaceId
+    && runtime.workspaceMemberId === context?.workspaceMemberId
+    && workspaceBillingRuntimeProjectionIsUsable(runtime));
+  const sharedBilling = runtimeUsable && mode === 'shared'
+    && preflight?.schemaVersion === 1
+    && preflight.workspaceId === context?.workspaceId
+    && preflight.workspaceMemberId === context?.workspaceMemberId
+    && Number.isFinite(preflightAge) && Math.abs(preflightAge) < 60_000;
   return {
     tier: workspaceQuotaTier(scopedTier),
+    sharedBilling,
     planKnown: Boolean(scopedTier?.trim()),
     loading: balance == null && !response?.workspaceBalance && !response?.workspaceSnapshot,
     balanceUsd: balance,

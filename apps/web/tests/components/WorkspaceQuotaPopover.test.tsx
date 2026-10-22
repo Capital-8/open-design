@@ -12,7 +12,7 @@ import { workspaceContextFixture } from '../helpers/workspace-context';
 const context = workspaceContextFixture({ workspaceId: 'workspace-a', workspaceMemberId: 'member-a', role: 'owner' });
 function view(tier: WorkspaceQuotaTier, balanceUsd = '24', remainingPercent = 75, resetsAt: string | null = '2026-10-22T06:00:00Z'): WorkspaceQuotaView {
   return {
-    tier, planKnown: true, loading: false, balanceUsd, planStatus: null,
+    tier, planKnown: true, sharedBilling: true, loading: false, balanceUsd, planStatus: null,
     windows: tier === 'free' ? [] : (tier === 'go' ? [18_000, 604_800] : [604_800]).map(durationSeconds => ({
       durationSeconds, remainingPercent, resetsAt, ...(remainingPercent === 0 ? { exhausted: true as const } : {}),
     })),
