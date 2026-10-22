@@ -48,6 +48,7 @@ type Session = {
   role: Role;
   actor: Actor;
   runtime: ReturnType<typeof createToolsDevSuite>;
+  dataDir: string;
   env: Record<string, string>;
   cases: Case[];
 };
@@ -254,7 +255,7 @@ async function startSession(browser: Browser, fixture: Fixture, role: Role, atte
       if (surface === 'project') await expect(page.frameLocator('[data-testid="artifact-preview-frame"]')
         .getByRole('heading', { name: 'Existing RUN011 output survives' })).toBeVisible({ timeout: T.long });
     }
-    return { role, actor, runtime, env, cases };
+    return { role, actor, runtime, dataDir, env, cases };
   } catch (error) {
     for (const item of cases) await item.page.close().catch(() => undefined);
     await runtime.stopWeb(env).catch(() => undefined);
@@ -316,8 +317,56 @@ async function terminalRun(item: Case, session: Session, fixture: Fixture, runId
     row = await response.json() as Record<string, unknown>;
     return row.status;
   }, { timeout: T.xlong, intervals: [250, 500, 1000] }).toBe('succeeded');
-  expect(row.exitCode).toBe(0);
-  return { status: row.status, exitCode: row.exitCode ?? null, errorCode: row.errorCode ?? null };
+  expect(row).toMatchObject({ id: runId, status: 'succeeded', signal: null,
+    cancelRequested: false, cancelOrigin: null, error: null, errorCode: null,
+    failureCategory: null, endedWithUnfinishedWork: false });
+  expect([0, 130]).toContain(row.exitCode);
+  let acpEvidence: { eventsSha256: string; completedSteps: number;
+    completedMessages: number; retryDiagnostics: number } | null = null;
+  if (row.exitCode === 130) {
+    // Vela can exit 130 after a successful ACP completion. Check the original
+    // local run stream before accepting the daemon's succeeded verdict; a
+    // retry diagnostic alone is not a terminal failure, and the AMR receipt
+    // below still must prove every chargeable call settled exactly once.
+    expect(runId).toMatch(/^[0-9a-f-]{36}$/i);
+    const eventsPath = join(session.dataDir, 'runs', runId, 'events.jsonl');
+    await expect.poll(async () => {
+      try {
+        const lines = (await readFile(eventsPath, 'utf8')).trim().split('\n');
+        return (JSON.parse(lines.at(-1) ?? '{}') as { event?: string }).event ?? null;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw error;
+      }
+    }, { timeout: T.long, intervals: [100, 250, 500] }).toBe('end');
+    const bytes = await readFile(eventsPath);
+    const events = bytes.toString().trim().split('\n').map(line => JSON.parse(line) as {
+      event: string; data?: Record<string, unknown>;
+    });
+    const diagnostics = events.filter(event => event.event === 'agent'
+      && event.data?.type === 'diagnostic');
+    const completedSteps = diagnostics.filter(event => event.data?.name === 'model_step_lifecycle'
+      && event.data.phase === 'end' && event.data.status === 'completed').length;
+    const completedMessages = diagnostics.filter(event => event.data?.name === 'assistant_message_lifecycle'
+      && event.data.phase === 'end' && event.data.status === 'completed').length;
+    expect(completedSteps).toBeGreaterThan(0);
+    expect(completedMessages).toBeGreaterThan(0);
+    expect(events.some(event => event.event === 'agent' && event.data?.type === 'usage')).toBe(true);
+    expect(events.some(event => event.event === 'agent' && event.data?.type === 'error')).toBe(false);
+    expect(diagnostics.some(event => ['model_step_lifecycle', 'assistant_message_lifecycle'].includes(
+      String(event.data?.name)) && event.data?.phase === 'end'
+      && event.data.status !== 'completed')).toBe(false);
+    expect(events.some(event => event.event === 'diagnostic' && event.data?.type === 'runtime_close'
+      && event.data.status === 'succeeded' && event.data.exit_code === 130)).toBe(true);
+    expect(events.at(-1)).toMatchObject({ event: 'end',
+      data: { status: 'succeeded', code: 130, signal: null, endedWithUnfinishedWork: false,
+        failureCategory: null } });
+    acpEvidence = { eventsSha256: createHash('sha256').update(bytes).digest('hex'),
+      completedSteps, completedMessages,
+      retryDiagnostics: diagnostics.filter(event => event.data?.name === 'model_retry').length };
+  }
+  return { status: row.status, exitCode: row.exitCode, errorCode: row.errorCode,
+    acpEvidence };
 }
 
 function balanceNotice(item: Case) {
