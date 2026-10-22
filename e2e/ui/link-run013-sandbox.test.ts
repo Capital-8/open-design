@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, Locator, Page } from '@playwright/test';
 
 import { clusterTest as test, expect } from '@/playwright/suite';
 import { warmPlaywrightDaemonRuntime, warmPlaywrightWebRuntime } from '@/playwright/runtime-lifecycle';
@@ -291,6 +291,16 @@ async function expectSelectedModel(session: Session) {
   expect(model).toBe(session.modelId);
 }
 
+async function waitForNoticeArtwork(dialog: Locator) {
+  await expect.poll(() => dialog.evaluate(element => getComputedStyle(element).opacity),
+    { timeout: T.long }).toBe('1');
+  const benefits = dialog.locator('li');
+  if (await benefits.count()) {
+    await expect.poll(() => benefits.last().evaluate(element => getComputedStyle(element).opacity),
+      { timeout: T.long }).toBe('1');
+  }
+}
+
 async function startSpectatorNoticeWatch(page: Page) {
   await page.evaluate(() => {
     type Watch = { count: number; observer: MutationObserver; seen: WeakSet<Element> };
@@ -395,6 +405,7 @@ test('[P0] RUN013 three Go roles notify only the initiator at actual Link full',
       await expect.poll(() => initiator.runResponses.length, { timeout: T.long }).toBe(countPosts(initiator));
       const newPosts = countPosts(initiator) - before;
       const terminal = await blockedRunTerminal(initiator, before);
+      await waitForNoticeArtwork(dialog);
       await initiator.page.screenshot({ path: join(output!, 'RUN013-' + role + '-initiator.png') });
       for (const spectator of spectators) {
         await spectator.page.screenshot({ path: join(output!, 'RUN013-' + role + '-spectator-' + spectator.role + '.png') });
@@ -502,6 +513,7 @@ test('[P0] RUN013 insufficient paygo balance remains blocked after releasing a r
     await expect.poll(() => session.runResponses.length, { timeout: T.long }).toBe(countPosts(session));
     const firstPosts = countPosts(session) - before;
     const firstTerminal = await blockedRunTerminal(session, before);
+    await waitForNoticeArtwork(firstHint === 'balance' ? balanceDialog : concurrencyDialog);
     await session.page.screenshot({ path: join(output!, 'RUN013-dual-full-and-insufficient.png') });
     await marker('dual-refusal-ready.json', { firstHint, newPosts: firstPosts,
       modelId: fixture.runtime.dualModelId, terminal: firstTerminal,
@@ -536,6 +548,7 @@ test('[P0] RUN013 insufficient paygo balance remains blocked after releasing a r
     await expect.poll(() => session.runResponses.length, { timeout: T.long }).toBe(countPosts(session));
     const manualPosts = countPosts(session) - manualBefore;
     const manualTerminal = await blockedRunTerminal(session, manualBefore);
+    await waitForNoticeArtwork(balanceDialog);
     await session.page.screenshot({ path: join(output!, 'RUN013-dual-after-release-still-insufficient.png') });
     await marker('dual-manual-ready.json', { newPosts: manualPosts,
       modelId: fixture.runtime.dualModelId, terminal: manualTerminal,
