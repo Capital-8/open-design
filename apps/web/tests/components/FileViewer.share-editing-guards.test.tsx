@@ -59,7 +59,7 @@ function setup(options: { history?: PreviewComment[]; currentPrepared?: boolean;
   });
   vi.stubGlobal('fetch', fetcher); vi.stubGlobal('crypto', webcrypto);
   vi.spyOn(window, 'confirm').mockReturnValue(true);
-  const tree = () => <CollabProvider value={collab}><FileViewer projectId={projectId} projectKind="prototype" liveHtml={options.srcdoc ? `${currentSource()}<script>localStorage.getItem("test")</script>` : undefined} filesRefreshKey={filesRefreshKey} file={{ name: 'index.html', path: 'index.html', type: 'file', kind: 'html', mime: 'text/html', size: 100, mtime }} previewComments={options.history?.map(comment => ({ ...comment, projectId }))} onSendBoardCommentAttachments={sendComments} onSavePreviewComment={saveComment} /></CollabProvider>;
+  const tree = () => <CollabProvider value={collab}><FileViewer projectId={projectId} projectKind="prototype" isDeck={options.srcdoc} liveHtml={options.srcdoc ? currentSource() : undefined} filesRefreshKey={filesRefreshKey} file={{ name: 'index.html', path: 'index.html', type: 'file', kind: 'html', mime: 'text/html', size: 100, mtime }} previewComments={options.history?.map(comment => ({ ...comment, projectId }))} onSendBoardCommentAttachments={sendComments} onSavePreviewComment={saveComment} /></CollabProvider>;
   const view = render(tree());
   const saveB = () => { editedSource = prepared.replace('Target', 'Edited B'); mtime++; view.rerender(tree()); };
   return { writes, saveComment, sendComments, fetcher, saveB, refreshFiles: () => { filesRefreshKey++; saveB(); }, delayPlan: () => { delayedPlan = true; }, releasePlan };

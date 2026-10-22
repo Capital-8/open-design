@@ -12922,6 +12922,15 @@ describe('FileViewer tweaks toolbar', () => {
       },
     }));
 
+    vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation((data: unknown) => {
+      const request = data as { validateForSave?: boolean; requestId: string; selector: string };
+      if (!request.validateForSave) return;
+      queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
+        data: { type: 'od:comment-active-target-update', requestId: request.requestId,
+          requestedSelector: request.selector, selector: '[data-od-id="hero"]', elementId: 'hero',
+          position: { x: 8, y: 12, width: 120, height: 48 } } })));
+    });
+
     const input = await screen.findByTestId('comment-popover-input') as HTMLTextAreaElement;
     fireEvent.change(input, { target: { value: '保留这个评论' } });
     fireEvent.click(screen.getByTestId('comment-add-send'));
