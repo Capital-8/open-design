@@ -107,7 +107,7 @@ describe('S04 / S06 发送前弹窗', () => {
     for (const ownerName of ['Alice', null]) {
       zh(<AmrOwnerTopUpDialog inline onClose={() => {}} ownerName={ownerName} />);
       expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('团队额度不足');
-      const body = screen.getByText('当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。');
+      const body = screen.getByText('当前团队额度不足，请联系团队空间所有者充值或升级订阅。');
       expect(body).toBeTruthy();
       expect(screen.getByTestId('amr-balance-owner-dismiss')).toBeTruthy();
       cleanup();
