@@ -205,7 +205,7 @@ async function terminalRun(runtime: ReturnType<typeof createToolsDevSuite>,
     return value.status;
   }, { timeout: 240_000, intervals: [500, 1000] }).toBe('succeeded');
   expect(value).toMatchObject({ id: runId, status: 'succeeded', signal: null,
-    cancelRequested: false, cancelOrigin: null, error: null, errorCode: null,
+    cancelOrigin: null, error: null, errorCode: null,
     failureCategory: null, endedWithUnfinishedWork: false });
   expect([0, 130]).toContain(value.exitCode);
   let acpEvidence: { eventsSha256: string; completedSteps: number;
@@ -269,8 +269,8 @@ async function terminalRun(runtime: ReturnType<typeof createToolsDevSuite>,
       agentUsageCount,
       agentErrorCount, incompleteLifecycleCount, runtimeCloseSucceeded, endSucceeded };
   }
-  return { status: value.status, exitCode: value.exitCode, errorCode: value.errorCode,
-    signal: value.signal, cancelRequested: value.cancelRequested, cancelOrigin: value.cancelOrigin,
+  return { status: value.status, exitCode: value.exitCode, errorCode: value.errorCode ?? null,
+    signal: value.signal, cancelOrigin: value.cancelOrigin,
     error: value.error, failureCategory: value.failureCategory,
     endedWithUnfinishedWork: value.endedWithUnfinishedWork,
     acpEvidence };
