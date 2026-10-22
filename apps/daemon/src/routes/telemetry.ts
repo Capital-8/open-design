@@ -19,6 +19,7 @@ import {
   createAnalyticsService,
   readAnalyticsContext,
   readPublicConfigResponse,
+  captureStockAnalyticsBatch,
 } from '../analytics.js';
 import type { AnalyticsContext } from '../analytics.js';
 import { readMetricsConsent, type readAppConfig, type writeAppConfig } from '../app-config.js';
@@ -34,10 +35,12 @@ import { observePendingInstallerApplyAttempts } from '../migration/index.js';
 import {
   OPEN_DESIGN_PLUGIN_ID,
 } from '../mcp-observability.js';
+import { startStockTelemetryCollector } from '../media/stock-telemetry.js';
 
 export interface DaemonTelemetry {
   analyticsService: ReturnType<typeof createAnalyticsService>;
   disposeFatalHandlers: () => void;
+  flushStockTelemetry: () => Promise<void>;
   getCachedAppVersion: () => any;
   resolveAppVersion: () => Promise<any>;
   reportFeedback: (req: {
@@ -376,11 +379,26 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
     }
   })();
 
+  const stockCollector = readPublicConfigResponse().key
+    ? startStockTelemetryCollector({
+        dataDir,
+        send: async (journal, signal) => captureStockAnalyticsBatch({
+          dataDir, events: journal.events,
+          sessionId: journal.header.sessionId ?? journal.header.callId,
+          context: journal.header.identity,
+          appVersion: (await appVersionPromise)?.version ?? UNKNOWN_APP_VERSION,
+          ...(signal ? { signal } : {}),
+        }),
+      })
+    : { dispose: () => {}, flush: async () => {} };
+
   return {
     analyticsService,
+    flushStockTelemetry: stockCollector.flush,
     disposeFatalHandlers: () => {
       telemetryDisposed = true;
       clearInterval(lifecycleTimer);
+      stockCollector.dispose();
       disposeFatalHandlers();
     },
     getCachedAppVersion: () => cachedAppVersion,
