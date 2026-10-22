@@ -2973,9 +2973,9 @@ describe('ProjectView conversation run isolation', () => {
         onRunCreated?: (runId: string) => void;
         onRunStatus?: (status: NonNullable<ChatMessage['runStatus']>) => void;
       };
-      if (streamViaDaemon.mock.calls.length === 1) {
+      if (streamViaDaemon.mock.calls.length <= 2) {
         firstRunError = options.handlers.onError;
-        options.onRunCreated?.('run-before-gateway-rejection');
+        options.onRunCreated?.(`run-${streamViaDaemon.mock.calls.length}`);
         options.onRunStatus?.('running');
       }
     });
@@ -2991,6 +2991,8 @@ describe('ProjectView conversation run isolation', () => {
     fireEvent.click(screen.getByTestId('send-message-alt'));
     await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from c'));
     expect(screen.getByTestId('queued-comment-count-0').textContent).toBe('1');
+    fireEvent.click(screen.getByTestId('send-message'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-1').textContent).toBe('hello from b'));
 
     const error = new Error('AMR Cloud reported insufficient balance') as Error & { code: string };
     error.code = 'AMR_INSUFFICIENT_BALANCE';
@@ -3007,6 +3009,7 @@ describe('ProjectView conversation run isolation', () => {
     renderProjectView(amrConfig, project, amrAgents);
     await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
     await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from c'));
+    expect(screen.getByTestId('send-queued-1').textContent).toBe('hello from b');
     expect(streamViaDaemon).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('queued-comment-count-0').textContent).toBe('1');
 
@@ -3017,6 +3020,60 @@ describe('ProjectView conversation run isolation', () => {
         expect.objectContaining({ role: 'user', content: 'hello from c' }),
       ]),
     }));
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
+    fireEvent.click(screen.getByTestId('send-queued-0'));
+    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(3));
+    expect(streamViaDaemon.mock.calls[2]?.[0]).toEqual(expect.objectContaining({
+      history: expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'hello from b' }),
+      ]),
+    }));
+  });
+
+  it('pauses the original AMR queue when its gateway fails while another conversation is visible', async () => {
+    conversationAMessages = [];
+    const amrAgents: AgentInfo[] = [{
+      id: 'amr', name: 'AMR', bin: 'amr', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }],
+    }];
+    const amrConfig = { ...config, agentId: 'amr' };
+    let firstRunError: ((error: Error) => void) | undefined;
+    streamViaDaemon.mockImplementation(async (input: unknown) => {
+      const options = input as {
+        handlers: { onError: (error: Error) => void };
+        onRunCreated?: (runId: string) => void;
+        onRunStatus?: (status: NonNullable<ChatMessage['runStatus']>) => void;
+      };
+      if (streamViaDaemon.mock.calls.length === 1) {
+        firstRunError = options.handlers.onError;
+        options.onRunCreated?.('run-a-gateway-failure');
+        options.onRunStatus?.('running');
+      }
+    });
+
+    const firstRender = renderProjectView(amrConfig, project, amrAgents);
+    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
+    fireEvent.click(screen.getByTestId('send-message'));
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
+    fireEvent.click(screen.getByTestId('send-message-alt'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from c'));
+
+    fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
+    await act(async () => { resolveConversationBMessages?.([]); });
+    const error = new Error('AMR Cloud reported insufficient balance') as Error & { code: string };
+    error.code = 'AMR_INSUFFICIENT_BALANCE';
+    await act(async () => { firstRunError?.(error); });
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+    expect(streamViaDaemon).toHaveBeenCalledTimes(1);
+
+    firstRender.unmount();
+    renderProjectView(amrConfig, project, amrAgents);
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from c'));
+    expect(streamViaDaemon).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
   });
 
   it('restores only one queued send for each stable request id', async () => {
