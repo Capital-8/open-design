@@ -2960,7 +2960,9 @@ describe('ProjectView conversation run isolation', () => {
     await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
   });
 
-  it('does not auto-send a gateway-paused AMR queue after remount and funding recovery', async () => {
+  it.each(['available', 'insufficient'] as const)(
+    'does not auto-send a gateway-paused AMR queue after remount and funding recovery (%s on busy Send now)',
+    async (freshFunding) => {
     conversationAMessages = [];
     fetchPreviewComments.mockResolvedValue([previewComment]);
     const amrAgents: AgentInfo[] = [{
@@ -3008,7 +3010,7 @@ describe('ProjectView conversation run isolation', () => {
     firstRender.unmount();
     // The wallet now has funds. A prior gateway refusal still cannot grant
     // consent to run a different queued submission after a page reload.
-    renderProjectView(amrConfig, project, amrAgents);
+    const secondRender = renderProjectView(amrConfig, project, amrAgents);
     await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
     await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from c'));
     expect(screen.getByTestId('send-queued-1').textContent).toBe('hello from b');
@@ -3024,7 +3026,45 @@ describe('ProjectView conversation run isolation', () => {
     }));
     await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
     await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
+    if (freshFunding === 'insufficient') {
+      const originalFetch = globalThis.fetch;
+      vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname === '/api/workspace/billing/preflight') {
+          return Promise.resolve(new Response(JSON.stringify({ preflight: {
+            schemaVersion: 1,
+            workspaceId: 'workspace-personal',
+            workspaceMemberId: 'member-personal',
+            modelId: url.searchParams.get('modelId'),
+            generatedAt: new Date().toISOString(),
+            fundingCheck: 'insufficient',
+            balanceUsd: '0',
+          } }), { status: 200, headers: { 'content-type': 'application/json' } }));
+        }
+        return originalFetch(input, init);
+      }));
+    }
     fireEvent.click(screen.getByTestId('send-queued-0'));
+    if (freshFunding === 'insufficient') {
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/workspace/billing/preflight?'),
+        expect.anything(),
+      ));
+      await waitFor(() => expect(screen.getByTestId('amr-balance-dialog')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('idle'));
+      expect(streamViaDaemon).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b');
+      // The failed fresh check must revoke the one-item explicit start even
+      // before a reload, so unrelated state churn cannot re-send this item.
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+      expect(streamViaDaemon).toHaveBeenCalledTimes(2);
+      secondRender.unmount();
+      stubAuthoritativePersonalWorkspaceBalance('10.00');
+      renderProjectView(amrConfig, project, amrAgents);
+      await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
+      expect(streamViaDaemon).toHaveBeenCalledTimes(2);
+      return;
+    }
     await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(3));
     expect(streamViaDaemon.mock.calls[2]?.[0]).toEqual(expect.objectContaining({
       history: expect.arrayContaining([

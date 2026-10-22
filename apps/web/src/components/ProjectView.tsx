@@ -3670,6 +3670,7 @@ export function ProjectView({
   }) => {
     if (
       input.code !== AMR_INSUFFICIENT_BALANCE_CODE
+      || project.id !== projectIdRef.current
       || input.authorityKey !== projectRunAuthorityKeyRef.current
       || input.accountGeneration !== currentWorkspaceAccountGeneration()
     ) return;
@@ -3714,7 +3715,7 @@ export function ProjectView({
       fundingRunKey: input.runKey,
       fundingSource: source,
     });
-  }, [requireManualStartAfterFundingRefusal]);
+  }, [project.id, requireManualStartAfterFundingRefusal]);
   useEffect(() => {
     if (amrBalanceGateBlock?.failureAuthorityKey === undefined) return;
     if (amrBalanceGateBlock.conversationId !== activeConversationId
