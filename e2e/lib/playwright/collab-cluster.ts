@@ -101,7 +101,8 @@ async function startClient(
   });
   let context: BrowserContext | null = null;
   try {
-    await runtime.startWeb(spec.env);
+    // Cluster clients have isolated Next dist dirs; use the fast cold-start bundler.
+    await runtime.startWeb({ OD_WEB_DEV_BUNDLER: 'turbopack', ...spec.env });
     context = await browser.newContext({ baseURL: runtime.url.web() });
     // Collab clients allocate their own BrowserContext, so the suite-level
     // context fixture never runs here. Seed campaign dismissals before the
