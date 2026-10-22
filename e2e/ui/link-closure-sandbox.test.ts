@@ -246,9 +246,25 @@ test('[P0] RUN-011/012 Owner Home actual A/B funding never submits without anoth
     await marker('A-manual-ready.json', { workspaceId: fixture.spaces.A.workspaceId, runId: created.runId });
     const verified = await receipt('A-manual-verified.json', fixture.spaces.A.workspaceId, manualClickAt);
     expect(verified.runId).toBe(created.runId);
-    expect(Number(verified.upstreamRequestCount)).toBeGreaterThan(0);
-    expect(Number(verified.aCreditUsageCount)).toBe(Number(verified.upstreamRequestCount));
+    expect(verified.billingWorkspaceId).toBe(fixture.spaces.A.workspaceId);
+    expect(Number(verified.targetSuccessfulUpstreamCount)).toBeGreaterThan(0);
+    expect(Number(verified.targetUsageCount)).toBeGreaterThanOrEqual(Number(verified.targetSuccessfulUpstreamCount));
+    expect(Number(verified.auxiliaryUsageCount)).toBeGreaterThanOrEqual(Number(verified.auxiliarySuccessfulUpstreamCount));
+    expect(Number(verified.unsettledSuccessfulCallCount)).toBe(0);
+    expect(Number(verified.unmatchedChargeCount)).toBe(0);
     expect(Number(verified.bCreditUsageDelta)).toBe(0);
+    const chargeableCalls = verified.chargeableCalls as Array<{
+      canonicalRequestId: string; usageId: string; chargedWorkspaceId: string;
+    }>;
+    expect(Array.isArray(chargeableCalls)).toBe(true);
+    expect(chargeableCalls.length).toBe(Number(verified.targetUsageCount) + Number(verified.auxiliaryUsageCount));
+    expect(new Set(chargeableCalls.map(call => call.canonicalRequestId)).size).toBe(chargeableCalls.length);
+    expect(new Set(chargeableCalls.map(call => call.usageId)).size).toBe(chargeableCalls.length);
+    for (const call of chargeableCalls) {
+      expect(call.canonicalRequestId.length).toBeGreaterThan(0);
+      expect(call.usageId.length).toBeGreaterThan(0);
+      expect(call.chargedWorkspaceId).toBe(fixture.spaces.A.workspaceId);
+    }
     await save('A-manual-once.safe.json', { binding, manualClickAt, created, responseStatus: response.status(), calls,
       verified, finalA: await preflight(fixture.spaces.A), finalB: await preflight(fixture.spaces.B) });
   } finally {
