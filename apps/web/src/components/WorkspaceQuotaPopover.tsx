@@ -7,7 +7,6 @@ import { useI18n } from '../i18n';
 import { formatVelaBalanceUsd } from '../providers/daemon';
 import { quotaPopoverConsoleUrl } from '../runtime/workspace-quota-links';
 import { PlanWordmark, type PlanBadgeTier } from './PlanWordmark';
-import { Icon } from './Icon';
 import card from './PersonalPlanCard.module.css';
 import quota from './CodingPlanUsage.module.css';
 import styles from './WorkspaceQuotaPopover.module.css';
@@ -116,7 +115,8 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
   }
   const walletContent = <>
     <span className={quota.value}><bdi>{formatVelaBalanceUsd(view.balanceUsd) ?? '—'}</bdi>
-      {consoleUrl && readable ? <Icon name="chevron-right" size={14} /> : null}
+      {consoleUrl && readable ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg> : null}
     </span>
   </>;
   return (
