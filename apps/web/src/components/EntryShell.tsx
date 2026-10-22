@@ -2004,8 +2004,8 @@ export function EntryShell({
           }}
           onOpenSearch={() => setProjectSearchOpen(true)}
           open={railOpen}
+          inviteSlot={<HomeInviteTrigger signedOut={amrLoggedIn === false} context={railWorkspaceContext} />}
           topRightSlot={<>
-            <HomeInviteTrigger signedOut={amrLoggedIn === false} context={railWorkspaceContext} />
             {topRightCampaignAudience || (homeCampaignHostsVisible && amrLoggedIn === true) ? (
             <>
               {topRightCampaignAudience ? (
