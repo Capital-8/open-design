@@ -53,6 +53,8 @@ export function composeToolsDevEnv(
     // live release card into a test run, while a spec that means to exercise
     // release-channel behavior can still opt back in explicitly.
     OD_RELEASE_CHANNEL: E2E_TOOLS_DEV_RELEASE_CHANNEL,
+    // Each e2e runtime has its own Next dist dir, so Turbopack cannot reuse a stale chunk graph.
+    OD_WEB_DEV_BUNDLER: 'turbopack',
     ...extraEnv,
     CODEX_HOME: suite.codexHomeDir,
     OD_DATA_DIR: suite.dataDir,
