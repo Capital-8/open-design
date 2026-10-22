@@ -249,3 +249,9 @@
 .workspaceMenu :global(.entry-nav-rail__workspace-list .entry-nav-rail__team-avatar) { line-height: 16.8px; }
 
 .workspaceSelectedMark { margin-left: auto; font-size: 13px; line-height: 18.2px; }
+
+/* The supplied HTML restores neutral ink after leaving the open quota chip. */
+.sharedQuotaPill:global(.entry-top-right-account-pill):not(:global(.entry-top-right-account-pill--upgrade)):has(:global([aria-expanded='true'])):not(:hover) {
+  background: #fafafa;
+  color: #666;
+}

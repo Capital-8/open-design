@@ -1418,7 +1418,7 @@ export function EntryTopRightCluster({
               }}
             >
               <div
-                className={`entry-top-right-account-pill${showUpgradePill ? ' entry-top-right-account-pill--upgrade' : ''}`}
+                className={`entry-top-right-account-pill${showUpgradePill ? ' entry-top-right-account-pill--upgrade' : ''}${quotaView.sharedBilling ? ` ${styles.sharedQuotaPill}` : ''}`}
               >
                 <button
                   type="button"
