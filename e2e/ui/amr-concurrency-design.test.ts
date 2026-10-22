@@ -1,7 +1,7 @@
 import { expect, test } from '@/playwright/suite';
 import { applyStandardMocks, routeAgents, routeSuccessfulRuns } from '@/playwright/mock-factory';
 import { mockSignedInVelaAccount } from '@/playwright/visual';
-import { AMR_PERSONAL_WORKSPACE_CONTEXT, createProjectViaApi, gotoProject, seedBrowserConfig } from '@/playwright/amr';
+import { AMR_PERSONAL_WORKSPACE_CONTEXT, AMR_PERSONAL_WORKSPACE_HEADERS, createProjectViaApi, gotoProject, seedBrowserConfig } from '@/playwright/amr';
 import { T } from '@/timeouts';
 
 // UISTATE-F04-CLIENT / YANG-E2E-009: a controlled Link rejection witnesses
@@ -30,6 +30,15 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await createProjectViaApi(page, projectId, 'F04 concurrency offer', {
     accountPlan: 'pro', accountBalanceUsd: '100.00', accountCredits: 1_000_000,
   });
+  const existingArtifact = '<!doctype html><html><body><h1>Existing F04 output</h1></body></html>';
+  const savedArtifact = await page.request.post(`/api/projects/${projectId}/files`, {
+    headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS },
+    data: { name: 'existing-output.html', content: existingArtifact, artifactManifest: {
+      version: 1, kind: 'html', title: 'Existing F04 output', entry: 'existing-output.html',
+      renderer: 'html', exports: ['html'],
+    } },
+  });
+  expect(savedArtifact.ok(), await savedArtifact.text()).toBeTruthy();
   const context = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, planId: 'team_pro' };
   await page.route('**/api/workspace/context', route => route.fulfill({ json: { context } }));
   await page.route(`**/api/projects/${projectId}/workspace-scope`, route => route.fulfill({ json: {
@@ -52,9 +61,24 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   const input = page.getByTestId('chat-composer-input');
   await expect(input).toBeVisible({ timeout: T.long });
   await input.fill('Preserve the original F04 draft');
+  const uploaded = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/upload'));
+  await page.getByTestId('chat-file-input').setInputFiles({
+    name: 'f04-brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Original F04 attachment bytes.\n'),
+  });
+  expect((await uploaded).ok()).toBeTruthy();
+  const attachment = page.getByTestId('staged-attachments').getByTitle('f04-brief.txt', { exact: true });
+  await expect(attachment).toBeVisible();
   await page.getByTestId('chat-send').click();
   const dialog = page.getByTestId('amr-concurrency-dialog');
   await expect(dialog).toBeVisible({ timeout: T.long });
+  await expect(input).toHaveText('Preserve the original F04 draft');
+  await expect(attachment).toBeVisible();
+  const retainedArtifact = await page.request.get(`/api/projects/${projectId}/files/existing-output.html`, {
+    headers: { ...AMR_PERSONAL_WORKSPACE_HEADERS },
+  });
+  expect(retainedArtifact.ok(), await retainedArtifact.text()).toBeTruthy();
+  expect(await retainedArtifact.text()).toContain('Existing F04 output');
   // Inspect the first modal state before any in-dialog click can move focus
   // away from the send/stop control and conceal its lingering tooltip.
   await testInfo.attach('f04-initial-focus', { body: JSON.stringify(await page.evaluate(() => ({
