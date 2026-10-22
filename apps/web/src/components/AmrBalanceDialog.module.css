@@ -333,6 +333,8 @@
 }
 
 .frozenBackdrop.frozenBackdrop {
+  /* Keep the frozen F04 scrim blur-free when shared modal styles load later. */
+  --scrim-backdrop: none;
   position: fixed;
   inset: 0;
   display: flex;
