@@ -3380,7 +3380,7 @@ export async function uploadProjectFiles(
 export function projectRawUrl(
   projectId: string,
   filePath: string,
-  _workspaceContext?: WorkspaceCollabContext | null,
+  workspaceContext?: WorkspaceCollabContext | null,
 ): string {
   // Encode each path segment individually so a slash inside the file
   // path stays a path separator, not %2F.
@@ -3388,7 +3388,13 @@ export function projectRawUrl(
     .split('/')
     .map((seg) => encodeURIComponent(seg))
     .join('/');
-  return `/api/projects/${encodeURIComponent(projectId)}/raw/${safePath}`;
+  // iframe and image navigations cannot send Workspace headers. The daemon
+  // treats this exact identity pair as a claim and freshly verifies membership
+  // and the project's persisted binding before serving Team-owned bytes.
+  return workspaceResourceUrl(
+    `/api/projects/${encodeURIComponent(projectId)}/raw/${safePath}`,
+    workspaceContext,
+  );
 }
 
 export function designSystemStaticUrl(
@@ -3429,7 +3435,8 @@ export async function deleteProjectFile(
 ): Promise<boolean> {
   try {
     const resp = await fetch(
-      projectRawUrl(projectId, name, workspaceContext),
+      // This write can set headers, so keep its URL free of navigation scope.
+      projectRawUrl(projectId, name),
       {
         method: 'DELETE',
         ...(workspaceContext ? { headers: workspaceProjectHeaders(workspaceContext) } : {}),
