@@ -54,6 +54,14 @@ function wireWindow(overrides: Record<string, unknown> = {}) {
 }
 
 describe('workspace design plan window mapping', () => {
+  it('uses a matching personal workspace snapshot instead of an account tier', () => {
+    const personal = workspaceContextFixture({ ...context, workspaceType: 'personal', planId: null, billingState: undefined });
+    const freeSnapshot = snapshot({ billing: { billingState: 'free', planId: 'free' }, designPlanWindows: [] });
+    expect(workspaceQuotaView({ context: personal, response: response(freeSnapshot), tier: 'go' }).tier).toBe('free');
+    expect(workspaceQuotaView({ context: personal, response: response(snapshot({ designPlanWindows: [wireWindow()] })), tier: 'free' }).windows)
+      .toEqual([{ durationSeconds: 18_000, remainingPercent: 40, resetsAt: null }]);
+  });
+
   it('maps Go and Plus windows in ascending duration order', () => {
     expect(view(snapshot({ designPlanWindows: [
       wireWindow({ kind: '7d', remainingCredits: '1', limitCredits: '3', resetsAt: '2026-10-22T00:00:00Z' }),
