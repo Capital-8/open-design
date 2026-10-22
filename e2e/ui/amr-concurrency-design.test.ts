@@ -7,14 +7,14 @@ import { T } from '@/timeouts';
 // UISTATE-F04-CLIENT / YANG-E2E-009: a controlled Link rejection witnesses
 // the running browser's illustration, benefits and native upgrade action.
 // Role/plan decisions remain covered by AmrConcurrencyDialog component tests.
-test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays manual', async ({ page }, testInfo) => {
+test('[P0] F04 Go Owner concurrency rejection renders the approved Cloud offer and stays manual', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.addInitScript(() => {
     localStorage.setItem('open-design:locale', 'zh-CN');
     localStorage.setItem('open-design:locale-source', 'manual');
   });
   await applyStandardMocks(page);
-  await mockSignedInVelaAccount(page, { plan: 'pro', balanceUsd: '100.00' });
+  await mockSignedInVelaAccount(page, { plan: 'go', balanceUsd: '100.00' });
   await routeAgents(page, [{ id: 'amr', name: 'OpenDesign AMR', bin: 'vela', available: true,
     version: 'test', models: [{ id: 'glm-5', label: 'glm-5' }] }]);
   await seedBrowserConfig(page, { mode: 'daemon', apiKey: '', baseUrl: 'https://api.anthropic.com',
@@ -28,7 +28,7 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   } } }));
   const projectId = `f04-${testInfo.testId}-${Date.now()}`;
   await createProjectViaApi(page, projectId, 'F04 concurrency offer', {
-    accountPlan: 'pro', accountBalanceUsd: '100.00', accountCredits: 1_000_000,
+    accountPlan: 'go', accountBalanceUsd: '100.00', accountCredits: 1_000_000,
   });
   const existingArtifact = '<!doctype html><html><body><h1>Existing F04 output</h1></body></html>';
   const savedArtifact = await page.request.post(`/api/projects/${projectId}/files`, {
@@ -39,7 +39,7 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
     } },
   });
   expect(savedArtifact.ok(), await savedArtifact.text()).toBeTruthy();
-  const context = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, planId: 'team_pro' };
+  const context = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, planId: 'team_go' };
   await page.route('**/api/workspace/context', route => route.fulfill({ json: { context } }));
   await page.route(`**/api/projects/${projectId}/workspace-scope`, route => route.fulfill({ json: {
     scope: { kind: 'personal', projectId, workspaceId: context.workspaceId, visibility: 'personal', context },
@@ -117,6 +117,7 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await dialog.evaluate(async element => {
     await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => undefined)));
   });
+  await testInfo.attach('f04-dialog-default', { body: await dialog.screenshot(), contentType: 'image/png' });
   // Capture the actual window.open destination while preventing external navigation.
   await page.evaluate(() => { window.open = ((url: string | URL | undefined) => {
     document.documentElement.dataset.f04Upgrade = String(url); return null;
@@ -144,6 +145,17 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(dialog).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await page.getByTestId('amr-concurrency-close').click();
+  await expect(dialog).toHaveCount(0);
+  const ownerCard = page.getByTestId('chat-concurrency-card');
+  await expect(ownerCard).toContainText('可用并发 已用满');
+  await expect(ownerCard).toContainText('当前并发不足，请升级套餐后再试。');
+  await expect(page.getByTestId('chat-run-error-card')).toHaveCount(0);
+  await expect.poll(async () => { const box = await ownerCard.boundingBox(); return [box?.width, box?.height]; })
+    .toEqual([480, 118]);
+  await testInfo.attach('f12-concurrency-card', { body: await ownerCard.screenshot(), contentType: 'image/png' });
+  await ownerCard.getByRole('button', { name: '升级' }).click();
+  await expect(dialog).toBeVisible();
   await page.getByTestId('amr-concurrency-close').click();
   await expect(dialog).toHaveCount(0);
   expect(runs.bodies).toHaveLength(1);
@@ -264,5 +276,16 @@ test('[P0] F06 member concurrency notice preserves the frozen spacing and button
   await expect(acknowledge).toHaveCSS('outline-offset', '3px');
   await acknowledge.click();
   await expect(dialog).toHaveCount(0);
+  const memberCard = page.getByTestId('chat-concurrency-card');
+  await expect(memberCard).toContainText('可用并发 已用满');
+  await expect(memberCard).toContainText('当前团队并发不足，请联系团队空间所有者升级订阅。');
+  await expect(page.getByTestId('chat-run-error-card')).toHaveCount(0);
+  await expect.poll(async () => { const box = await memberCard.boundingBox(); return [box?.width, box?.height]; })
+    .toEqual([480, 118]);
+  await testInfo.attach('f15-concurrency-card', { body: await memberCard.screenshot(), contentType: 'image/png' });
+  await memberCard.getByRole('button', { name: '升级' }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('当前团队并发不足，请联系团队空间所有者升级订阅。');
+  await acknowledge.click();
   expect(runs.bodies).toHaveLength(1);
 });

@@ -141,6 +141,8 @@ export const th: Dict = {
   'chat.amrError.balanceMessage': 'ยอดเงิน OpenDesign Cloud ของคุณหมดแล้ว เติมเงินเพื่อดำเนินงานนี้ต่อ',
   'chat.amrError.authorizeCta': 'ให้สิทธิ์และลองใหม่',
   'chat.amrError.rechargeCta': 'เติมเงิน',
+  "chat.amrConcurrencyCard.available": "จำนวนคำขอพร้อมกันที่ใช้ได้",
+  "chat.amrConcurrencyCard.full": "เต็มแล้ว",
   "chat.amrConcurrencyGate.title": "ถึงขีดจำกัดคำขอพร้อมกันแล้ว",
   "chat.amrConcurrencyGate.message": "ความจุพร้อมกันเต็มแล้ว โปรดอัปเกรดแผนแล้วลองอีกครั้ง",
   "chat.amrConcurrencyGate.teamTitle": "ทีมถึงขีดจำกัดการทำงานพร้อมกันแล้ว",

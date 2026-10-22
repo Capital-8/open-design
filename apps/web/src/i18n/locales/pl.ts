@@ -141,6 +141,8 @@ export const pl: Dict = {
   'chat.amrError.balanceMessage': 'Saldo OpenDesign Cloud zostało wyczerpane. Doładuj, aby kontynuować zadanie.',
   'chat.amrError.authorizeCta': 'Autoryzuj i ponów',
   'chat.amrError.rechargeCta': 'Doładuj',
+  "chat.amrConcurrencyCard.available": "Dostępna współbieżność",
+  "chat.amrConcurrencyCard.full": "Limit osiągnięty",
   "chat.amrConcurrencyGate.title": "Osiągnięto limit równoczesnych żądań",
   "chat.amrConcurrencyGate.message": "Brak wolnych miejsc. Zmień plan na wyższy i spróbuj ponownie.",
   "chat.amrConcurrencyGate.teamTitle": "Osiągnięto limit równoczesnych żądań zespołu",

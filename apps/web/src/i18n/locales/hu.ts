@@ -141,6 +141,8 @@ export const hu: Dict = {
   'chat.amrError.balanceMessage': 'Az OpenDesign Cloud-egyenleged elfogyott. Tölts fel a futtatás folytatásához.',
   'chat.amrError.authorizeCta': 'Engedélyezés és újrapróbálkozás',
   'chat.amrError.rechargeCta': 'Feltöltés',
+  "chat.amrConcurrencyCard.available": "Elérhető párhuzamos kérések",
+  "chat.amrConcurrencyCard.full": "Betelt",
   "chat.amrConcurrencyGate.title": "Elérted az egyidejű kérések korlátját",
   "chat.amrConcurrencyGate.message": "Az egyidejű kapacitás megtelt. Válts magasabb csomagra, majd próbáld újra.",
   "chat.amrConcurrencyGate.teamTitle": "A csapat elérte a párhuzamossági korlátot",

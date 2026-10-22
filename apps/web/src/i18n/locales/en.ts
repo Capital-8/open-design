@@ -141,6 +141,8 @@ export const en: Dict = {
   'chat.amrError.balanceMessage': 'Your OpenDesign Cloud allowance has run out. Top up to keep this run going.',
   'chat.amrError.authorizeCta': 'Authorize & retry',
   'chat.amrError.rechargeCta': 'Top up',
+  "chat.amrConcurrencyCard.available": "Available concurrency",
+  "chat.amrConcurrencyCard.full": "Full",
   "chat.amrConcurrencyGate.title": "Concurrency limit reached",
   "chat.amrConcurrencyGate.message": "Your concurrent capacity is full. Upgrade your plan and try again.",
   "chat.amrConcurrencyGate.teamTitle": "Team concurrency limit reached",

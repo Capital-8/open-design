@@ -141,6 +141,8 @@ export const de: Dict = {
   'chat.amrError.balanceMessage': 'Dein OpenDesign Cloud-Guthaben ist aufgebraucht. Lade auf, um diesen Lauf fortzusetzen.',
   'chat.amrError.authorizeCta': 'Autorisieren und wiederholen',
   'chat.amrError.rechargeCta': 'Aufladen',
+  "chat.amrConcurrencyCard.available": "Verfügbare parallele Anfragen",
+  "chat.amrConcurrencyCard.full": "Ausgelastet",
   "chat.amrConcurrencyGate.title": "Limit gleichzeitiger Anfragen erreicht",
   "chat.amrConcurrencyGate.message": "Alle Plätze sind belegt. Upgrade deinen Tarif und versuche es erneut.",
   "chat.amrConcurrencyGate.teamTitle": "Parallelitätslimit des Teams erreicht",

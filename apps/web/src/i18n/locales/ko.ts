@@ -141,6 +141,8 @@ export const ko: Dict = {
   'chat.amrError.balanceMessage': 'OpenDesign Cloud 잔액이 부족합니다. 충전하여 이 작업을 계속 진행하세요.',
   'chat.amrError.authorizeCta': '인증하고 재시도',
   'chat.amrError.rechargeCta': '충전',
+  "chat.amrConcurrencyCard.available": "사용 가능한 동시 요청",
+  "chat.amrConcurrencyCard.full": "한도 도달",
   "chat.amrConcurrencyGate.title": "동시 요청 한도에 도달했습니다",
   "chat.amrConcurrencyGate.message": "동시 실행 용량이 가득 찼습니다. 요금제를 업그레이드한 후 다시 시도하세요.",
   "chat.amrConcurrencyGate.teamTitle": "팀 동시 실행 한도에 도달했습니다",

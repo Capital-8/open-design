@@ -141,6 +141,8 @@ export const ja: Dict = {
   'chat.amrError.balanceMessage': 'OpenDesign Cloud の残高が不足しています。チャージしてこのタスクを続行してください。',
   'chat.amrError.authorizeCta': '認可して再試行',
   'chat.amrError.rechargeCta': 'チャージ',
+  "chat.amrConcurrencyCard.available": "利用可能な同時実行数",
+  "chat.amrConcurrencyCard.full": "上限に到達",
   "chat.amrConcurrencyGate.title": "同時リクエスト数の上限に達しました",
   "chat.amrConcurrencyGate.message": "同時実行枠がいっぱいです。プランをアップグレードしてから再試行してください。",
   "chat.amrConcurrencyGate.teamTitle": "チームの同時実行数が上限に達しました",

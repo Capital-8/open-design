@@ -134,7 +134,7 @@ describe('S15 运行中额度不足(升级卡归零那一档)', () => {
   it('无充值权限成员:团队标题 + 正文', () => {
     zh(<UpgradeCard balanceUsd={0} pausedAudience="member" onUpgrade={() => {}} />);
     expect(within(why()).getByText('团队额度不足，任务已暂停')).toBeTruthy();
-    expect(within(why()).getByText('当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。')).toBeTruthy();
+    expect(within(why()).getByText('当前团队额度不足，请联系团队空间所有者充值或升级订阅。')).toBeTruthy();
   });
 
   it('余额偏低那一档不动', () => {

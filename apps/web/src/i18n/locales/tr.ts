@@ -141,6 +141,8 @@ export const tr: Dict = {
   'chat.amrError.balanceMessage': 'OpenDesign Cloud bakiyeniz bitti. Çalıştırmaya devam etmek için bakiye yükleyin.',
   'chat.amrError.authorizeCta': 'Yetkilendir ve yeniden dene',
   'chat.amrError.rechargeCta': 'Bakiye yükle',
+  "chat.amrConcurrencyCard.available": "Kullanılabilir eşzamanlı istek",
+  "chat.amrConcurrencyCard.full": "Dolu",
   "chat.amrConcurrencyGate.title": "Eşzamanlı istek sınırına ulaşıldı",
   "chat.amrConcurrencyGate.message": "Eşzamanlı kapasite dolu. Planınızı yükseltip tekrar deneyin.",
   "chat.amrConcurrencyGate.teamTitle": "Takımın eşzamanlılık sınırına ulaşıldı",

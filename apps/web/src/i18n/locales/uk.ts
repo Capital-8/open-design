@@ -141,6 +141,8 @@ export const uk: Dict = {
   'chat.amrError.balanceMessage': 'Баланс OpenDesign Cloud вичерпано. Поповніть, щоб продовжити це виконання.',
   'chat.amrError.authorizeCta': 'Авторизувати та повторити',
   'chat.amrError.rechargeCta': 'Поповнити',
+  "chat.amrConcurrencyCard.available": "Доступні паралельні запити",
+  "chat.amrConcurrencyCard.full": "Ліміт вичерпано",
   "chat.amrConcurrencyGate.title": "Досягнуто ліміту одночасних запитів",
   "chat.amrConcurrencyGate.message": "Вільних місць немає. Перейдіть на вищий тариф і спробуйте знову.",
   "chat.amrConcurrencyGate.teamTitle": "Досягнуто ліміту одночасних запитів команди",

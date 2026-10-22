@@ -141,6 +141,8 @@ export const ar: Dict = {
   'chat.amrError.balanceMessage': 'نفد رصيد OpenDesign Cloud الخاص بك. اشحن للاستمرار في هذه المهمة.',
   'chat.amrError.authorizeCta': 'تفويض وإعادة المحاولة',
   'chat.amrError.rechargeCta': 'شحن',
+  "chat.amrConcurrencyCard.available": "التزامن المتاح",
+  "chat.amrConcurrencyCard.full": "ممتلئ",
   "chat.amrConcurrencyGate.title": "تم بلوغ حد الطلبات المتزامنة",
   "chat.amrConcurrencyGate.message": "السعة المتزامنة ممتلئة. قم بترقية خطتك ثم حاول مجددًا.",
   "chat.amrConcurrencyGate.teamTitle": "تم بلوغ حد الطلبات المتزامنة للفريق",

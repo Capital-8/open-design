@@ -3225,6 +3225,17 @@ export function ProjectView({
         preflight: concurrencyRejection.preflight,
       })
     : null;
+  const currentConcurrencyPresentation = resolveAmrConcurrencyPresentation({
+    context: projectRunBillingAuthorityContext,
+    billing: projectRunPreflightBilling,
+  });
+  const concurrencyCardPresentation = concurrencyRejection
+    && concurrencyRejection.conversationId === activeConversationId
+    && concurrencyRejection.authorityKey === projectRunAuthorityKey
+    && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
+      ? concurrencyPresentation : currentConcurrencyPresentation;
+  const concurrencyCardEligible = concurrencyCardPresentation?.branch.audience === 'member'
+    || concurrencyCardPresentation?.upgradeAllowed === true;
   /**
    * 「找所有者充值」弹窗是从**卡上那颗按钮**点开的(而不是拦截时自动弹出的)。
    * 拦截时自动弹出的那一份记在 `amrBalanceGateBlock.dialog` 上,两者共用同一个
@@ -14559,6 +14570,35 @@ export function ProjectView({
                 && concurrencyRejection.authorityKey === projectRunAuthorityKey
                 && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
                 ? concurrencyRejection.draft ?? undefined : undefined}
+              amrConcurrencyCardAudience={concurrencyRejection
+                && concurrencyRejection.conversationId === activeConversationId
+                && concurrencyRejection.authorityKey === projectRunAuthorityKey
+                && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
+                ? concurrencyRejection.branch.audience : null}
+              amrConcurrencyCardEligible={concurrencyCardEligible}
+              onAmrConcurrencyUpgrade={() => {
+                if (!activeConversationId || config.mode !== 'daemon' || config.agentId !== 'amr') return;
+                // A retained refusal keeps its original payer and plan proof.
+                // A restored failed-run card can reopen the same notice using
+                // this project's current billing authority, without resending.
+                if (!concurrencyRejection
+                  || concurrencyRejection.conversationId !== activeConversationId
+                  || concurrencyRejection.authorityKey !== projectRunAuthorityKey
+                  || concurrencyRejection.accountGeneration !== currentWorkspaceAccountGeneration()) {
+                  setConcurrencyRejection({
+                    conversationId: activeConversationId,
+                    authorityKey: projectRunAuthorityKey,
+                    accountGeneration: currentWorkspaceAccountGeneration(),
+                    requestId: `restored-concurrency-card:${activeConversationId}`,
+                    branch: amrBalanceBranch,
+                    workspaceContext: projectRunBillingAuthorityContext,
+                    preflight: null,
+                    draft: null,
+                    initialHomeSend: false,
+                  });
+                }
+                setConcurrencyDialogOpen(true);
+              }}
               onRejectedComposerSendRestored={(nonce, restored) => {
                 if (!restored || !concurrencyRejection?.initialHomeSend
                   || concurrencyRejection.draft?.nonce !== nonce

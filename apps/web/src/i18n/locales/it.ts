@@ -141,6 +141,8 @@ export const it: Dict = {
   'chat.amrError.balanceMessage': 'Il tuo saldo OpenDesign Cloud è esaurito. Ricarica per continuare questa esecuzione.',
   'chat.amrError.authorizeCta': 'Autorizza e riprova',
   'chat.amrError.rechargeCta': 'Ricarica',
+  "chat.amrConcurrencyCard.available": "Concorrenza disponibile",
+  "chat.amrConcurrencyCard.full": "Esaurita",
   "chat.amrConcurrencyGate.title": "Limite di richieste simultanee raggiunto",
   "chat.amrConcurrencyGate.message": "La capacità simultanea è piena. Passa a un piano superiore e riprova.",
   "chat.amrConcurrencyGate.teamTitle": "Limite di concorrenza del team raggiunto",

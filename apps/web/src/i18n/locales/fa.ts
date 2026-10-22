@@ -141,6 +141,8 @@ export const fa: Dict = {
   'chat.amrError.balanceMessage': 'موجودی OpenDesign Cloud شما تمام شده است. برای ادامه این اجرا شارژ کنید.',
   'chat.amrError.authorizeCta': 'اعطای دسترسی و تلاش مجدد',
   'chat.amrError.rechargeCta': 'شارژ',
+  "chat.amrConcurrencyCard.available": "هم‌زمانی در دسترس",
+  "chat.amrConcurrencyCard.full": "تکمیل",
   "chat.amrConcurrencyGate.title": "حد درخواست‌های هم‌زمان تکمیل است",
   "chat.amrConcurrencyGate.message": "ظرفیت هم‌زمان پر است. طرح خود را ارتقا دهید و دوباره تلاش کنید.",
   "chat.amrConcurrencyGate.teamTitle": "محدودیت هم‌زمانی تیم پر شده است",

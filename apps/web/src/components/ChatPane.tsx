@@ -814,6 +814,12 @@ interface Props {
    * OPEND-2849)。宿主读不出时按 `owner` 说 —— 那是今天的默认身份。
    */
   amrBalanceAudience?: 'owner' | 'member';
+  /** Frozen r506 F12/F15 card for a refused Link request before a run exists. */
+  amrConcurrencyCardAudience?: 'owner' | 'member' | null;
+  /** Owner needs scoped proof of an upgrade path; members can contact the owner. */
+  amrConcurrencyCardEligible?: boolean;
+  /** Opens the matching F04/F06 explanation; it never resends the draft. */
+  onAmrConcurrencyUpgrade?: () => void;
   /**
    * **失败之后的那次钱包补查已经落地,而且没读出数字。**
    *
@@ -1400,6 +1406,9 @@ export function ChatPane({
   amrBalanceCardUsd = null,
   amrBalanceCardAnchorMessageId = null,
   amrBalanceAudience = 'owner',
+  amrConcurrencyCardAudience = null,
+  amrConcurrencyCardEligible = true,
+  onAmrConcurrencyUpgrade,
   amrBalanceCardUnavailable = false,
   onAmrBalanceUpgrade,
   onOpenAmrSettings,
@@ -2488,6 +2497,12 @@ export function ChatPane({
   const displayErrorTitle = accessErrorCopy
     ? t(accessErrorCopy.titleKey)
     : t(runFailureUi?.titleKey ?? 'chat.runError.title.generic', runFailureCopyVars);
+  const frozenConcurrencyCardAudience = amrConcurrencyCardEligible
+    ? (amrConcurrencyCardAudience
+      ?? (!accessErrorCopy && displayError && retryAssistant?.agentId === 'amr'
+        && runFailureUi?.titleKey === 'chat.runError.title.membershipConcurrencyLimit'
+        ? amrBalanceAudience : null))
+    : null;
   /*
    * 这张顶层报错卡代表**哪一轮**。
    *
@@ -4547,7 +4562,10 @@ export function ChatPane({
                   }}
                   highlightedUserMessageId={chatRailHighlightedMessageId}
                 />
-                {displayError ? (
+                {frozenConcurrencyCardAudience ? (
+                  <UpgradeCard balanceUsd={0} concurrencyAudience={frozenConcurrencyCardAudience}
+                    onUpgrade={onAmrConcurrencyUpgrade} />
+                ) : displayError ? (
                   /*
                    * 报错卡(稿子组件 19)。终于接回产品 —— 之前 `RunErrorCard` 抽出来了
                    * 却只有验收陈列页在用,产品这一格仍是 `UserActionCard`:

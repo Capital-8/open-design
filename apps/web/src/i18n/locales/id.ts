@@ -141,6 +141,8 @@ export const id: Dict = {
   'chat.amrError.balanceMessage': 'Saldo OpenDesign Cloud Anda habis. Isi ulang untuk melanjutkan proses ini.',
   'chat.amrError.authorizeCta': 'Otorisasi & coba lagi',
   'chat.amrError.rechargeCta': 'Isi ulang',
+  "chat.amrConcurrencyCard.available": "Konkurensi tersedia",
+  "chat.amrConcurrencyCard.full": "Penuh",
   "chat.amrConcurrencyGate.title": "Batas permintaan bersamaan tercapai",
   "chat.amrConcurrencyGate.message": "Kapasitas bersamaan penuh. Tingkatkan paket lalu coba lagi.",
   "chat.amrConcurrencyGate.teamTitle": "Batas konkurensi tim tercapai",
