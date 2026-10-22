@@ -1306,16 +1306,17 @@ export function EntryTopRightCluster({
   // 升级 that could only reopen the plan they already hold. It reads the tier
   // the card LABELS, so the button and the nameplate next to it can never
   // disagree.
-  // Whether the top-right pill sells the upgrade instead of reporting a
-  // balance. It reads the same tier the wordmark draws, so the pill's green
-  // ground and its badge can never disagree. `labelTier` alone is not enough:
+  // Whether the Owner's top-right pill sells the upgrade instead of reporting a
+  // balance. It reads the same tier the wordmark draws. `labelTier` alone is not enough:
   // B commonly reports no plan at all for a free account, which leaves the
   // strict read null while the wordmark still resolves free off the display
   // label — that is the state a local dev workspace sits in. It is kept in the
   // test anyway for the case where B DOES say 'free' but the workspace is
   // team-typed, where the wordmark draws `team` instead.
   const isFreePlan = planTier === 'free' || (labelTier ?? '').trim().toLowerCase() === 'free';
-  // Design PR #8364: the Free card sells 升级 like every paid tier. A personal
+  // A Free member may inspect shared quota, but only its Owner sees an upgrade prompt.
+  const showUpgradePill = isFreePlan && context?.role === 'owner';
+  // Design PR #8364: the Owner's Free card sells 升级 like every paid tier. A personal
   // workspace needs no billing permission — its member IS the payer — and an
   // account B reports without any plan is upgradeable as free once the card
   // already labels it free, so the header button and the nameplate agree.
@@ -1413,7 +1414,7 @@ export function EntryTopRightCluster({
               }}
             >
               <div
-                className={`entry-top-right-account-pill${isFreePlan ? ' entry-top-right-account-pill--upgrade' : ''}`}
+                className={`entry-top-right-account-pill${showUpgradePill ? ' entry-top-right-account-pill--upgrade' : ''}`}
               >
                 <button
                   type="button"
@@ -1422,15 +1423,15 @@ export function EntryTopRightCluster({
                   aria-haspopup="dialog"
                   aria-expanded={creditsPanelOpen}
                   aria-controls={creditsPanelOpen ? creditsPanelId : undefined}
-                  aria-label={isFreePlan ? t('entry.creditsUpgrade') : t('entry.credits')}
+                  aria-label={showUpgradePill ? t('entry.creditsUpgrade') : t('entry.credits')}
                   onClick={() => {
                     // Clicking, hovering or focusing opens the quota panel.
                     trackAccountAction('credits');
                     openCreditsPanel();
                   }}
                 >
-                  {isFreePlan ? (
-                    /* Free plan: the pill stops reporting a balance that is only
+                  {showUpgradePill ? (
+                    /* Owner's Free plan: the pill stops reporting a balance that is only
                        ever 0.00 and sells the upgrade instead — spark mark plus
                        the same 升级 / Upgrade label the billing card uses, on
                        the green ground the wrapper paints. */
