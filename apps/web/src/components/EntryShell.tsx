@@ -1892,6 +1892,13 @@ export function EntryShell({
 
   const [registrationSkipNotice, setRegistrationSkipNotice] = useState<{ count: number; accountId: string; workspaceId: string; workspaceMemberId: string; credentialRevision: string | undefined; profile: string | undefined } | null>(null);
   const [registrationEntryFade, setRegistrationEntryFade] = useState(false);
+  // A device login may finish while the first-run screen is unmounted. On
+  // return, the server-issued registration claim must still open the invite
+  // step before the signed-in user has to press Continue a second time.
+  const unconfiguredFirstRunCloud = view === 'onboarding'
+    && config.onboardingCompleted !== true
+    && config.mode === 'daemon'
+    && config.agentId === null;
   useEffect(() => {
     if (!registrationEntryFade) return;
     const timer = window.setTimeout(() => setRegistrationEntryFade(false), 200);
@@ -1902,9 +1909,13 @@ export function EntryShell({
     identityReady: !workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure,
     identityUnavailable: Boolean(workspaceContextState.failure && !workspaceContextState.loading && !workspaceContextState.identityChangePending),
     onRetryIdentity: () => notifyWorkspaceContextRefresh(),
-    allowHost: view !== 'onboarding' || (config.mode === 'daemon' && config.agentId === 'amr'),
+    allowHost: view !== 'onboarding' || (config.mode === 'daemon' && config.agentId === 'amr') || unconfiguredFirstRunCloud,
     onExit: (count, context, completion) => {
       if (!amrAccountId) return;
+      if (unconfiguredFirstRunCloud) {
+        onModeChange('daemon');
+        onAgentChange('amr');
+      }
       if (completion === 'skipped' && count > 0) setRegistrationSkipNotice({ count, accountId: amrAccountId, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId, credentialRevision: amrRegistrationStatus?.credentialRevision, profile: amrRegistrationStatus?.profile });
       setRegistrationEntryFade(true);
       finishOnboarding();

@@ -2549,7 +2549,7 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
 });
 
 
-it('configures Hosted before the strict new-registration host takes over onboarding', async () => {
+it('shows the first-registration invite on a hydrated login before another Continue click', async () => {
   const base = workspaceContextFixture({ workspaceId: 'registered-workspace', workspaceMemberId: 'registered-member', role: 'owner' });
   vi.spyOn(workspaceContextModule, 'useWorkspaceContext').mockReturnValue({ context: { ...base, permissions: { ...base.permissions, canInviteMembers: true } }, loading: false });
   const status = { loggedIn: true, sessionState: 'authenticated' as const, profile: 'prod', credentialRevision: 'registered-credential', configPath: '/test', user: { id: 'registered-account', email: 'new@example.com' }, registrationInvite: { accountId: 'registered-account', deviceAuthorizationId: 'new-authorization' } };
@@ -2564,12 +2564,28 @@ it('configures Hosted before the strict new-registration host takes over onboard
       onAgentChange={agentId => { props.onAgentChange(agentId); setConfig(old => ({ ...old, agentId })); }} /></I18nProvider>;
   }
   render(<RuntimeHarness />);
-  expect(screen.queryByText('Invite colleagues for free. Design together.')).toBeNull();
-  fireEvent.click(await screen.findByRole('button', { name: /Continue \(signed in\)/i }));
   await screen.findByText('Invite colleagues for free. Design together.');
   expect(activeChange).toHaveBeenLastCalledWith(true);
-  expect(props.onModeChange).toHaveBeenCalledWith('daemon'); expect(props.onAgentChange).toHaveBeenCalledWith('amr');
+  expect(props.onAgentChange).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
   await waitFor(() => expect(localStorage.getItem('od.registration-invite.completed:registered-account:new-authorization')).toBe('1'));
+  expect(props.onModeChange).toHaveBeenCalledWith('daemon');
+  expect(props.onAgentChange).toHaveBeenCalledWith('amr');
+  expect(props.onCompleteOnboarding).toHaveBeenCalledOnce();
   expect(activeChange).toHaveBeenLastCalledWith(false);
+});
+
+it.each([
+  ['Local', baseConfig({ mode: 'daemon', agentId: 'claude-code' })],
+  ['BYOK', baseConfig({ mode: 'api', agentId: null })],
+])('preserves a selected %s runtime during a hydrated registration login', async (_source, config) => {
+  const base = workspaceContextFixture({ workspaceId: 'registered-workspace', workspaceMemberId: 'registered-member', role: 'owner' });
+  vi.spyOn(workspaceContextModule, 'useWorkspaceContext').mockReturnValue({ context: { ...base, permissions: { ...base.permissions, canInviteMembers: true } }, loading: false });
+  const status = { loggedIn: true, sessionState: 'authenticated' as const, profile: 'prod', credentialRevision: 'registered-credential', configPath: '/test', user: { id: 'registered-account', email: 'new@example.com' }, registrationInvite: { accountId: 'registered-account', deviceAuthorizationId: 'new-authorization' } };
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => String(input) === '/api/workspace/context' ? jsonResponse({ context: base }) : jsonResponse(status)) as typeof fetch;
+  const props = renderOnboarding({ config, amrLoggedIn: true, amrSessionState: 'authenticated', amrAccountId: status.user.id, amrRegistrationStatus: status });
+  await screen.findByRole('button', { name: /Continue \(signed in\)/i });
+  expect(screen.queryByText('Invite colleagues for free. Design together.')).toBeNull();
+  expect(props.onAgentChange).not.toHaveBeenCalled();
+  expect(props.onCompleteOnboarding).not.toHaveBeenCalled();
 });
