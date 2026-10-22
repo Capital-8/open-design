@@ -429,22 +429,24 @@ test('[P0] RUN013 three Go roles notify only the initiator at actual Link full',
         spectatorStates: spectators.map(session => ({ role: session.role, requests: session.requests })),
       });
       if (role === 'owner') {
-        await initiator.page.context().route('https://**/*', route =>
-          route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Controlled plans destination</title>' }));
+        const dashboardRequest = initiator.page.context().waitForEvent('request', request =>
+          request.isNavigationRequest() && new URL(request.url()).pathname === '/dashboard');
         const popupReady = initiator.page.waitForEvent('popup');
         await initiator.page.getByTestId('amr-concurrency-upgrade').click();
         const popup = await popupReady;
-        await popup.waitForURL(url => url.protocol === 'https:', { timeout: T.long });
-        const destination = new URL(popup.url());
-        expect(destination.protocol).toBe('https:');
+        const request = await dashboardRequest;
+        const destination = new URL(request.url());
+        expect(destination.origin).toBe(new URL(fixture.urls.web).origin);
         expect(destination.searchParams.get('workspaceId')).toBe(space.workspaceId);
+        expect(destination.searchParams.get('source')).toBe('open_design');
         expect(destination.searchParams.get('billing')).toBe('plan');
+        const response = await request.response();
         await save('RUN013-owner-upgrade-destination.safe.json', {
-          binding, host: destination.hostname, path: destination.pathname, workspaceId: space.workspaceId,
-          billing: destination.searchParams.get('billing'),
+          binding, origin: destination.origin, path: destination.pathname, workspaceId: space.workspaceId,
+          billing: destination.searchParams.get('billing'), dashboardStatus: response?.status() ?? null,
+          scope: 'OD entry only; console plan selection needs an authenticated session',
         });
         await popup.close();
-        await initiator.page.context().unroute('https://**/*');
       }
       await initiator.page.getByTestId('amr-concurrency-close').click();
       await expect(input).toHaveText(draft);
