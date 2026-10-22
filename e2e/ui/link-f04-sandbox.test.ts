@@ -254,10 +254,25 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     await marker('F04-manual-ready.json', { projectId, runId: run.runId, challenge });
     const verified = await receipt('F04-manual-verified.json');
     expect(verified.runId).toBe(run.runId);
-    expect(Number(verified.upstreamRequestCount)).toBeGreaterThan(0);
     expect(verified.billingWorkspaceId).toBe(space.workspaceId);
-    expect(verified.fundingKind).toMatch(/coding_plan|wallet/);
-    expect(Number(verified.modelUsageCount)).toBe(Number(verified.upstreamRequestCount));
+    expect(verified.fundingKind).toMatch(/^(coding_plan|wallet)$/);
+    expect(Number(verified.targetSuccessfulUpstreamCount)).toBeGreaterThan(0);
+    expect(Number(verified.targetUsageCount)).toBeGreaterThanOrEqual(Number(verified.targetSuccessfulUpstreamCount));
+    expect(Number(verified.auxiliaryUsageCount)).toBeGreaterThanOrEqual(Number(verified.auxiliarySuccessfulUpstreamCount));
+    expect(Number(verified.unsettledSuccessfulCallCount)).toBe(0);
+    expect(Number(verified.unmatchedChargeCount)).toBe(0);
+    const chargeableCalls = verified.chargeableCalls as Array<{
+      canonicalRequestId: string; usageId: string; chargedWorkspaceId: string;
+    }>;
+    expect(Array.isArray(chargeableCalls)).toBe(true);
+    expect(chargeableCalls.length).toBe(Number(verified.targetUsageCount) + Number(verified.auxiliaryUsageCount));
+    expect(new Set(chargeableCalls.map(call => call.canonicalRequestId)).size).toBe(chargeableCalls.length);
+    expect(new Set(chargeableCalls.map(call => call.usageId)).size).toBe(chargeableCalls.length);
+    for (const call of chargeableCalls) {
+      expect(call.canonicalRequestId.length).toBeGreaterThan(0);
+      expect(call.usageId.length).toBeGreaterThan(0);
+      expect(call.chargedWorkspaceId).toBe(space.workspaceId);
+    }
     await save('F04-manual.safe.json', { binding, manualClickAt, run, requests, verified });
   } finally {
     await save('request-timeline.safe.json', { binding, requests });
