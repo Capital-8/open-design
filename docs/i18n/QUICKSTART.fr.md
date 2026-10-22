@@ -155,7 +155,7 @@ OD_API_TOKEN=
 
 ## Stockage persistant
 
-Docker Compose conserve les données dans un volume nommé persistant. Préservez ce volume lors des mises à jour. Configuration et sauvegarde : [Daemon storage](../daemon-data.md)
+Docker Compose conserve les données dans un volume nommé persistant. Préservez ce volume lors des mises à jour. Configuration et sauvegarde : [Daemon storage](../../QUICKSTART.md#persistent-storage)
 
 ---
 
@@ -283,7 +283,7 @@ BASE_SYSTEM_PROMPT   (remise fichier ou <artifact> selon le profil d’exécutio
    + active skill body          (SKILL.md — workflow and output rules)
 ```
 
-Changer le skill ou le système de design modifie la composition du prochain envoi. Le chemin **OD Next**, activable dans **Settings → Labs → Design Harness** et soumis à des conditions d'éligibilité par exécution, utilise une composition indépendante. Pour comprendre les deux chemins et leurs contrats, consultez [`docs/prompt-composition.md`](../prompt-composition.md).
+Changer le skill ou le système de design modifie la composition du prochain envoi. Le chemin **OD Next**, activable dans **Settings → Labs → Design Harness** et soumis à des conditions d'éligibilité par exécution, utilise une composition indépendante. Pour comprendre les deux chemins et leurs contrats, consultez [`apps/daemon/src/prompts/AGENTS.md`](../../apps/daemon/src/prompts/AGENTS.md).
 
 ## File map
 
@@ -350,9 +350,9 @@ open-design/
 
 ## Retour à la vision
 
-Ce guide accompagne la documentation dans [`docs/`](../../docs/). La [spécification](../spec.md) et la [feuille de route](../roadmap.md) historiques sont archivées ; les documents ci-dessous décrivent les contrats actuels. Points clés :
+Ce guide accompagne la documentation dans [`docs/`](../../docs/). La [Historical: spécification](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/spec.md) et la [Historical: feuille de route](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md) historiques sont archivées ; les documents ci-dessous décrivent les contrats actuels. Points clés :
 
-- `docs/architecture.md` décrit le stack livré : Next.js 16 App Router devant, daemon local derrière, et rewrites `apps/web/next.config.ts` en dev pour que le navigateur parle toujours à la même surface `/api`.
+- `apps/AGENTS.md` décrit le stack livré : Next.js 16 App Router devant, daemon local derrière, et rewrites `apps/web/next.config.ts` en dev pour que le navigateur parle toujours à la même surface `/api`.
 - `docs/skills-protocol.md` décrit le frontmatter actuel de `SKILL.md` / `od:` et la séparation entre skills fonctionnels et modèles de rendu. Le parseur et la normalisation de référence se trouvent dans `apps/daemon/src/skills.ts`.
 - `docs/agent-adapters.md` décrit le contrat d’adapter. Les paramètres de lancement, d’arguments, de modèles et de stream propres à chaque runtime se trouvent sous `apps/daemon/src/runtimes/defs/`, avec leur enregistrement dans `apps/daemon/src/runtimes/registry.ts` ; `apps/daemon/src/agents.ts` reste une surface d’export de compatibilité.
-- `docs/modes.md` distingue les six onglets New Project des sept modes normalisés du registre (`prototype`, `deck`, `template`, `design-system`, `image`, `video`, `audio`).
+- `design-templates/AGENTS.md` distingue les six onglets New Project des sept modes normalisés du registre (`prototype`, `deck`, `template`, `design-system`, `image`, `video`, `audio`).

@@ -22,7 +22,7 @@ namespace so installs can coexist without affecting runtime data/log/cache paths
 
 Packaged runtime state is namespace-scoped under `.tmp/tools-pack/runtime/mac/namespaces/<namespace>/`:
 
-- Packaged daemon storage follows the [daemon data contract](../../docs/daemon-data.md). The launcher passes the final namespace-scoped data root to the daemon.
+- Packaged daemon storage follows the [daemon data contract](../../apps/daemon/AGENTS.md#data-ownership). The launcher passes the final namespace-scoped data root to the daemon.
 - `logs/` contains packaged process logs for `desktop`, `web`, and `daemon`.
 - `runtime/` is the sidecar runtime base used by the packaged desktop/web/daemon process group.
 - `cache/` is reserved for namespace-local packaged cache state.
@@ -106,7 +106,7 @@ Local lifecycle commands:
 - `tools-pack linux cleanup`
 - `tools-pack linux cleanup --headless`
 
-Build artifacts are namespace-scoped under `.tmp/tools-pack/out/linux/namespaces/<namespace>/`. Packaged logs, sidecar runtime, cache, and Electron user-data are namespace-scoped under the tools-pack runtime root. Daemon storage follows only [daemon data contract](../../docs/daemon-data.md). Containerized build cache lives under `.tmp/tools-pack/.docker-cache/{electron,electron-builder}/`.
+Build artifacts are namespace-scoped under `.tmp/tools-pack/out/linux/namespaces/<namespace>/`. Packaged logs, sidecar runtime, cache, and Electron user-data are namespace-scoped under the tools-pack runtime root. Daemon storage follows only [daemon data contract](../../apps/daemon/AGENTS.md#data-ownership). Containerized build cache lives under `.tmp/tools-pack/.docker-cache/{electron,electron-builder}/`.
 
 Local installs use XDG paths:
 

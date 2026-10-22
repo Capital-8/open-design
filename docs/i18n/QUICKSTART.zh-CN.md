@@ -191,7 +191,7 @@ OD_API_TOKEN=
 
 ## 持久化存储
 
-Docker Compose 使用持久命名卷保存数据。升级时保留该卷；配置与备份见 [Daemon storage](../daemon-data.md)
+Docker Compose 使用持久命名卷保存数据。升级时保留该卷；配置与备份见 [Daemon storage](../../QUICKSTART.md#persistent-storage)
 
 ---
 
@@ -332,9 +332,9 @@ open-design/
 
 ## 回到产品愿景
 
-本 Quickstart 对应 [`docs/`](../../docs/) 中 spec 的可运行起点；spec 描述了其演进方向（见 [`docs/roadmap.md`](../../docs/roadmap.md)）。要点如下：
+本 Quickstart 对应 [`docs/`](../../docs/) 中 spec 的可运行起点；spec 描述了其演进方向（见 [Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)）。要点如下：
 
-- `docs/architecture.md` 描述了当前已交付的 stack：前端为 Next.js 16 App Router，后端为本地 daemon；`apps/web/next.config.ts` 在 dev 模式下进行 rewrite，使浏览器始终通过同一套 `/api` 入口通信。
+- `apps/AGENTS.md` 描述了当前已交付的 stack：前端为 Next.js 16 App Router，后端为本地 daemon；`apps/web/next.config.ts` 在 dev 模式下进行 rewrite，使浏览器始终通过同一套 `/api` 入口通信。
 - `docs/skills-protocol.md` 描述当前 `SKILL.md`/`od:` frontmatter，以及功能性 skill 与渲染模板的分离。`apps/daemon/src/skills.ts` 中的解析与归一化逻辑是实现层事实来源。
 - `docs/agent-adapters.md` 描述 adapter contract。各 runtime 的启动、参数、模型与 stream 设置位于 `apps/daemon/src/runtimes/defs/`，并在 `apps/daemon/src/runtimes/registry.ts` 中注册；`apps/daemon/src/agents.ts` 是兼容性导出层。
-- `docs/modes.md` 区分六个 New Project 页签与七个归一化 registry mode（`prototype`、`deck`、`template`、`design-system`、`image`、`video`、`audio`）。
+- `design-templates/AGENTS.md` 区分六个 New Project 页签与七个归一化 registry mode（`prototype`、`deck`、`template`、`design-system`、`image`、`video`、`audio`）。

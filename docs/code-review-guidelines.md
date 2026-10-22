@@ -235,7 +235,7 @@ page templates, and image/video/audio templates.
 
 - Bundled first-party plugins live under `plugins/_official/<tier>/<id>/`; portable specification examples live under `plugins/spec/examples/<id>/` and are not treated as installed catalog entries.
 - Each portable plugin has a `SKILL.md`. OpenDesign display, input, preview, pipeline, capability, and source metadata lives in `open-design.json`, not in the portable skill body.
-- `open-design.json` conforms to `docs/schemas/open-design.plugin.v1.json` and references only supported atoms, design systems, craft docs, assets, scripts, MCP servers, or connectors.
+- `open-design.json` conforms to `plugins/spec/schemas/open-design.plugin.v1.json` and references only supported atoms, design systems, craft docs, assets, scripts, MCP servers, or connectors.
 - Plugin content stays portable and does not import app-private source.
 - Contribution-facing spec documentation updates its matching `*.zh-CN.md` mirror.
 - Validation follows `plugins/AGENTS.md`, including plugin-runtime typechecking and `od plugin validate` when the built CLI is available.
@@ -297,7 +297,7 @@ Review in this order. Each priority lists the concrete checks for it.
 - No committed secrets, API keys, or `media-config.json` content. No widening of credential storage scope without explicit need.
 - Logs do not leak credentials, tokens, or full prompt payloads.
 - Keep control-plane runtime state separate from daemon-owned data. Sidecar and `tools-dev` runtime/log state follows the namespace-scoped `.tmp/<source>/<namespace>/...` contract (with `tools-dev` logs under `.tmp/tools-dev/<namespace>/...`). Private IPC endpoints are derived by `@open-design/sidecar` from the five-field stamp and current OS principal; POSIX endpoints use a principal-scoped, hashed directory under the OS temporary directory, and callers must treat the concrete path as opaque.
-- Daemon-owned data must derive from the daemon's already-resolved `RUNTIME_DATA_DIR`; subprocesses inherit that truth through `OD_DATA_DIR`. Review the [daemon data contract](daemon-data.md) when changing storage; do not recompute an independent data root.
+- Daemon-owned data must derive from the daemon's already-resolved `RUNTIME_DATA_DIR`; subprocesses inherit that truth through `OD_DATA_DIR`. Review the [daemon data contract](../apps/daemon/AGENTS.md#data-ownership) when changing storage; do not recompute an independent data root.
 - For daemon, desktop, sidecar, path, log, or namespace changes, validate the relevant side of that split per `AGENTS.md`: resolved daemon data-root propagation for daemon data; concurrent namespaces, log-path inspection, and desktop `inspect eval`/`inspect screenshot` for control-plane state.
 
 ### 5.5 Performance and operational risk

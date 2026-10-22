@@ -518,13 +518,13 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 |---|---|
 | 前端 | Next.js 16 App Router + React 18 + TypeScript |
 | 守护进程 | Node 24 · Express · SSE 流式传输 · `better-sqlite3` |
-| 存储 | 数据保存在 daemon 数据根目录中；配置、持久化与备份见 [Daemon storage](../daemon-data.md) |
+| 存储 | 数据保存在 daemon 数据根目录中；配置、持久化与备份见 [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | 预览 | 文件系统运行渲染规范项目文件；BYOK/纯 API 运行将一个完整 `<artifact>` 块解析到沙箱 `srcdoc` iframe |
 | 导出 | HTML（内联）· PDF（浏览器打印）· PPTX（Agent 驱动）· ZIP · Markdown · MP4（HyperFrames） |
 | 桌面 | Electron 外壳 + 沙箱渲染进程 + sidecar IPC（STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN） |
 | 生命周期 | 统一入口：`pnpm tools-dev`（start / stop / run / status / logs / inspect / check） |
 
-完整架构说明 → [`docs/architecture.md`](../../docs/architecture.md)。技能协议 → [`docs/skills-protocol.md`](../../docs/skills-protocol.md)。Agent 适配器契约 → [`docs/agent-adapters.md`](../../docs/agent-adapters.md)。
+完整架构说明 → [`apps/AGENTS.md`](../../apps/AGENTS.md)。技能协议 → [`docs/skills-protocol.md`](../../docs/skills-protocol.md)。Agent 适配器契约 → [`docs/agent-adapters.md`](../../docs/agent-adapters.md)。
 
 ---
 
@@ -552,7 +552,6 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [ ] Figma / Pencil → React / Next / Vue 迁移插件（alpha）
 - [ ] 刷新现有代码库插件（指向 git 仓库 + `DESIGN.md`）
 
-分阶段交付 → [`docs/roadmap.md`](../../docs/roadmap.md)。
 
 ---
 
@@ -691,7 +690,6 @@ gh pr create --fill
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | HTML→MP4 动态图形框架，在 OpenDesign 中作为 `hyperframes-html` 一等公民集成。 |
 | [Claude Code skills][skill] | 我们原样采用的 `SKILL.md` 约定。 |
 
-详细溯源 → [`docs/references.md`](../../docs/references.md)。
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

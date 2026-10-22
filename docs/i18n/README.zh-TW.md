@@ -525,13 +525,13 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 |---|---|
 | 前端 | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE 串流 · `better-sqlite3` |
-| 儲存 | 資料儲存在 daemon 資料根目錄中；設定、持久化與備份請見 [Daemon storage](../daemon-data.md) |
+| 儲存 | 資料儲存在 daemon 資料根目錄中；設定、持久化與備份請見 [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | 預覽 | 檔案系統執行渲染標準專案檔案；BYOK／純 API 執行把一個完整 `<artifact>` 區塊解析到沙箱化 `srcdoc` iframe |
 | 匯出 | HTML（內嵌）· PDF（瀏覽器列印）· PPTX（agent 驅動）· ZIP · Markdown · MP4（HyperFrames） |
 | 桌面 | Electron shell + 沙箱化 renderer + sidecar IPC（STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN） |
 | 生命週期 | 單一進入點：`pnpm tools-dev`（start / stop / run / status / logs / inspect / check） |
 
-完整架構 → [`docs/architecture.md`](../../docs/architecture.md)。Skill 協定 → [`docs/skills-protocol.md`](../../docs/skills-protocol.md)。Agent adapter 契約 → [`docs/agent-adapters.md`](../../docs/agent-adapters.md)。
+完整架構 → [`apps/AGENTS.md`](../../apps/AGENTS.md)。Skill 協定 → [`docs/skills-protocol.md`](../../docs/skills-protocol.md)。Agent adapter 契約 → [`docs/agent-adapters.md`](../../docs/agent-adapters.md)。
 
 ---
 
@@ -555,7 +555,6 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [ ] Figma / Pencil → React / Next / Vue 遷移外掛（alpha）
 - [ ] 翻新既有程式碼庫的外掛（指向一個 git 儲存庫 + `DESIGN.md`）
 
-分階段交付 → [`docs/roadmap.md`](../../docs/roadmap.md)。
 
 ---
 
@@ -694,7 +693,6 @@ gh pr create --fill
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | HTML→MP4 動態圖像框架，在 OpenDesign 中整合為一等公民的 `hyperframes-html`。 |
 | [Claude Code skills][skill] | 我們原封不動採用的 `SKILL.md` 慣例。 |
 
-詳細出處 → [`docs/references.md`](../../docs/references.md)。
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

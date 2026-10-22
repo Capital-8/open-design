@@ -1,6 +1,6 @@
 # Contributing a Design Template
 
-**Parent:** [`spec.md`](spec.md) · **Siblings:** [`skills-protocol.md`](skills-protocol.md) · [`architecture.md`](architecture.md) · [`modes.md`](modes.md)
+**Siblings:** [`skills-protocol.md`](skills-protocol.md) · [app boundaries](../apps/AGENTS.md) · [template modes](../design-templates/AGENTS.md)
 
 > Want to read the shared `SKILL.md` protocol instead? See [`skills-protocol.md`](skills-protocol.md). This file is the **how-to** for shipping a rendering template upstream — what to write, how to run it locally, and what we'll send back at review.
 
@@ -282,8 +282,8 @@ Pick the closest one to your idea and read its `SKILL.md` body before writing yo
 ### Spec & supporting docs
 
 - [`skills-protocol.md`](skills-protocol.md) — full frontmatter grammar, discovery & precedence rules, mode semantics, craft references, testing primitives
-- [`architecture.md`](architecture.md) — daemon ↔ web ↔ skill registry data flow
-- [`modes.md`](modes.md) — what the Prototype / Deck / Template / Image / Video / Audio template modes mean to the runtime
+- [app boundaries](../apps/AGENTS.md) — daemon ↔ web ↔ skill registry data flow
+- [template modes](../design-templates/AGENTS.md) — what the Prototype / Deck / Template / Image / Video / Audio template modes mean to the runtime
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — code style, commit conventions, "what we don't accept" for the broader project
 
 ### Upstream

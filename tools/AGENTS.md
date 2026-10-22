@@ -67,4 +67,4 @@ pnpm tools-serve start updater
 - Stamp/namespace changes validate two concurrent namespaces, including desktop `inspect eval` and `inspect screenshot` for each.
 - Path/log changes run `pnpm tools-dev logs --namespace <name> --json` and confirm paths under `.tmp/tools-dev/<namespace>/...`.
 - Private IPC endpoints are opaque and owned by `@open-design/sidecar`; orchestration uses its client/lifecycle primitives. Do not derive identity/state files from stamps. Runtime files normally live under `<project-root>/.tmp/<source>/<namespace>/...`.
-- Daemon-owned storage is a separate boundary; follow [`docs/daemon-data.md`](../docs/daemon-data.md).
+- Daemon-owned storage is a separate boundary; follow [`apps/daemon/AGENTS.md#data-ownership`](../apps/daemon/AGENTS.md#data-ownership).

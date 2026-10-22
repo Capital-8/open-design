@@ -515,13 +515,13 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 |---|---|
 | الواجهة الأمامية | Next.js 16 App Router + React 18 + TypeScript |
 | الـ Daemon | Node 24 · Express · بثّ SSE · `better-sqlite3` |
-| التخزين | تُحفظ البيانات المحلية في دليل بيانات daemon. للإعداد والنسخ الاحتياطي: [Daemon storage](../daemon-data.md) |
+| التخزين | تُحفظ البيانات المحلية في دليل بيانات daemon. للإعداد والنسخ الاحتياطي: [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | المعاينة | تشغيلات filesystem تعرض الملفات الأساسية؛ وتشغيلات BYOK/API تحلل كتلة `<artifact>` كاملة في iframe `srcdoc` معزول |
 | التصدير | HTML (مضمَّن) · PDF (طباعة المتصفح) · PPTX (يقوده الوكيل) · ZIP · Markdown · MP4 (HyperFrames) |
 | سطح المكتب | غلاف Electron + مُصيِّر معزول + IPC جانبي (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
 | دورة الحياة | نقطة دخول واحدة: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) |
 
-البنية المعمارية الكاملة ← [`docs/architecture.md`](../../docs/architecture.md). بروتوكول المهارات ← [`docs/skills-protocol.md`](../../docs/skills-protocol.md). عقد محوّل الوكلاء ← [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
+البنية المعمارية الكاملة ← [`apps/AGENTS.md`](../../apps/AGENTS.md). بروتوكول المهارات ← [`docs/skills-protocol.md`](../../docs/skills-protocol.md). عقد محوّل الوكلاء ← [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
 
 ---
 
@@ -545,7 +545,6 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [ ] إضافات نقل Figma / Pencil ← React / Next / Vue (ألفا)
 - [ ] إضافة تحديث قاعدة شفرة موجودة (وجّهها نحو مستودع git + ملف `DESIGN.md`)
 
-التسليم المرحلي ← [`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -684,7 +683,6 @@ gh pr create --fill
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | إطار الرسوميات الحركية HTML→MP4، مدمج بصفته `hyperframes-html` من الدرجة الأولى في OpenDesign. |
 | [Claude Code skills][skill] | اصطلاح `SKILL.md` الذي نعتمده حرفيًا. |
 
-النَّسَب التفصيلي ← [`docs/references.md`](../../docs/references.md).
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

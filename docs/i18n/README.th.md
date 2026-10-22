@@ -510,13 +510,13 @@ Plugin registry endpoint: `GET /api/plugins`. ภาพรวม directory → [
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
-| Storage | ข้อมูล local จัดเก็บใน daemon data directory ดูการตั้งค่าและการสำรองข้อมูลที่ [Daemon storage](../daemon-data.md) |
+| Storage | ข้อมูล local จัดเก็บใน daemon data directory ดูการตั้งค่าและการสำรองข้อมูลที่ [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | Preview | Filesystem runs render canonical project files; BYOK/plain-API runs parse one complete `<artifact>` block into a sandboxed `srcdoc` iframe |
 | Export | HTML (inlined) · PDF (browser print) · PPTX (agent-driven) · ZIP · Markdown · MP4 (HyperFrames) |
 | Desktop | Electron shell + sandboxed renderer + sidecar IPC (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
 | Lifecycle | Entry point เดียว: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) |
 
-Architecture เต็ม → [`docs/architecture.md`](../../docs/architecture.md). Skill protocol → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Agent adapter contract → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
+Architecture เต็ม → [`apps/AGENTS.md`](../../apps/AGENTS.md). Skill protocol → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Agent adapter contract → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
 
 ---
 
@@ -540,7 +540,6 @@ Architecture เต็ม → [`docs/architecture.md`](../../docs/architecture.m
 - [ ] Figma / Pencil → React / Next / Vue migration plugins (alpha)
 - [ ] Refresh-existing-codebase plugin (ชี้ไปที่ git repo + `DESIGN.md`)
 
-Phased delivery → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -686,7 +685,6 @@ SVG ด้านบน regenerate ทุกวันโดย [`.github/workflow
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | Framework motion-graphics HTML→MP4 ที่ integrate เป็น `hyperframes-html` แบบ first-class ใน OpenDesign. |
 | [Claude Code skills][skill] | Convention `SKILL.md` ที่เรารับมาใช้ตรง ๆ. |
 
-Provenance แบบละเอียด → [`docs/references.md`](../../docs/references.md).
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

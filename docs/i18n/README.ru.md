@@ -524,13 +524,13 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 |---|---|
 | Фронтенд | Next.js 16 App Router + React 18 + TypeScript |
 | Демон | Node 24 · Express · SSE-стриминг · `better-sqlite3` |
-| Хранилище | Локальные данные сохраняются в каталоге демона. Настройка и резервное копирование: [Daemon storage](../daemon-data.md) |
+| Хранилище | Локальные данные сохраняются в каталоге демона. Настройка и резервное копирование: [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | Предпросмотр | Filesystem-запуск рендерит канонические файлы; BYOK/API разбирает полный `<artifact>` в iframe `srcdoc` |
 | Экспорт | HTML (встроенный) · PDF (печать из браузера) · PPTX (управляемый агентом) · ZIP · Markdown · MP4 (HyperFrames) |
 | Десктоп | Electron-оболочка + изолированный рендерер + sidecar IPC (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
 | Жизненный цикл | Одна точка входа: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) |
 
-Полная архитектура → [`docs/architecture.md`](../../docs/architecture.md). Протокол навыков → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Контракт адаптера агента → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
+Полная архитектура → [`apps/AGENTS.md`](../../apps/AGENTS.md). Протокол навыков → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Контракт адаптера агента → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
 
 ---
 
@@ -558,7 +558,6 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [ ] Плагины миграции Figma / Pencil → React / Next / Vue (alpha)
 - [ ] Плагин обновления существующей кодовой базы (направить на git-репозиторий + `DESIGN.md`)
 
-Поэтапная поставка → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -704,7 +703,6 @@ SVG выше регенерируется ежедневно через [`.githu
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | Фреймворк моушн-графики HTML→MP4, интегрированный как полноправный `hyperframes-html` в OpenDesign. |
 | [Claude Code skills][skill] | Конвенция `SKILL.md`, которую мы перенимаем дословно. |
 
-Подробное происхождение → [`docs/references.md`](../../docs/references.md).
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

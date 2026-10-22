@@ -534,13 +534,13 @@ Point de terminaison du registre des plugins : `GET /api/plugins`. Vue d'ensembl
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · streaming SSE · `better-sqlite3` |
-| Stockage | Les données locales sont conservées dans le répertoire du daemon. Configuration et sauvegarde : [Daemon storage](../daemon-data.md) |
+| Stockage | Les données locales sont conservées dans le répertoire du daemon. Configuration et sauvegarde : [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | Aperçu | Les exécutions filesystem rendent les fichiers canoniques ; BYOK/API analyse un bloc `<artifact>` complet dans une iframe `srcdoc` sandboxée |
 | Export | HTML (intégré) · PDF (impression navigateur) · PPTX (piloté par l'agent) · ZIP · Markdown · MP4 (HyperFrames) |
 | Bureau | Coque Electron + renderer sandboxé + IPC sidecar (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
 | Cycle de vie | Un seul point d'entrée : `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) |
 
-Architecture complète → [`docs/architecture.md`](../../docs/architecture.md). Protocole des skills → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Contrat d'adaptateur d'agent → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
+Architecture complète → [`apps/AGENTS.md`](../../apps/AGENTS.md). Protocole des skills → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Contrat d'adaptateur d'agent → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
 
 ---
 
@@ -568,7 +568,6 @@ Architecture complète → [`docs/architecture.md`](../../docs/architecture.md).
 - [ ] Plugins de migration Figma / Pencil → React / Next / Vue (alpha)
 - [ ] Plugin de rafraîchissement de base de code existante (pointer vers un dépôt git + un `DESIGN.md`)
 
-Historique de la livraison par phases (document archivé) → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -715,7 +714,6 @@ Si cela vous a fait gagner trente minutes, mettez-lui une ★. Les étoiles ne p
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | Le framework de motion graphics HTML→MP4, intégré comme `hyperframes-html` de première classe dans OpenDesign. |
 | [Claude Code skills][skill] | La convention `SKILL.md` que nous adoptons telle quelle. |
 
-Provenance détaillée → [`docs/references.md`](../../docs/references.md).
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

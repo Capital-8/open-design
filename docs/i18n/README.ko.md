@@ -513,13 +513,13 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 |---|---|
 | 프론트엔드 | Next.js 16 App Router + React 18 + TypeScript |
 | 데몬 | Node 24 · Express · SSE 스트리밍 · `better-sqlite3` |
-| 스토리지 | 로컬 데이터는 daemon 데이터 디렉터리에 저장됩니다. 설정과 백업: [Daemon storage](../daemon-data.md) |
+| 스토리지 | 로컬 데이터는 daemon 데이터 디렉터리에 저장됩니다. 설정과 백업: [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | 미리보기 | filesystem 실행은 정규 파일을 렌더링하고 BYOK/API는 완전한 `<artifact>` 블록을 샌드박스 `srcdoc` iframe으로 파싱합니다 |
 | 내보내기 | HTML(인라인) · PDF(브라우저 인쇄) · PPTX(에이전트 기반) · ZIP · Markdown · MP4(HyperFrames) |
 | 데스크톱 | Electron 셸 + 샌드박스 렌더러 + 사이드카 IPC(STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
 | 라이프사이클 | 단일 진입점: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) |
 
-전체 아키텍처 → [`docs/architecture.md`](../../docs/architecture.md). 스킬 프로토콜 → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). 에이전트 어댑터 계약 → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
+전체 아키텍처 → [`apps/AGENTS.md`](../../apps/AGENTS.md). 스킬 프로토콜 → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). 에이전트 어댑터 계약 → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
 
 ---
 
@@ -543,7 +543,6 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 - [ ] Figma / Pencil → React / Next / Vue 마이그레이션 플러그인(알파)
 - [ ] 기존 코드베이스 새롭게 하기 플러그인(git 저장소 + `DESIGN.md`에 겨눔)
 
-단계별 제공 → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -682,7 +681,6 @@ gh pr create --fill
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | HTML→MP4 모션 그래픽 프레임워크로, OpenDesign에 일급 `hyperframes-html`로 통합됨. |
 | [Claude Code skills][skill] | 우리가 그대로 채택한 `SKILL.md` 관례. |
 
-자세한 출처 → [`docs/references.md`](../../docs/references.md).
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

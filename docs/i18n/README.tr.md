@@ -513,13 +513,13 @@ Eklenti kayıt uç noktası: `GET /api/plugins`. Dizin genel bakışı → [`plu
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
-| Depolama | Yerel veriler daemon veri dizininde saklanır. Yapılandırma ve yedekleme: [Daemon storage](../daemon-data.md) |
+| Depolama | Yerel veriler daemon veri dizininde saklanır. Yapılandırma ve yedekleme: [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | Önizleme | Filesystem çalıştırmaları kanonik dosyaları render eder; BYOK/API eksiksiz bir `<artifact>` bloğunu yalıtılmış `srcdoc` iframe'e ayrıştırır |
 | Dışa aktarma | HTML (gömülü) · PDF (tarayıcı yazdırma) · PPTX (ajan güdümlü) · ZIP · Markdown · MP4 (HyperFrames) |
 | Masaüstü | Electron shell + yalıtılmış renderer + sidecar IPC (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
 | Yaşam döngüsü | Tek giriş noktası: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) |
 
-Tam mimari → [`docs/architecture.md`](../../docs/architecture.md). Beceri protokolü → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Ajan adaptör sözleşmesi → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
+Tam mimari → [`apps/AGENTS.md`](../../apps/AGENTS.md). Beceri protokolü → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Ajan adaptör sözleşmesi → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
 
 ---
 
@@ -543,7 +543,6 @@ Tam mimari → [`docs/architecture.md`](../../docs/architecture.md). Beceri prot
 - [ ] Figma / Pencil → React / Next / Vue taşıma eklentileri (alpha)
 - [ ] Mevcut kod tabanını yenileme eklentisi (bir git deposu + `DESIGN.md` dosyasına yönlendirin)
 
-Aşamalı teslimat → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -682,7 +681,6 @@ Bu size otuz dakika kazandırdıysa, bir ★ verin. Yıldızlar kira ödemez —
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | HTML→MP4 hareket grafikleri çerçevesi, OpenDesign'da birinci sınıf `hyperframes-html` olarak entegre edilmiştir. |
 | [Claude Code skills][skill] | Birebir benimsediğimiz `SKILL.md` kuralı. |
 
-Ayrıntılı köken → [`docs/references.md`](../../docs/references.md).
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

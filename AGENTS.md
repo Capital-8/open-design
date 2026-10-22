@@ -21,7 +21,7 @@ Required cross-repository boundaries:
 - Keep app-private implementations private. Apps must not import another app's `src/` or `tests/`; promote shared behavior to an owned package or use the public API.
 - Put shared web/daemon DTOs, SSE unions, errors, and task shapes in `packages/contracts` before wiring consumers. Keep contracts pure TypeScript, without framework, filesystem/process, browser, SQLite, daemon-private, or sidecar control-plane dependencies.
 - Keep sidecar awareness at app sidecar entries and orchestration boundaries. Business logic must not assemble process identities, discover IPC paths, or scan processes.
-- Resolve daemon data once and propagate that root to consumers and subprocesses; follow [daemon storage](docs/daemon-data.md). Keep packaged runtime/data/log/cache paths namespace-scoped and independent of ports.
+- Resolve daemon data once and propagate that root to consumers and subprocesses; follow [daemon storage](apps/daemon/AGENTS.md#data-ownership). Keep packaged runtime/data/log/cache paths namespace-scoped and independent of ports.
 - User-facing capabilities ship through both web UI and `od` CLI against the same daemon API in the same PR. CLI output supports `--json`, and long prompt inputs support `--prompt-file <path|->` where relevant. Document genuinely inapplicable surfaces; do not defer parity as follow-up work.
 - Use TypeScript for project-owned source, scripts, tests, reporters, and configs. Generated/vendor/compatibility JavaScript requires an explicit reason accepted by `pnpm guard`.
 
@@ -57,15 +57,15 @@ Read the entry matching the task; follow its local references for implementation
 | --- | --- |
 | Understand product and set up development | [README.md](README.md), [QUICKSTART.md](QUICKSTART.md), [CONTRIBUTING.md](CONTRIBUTING.md); native Windows: [troubleshooting](docs/windows-troubleshooting.md). |
 | Review code or prepare a PR | [review guide](docs/code-review-guidelines.md), [PR template](.github/pull_request_template.md), [contribution policy](CONTRIBUTING.md#commits--pull-requests). |
-| Change API/resource or runtime architecture | [architecture](docs/architecture.md), [architecture boundaries](specs/current/architecture-boundaries.md), [contracts](packages/AGENTS.md). Historical `docs/spec.md` and `docs/roadmap.md` are archived, not current behavior. |
-| Change data paths, persistence, or deployment storage | [daemon data contract and operator guidance](docs/daemon-data.md); implementation starts at `resolveDataDir` in `apps/daemon/src/daemon-paths.ts`. |
-| Change web UI, styles, animation, localization, or chat | [web guide](apps/web/AGENTS.md); chat work also follows [chat guide](apps/web/src/components/chat/AGENTS.md) and its design references. |
-| Change prompt text in daemon, contracts, or official scenario assets | [prompt composition](docs/prompt-composition.md). Product-agent instructions and repository-maintenance instructions have separate audiences. |
+| Change API/resource or runtime architecture | [app boundaries](apps/AGENTS.md), [contracts](packages/AGENTS.md). |
+| Change data paths, persistence, or deployment storage | [daemon data ownership](apps/daemon/AGENTS.md#data-ownership), [storage configuration](QUICKSTART.md#persistent-storage); implementation starts at `resolveDataDir` in `apps/daemon/src/daemon-paths.ts`. |
+| Change web UI, styles, animation, localization, or chat | [web guide](apps/web/AGENTS.md); chat work also follows [chat guide](apps/web/src/components/chat/AGENTS.md) and affected behavior tests. |
+| Change prompt text in daemon, contracts, or official scenario assets | [prompt composition](apps/daemon/src/prompts/AGENTS.md). Product-agent instructions and repository-maintenance instructions have separate audiences. |
 | Change runtime streams, parser behavior, or physical Runs | [daemon guide](apps/daemon/AGENTS.md), [runtime guide](apps/daemon/src/runtimes/AGENTS.md). |
-| Change CI scope, omission, or workflow topology | [.github guide](.github/AGENTS.md), [CI methodology and confidence contract](specs/current/ci.md). |
+| Change CI scope, omission, or workflow topology | [.github guide](.github/AGENTS.md), [scope routing and omission](.github/AGENTS.md#scope-routing-and-omission). |
 | Change packaging, updater, cache keys, or release channels | [pack guide](tools/pack/AGENTS.md), [cache contract](tools/pack/CACHE.md), [release guide](tools/release/README.md). |
 | Add or change extension resources | [skills protocol](docs/skills-protocol.md), [template ownership](design-templates/AGENTS.md), [design systems](design-systems/README.md), [craft](craft/README.md), [plugins](plugins/AGENTS.md). |
-| Add, repair, or optimize tests | [test efficiency](docs/testing/test-efficiency.zh-CN.md), then the owning package guide; cross-boundary/UI coverage follows [e2e guide](e2e/AGENTS.md). |
+| Add, repair, or optimize tests | [test efficiency](e2e/AGENTS.md#test-efficiency-and-determinism), then the owning package guide; cross-boundary/UI coverage follows [e2e guide](e2e/AGENTS.md). |
 
 ## 5. Repository working methods
 

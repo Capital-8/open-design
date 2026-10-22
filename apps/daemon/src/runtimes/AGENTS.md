@@ -16,7 +16,7 @@ beside their runtime stream helpers.
 ## Product steering and questions
 
 Product clarification uses `<question-form>` artifacts; see `apps/web/AGENTS.md`
-and `docs/prompt-composition.md`. This describes OpenDesign's product protocol,
+and `apps/daemon/src/prompts/AGENTS.md`. This describes OpenDesign's product protocol,
 not the repository contributor's conversation interface.
 
 `POST /api/runs/:id/steer` sends a further user message into a running turn;

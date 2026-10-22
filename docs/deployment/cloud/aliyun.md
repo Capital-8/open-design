@@ -225,7 +225,7 @@ spec:
 
 Apply with `kubectl apply -f open-design.yaml`. Front the Service with an Ingress (NGINX Ingress Controller is preinstalled on ACK Pro) and an ACM-issued certificate. With `OD_API_TOKEN` set, every `/api/*` request from non-loopback origins must carry an `Authorization: Bearer <token>` header — wire that into your Ingress / proxy auth layer.
 
-> **Note on `replicas: 1`:** before changing storage paths or shared persistent storage, you MUST read [daemon data contract](../../daemon-data.md). Running multiple replicas without shared persistent daemon storage will diverge state. A multi-replica ACK topology needs an external database; that is out of scope for this guide.
+> **Note on `replicas: 1`:** before changing storage paths or shared persistent storage, you MUST read [daemon data contract](../../../apps/daemon/AGENTS.md#data-ownership). Running multiple replicas without shared persistent daemon storage will diverge state. A multi-replica ACK topology needs an external database; that is out of scope for this guide.
 
 ## Path C — ROS templates
 

@@ -191,7 +191,7 @@ OD_API_TOKEN=
 
 ## Armazenamento persistente
 
-O Docker Compose armazena os dados em um volume nomeado persistente. Preserve esse volume nas atualizações. Configuração e backup: [Daemon storage](../daemon-data.md)
+O Docker Compose armazena os dados em um volume nomeado persistente. Preserve esse volume nas atualizações. Configuração e backup: [Daemon storage](../../QUICKSTART.md#persistent-storage)
 
 ---
 
@@ -332,9 +332,9 @@ open-design/
 
 ## Voltando à visão
 
-Este Início rápido é a semente executável da spec em [`docs/`](../../docs/). A spec descreve para onde isso evolui (veja [`docs/roadmap.md`](../../docs/roadmap.md)). Destaques:
+Este Início rápido é a semente executável da spec em [`docs/`](../../docs/). A spec descreve para onde isso evolui (veja [Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)). Destaques:
 
-- `docs/architecture.md` descreve a stack entregue: Next.js 16 App Router na frente, daemon local atrás, e os rewrites de `apps/web/next.config.ts` em dev mantendo o navegador conversando com a mesma superfície `/api`.
+- `apps/AGENTS.md` descreve a stack entregue: Next.js 16 App Router na frente, daemon local atrás, e os rewrites de `apps/web/next.config.ts` em dev mantendo o navegador conversando com a mesma superfície `/api`.
 - `docs/skills-protocol.md` descreve o frontmatter atual de `SKILL.md`/`od:` e a separação entre skills funcionais e templates de renderização. O parser e a normalização em `apps/daemon/src/skills.ts` são a fonte de verdade da implementação.
 - `docs/agent-adapters.md` descreve o contrato dos adapters. Configurações de launch, argumentos, modelos e stream específicas de cada runtime ficam em `apps/daemon/src/runtimes/defs/`, com registro em `apps/daemon/src/runtimes/registry.ts`; `apps/daemon/src/agents.ts` é uma superfície de exports de compatibilidade.
-- `docs/modes.md` distingue as seis abas de New Project dos sete modos normalizados do registro (`prototype`, `deck`, `template`, `design-system`, `image`, `video`, `audio`).
+- `design-templates/AGENTS.md` distingue as seis abas de New Project dos sete modos normalizados do registro (`prototype`, `deck`, `template`, `design-system`, `image`, `video`, `audio`).

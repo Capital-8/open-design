@@ -514,13 +514,13 @@ Plugin-Registry-Endpunkt: `GET /api/plugins`. Verzeichnisübersicht → [`plugin
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE-Streaming · `better-sqlite3` |
-| Speicher | Lokale Daten bleiben im Daemon-Datenverzeichnis erhalten. Konfiguration und Sicherung: [Daemon storage](../daemon-data.md) |
+| Speicher | Lokale Daten bleiben im Daemon-Datenverzeichnis erhalten. Konfiguration und Sicherung: [Daemon storage](../../QUICKSTART.md#persistent-storage) |
 | Vorschau | Dateisystemläufe rendern kanonische Projektdateien; BYOK-/Plain-API-Läufe parsen einen vollständigen `<artifact>`-Block in ein Sandbox-`srcdoc`-iframe |
 | Export | HTML (eingebettet) · PDF (Browser-Druck) · PPTX (agentengesteuert) · ZIP · Markdown · MP4 (HyperFrames) |
 | Desktop | Electron-Shell + Sandboxed Renderer + Sidecar-IPC (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
 | Lebenszyklus | Ein Einstiegspunkt: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) |
 
-Vollständige Architektur → [`docs/architecture.md`](../../docs/architecture.md). Skill-Protokoll → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Agent-Adapter-Vertrag → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
+Vollständige Architektur → [`apps/AGENTS.md`](../../apps/AGENTS.md). Skill-Protokoll → [`docs/skills-protocol.md`](../../docs/skills-protocol.md). Agent-Adapter-Vertrag → [`docs/agent-adapters.md`](../../docs/agent-adapters.md).
 
 ---
 
@@ -544,7 +544,6 @@ Vollständige Architektur → [`docs/architecture.md`](../../docs/architecture.m
 - [ ] Figma- / Pencil- → React- / Next- / Vue-Migrations-Plugins (Alpha)
 - [ ] Plugin zum Auffrischen einer bestehenden Codebasis (auf ein git-Repo + `DESIGN.md` gerichtet)
 
-Phasenweise Auslieferung → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -683,7 +682,6 @@ Wenn dir das dreißig Minuten gespart hat, gib ihm ein ★. Sterne zahlen keine 
 | [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) | Das HTML→MP4-Motion-Graphics-Framework, integriert als vollwertiges `hyperframes-html` in OpenDesign. |
 | [Claude Code skills][skill] | Die `SKILL.md`-Konvention, die wir wortgetreu übernehmen. |
 
-Detaillierte Herkunft → [`docs/references.md`](../../docs/references.md).
 
 [skill]: https://docs.anthropic.com/en/docs/claude-code/skills
 

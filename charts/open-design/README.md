@@ -23,7 +23,7 @@ These commands deploy an OpenDesign application on the Kubernetes cluster in the
 
 #### SQLite State & Concurrency Limitations
 The current OpenDesign runtime stores state in local files and SQLite; see the
-[daemon data contract](../../docs/daemon-data.md) for storage configuration.
+[daemon data contract](../../apps/daemon/AGENTS.md#data-ownership) for storage configuration.
 Because SQLite does not support concurrent writes from multiple network
 replicas, **this chart is strictly limited to 1 replica**.
 

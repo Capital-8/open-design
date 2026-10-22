@@ -9,7 +9,7 @@ instructions for the agent maintaining this repository.
 - `app/` contains Next.js routes; `src/App.tsx` is the main client shell.
 - `src/providers/` owns app-local HTTP/SSE integration; shared wire types come from `@open-design/contracts`.
 - `src/runtime/` owns presentation/domain helpers; component-owned behavior stays with its component.
-- Before changing chat rendering, tool displays, execution records, or pinned UI, read `src/components/chat/AGENTS.md`, `specs/current/chat-panel-next.md`, and `specs/current/chat-panel-next-plan.md` (paths relative to the repository root for the specs).
+- Before changing chat rendering, tool displays, execution records, or pinned UI, read [the chat guide](src/components/chat/AGENTS.md) and affected behavior tests.
 - HTML preview mode/bridge decisions live in `src/components/file-viewer-render-mode.ts` and `FileViewer.tsx`. Features requiring injected bridges must disqualify URL-load mode; filter iframe messages against owned frames and, where required, the active frame.
 
 ## Web CSS ownership
@@ -46,7 +46,7 @@ Within the OpenDesign product, clarifying questions render as the
 `<question-form>` artifact inside the originating assistant message. Answers
 become the next user message through `formatFormAnswers` and `/api/chat`.
 This describes the product protocol, not the repository contributor's chat UI.
-Before changing it, read `docs/prompt-composition.md` and update affected host
+Before changing it, read `apps/daemon/src/prompts/AGENTS.md` and update affected host
 rendering, prompt paths, and contracts together. Do not add a separate tool-answer
 return path without changing that protocol deliberately.
 
