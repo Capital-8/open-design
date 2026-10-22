@@ -1317,8 +1317,8 @@ export function EntryTopRightCluster({
   // test anyway for the case where B DOES say 'free' but the workspace is
   // team-typed, where the wordmark draws `team` instead.
   const isFreePlan = planTier === 'free' || (labelTier ?? '').trim().toLowerCase() === 'free';
-  // A Free member may inspect shared quota, but only its Owner sees an upgrade prompt.
-  const showUpgradePill = isFreePlan && context?.role === 'owner';
+  // The seats HTML uses the Free upgrade chip for every role; it only opens quota.
+  const showUpgradePill = isFreePlan && (quotaView.sharedBilling || context?.role === 'owner');
   // Design PR #8364: the Owner's Free card sells 升级 like every paid tier. A personal
   // workspace needs no billing permission — its member IS the payer — and an
   // account B reports without any plan is upgradeable as free once the card
@@ -1458,7 +1458,7 @@ export function EntryTopRightCluster({
                           fallback for a tier string no wordmark matches —
                           without it the capsule would be empty. */}
                       {planTier ? (
-                        <PlanWordmark tier={planTier} height={16} />
+                        <PlanWordmark tier={planTier} height={16} variant={quotaView.sharedBilling ? 'seats-phase1' : undefined} />
                       ) : (
                         <RemixIcon name="battery-charge-line" size={16} />
                       )}

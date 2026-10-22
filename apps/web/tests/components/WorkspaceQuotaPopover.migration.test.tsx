@@ -58,12 +58,15 @@ it('expired or revoked runtime cannot reactivate the shared card', () => {
   body.workspaceRuntime.hardExpiresAt = new Date(Date.now() - 1).toISOString();
   expect(state(body).sharedBilling).toBe(false);
 });
-it.each(['owner', 'admin', 'member'] as const)('%s keeps zero wallet visible while only shared hides the Free plan region', role => {
+it.each(['owner', 'admin', 'member'] as const)('%s keeps zero wallet while shared Free uses the HTML availability and zero bar', role => {
   const mounted = render(panel(response('legacy'), role));
   expect(screen.getByText('未订阅')).toBeTruthy();
   expect(screen.getByText('$0.00')).toBeTruthy();
   mounted.rerender(panel(response('shared'), role));
-  expect(screen.queryByRole('region', { name: 'Design Plan 额度' })).toBeNull();
+  expect(screen.getByRole('region', { name: 'Design Plan 额度' })).toBeTruthy();
+  expect(screen.getByText('订阅套餐后可用')).toBeTruthy();
+  expect(screen.queryByText('未订阅')).toBeNull();
+  expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
   expect(screen.getByRole('region', { name: '按量额度' })).toBeTruthy();
   expect(screen.getByText('$0.00')).toBeTruthy();
   if (role !== 'owner') expect(screen.queryByRole('button', { name: /^(升级|充值|管理)$/ })).toBeNull();

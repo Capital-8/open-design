@@ -48,7 +48,7 @@
   background: none;
   color: #999;
   box-shadow: none;
-  cursor: help;
+  cursor: default;
 }
 .helpTrigger:hover,
 .helpTrigger:focus-visible {
@@ -119,13 +119,20 @@
 }
 .row > :first-child { color: #ccc; }
 .row > :last-child { color: #f5f5f5; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.row .exhausted { color: var(--red); }
-.fallback {
-  margin: 8px 0 0;
-  color: var(--amber);
+.freeRow {
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.freeRow > .availability {
+  flex: 1;
+  min-width: 0;
+  color: #999;
   font-size: 11px;
+  font-weight: 400;
   line-height: 16px;
 }
+.freeSkeleton .walletSkeleton { margin: 0; padding-top: 0; border: 0; }
 .track {
   height: 4px;
   margin-top: 6px;
@@ -146,7 +153,7 @@
 .placeholder small {
   color: #999;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 16px;
 }
 section + .metered { margin-top: 16px; }

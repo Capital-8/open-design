@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// VIEW-001/002/003/010-CLIENT/012/017/021; PRD §5.3 visibility, design E/A11 styling.
+// VIEW-001/002/003/010-CLIENT/012/017/021; latest confirmed HTML E/A11 states.
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceQuotaPopover } from '../../src/components/WorkspaceQuotaPopover';
@@ -64,7 +64,7 @@ describe.each(['zh-CN', 'en'] as const)('K6 C-01 reset rows (U001/UI-002) — %s
   }
   function expectQuotaWithoutReset(value: WorkspaceQuotaView, percent: number, count: number) {
     const plan = renderQuota(value);
-    expect(plan.getAllByText(percent === 0 ? (locale === 'en' ? 'Used up' : '已用完') : locale === 'en' ? `${percent}% left` : `剩余 ${percent}%`)).toHaveLength(count);
+    expect(plan.getAllByText(locale === 'en' ? `${percent}% left` : `剩余 ${percent}%`)).toHaveLength(count);
     const bars = plan.getAllByRole('progressbar');
     expect(bars).toHaveLength(count);
     for (const bar of bars) expect(bar.getAttribute('aria-valuenow')).toBe(String(percent));
@@ -106,13 +106,13 @@ describe('C-01 state and role matrix (VIEW-001/002/021)', () => {
   for (const [id, tier, balance, percent] of cases) {
     it.each(['owner', 'admin', 'member'] as const)(`${id} ${tier}: %s sees the shared amount and its role action`, role => {
       render(panel(view(tier, balance, percent), role));
-      expect(Boolean(screen.queryByRole('region', { name: 'Design Plan 额度' }))).toBe(tier !== 'free');
+      expect(screen.getByRole('region', { name: 'Design Plan 额度' })).toBeTruthy();
       expect(screen.getByRole('region', { name: '按量额度' })).toBeTruthy();
       expect(screen.getByText(`$${Number(balance).toFixed(2)}`)).toBeTruthy();
-      expect(screen.queryAllByRole('progressbar').length).toBe(tier === 'free' ? 0 : tier === 'go' ? 2 : 1);
+      expect(screen.queryAllByRole('progressbar').length).toBe(tier === 'go' ? 2 : 1);
       expect(screen.queryByText('未订阅')).toBeNull();
-      expect(screen.queryByText('订阅套餐后可用')).toBeNull();
-      for (const bar of screen.queryAllByRole('progressbar')) expect(bar.getAttribute('aria-valuenow')).toBe(String(percent));
+      expect(Boolean(screen.queryByText('订阅套餐后可用'))).toBe(tier === 'free');
+      for (const bar of screen.queryAllByRole('progressbar')) expect(bar.getAttribute('aria-valuenow')).toBe(String(tier === 'free' ? 0 : percent));
       const action = tier === 'max' ? '充值' : '升级';
       if (role === 'owner') {
         expect(screen.getByText('额度全员共用')).toBeTruthy();
@@ -129,32 +129,24 @@ describe('C-01 state and role matrix (VIEW-001/002/021)', () => {
   }
 });
 
-it.each(['free', 'go', 'plus', 'pro', 'max'] as const)('E12 %s retains header with the unified default loading block (decision 5)', tier => {
+it.each(['free', 'go', 'plus', 'pro', 'max'] as const)('E12 %s uses the supplied HTML loading shape', tier => {
   render(panel({ ...view(tier), loading: true }));
   expect(screen.getByRole('img', { name: tier })).toBeTruthy();
   expect(screen.getByTestId('workspace-quota-skeleton').getAttribute('aria-busy')).toBe('true');
-  expect(screen.queryAllByTestId('workspace-quota-window-skeleton')).toHaveLength(1);
+  expect(screen.queryAllByTestId('workspace-quota-window-skeleton')).toHaveLength(tier === 'go' ? 2 : 1);
   expect(screen.queryAllByTestId('workspace-quota-wallet-skeleton')).toHaveLength(1);
   expect(screen.queryByText(/加载|重试|刷新|错误|明细暂不可用|\$0/)).toBeNull();
   expect(screen.queryByRole('progressbar')).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
-it('E12 uses identical default loading markup for every tier and unknown tier (decision 5)', () => {
-  const skeletons = (['free', 'go', 'plus', 'pro', 'max', null] as const).map(tier => {
-    const mounted = render(panel({ ...view(tier ?? 'free'), tier, loading: true }));
-    const skeleton = screen.getByTestId('workspace-quota-skeleton');
-    expect(within(skeleton).queryAllByTestId('workspace-quota-window-skeleton')).toHaveLength(1);
-    expect(within(skeleton).queryAllByTestId('workspace-quota-wallet-skeleton')).toHaveLength(1);
-    expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText(/加载|重试|刷新|错误|暂不可用|\$0/)).toBeNull();
-    expect(screen.queryByRole('img', { name: /暂不可用/ })).toBeNull();
-    const html = skeleton.innerHTML;
-    mounted.unmount();
-    return html;
-  });
-  for (const html of skeletons) expect(html).toBe(skeletons[0]);
+it('E12 unknown tier keeps one neutral loading block without inventing Free', () => {
+  render(panel({ ...view('free'), tier: null, loading: true }));
+  expect(screen.queryAllByTestId('workspace-quota-window-skeleton')).toHaveLength(1);
+  expect(screen.queryAllByTestId('workspace-quota-wallet-skeleton')).toHaveLength(1);
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.queryByRole('img')).toBeNull();
+  expect(screen.queryByText(/暂不可用|\$0/)).toBeNull();
 });
 
 it('does not call an unknown plan unavailable when a scoped balance has loaded', () => {
@@ -272,25 +264,27 @@ it('E04 owner action preserves locked-workspace recovery priority and falls back
 });
 
 // Either Go window can exhaust the plan; unknown/debt must never promise funded fallback.
-describe.each(['go', 'plus', 'pro', 'max'] as const)('PRD §5.3 exhausted %s', tier => {
+describe.each(['go', 'plus', 'pro', 'max'] as const)('HTML zero window %s', tier => {
   it.each(['24', '0', '0.00', '-1.25', null])('uses the server wallet %s without hiding debt or inventing fallback', balance => {
     const value = { ...view(tier, '24', 75), balanceUsd: balance };
     value.windows = value.windows!.map((window, index) => ({ ...window, remainingPercent: index === 0 ? 0 : 75, ...(index === 0 ? { exhausted: true as const } : {}) }));
     render(panel(value));
-    expect(screen.getAllByText('已用完')).toHaveLength(1);
-    expect(Boolean(screen.queryByText('重置前将自动使用按量额度继续生成'))).toBe(balance === '24');
+    expect(screen.getAllByText('剩余 0%')).toHaveLength(1);
+    expect(screen.queryByText('已用完')).toBeNull();
+    expect(screen.queryByText('重置前将自动使用按量额度继续生成')).toBeNull();
     expect(screen.getByRole('region', { name: '按量额度' })).toBeTruthy();
     if (balance === '0' || balance === '0.00') expect(screen.getByText('$0.00')).toBeTruthy();
     if (balance == null) expect(screen.getByText('—')).toBeTruthy();
     if (balance === '-1.25') expect(screen.getByText('-$1.25')).toBeTruthy();
   });
 });
-it('Go weekly exhaustion also enables funded metered fallback', () => {
+it('Go weekly zero keeps its percentage without adding a fallback message', () => {
   const value = view('go');
   value.windows = value.windows!.map(window => ({ ...window, remainingPercent: window.durationSeconds === 604_800 ? 0 : 75, ...(window.durationSeconds === 604_800 ? { exhausted: true as const } : {}) }));
   render(panel(value));
-  expect(screen.getAllByText('已用完')).toHaveLength(1);
-  expect(screen.getByText('重置前将自动使用按量额度继续生成')).toBeTruthy();
+  expect(screen.getAllByText('剩余 0%')).toHaveLength(1);
+    expect(screen.queryByText('已用完')).toBeNull();
+  expect(screen.queryByText('重置前将自动使用按量额度继续生成')).toBeNull();
 });
 
 it('rounded 0% with positive server credits never promises exhaustion or metered fallback', () => {

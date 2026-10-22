@@ -45,3 +45,29 @@ it('E09 current workspace Free keeps its badge when account metadata says Max (V
   expect(panel.getByRole('button', { name: '升级' })).toBeTruthy();
   expect(panel.queryByRole('button', { name: '管理' })).toBeNull();
 });
+
+it.each(['owner', 'admin', 'member'] as const)('shared Free %s uses the HTML upgrade chip without giving members payment actions', async role => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({})));
+  const context = workspaceContextFixture({ workspaceId: 'shared-free', workspaceMemberId: 'm', role, planId: null, billingState: 'free' });
+  const at = new Date().toISOString();
+  const response: WorkspaceBillingResponse = { summary: null,
+    workspaceBalance: { workspaceId: 'shared-free', workspaceMemberId: 'm', balanceUsd: '0', billingScopeVersion: 2, expiresAt: null, updatedAt: null },
+    preflight: { schemaVersion: 1, workspaceId: 'shared-free', workspaceMemberId: 'm', generatedAt: at,
+      modelId: null, balanceUsd: '0', modelCovered: false, funding: 'wallet',
+      codingPlan: { workspaceId: 'shared-free', generatedAt: at, eligible: false, tier: null, windows: [] } },
+  };
+  Reflect.set(response.preflight!, 'billingMode', 'shared');
+  const rail = (value: WorkspaceBillingResponse) => <I18nProvider initial="zh-CN"><EntryNavRail view="home" onViewChange={() => {}} onNewProject={() => {}} open context={context} billing={null} billingResponse={value} /></I18nProvider>;
+  let mounted: ReturnType<typeof render>;
+  await act(async () => { mounted = render(rail(response)); });
+  const trigger = screen.getByTestId('entry-top-right-credits');
+  expect(trigger.textContent).toBe('升级');
+  fireEvent.click(trigger);
+  const panel = within(screen.getByTestId('entry-top-right-credits-panel'));
+  expect(panel.getByText('$0.00')).toBeTruthy();
+  expect(panel.getByText('订阅套餐后可用')).toBeTruthy();
+  expect(Boolean(panel.queryByRole('button', { name: '升级' }))).toBe(role === 'owner');
+  const legacy = { ...response }; delete legacy.preflight;
+  mounted!.rerender(rail(legacy));
+  expect(trigger.textContent).toBe(role === 'owner' ? '升级' : '');
+});

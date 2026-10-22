@@ -89,8 +89,7 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
   const shownBadge = view.tier ?? (badgeTier === 'team' ? 'team' : null);
   // Go has 5h + 7d; other paid tiers only 7d.
   const durations = view.tier === 'free' ? [] : view.tier === 'go' ? [18_000, 604_800] : [604_800];
-  const showPlan = view.tier != null && view.tier !== 'free';
-  const exhausted = durations.some(duration => view.windows?.some(window => window.durationSeconds === duration && window.exhausted));
+  const showPlan = view.tier != null;
   function resetCountdown(raw: string | null | undefined) {
     if (!raw) return null;
     const minutes = Math.ceil((new Date(raw).getTime() - Date.now()) / 60_000);
@@ -111,7 +110,7 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
   }
   function help(kind: 'plan' | 'metered') {
     const label = kind === 'plan'
-      ? view.modelRestriction ?? t('workspaceQuota.planHelp')
+      ? t('workspaceQuota.planHelp')
       : t(view.tier === 'free' ? 'workspaceQuota.freeMeteredHelp' : 'workspaceQuota.meteredHelp');
     return <QuotaHelp label={label} kind={kind} />;
   }
@@ -127,7 +126,7 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
           aria-label={shownBadge && shownBadge !== 'team' ? shownBadge : undefined}>
           {shownBadge === 'team' ? planLabel : null}
           {/* A scoped balance alone does not prove a plan tier. */}
-          {shownBadge ? <PlanWordmark tier={shownBadge} height={shownBadge === 'team' ? 11 : 20} /> : null}
+          {shownBadge ? <PlanWordmark tier={shownBadge} height={shownBadge === 'team' ? 11 : 20} variant="seats-phase1" /> : null}
         </span>
         {/* Role, not wallet balance, chooses the action. */}
         {readable && owner && view.planKnown && actionUrl ? (
@@ -138,12 +137,12 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
       </div>
       {view.loading ? (
         // Header stays; no spinner, hint, error or retry text.
-        <div aria-busy="true" data-testid="workspace-quota-skeleton">
-          <div className={quota.block} data-testid="workspace-quota-window-skeleton" aria-hidden="true">
+        <div aria-busy="true" data-testid="workspace-quota-skeleton" className={view.tier === 'free' ? styles.freeSkeleton : undefined}>
+          {Array.from({ length: view.tier === 'go' ? 2 : 1 }, (_, index) => <div key={index} className={quota.block} data-testid="workspace-quota-window-skeleton" aria-hidden="true">
             <div className={quota.row}><span className={quota.bone} /><span className={`${quota.bone} ${quota.boneEnd}`} /></div>
             <span className={`${quota.bone} ${quota.boneTrack}`} />
-          </div>
-          <div className={`${quota.wallet} ${quota.walletWithQuota}`} aria-hidden="true" data-testid="workspace-quota-wallet-skeleton">
+          </div>)}
+          <div className={`${quota.wallet} ${quota.walletWithQuota} ${styles.walletSkeleton}`} aria-hidden="true" data-testid="workspace-quota-wallet-skeleton">
             <span className={quota.bone} /><span className={`${quota.bone} ${quota.boneEnd}`} />
           </div>
         </div>
@@ -151,7 +150,16 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
         <>
           {showPlan ? <section aria-label={t('workspaceQuota.designPlanAllowance')}>
             <div className={styles.sectionHead}><h3>{t('workspaceQuota.designPlanAllowance')}{help('plan')}</h3></div>
-            {durations.map(duration => {
+            {view.tier === 'free' ? <div className={styles.planBlock}>
+              <div className={`${styles.row} ${styles.freeRow}`}>
+                <span className={styles.availability}>{t('workspaceQuota.subscribeToUse')}</span>
+                <span>{t('billing.codingPlanRemainingPercent', { percent: 0 })}</span>
+              </div>
+              <div className={`${quota.track} ${styles.track}`} role="progressbar" aria-label={t('workspaceQuota.designPlanAllowance')}
+                aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}>
+                <span className={quota.fill} style={{ width: '0%' }} />
+              </div>
+            </div> : durations.map(duration => {
               const window = view.windows?.find(item => item.durationSeconds === duration);
               const percent = window?.remainingPercent;
               const known = percent != null && Number.isFinite(percent) && percent >= 0 && percent <= 100;
@@ -164,7 +172,7 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
                   <span className={quota.allowance}>
                     {t(duration === 18_000 ? 'billing.codingPlanPeriodHours' : 'billing.codingPlanPeriodDays', { count: duration === 18_000 ? 5 : 7 })}
                   </span>
-                  <span className={window?.exhausted ? styles.exhausted : undefined}>{window?.exhausted ? t('workspaceQuota.exhausted') : t('billing.codingPlanRemainingPercent', { percent })}</span>
+                  <span>{t('billing.codingPlanRemainingPercent', { percent })}</span>
                 </div>
                 <div className={`${quota.track} ${styles.track}`} role="progressbar" aria-label={t('billing.codingPlanDesignPlan')}
                   aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
@@ -173,7 +181,6 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
                 {resetLabel ? <div className={styles.details}>{resetLabel}</div> : null}
               </div>;
             })}
-            {exhausted && view.balanceUsd != null && Number(view.balanceUsd) > 0 ? <p className={styles.fallback}>{t('workspaceQuota.meteredFallback')}</p> : null}
           </section> : null}
           <section className={styles.metered} aria-label={t('workspaceQuota.payAsYouGo')}>
             <div className={styles.sectionHead}>
