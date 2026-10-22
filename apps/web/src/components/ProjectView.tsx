@@ -1023,6 +1023,9 @@ interface QueuedChatSend {
   attachments: ChatAttachment[];
   commentAttachments: ChatCommentAttachment[];
   meta?: ProjectChatSendMeta;
+  // A prior AMR insufficient-funding refusal requires an explicit Send now.
+  // Persist this with the item so a remount cannot silently drain it.
+  manualStartOnly?: boolean;
   createdAt: number;
 }
 
@@ -3255,8 +3258,9 @@ export function ProjectView({
   const amrConcurrencyReadsRef = useRef(new Set<string>());
   // Conversations whose queue auto-drain is paused because the balance gate
   // blocked a send. Without the pause, every unrelated re-run of the drain
-  // effect would re-hit the wallet endpoint and re-pop the dialog. Lifted by
-  // the next send that passes the gate.
+  // effect would re-hit the wallet endpoint and re-pop the dialog. A later
+  // allowed send lifts this in-memory guard; funding-refused queue items also
+  // carry a durable manual-start marker across remounts.
   const amrGatePausedQueueConversationsRef = useRef<Set<string>>(new Set());
   /**
    * 被余额硬拦下来的那一发的 `clientRequestId`(OPEND-2719)。
@@ -3402,6 +3406,16 @@ export function ProjectView({
   const streamingConversationIdRef = useRef<string | null>(null);
   const [queuedChatSends, setQueuedChatSends] = useState<QueuedChatSend[]>([]);
   const queuedChatSendsRef = useRef<QueuedChatSend[]>([]);
+  const requireManualStartAfterFundingRefusal = useCallback((conversationId: string) => {
+    const current = queuedChatSendsRef.current;
+    if (!current.some((item) => item.conversationId === conversationId && !item.manualStartOnly)) return;
+    const next = current.map((item) => item.conversationId === conversationId
+      ? { ...item, manualStartOnly: true }
+      : item);
+    queuedChatSendsRef.current = next;
+    setQueuedChatSends(next);
+    saveQueuedChatSends(project.id, next);
+  }, [project.id]);
   // A BYOK preflight can reject a send before any Run exists. Keep that
   // submission's task identity in memory so fixing Settings and resubmitting
   // the same draft completes the original task funnel instead of fabricating a
@@ -3661,7 +3675,10 @@ export function ProjectView({
     const source = input.source ?? 'gateway';
     // Only an actual gateway failure pauses pending sends. The independent
     // read never cancels a run or changes task status.
-    if (source === 'gateway') amrGatePausedQueueConversationsRef.current.add(input.conversationId);
+    if (source === 'gateway') {
+      amrGatePausedQueueConversationsRef.current.add(input.conversationId);
+      requireManualStartAfterFundingRefusal(input.conversationId);
+    }
     const key = `${input.accountGeneration}:${input.conversationId}:${input.runKey}`;
     if (shownFundingFailuresRef.current.has(key)) {
       if (source === 'gateway') setAmrBalanceGateBlock((previous) =>
@@ -3688,7 +3705,7 @@ export function ProjectView({
       fundingRunKey: input.runKey,
       fundingSource: source,
     });
-  }, []);
+  }, [requireManualStartAfterFundingRefusal]);
   useEffect(() => {
     if (amrBalanceGateBlock?.failureAuthorityKey === undefined) return;
     if (amrBalanceGateBlock.conversationId !== activeConversationId
@@ -9274,6 +9291,7 @@ export function ProjectView({
             const accepted = meta?.composerOwnedDraft
               ? rejectBlockedSend()
               : acceptedDurableQueue(parkBlockedSend());
+            requireManualStartAfterFundingRefusal(gateConversationId);
             // Retraction retires the provisional turn. Present the rejection
             // after it so the current draft owns the dialog, not a phantom run.
             showAmrFundingFailure({
@@ -9360,7 +9378,11 @@ export function ProjectView({
               // 下面那条原来的排队路上,行为一个字不变。
               if (meta?.composerOwnedDraft) return rejectBlockedSend();
             }
-            return acceptedDurableQueue(parkBlockedSend());
+            const accepted = acceptedDurableQueue(parkBlockedSend());
+            if (gate.reason === 'insufficient') {
+              requireManualStartAfterFundingRefusal(gateConversationId);
+            }
+            return accepted;
           }
           if (gate.kind === 'unavailable') {
             return acceptedDurableQueue(parkBlockedSend());
@@ -11211,6 +11233,7 @@ export function ProjectView({
       projectMutationReadOnly,
       projectWorkspaceScopeState.scope,
       showAmrFundingFailure,
+      requireManualStartAfterFundingRefusal,
       onInitialHomeRequestProgress,
       amrBalanceCardScope,
     ],
@@ -11504,6 +11527,7 @@ export function ProjectView({
       (item) => item.conversationId === activeConversationId,
     );
     if (!next) return;
+    if (config.mode === 'daemon' && config.agentId === 'amr' && next.manualStartOnly) return;
     startingQueuedChatSendIdRef.current = next.id;
     armSlideNavForQueuedSend(next);
     void (async () => {
