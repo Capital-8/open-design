@@ -183,6 +183,12 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     const held = await receipt('F04-held.json');
     expect(Number(held.running)).toBe(space.limit);
     expect(Number(held.limit)).toBe(space.limit);
+    expect(held.heldWorkspaceId).toBe(space.workspaceId);
+    const heldRequestIds = held.heldRequestIds as string[];
+    expect(Array.isArray(heldRequestIds)).toBe(true);
+    expect(heldRequestIds).toHaveLength(space.limit);
+    expect(heldRequestIds.every(id => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(heldRequestIds).size).toBe(space.limit);
     const before = postCount();
     await send.click();
     const dialog = page.getByTestId('amr-concurrency-dialog');
@@ -219,13 +225,21 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     const refusal = await receipt('F04-refusal-verified.json');
     expect(refusal.challenge).toBe(challenge);
     expect(Number(refusal.running)).toBe(space.limit);
+    expect(refusal.heldWorkspaceId).toBe(space.workspaceId);
+    expect((refusal.heldRequestIds as string[]).slice().sort()).toEqual(heldRequestIds.slice().sort());
     if (refusal.admissionSource === 'link') {
       expect(refusal.admissionFailureCode).toMatch(/tier_limit_exceeded|membership_concurrency_limit/);
       expect(rejectedPosts).toBe(1);
+      expect(runResponses).toHaveLength(1);
+      expect(runResponses[0]?.status).toBe(202);
+      expect(runResponses[0]?.runId).toEqual(expect.any(String));
+      expect(refusal.runId).toBe(runResponses[0]?.runId);
+      expect(refusal.rejectedLinkRequestId).toEqual(expect.any(String));
     } else {
       expect(refusal.admissionSource).toBe('preflight');
       expect(refusal.hintStatus).toBe('full');
       expect(rejectedPosts).toBe(0);
+      expect(refusal.runId).toBeNull();
     }
     expect(Number(refusal.newUpstreamCount)).toBe(0);
     expect(Number(refusal.newCreditUsageCount)).toBe(0);
@@ -235,6 +249,10 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     await marker('F04-release-ready.json', { projectId });
     const released = await receipt('F04-one-released.json');
     expect(Number(released.running)).toBe(space.limit - 1);
+    expect(released.heldWorkspaceId).toBe(space.workspaceId);
+    expect(heldRequestIds).toContain(released.releasedRequestId);
+    expect((released.remainingHeldRequestIds as string[]).slice().sort())
+      .toEqual(heldRequestIds.filter(id => id !== released.releasedRequestId).sort());
     const idleStart = new Date().toISOString();
     const automatic = await page.waitForEvent('request', { predicate: request => request.method() === 'POST'
       && new URL(request.url()).pathname === '/api/runs', timeout: 5000 }).catch(() => null);
