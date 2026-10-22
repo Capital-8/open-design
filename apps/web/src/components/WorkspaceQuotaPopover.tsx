@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { isWorkspaceLifecycleReadable, type WorkspaceCollabContext } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { notifyWorkspaceBillingRefresh } from '../collab/useWorkspaceContext';
@@ -8,10 +8,50 @@ import { formatVelaBalanceUsd } from '../providers/daemon';
 import { quotaPopoverConsoleUrl } from '../runtime/workspace-quota-links';
 import { PlanWordmark, type PlanBadgeTier } from './PlanWordmark';
 import { Icon } from './Icon';
-import { RemixIcon } from './RemixIcon';
 import card from './PersonalPlanCard.module.css';
 import quota from './CodingPlanUsage.module.css';
 import styles from './WorkspaceQuotaPopover.module.css';
+
+function QuotaHelp({ label, kind }: { label: string; kind: 'plan' | 'metered' }) {
+  const id = useId();
+  const tipRef = useRef<HTMLSpanElement>(null);
+  function hide() { tipRef.current?.hidePopover?.(); }
+  useEffect(() => {
+    window.addEventListener('resize', hide);
+    window.addEventListener('scroll', hide, true);
+    return () => {
+      window.removeEventListener('resize', hide);
+      window.removeEventListener('scroll', hide, true);
+    };
+  }, []);
+  function show(target: HTMLButtonElement) {
+    const tip = tipRef.current;
+    if (!tip) return;
+    tip.showPopover?.();
+    const anchor = target.getBoundingClientRect();
+    const rect = tip.getBoundingClientRect();
+    const left = Math.max(12, Math.min(anchor.left + anchor.width / 2 - rect.width / 2, window.innerWidth - rect.width - 12));
+    const below = anchor.top < rect.height + 22;
+    tip.dataset.below = String(below);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(12, Math.min(below ? anchor.bottom + 2.5 : anchor.top - rect.height - 2.5, window.innerHeight - rect.height - 12))}px`;
+    tip.style.setProperty('--arrow-left', `${Math.max(10, Math.min(rect.width - 10, anchor.left + anchor.width / 2 - left))}px`);
+  }
+  return <span className={styles.help}
+    onPointerLeave={event => {
+      if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) && !event.currentTarget.contains(document.activeElement)) hide();
+    }}
+    onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) hide(); }}
+    onKeyDown={event => { if (event.key === 'Escape') { hide(); event.stopPropagation(); } }}>
+    <button type="button" className={styles.helpTrigger} aria-label={label} aria-describedby={id}
+      onPointerEnter={event => show(event.currentTarget)} onFocus={event => show(event.currentTarget)}>
+      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+        <circle cx="10" cy="10" r="7.5" /><path d="M10 9v5" strokeLinecap="round" /><circle cx="10" cy="6" r=".7" fill="currentColor" stroke="none" />
+      </svg>
+    </button>
+    <span ref={tipRef} className={styles.tooltip} id={id} role="tooltip" popover="manual" data-workspace-quota-tip={kind}>{label}</span>
+  </span>;
+}
 
 export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, badgeTier, planLabel, onNavigate }: {
   view: WorkspaceQuotaView;
@@ -35,13 +75,16 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
   const max = view.tier === 'max';
   // Preserve base EntryNavRail's locked/past-due recovery priority.
   const actionUrl = context?.billingRecovery?.recoveryUrl?.trim()
-    || quotaPopoverConsoleUrl(profile, workspaceId, max ? 'console' : 'plans', consoleOrigin);
+    || quotaPopoverConsoleUrl(profile, workspaceId, max ? 'recharge' : 'plans', consoleOrigin);
   const owner = context?.role === 'owner';
   // Preserve the existing contracts billing policy: locked workspaces remain readable.
   const readable = context?.memberStatus === 'active' && isWorkspaceLifecycleReadable(context.lifecycleState);
   const shownBadge = view.tier ?? (badgeTier === 'team' ? 'team' : null);
   // Go has 5h + 7d; other paid tiers only 7d.
   const durations = view.tier === 'free' ? [] : view.tier === 'go' ? [18_000, 604_800] : [604_800];
+  const showPlan = view.tier != null && view.tier !== 'free';
+  const showMetered = view.balanceUsd == null || Number(view.balanceUsd) !== 0;
+  const exhausted = durations.some(duration => view.windows?.some(window => window.durationSeconds === duration && window.exhausted));
   function resetCountdown(raw: string | null | undefined) {
     if (!raw) return null;
     const minutes = Math.ceil((new Date(raw).getTime() - Date.now()) / 60_000);
@@ -63,13 +106,8 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
   function help(kind: 'plan' | 'metered') {
     const label = kind === 'plan'
       ? view.modelRestriction ?? t('workspaceQuota.planHelp')
-      : t('workspaceQuota.meteredHelp');
-    return <span className={styles.help}>
-      <button type="button" className={styles.helpTrigger} aria-label={label} aria-describedby={`workspace-quota-${kind}-tip`}>
-        <RemixIcon name="information-line" size={16} />
-      </button>
-      <span className={styles.tooltip} id={`workspace-quota-${kind}-tip`} role="tooltip">{label}</span>
-    </span>;
+      : t(view.tier === 'free' ? 'workspaceQuota.freeMeteredHelp' : 'workspaceQuota.meteredHelp');
+    return <QuotaHelp label={label} kind={kind} />;
   }
   const walletContent = <>
     <span className={quota.value}><bdi>{formatVelaBalanceUsd(view.balanceUsd) ?? '—'}</bdi>
@@ -77,7 +115,7 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
     </span>
   </>;
   return (
-    <div className={`entry-nav-rail__menu-credits ${card.card}`} data-plan-status={view.planStatus ?? undefined}>
+    <div className={`entry-nav-rail__menu-credits ${card.card} ${styles.card}`} data-plan-status={view.planStatus ?? undefined}>
       <div className="entry-nav-rail__menu-credits-head">
         <span className="entry-nav-rail__menu-credits-plan" role={shownBadge && shownBadge !== 'team' ? 'img' : undefined}
           aria-label={shownBadge && shownBadge !== 'team' ? shownBadge : undefined}>
@@ -88,7 +126,7 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
         {/* Role, not wallet balance, chooses the action. */}
         {readable && owner && view.planKnown && actionUrl ? (
           <Button className="entry-nav-rail__menu-credits-upgrade" onClick={() => navigate(actionUrl, max ? 'credits' : 'upgrade')}>
-            {t(max ? 'entry.creditsManage' : 'entry.creditsUpgrade')}
+            {t(max ? 'chat.amrError.rechargeCta' : 'entry.creditsUpgrade')}
           </Button>
         ) : null}
       </div>
@@ -105,12 +143,9 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
         </div>
       ) : (
         <>
-          <section aria-label={t('workspaceQuota.designPlanAllowance')}>
+          {showPlan ? <section aria-label={t('workspaceQuota.designPlanAllowance')}>
             <div className={styles.sectionHead}><h3>{t('workspaceQuota.designPlanAllowance')}{help('plan')}</h3></div>
-            {/* The Design Plan region is present even on Free. */}
-            {view.tier === 'free' ? <div className={styles.placeholder}>
-              <span>{t('workspaceQuota.unsubscribed')}</span><small>{t('workspaceQuota.subscribeToUse')}</small>
-            </div> : durations.map(duration => {
+            {durations.map(duration => {
               const window = view.windows?.find(item => item.durationSeconds === duration);
               const percent = window?.remainingPercent;
               const known = percent != null && Number.isFinite(percent) && percent >= 0 && percent <= 100;
@@ -119,11 +154,11 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
               </div>;
               const resetLabel = resetCountdown(window?.resetsAt);
               return <div className={`${quota.block} ${styles.planBlock}`} key={duration}>
-                <div className={quota.row}>
+                <div className={styles.row}>
                   <span className={quota.allowance}>
                     {t(duration === 18_000 ? 'billing.codingPlanPeriodHours' : 'billing.codingPlanPeriodDays', { count: duration === 18_000 ? 5 : 7 })}
                   </span>
-                  <span>{t('billing.codingPlanRemainingPercent', { percent })}</span>
+                  <span className={window?.exhausted ? styles.exhausted : undefined}>{window?.exhausted ? t('workspaceQuota.exhausted') : t('billing.codingPlanRemainingPercent', { percent })}</span>
                 </div>
                 <div className={`${quota.track} ${styles.track}`} role="progressbar" aria-label={t('billing.codingPlanDesignPlan')}
                   aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
@@ -132,16 +167,17 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
                 {resetLabel ? <div className={styles.details}>{resetLabel}</div> : null}
               </div>;
             })}
-          </section>
-          <section className={`${quota.walletWithQuota} ${styles.metered}`} aria-label={t('workspaceQuota.payAsYouGo')}>
+            {exhausted && view.balanceUsd != null && Number(view.balanceUsd) > 0 ? <p className={styles.fallback}>{t('workspaceQuota.meteredFallback')}</p> : null}
+          </section> : null}
+          {showMetered ? <section className={styles.metered} aria-label={t('workspaceQuota.payAsYouGo')}>
             <div className={styles.sectionHead}>
               <h3>{t('workspaceQuota.payAsYouGo')}{help('metered')}</h3>
-              {consoleUrl && readable ? <button type="button" className={`${styles.balance} ${quota.wallet}`}
+              {consoleUrl && readable ? <button type="button" className={styles.balance}
                 data-testid="entry-nav-credits-row" aria-label={t('workspaceQuota.viewBalance')}
                 onClick={() => navigate(consoleUrl, 'credits')}>{walletContent}</button>
-                : <div className={quota.wallet}>{walletContent}</div>}
+                : <div className={styles.balance}>{walletContent}</div>}
             </div>
-          </section>
+          </section> : null}
         </>
       )}
       {context ? <div className={styles.footer} role="note">

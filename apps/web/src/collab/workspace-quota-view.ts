@@ -14,6 +14,8 @@ export interface WorkspaceQuotaView {
   windows: ReadonlyArray<{
     durationSeconds: number;
     remainingPercent: number;
+    /** Proven server zero, distinct from a positive balance rounded to 0%. */
+    exhausted?: true;
     resetsAt: string | null;
   }> | null;
   breakdown: string | null;
@@ -65,6 +67,7 @@ export function workspaceDesignPlanWindows(snapshot: unknown): WorkspaceQuotaVie
     windows.push({
       durationSeconds: kind === '5h' ? 18_000 : 604_800,
       remainingPercent: 100 - usedPercent,
+      ...(remaining === 0n ? { exhausted: true as const } : {}),
       resetsAt: typeof resetsAt === 'string' && resetsAt ? resetsAt : null,
     });
   }

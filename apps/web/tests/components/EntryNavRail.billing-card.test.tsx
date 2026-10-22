@@ -330,14 +330,14 @@ describe('account menu billing card — scoped USD balance (recvqgaMLxEdZX)', ()
     expect(card.queryByText(/积分/)).toBeNull();
   });
 
-  it('keeps a proven zero visible as $0.00', () => {
+  it('hides the metered region for a proven zero per PRD §5.3', () => {
     renderRail({
       context: context(),
       billing: billing({ totalAvailableCredits: 600_000 }),
       balanceUsd: '0',
     });
 
-    expect(billingCard().getByText('$0.00')).toBeTruthy();
+    expect(billingCard().queryByRole('region', { name: '按量额度' })).toBeNull();
   });
 
   it('keeps the wallet chevron and scoped balance', () => {

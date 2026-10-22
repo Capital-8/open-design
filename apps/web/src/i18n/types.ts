@@ -38,6 +38,9 @@ export interface Dict {
   'workspaceQuota.resetIn': string;
   'workspaceQuota.planHelp': string;
   'workspaceQuota.meteredHelp': string;
+  'workspaceQuota.freeMeteredHelp': string;
+  'workspaceQuota.exhausted': string;
+  'workspaceQuota.meteredFallback': string;
   'workspaceQuota.shared': string;
   'workspaceQuota.contactOwnerForBilling': string;
   'workspaceQuota.unsubscribed': string;

@@ -1,20 +1,6 @@
 // @vitest-environment jsdom
-//
-// The workbench's top-right credits pill, for a SUBSCRIBER whose wallet reads
-// zero.
-//
-// On Go / Plus / Pro / Max the eligible models can use Coding Plan windows before the wallet. A subscriber therefore
-// sits at $0.00 as a normal, healthy state — and the pill rendered it as a
-// permanent alarm next to their avatar. The original ruling hid the money only
-// for a subscribed plan whose balance was exactly zero.
-//
-// SUPERSEDED for the paid pill by the design (PR #8364,
-// `docs/ui-previews/plan-panels/`, and its `electron-panel.png`): the paid
-// capsule carries the plan WORDMARK ALONE at every balance. The money did not
-// move — it reads in the card the capsule opens, with the currency named
-// (「$10.00」), which is where a number belongs next to an allowance. The
-// original ruling's goal (no permanent alarm beside the avatar) is strictly
-// better served. Free Owners still see the upgrade prompt on the pill.
+// PRD §5.3: plan-only paid pill, and metered region only for a nonzero wallet.
+// Unknown values remain placeholders and an overdrawn wallet stays visible.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { WorkspaceBillingResponse, WorkspaceBillingSummary, WorkspaceCollabContext } from '@open-design/contracts';
@@ -134,7 +120,7 @@ describe('top-right credits pill', () => {
   });
 
   it.each(['team_basic', 'team_plus', 'team_max_yearly'])(
-    'keeps zero wallet quiet on paid team plan %s with a separate wallet row',
+    'keeps zero wallet quiet on paid team plan %s and hides the empty wallet region',
     async (tier) => {
       // Paid team seats have Coding Plan pools; team_basic remains wallet-only.
       renderRail({
@@ -142,14 +128,14 @@ describe('top-right credits pill', () => {
         billing: billing({ membershipTier: tier }),
         balanceUsd: '0',
       });
-      // The capsule is wordmark-only at every team tier now; the wallet row
-      // under it is where the zero reads.
+      // The capsule is wordmark-only; a proven zero does not need a wallet row.
       expect(creditsPill()?.textContent ?? '').not.toMatch(/\d/);
-      expect((await creditsRow()).textContent).toContain('$0.00');
+      fireEvent.pointerEnter(screen.getByTestId('entry-top-right-credits'));
+      expect(screen.queryByTestId('entry-nav-credits-row')).toBeNull();
     },
   );
 
-  it('sells the upgrade on a free plan and keeps the zero in the card, where it explains the gate', async () => {
+  it('sells the upgrade on a free plan and hides both empty allowance regions', async () => {
     renderRail({
       context: context({ planId: null, billingState: 'free' } as Partial<WorkspaceCollabContext>),
       billing: billing({ membershipTier: '', subscriptionStatus: '' }),
@@ -158,7 +144,8 @@ describe('top-right credits pill', () => {
     // The free pill IS the upgrade CTA (per product): no balance on it.
     expect(creditsPill()?.textContent).toContain('升级');
     expect(creditsPill()?.textContent).not.toContain('0.00');
-    expect((await creditsRow()).textContent).toContain('$0.00');
+    fireEvent.pointerEnter(screen.getByTestId('entry-top-right-credits'));
+      expect(screen.queryByTestId('entry-nav-credits-row')).toBeNull();
   });
 
   it.each(['admin', 'member'] as const)('shows shared Free quota without an upgrade prompt for %s', async (role) => {
@@ -187,22 +174,23 @@ describe('top-right credits pill', () => {
     expect(creditsPill()?.getAttribute('aria-label')).toBe('额度');
     expect(creditsPill()?.parentElement?.classList.contains('entry-top-right-account-pill--upgrade')).toBe(false);
     expect(creditsPill()?.querySelector('svg.plan-wordmark')?.getAttribute('viewBox')).toBe('0 0 107 49');
-    const card = await creditsRow();
-    expect(card.textContent).toContain('$0.00');
+    fireEvent.pointerEnter(screen.getByTestId('entry-top-right-credits'));
+    expect(screen.queryByTestId('entry-nav-credits-row')).toBeNull();
     expect(screen.queryByRole('button', { name: '升级' })).toBeNull();
   });
 
-  it('keeps the pill and the zero balance while the plan is still unknown', async () => {
+  it('keeps the pill while hiding a proven zero when the plan is unknown', async () => {
     // Billing has not answered yet: hiding the pill on an unresolved plan
     // would make it flicker in and out as the read lands. With no plan at all
     // the display label resolves free — the state a local dev workspace sits
-    // in — so the pill sells the upgrade and the card keeps the zero.
+    // in — so the pill stays available while the zero wallet is hidden.
     renderRail({
       context: context({ planId: null, billingState: undefined } as Partial<WorkspaceCollabContext>),
       billing: null,
       balanceUsd: '0',
     });
     expect(creditsPill()?.textContent).toContain('升级');
-    expect((await creditsRow()).textContent).toContain('$0.00');
+    fireEvent.pointerEnter(screen.getByTestId('entry-top-right-credits'));
+      expect(screen.queryByTestId('entry-nav-credits-row')).toBeNull();
   });
 });

@@ -43,10 +43,10 @@ it.each(['prod', undefined, null, '', 'unknown'])('SAFE-004 profile %s stays pin
     'https://open-design.ai/cloud/dashboard?workspaceId=odlocal-plus&source=open_design', '_blank', 'noopener,noreferrer');
 });
 
-it('SAFE-004 Max management keeps the console intent on the same status origin', () => {
+it('SAFE-004 Max recharge keeps the recharge intent on the same status origin', () => {
   render(<I18nProvider initial="zh-CN"><WorkspaceQuotaPopover context={context} view={{ ...view, tier: 'max' }}
     profile="local" consoleOrigin={origin} /></I18nProvider>);
-  fireEvent.click(screen.getByRole('button', { name: '管理' }));
+  fireEvent.click(screen.getByRole('button', { name: '充值' }));
   expect(window.open).toHaveBeenLastCalledWith(
-    `${origin}/dashboard?workspaceId=odlocal-plus&source=open_design`, '_blank', 'noopener,noreferrer');
+    `${origin}/dashboard?workspaceId=odlocal-plus&source=open_design&billing=recharge`, '_blank', 'noopener,noreferrer');
 });
