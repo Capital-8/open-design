@@ -14,7 +14,7 @@ import {
 import type { SidecarGenerationHandoffRequest } from "./client.js";
 import { requestJsonIpc } from "./json-ipc.js";
 import { retireSupervisedSidecarTargetTree } from "./process-retirement.js";
-import { supervisorExitCode } from "./supervisor-exit.js";
+import { supervisorExitDisposition } from "./supervisor-exit.js";
 import {
   readCurrentSidecarArgvStamp,
   resolvePrivateIpcPath,
@@ -151,7 +151,8 @@ const ownerTimer = ownerPid == null ? null : setInterval(() => {
 ownerTimer?.unref();
 
 let forwardedSignal: NodeJS.Signals | null = null;
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
+const forwardingSignals = ["SIGINT", "SIGTERM"] as const;
+for (const signal of forwardingSignals) {
   process.on(signal, () => {
     forwardedSignal = signal;
     if (child.pid != null) {
@@ -181,7 +182,19 @@ function observeTarget(): void {
       return;
     }
     if (ownerTimer != null) clearInterval(ownerTimer);
-    process.exitCode = supervisorExitCode(code, signal, forwardedSignal);
+    const disposition = supervisorExitDisposition(code, signal, forwardedSignal);
+    if (disposition.kind === "code") {
+      process.exitCode = disposition.code;
+      return;
+    }
+    // Re-raise the target's terminating signal on the supervisor itself so the
+    // owner observes a real signal instead of a 128 + N number.
+    // Fallback if the signal is ignored (e.g. SIGPIPE) or cannot be raised.
+    process.exitCode = 1;
+    for (const forwarding of forwardingSignals) process.removeAllListeners(forwarding);
+    try {
+      process.kill(process.pid, disposition.signal);
+    } catch {}
   });
 }
 
