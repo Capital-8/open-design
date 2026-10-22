@@ -430,7 +430,10 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
         await expect(item.page.getByTestId('amr-balance-owner-dismiss')).toHaveText('知道了');
       }
       await dismissNotice(item);
-      item.draft = 'RUN011 new attached draft ' + caseKey(item) + ' ' + binding.attemptId;
+      // The controlled real-Link provider requires an explicit QA marker in
+      // the actual user prompt; keep the tested draft and attachment intact.
+      item.draft = 'RUN011 new attached draft ' + caseKey(item) + ' ' + binding.attemptId
+        + ' QA:' + JSON.stringify({ id: 'run011-' + caseKey(item) + '-' + binding.attemptId, tokens: 16 });
       item.attachment = 'run011-' + caseKey(item) + '.txt';
       await input.fill(item.draft);
       const upload = item.surface === 'project' ? item.page.waitForResponse(response =>
@@ -610,7 +613,8 @@ test('[P0] RUN011 isolated runtime probe reaches Link before six-page replay', a
   try {
     const item = session.cases.find(candidate => candidate.surface === 'home')!;
     expect((await preflight(item, session, fixture)).fundingCheck).toBe('available');
-    const prompt = 'RUN011 isolated runtime probe ' + binding.attemptId;
+    const prompt = 'RUN011 isolated runtime probe ' + binding.attemptId
+      + ' QA:' + JSON.stringify({ id: 'run011-probe-' + binding.attemptId, tokens: 16 });
     await elements(item).input.fill(prompt);
     const startedAt = Date.now();
     const responsePromise = item.page.waitForResponse(response =>

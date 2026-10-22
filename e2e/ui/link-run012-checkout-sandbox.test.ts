@@ -400,7 +400,9 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     const send = page.getByTestId('home-hero-submit');
     const staged = page.getByTestId('home-hero-staged-files');
     await expect(input).toBeVisible({ timeout: T.xlong });
-    const draft = 'RUN012 A retained draft ' + binding.attemptId;
+    // The controlled real-Link provider requires a marker in the user prompt.
+    const draft = 'RUN012 A retained draft ' + binding.attemptId
+      + ' QA:' + JSON.stringify({ id: 'run012-a-' + binding.attemptId, tokens: 16 });
     const attachment = 'run012-a-' + binding.attemptId + '.txt';
     await input.fill(draft);
     await page.getByTestId('home-hero-file-input').setInputFiles({
