@@ -81,7 +81,7 @@ function renderRail(props: {
         open
         context={props.context}
         billing={props.billing}
-        amrProfile={props.amrProfile}
+        workspaceQuotaStatus={props.amrProfile ? { profile: props.amrProfile } : null}
         balanceUsd="210"
       />
     </I18nProvider>,

@@ -27,7 +27,13 @@ interface Props {
   entryFrom?: 'workspace_switcher' | 'all_projects';
 }
 const emptyRow = (): Row => ({ email: '', role: 'member', idempotencyKey: crypto.randomUUID() });
-const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+const validEmail = (value: string) => {
+  const input = document.createElement('input');
+  input.type = 'email';
+  input.required = true;
+  input.value = value.trim();
+  return input.validity.valid;
+};
 const canonicalRole = (role: string): WorkspaceInviteRole => role === 'admin' || role === '管理员' ? 'admin' : 'member';
 
 /** The local form retains authoritative per-row results and never retries sent recipients. */
@@ -47,6 +53,8 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
   const [batchSuccess, setBatchSuccess] = useState<number | null>(null);
   const [readyToEnter, setReadyToEnter] = useState(false);
   const [countdown, setCountdown] = useState(3);
+  const [leaving, setLeaving] = useState(false);
+  const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completionSent = useRef(false);
   const finishCallback = useRef(onFinish);
   finishCallback.current = onFinish;
@@ -79,6 +87,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
   const triggers = useRef<Array<HTMLButtonElement | null>>([]);
   const menu = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
+  const focusAddedRow = useRef(false);
   const requestVersion = useRef(0);
   const submittingRef = useRef(false);
   const controller = useRef<AbortController | null>(null);
@@ -90,6 +99,8 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     submittingRef.current = false;
     if (finishTimer.current) clearTimeout(finishTimer.current);
     finishTimer.current = null;
+    if (exitTimer.current) clearTimeout(exitTimer.current);
+    exitTimer.current = null; setLeaving(false);
     setBatchSuccess(null); setPartialCount(null); setReadyToEnter(false); completionSent.current = false;
     controller.current?.abort();
     setHelpOpen(false);
@@ -97,7 +108,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     if (!onboarding) dialog.current?.querySelector<HTMLHeadingElement>('h2')?.focus();
-    return () => { if (finishTimer.current) clearTimeout(finishTimer.current); requestVersion.current += 1; controller.current?.abort(); previous?.focus(); };
+    return () => { if (exitTimer.current) clearTimeout(exitTimer.current); if (finishTimer.current) clearTimeout(finishTimer.current); requestVersion.current += 1; controller.current?.abort(); previous?.focus(); };
   }, [open, identity, onboarding]);
   useEffect(() => {
     if (open) trackWorkspaceSurfaceView(analytics.track, { page_name: page, area: 'workspace_invite_dialog', entry_from: entryFrom, ...dimensions });
@@ -134,14 +145,32 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
       setTimeout(() => setCountdown(2), 1000),
       setTimeout(() => setCountdown(1), 2000),
       setTimeout(() => {
-        if (completionSent.current) return;
-        completionSent.current = true;
-        finishCallback.current?.(sentCount, 'sent');
+        enterWorkbench();
       }, 3000),
     ];
     return () => timers.forEach(clearTimeout);
   }, [open, onboarding, readyToEnter, sentCount]);
+  useLayoutEffect(() => {
+    if (!open || !focusAddedRow.current) return;
+    focusAddedRow.current = false;
+    const input = dialog.current?.querySelectorAll<HTMLInputElement>('input[type="email"]')[rows.length - 1];
+    input?.focus({ preventScroll: true });
+    input?.closest('[data-invite-row]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [open, rows.length]);
   if (!open) return null;
+
+  function enterWorkbench() {
+    if (completionSent.current) return;
+    completionSent.current = true;
+    const version = requestVersion.current;
+    const finish = () => {
+      exitTimer.current = null;
+      if (version === requestVersion.current) finishCallback.current?.(sentCount, 'sent');
+    };
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
+    setLeaving(true);
+    exitTimer.current = setTimeout(finish, 180);
+  }
 
   function rowErrors(values: Row[], includeServerErrors = true) {
     const seen = new Set<string>();
@@ -259,11 +288,11 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     }}>
     {!onboarding ? <div className={styles.backdrop} onClick={close} /> : null}
     <section className={styles.panel} aria-busy={submitting}>
-      {readyToEnter ? <div className={styles.complete}>
+      {readyToEnter ? <div className={`${styles.complete} ${leaving ? styles.leaving : ''}`}>
         <span className={styles.completeIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m5 12 4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
         <h2 tabIndex={-1}>{t('workspaceInvite.completeTitle')}</h2>
         <p>{t('workspaceInvite.completeReceipt').replace('{count}', String(sentCount))}<br />{t('workspaceInvite.completeBody')}</p>
-        <Button className={styles.completeEnter} aria-describedby={`${id}-countdown`} onClick={() => { if (!completionSent.current) { completionSent.current = true; onFinish?.(sentCount, 'sent'); } }}>{t('workspaceInvite.enterWorkspace')}</Button>
+        <Button className={styles.completeEnter} aria-describedby={`${id}-countdown`} onClick={enterWorkbench}>{t('workspaceInvite.enterWorkspace')}</Button>
         <p className={styles.countdown} id={`${id}-countdown`}>{t('workspaceInvite.completeCountdown').split('{seconds}')[0]}<span>{countdown}</span>{t('workspaceInvite.completeCountdown').split('{seconds}')[1]}</p>
       </div> : <><header className={styles.heading}><h2 tabIndex={onboarding ? undefined : -1}>{t(onboarding ? 'workspaceInvite.onboardingTitle' : 'workspaceInvite.title')}</h2>
         {!onboarding ? <>
@@ -279,7 +308,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
       <form onSubmit={event => { event.preventDefault(); void submit(); }} noValidate>
         <div className={`${styles.labels} ${rows.length === 1 ? styles.single : ''}`}><span>{t(onboarding ? 'workspaceInvite.onboardingEmailLabel' : 'workspaceInvite.emailLabel')}</span><span>{t('workspaceInvite.roleLabel')}</span></div>
         <div className={styles.rows} data-invite-rows>
-          {rows.map((row, index) => <div className={`${styles.row} ${rows.length === 1 ? styles.single : ''}`} key={index}>
+          {rows.map((row, index) => <div className={`${styles.row} ${rows.length === 1 ? styles.single : ''}`} key={index} data-invite-row>
             <input type="email" className={styles.input} value={row.email} placeholder={t(onboarding ? 'workspaceInvite.onboardingEmailPlaceholder' : 'workspaceInvite.emailPlaceholder')} aria-label={t('workspaceInvite.emailLabel')}
               disabled={submitting} aria-invalid={validated && !!errors[index]} aria-describedby={validated && errors[index] ? `${id}-error-${index}` : undefined}
               onChange={event => updateRow(index, { email: event.target.value })} onBlur={() => { if (row.email.trim()) setValidated(true); }} />
@@ -293,7 +322,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
             {validated && errors[index] ? <p className={styles.lineError} id={`${id}-error-${index}`} role="alert">{errors[index]}</p> : null}
           </div>)}
         </div>
-        <Button className={styles.add} disabled={submitting} onClick={() => { click('add_recipient_row'); setRows(previous => [...previous, emptyRow()]); }}>{onboarding ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z" /></svg>{t('workspaceInvite.addMember')}</> : locale === 'en' ? t('workspaceInvite.addMember') : `＋ ${t('workspaceInvite.addMember')}`}</Button>
+        <Button className={styles.add} disabled={submitting} onClick={() => { click('add_recipient_row'); focusAddedRow.current = true; setRows(previous => [...previous, emptyRow()]); }}>{onboarding ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z" /></svg>{t('workspaceInvite.addMember')}</> : locale === 'en' ? t('workspaceInvite.addMember') : `＋ ${t('workspaceInvite.addMember')}`}</Button>
         {!onboarding && error ? <p className={styles.error} role="alert">{error}</p> : null}
         {onboarding && partialCount !== null ? <p className={styles.summary} role="alert">{t('workspaceInvite.onboardingPartialSummary').replace('{count}', String(partialCount.sent)).replace('{failed}', String(partialCount.failed))}</p> : null}
         {onboarding && error ? <p className={styles.error} role="alert">{error}</p> : null}

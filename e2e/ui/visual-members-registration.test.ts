@@ -46,6 +46,7 @@ test('[P1] B04 multiple rows retain independent roles and can be removed', async
   const host = await start(page);
   await host.form.getByRole('button', { name: '添加成员' }).click();
   const inputs = host.form.locator('input[type=email]');
+  await expect(inputs.nth(1)).toBeFocused();
   await inputs.nth(0).fill('mika@example.com'); await inputs.nth(1).fill('lee@example.com');
   await captureRegistration(page, 'B04');
   await host.form.locator('[aria-haspopup=listbox]').nth(0).click();
@@ -108,7 +109,7 @@ test('[P1] B08 pending request prevents repeat submits and skip', async ({ page 
   } finally { release(); }
 });
 
-test('[P1] B09 B18 confirmed success waits before home and counts exactly two', async ({ page }) => {
+test('[P1] B09 B18 success counts down, fades and enters once without a duplicate toast', async ({ page }) => {
   const host = await start(page);
   await host.invite(route => route.fulfill({ json: { results: [{ email: 'mika@example.com', ok: true }, { email: 'lee@example.com', ok: true }] } }));
   await host.form.getByRole('button', { name: '添加成员' }).click();
@@ -116,25 +117,22 @@ test('[P1] B09 B18 confirmed success waits before home and counts exactly two', 
   await host.form.locator('input[type=email]').nth(1).fill('lee@example.com');
   await pauseSuccessTimer(page);
   await host.form.getByRole('button', { name: '发送邀请', exact: true }).click();
-  await expect(host.form.getByRole('button', { name: '已发送邀请', exact: true })).toBeDisabled();
+  await expect(host.form.getByRole('heading', { name: '邀请已发送' })).toBeVisible();
+  await expect(host.form.getByText('3s 后自动进入')).toBeVisible();
   await captureRegistration(page, 'B09', true);
-  await page.clock.runFor(999);
+  await page.clock.runFor(1000);
+  await expect(host.form.getByText('2s 后自动进入')).toBeVisible();
+  await page.clock.runFor(1000);
+  await expect(host.form.getByText('1s 后自动进入')).toBeVisible();
+  await page.clock.runFor(1000);
   await expect(host.form).toBeVisible();
-  await page.clock.runFor(1);
+  await page.clock.runFor(180);
   await expect(host.form).toHaveCount(0);
   await expect(page.getByTestId('home-view')).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: '已向 2 位同事发送邀请' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '已向 2 位同事发送邀请' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: '邀请', exact: true })).toHaveCount(0);
   expect(await page.evaluate(key => localStorage.getItem(key), `od.registration-invite.completed:${NEW_ACCOUNT_ID}:${NEW_AUTHORIZATION_ID}`)).toBe('1');
-  const toast = page.getByRole('status').filter({ hasText: '已向 2 位同事发送邀请' });
-  await expect(toast).toHaveCSS('top', '64px');
-  await expect(toast.getByRole('button')).toHaveCount(1);
-  await page.clock.runFor(500);
   await captureRegistration(page, 'B18', true);
-  await page.clock.runFor(3499);
-  await expect(toast).toHaveCount(1);
-  await page.clock.runFor(1);
-  await expect(toast).toHaveCount(0);
   await page.clock.resume();
 });
 
@@ -164,7 +162,7 @@ test('[P1] B12 B19 partial success keeps only failure and skip reports actual cu
   await host.form.getByRole('button', { name: '发送邀请', exact: true }).click();
   await expect(host.form.locator('input[type=email]')).toHaveCount(1);
   await expect(host.form.locator('input[type=email]')).toHaveValue('lee@example.com');
-  await expect(host.form.getByText('此邮箱已有待接受的邀请')).toBeVisible();
+  await expect(host.form.getByText('此邮箱已有待接受的邀请，可在成员页重新发送')).toBeVisible();
   await expect(host.form.getByRole('button', { name: '已邀请 1 位同事' })).toBeDisabled();
   await captureRegistration(page, 'B12-transient', true);
   await page.clock.runFor(650);
@@ -282,7 +280,8 @@ for (const success of [false, true]) {
         await host.invite(route => route.fulfill({ json: { results: [{ email: 'mika@example.com', ok: true }] } }));
         await host.form.locator('input[type=email]').fill('mika@example.com');
         await host.form.getByRole('button', { name: '发送邀请', exact: true }).click();
-        await expect(host.form.getByRole('button', { name: '已发送邀请', exact: true })).toBeDisabled();
+        await expect(host.form.getByRole('heading', { name: '邀请已发送' })).toBeVisible();
+  await expect(host.form.getByText(/已向 2 位同事发送邀请/)).toBeVisible();
         await page.clock.fastForward(1000);
       } else await host.form.getByRole('button', { name: '暂时跳过' }).click();
       await expect.poll(() => held.opened, { timeout: T.long }).toBe(true);
@@ -322,7 +321,7 @@ for (const failure of ['forbidden', 'workspace', 'member', 'permission'] as cons
 }
 
 
-test('[P1] registration partial retry sends failed recipient only and exits with cumulative two-success toast', async ({ page }) => {
+test('[P1] registration partial retry sends failed recipient only and completes with cumulative two successes', async ({ page }) => {
   const host = await start(page);
   const bodies: unknown[] = [];
   await host.invite(route => {
@@ -341,12 +340,13 @@ test('[P1] registration partial retry sends failed recipient only and exits with
   await expect(host.form.getByRole('button', { name: '已邀请 1 位同事' })).toBeDisabled();
   await page.clock.runFor(650);
   await host.form.getByRole('button', { name: '发送邀请', exact: true }).click();
-  await expect(host.form.getByRole('button', { name: '已发送邀请', exact: true })).toBeDisabled();
+  await expect(host.form.getByRole('heading', { name: '邀请已发送' })).toBeVisible();
+  await expect(host.form.getByText(/已向 2 位同事发送邀请/)).toBeVisible();
   expect(bodies).toHaveLength(2);
   expect(JSON.stringify(bodies[1])).toContain('lee@example.com');
   expect(JSON.stringify(bodies[1])).not.toContain('mika@example.com');
-  await page.clock.runFor(1000); await page.clock.resume();
+  await page.clock.runFor(3180); await page.clock.resume();
   await expect(host.form).toHaveCount(0);
-  await expect(page.getByRole('status').filter({ hasText: '已向 2 位同事发送邀请' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '已向 2 位同事发送邀请' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: '邀请', exact: true })).toHaveCount(0);
 });

@@ -114,7 +114,7 @@ describe('strict registration invitation host', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'colleague@example.com' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '发送邀请' })); });
     expect(exit).not.toHaveBeenCalled(); await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
-    expect(exit).not.toHaveBeenCalled(); await act(async () => { fireEvent.click(screen.getByRole('button', { name: '进入工作台' })); });
+    expect(exit).not.toHaveBeenCalled(); await act(async () => { fireEvent.click(screen.getByRole('button', { name: '进入工作台' })); await vi.advanceTimersByTimeAsync(180); });
     expect(exit).toHaveBeenCalledWith(1, context, 'sent'); expect(localStorage.getItem('od.invitation-banner.dismissed:new-account')).toBe('1');
   });
   it('counts down from three and automatically enters once after confirmed delivery', async () => {
@@ -129,6 +129,7 @@ describe('strict registration invitation host', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(screen.getByText((_text, element) => element?.tagName === 'P' && element.textContent === '1s 后自动进入')).toBeTruthy(); expect(exit).not.toHaveBeenCalled();
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(180); });
     expect(exit).toHaveBeenCalledExactlyOnceWith(1, context, 'sent');
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
     expect(exit).toHaveBeenCalledTimes(1);
