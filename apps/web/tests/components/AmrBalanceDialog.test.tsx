@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { buildWorkspacePermissions } from '@open-design/contracts';
 import {
   AmrBalanceDialog,
   WALLET_WATCH_INTERVAL_MS,
@@ -62,6 +63,33 @@ describe('AmrBalanceDialog', () => {
       'Publish in one click and share your work with a link',
     ]);
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Invite members for free and share allowance');
+  });
+
+  // RUN-004 / frozen product r271 and client QA r2282: the funding
+  // rejection dialog offers neither auto-recharge nor a nonexistent higher
+  // tier to Max Owners. The separate chat card/settings entry is unchanged.
+  it.each(['personal', 'team'] as const)('Max %s Owner has no purchase shortcut in the funding dialog', (workspaceType) => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const onClose = vi.fn();
+    const onResolved = vi.fn();
+    render(<AmrBalanceDialog
+      reason="insufficient" balanceUsd="0" profile="local"
+      entrySource="chat_balance_gate_upgrade" upgradeIntent="auto_recharge"
+      workspaceContext={workspaceContextFixture({
+        workspaceId: 'max-space', workspaceMemberId: 'max-owner',
+        workspaceType, role: 'owner', planId: 'team_max',
+        permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }),
+      })}
+      metricsConsent={false} installationId={null}
+      onClose={onClose} onResolved={onResolved}
+    />);
+    expect(screen.getByRole('alertdialog')).toBeVisible();
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+    expect(screen.queryByRole('button', { name: /upgrade|recharge/i })).toBeNull();
+    expect(open).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onResolved).not.toHaveBeenCalled();
   });
 
   it('preserves the existing sign-in invitation benefits', () => {
@@ -416,7 +444,7 @@ describe('AmrBalanceDialog', () => {
       return new Response(JSON.stringify({summary:null}));
     });
     render(<HomeAmrBalanceGateDialogs
-      block={{reason:'insufficient',dialog:'upgrade',upgradeIntent:'auto_recharge',
+      block={{reason:'insufficient',dialog:'upgrade',upgradeIntent:'pricing',
         snapshot:{status:'available',profile:'default',user:null,balanceUsd:'0',updatedAt:null,
           fetchedAt:new Date().toISOString(),stale:false,source:'daemon_cache'},resolve:vi.fn()}}
       runtimeProfile={profile} consoleOrigin="http://127.0.0.1:49195"
@@ -430,7 +458,7 @@ describe('AmrBalanceDialog', () => {
       const target=new URL(String(open.mock.calls[0]![0]));
       expect(target.origin).toBe(origin);
       expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
-      expect(target.searchParams.get('billing')).toBe('auto-recharge');
+      expect(target.searchParams.get('billing')).toBe('plan');
     }
   });
 
