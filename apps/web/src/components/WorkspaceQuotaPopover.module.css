@@ -74,6 +74,8 @@
   box-shadow: none;
   filter: drop-shadow(0 4px 10px #0002);
   font: 400 11px/1.5 Arial, sans-serif;
+  font-synthesis: initial;
+  -webkit-font-smoothing: antialiased;
   white-space: normal;
   overflow: visible;
   overflow-wrap: anywhere;
