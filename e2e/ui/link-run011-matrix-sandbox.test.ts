@@ -1,0 +1,463 @@
+import { execFileSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { chmod, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import type { Browser, Page } from '@playwright/test';
+
+import { clusterTest as test, expect } from '@/playwright/suite';
+import { warmPlaywrightDaemonRuntime, warmPlaywrightWebRuntime } from '@/playwright/runtime-lifecycle';
+import { createToolsDevSuite, e2eWorkspaceRoot } from '@/tools-dev/runtime';
+import { T } from '@/timeouts';
+
+type Role = 'owner' | 'admin' | 'member';
+type Surface = 'home' | 'project';
+type Actor = { controlKey: string; runtimeKey: string; userId: string; email: string; name: string; memberId: string };
+type Fixture = {
+  alias: string;
+  tuple: { odSha: string; amrSha: string };
+  urls: { api: string; link: string; web: string };
+  runtime: { velaBin: string; openCodeBin: string; modelId: string };
+  space: { workspaceId: string; tier: 'go'; actors: Record<Role, Actor> };
+};
+type Binding = {
+  protocol: 'od-link-run011-matrix-v1';
+  alias: string;
+  attemptId: string;
+  fixtureSha256: string;
+  odSha: string;
+  amrSha: string;
+  workspaceId: string;
+  modelId: string;
+};
+type RunResponse = { status: number; runId: string | null };
+type Case = {
+  role: Role;
+  surface: Surface;
+  actor: Actor;
+  page: Page;
+  projectId: string | null;
+  requests: Array<{ at: string; method: string; path: string; workspaceId: string | null }>;
+  runResponses: RunResponse[];
+  runBodies: Array<{ currentPrompt: string | null; attachmentNames: string[] }>;
+  draft: string;
+  attachment: string;
+};
+type Session = {
+  role: Role;
+  actor: Actor;
+  runtime: ReturnType<typeof createToolsDevSuite>;
+  env: Record<string, string>;
+  cases: Case[];
+};
+
+const fixturePath = process.env.OD_LINK_RUN011_FIXTURE;
+const output = process.env.OD_LINK_RUN011_EVIDENCE;
+const roles: Role[] = ['owner', 'admin', 'member'];
+const surfaces: Surface[] = ['home', 'project'];
+
+test.use({ viewport: { width: 1280, height: 800 }, video: 'on' });
+
+async function prepare() {
+  if (!fixturePath || !output) throw new Error('Explicit RUN011 fixture and evidence directory required');
+  if (((await stat(fixturePath)).mode & 0o077) !== 0) throw new Error('Private fixture0600 required');
+  const bytes = await readFile(fixturePath);
+  const fixture = JSON.parse(bytes.toString()) as Fixture;
+  const fixtureSha256 = createHash('sha256').update(bytes).digest('hex');
+  const odSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: e2eWorkspaceRoot(), encoding: 'utf8' }).trim();
+  if (fixture.tuple.odSha !== odSha || !fixture.tuple.amrSha || fixture.space.tier !== 'go'
+    || !fixture.space.workspaceId || !fixture.runtime.modelId) throw new Error('Incomplete fixed RUN011 tuple');
+  for (const value of Object.values(fixture.urls)) {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
+      throw new Error('Only isolated loopback AMR endpoints permitted');
+    }
+  }
+  for (const role of roles) {
+    const actor = fixture.space.actors[role];
+    if (!actor?.controlKey || !actor.runtimeKey || !actor.memberId) {
+      throw new Error('Three product-authenticated actors required');
+    }
+  }
+  await mkdir(output, { recursive: true, mode: 0o700 });
+  await chmod(output, 0o700);
+  const markers = join(output, 'markers');
+  await mkdir(markers, { recursive: true, mode: 0o700 });
+  await chmod(markers, 0o700);
+  if ((await readdir(markers)).length !== 0) throw new Error('Fresh empty marker directory required');
+  const binding: Binding = { protocol: 'od-link-run011-matrix-v1', alias: fixture.alias,
+    attemptId: randomUUID(), fixtureSha256, odSha, amrSha: fixture.tuple.amrSha,
+    workspaceId: fixture.space.workspaceId, modelId: fixture.runtime.modelId };
+  const save = (name: string, value: unknown) =>
+    writeFile(join(output, name), JSON.stringify(value, null, 2), { mode: 0o600 });
+  const marker = async (name: string, value: Record<string, unknown>) => {
+    const target = join(markers, name);
+    const temp = target + '.' + process.pid + '.tmp';
+    await writeFile(temp, JSON.stringify({ ...binding, ...value, at: new Date().toISOString() }),
+      { mode: 0o600, flag: 'wx' });
+    await rename(temp, target);
+  };
+  const receipt = async (name: string) => {
+    let value!: Record<string, unknown>;
+    await expect.poll(async () => {
+      try {
+        value = JSON.parse(await readFile(join(markers, name), 'utf8')) as Record<string, unknown>;
+        return true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+        throw error;
+      }
+    }, { timeout: 180_000, intervals: [250, 500, 1000] }).toBe(true);
+    expect(value).toMatchObject(binding);
+    expect(value.receiptDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(value.receiptFile).toMatch(/^[a-zA-Z0-9.-]+\.safe\.json$/);
+    const evidence = await readFile(join(markers, String(value.receiptFile)));
+    expect(createHash('sha256').update(evidence).digest('hex')).toBe(value.receiptDigest);
+    if (value.error) throw new Error('RUN011 accounting receipt blocked: ' + String(value.error));
+    await save(name, value);
+    return value;
+  };
+  return { fixture, binding, save, marker, receipt };
+}
+
+function caseKey(item: Pick<Case, 'role' | 'surface'>) {
+  return item.role + '-' + item.surface;
+}
+
+function elements(item: Case) {
+  const home = item.surface === 'home';
+  return {
+    input: item.page.getByTestId(home ? 'home-hero-input' : 'chat-composer-input'),
+    send: item.page.getByTestId(home ? 'home-hero-submit' : 'chat-send'),
+    file: item.page.getByTestId(home ? 'home-hero-file-input' : 'chat-file-input'),
+    staged: item.page.getByTestId(home ? 'home-hero-staged-files' : 'staged-attachments'),
+  };
+}
+
+function runPosts(item: Case) {
+  return item.requests.filter(request => request.method === 'POST' && request.path === '/api/runs');
+}
+
+async function startSession(browser: Browser, fixture: Fixture, role: Role, attemptId: string): Promise<Session> {
+  const actor = fixture.space.actors[role];
+  const namespace = 'link-run011-' + randomUUID().slice(0, 8);
+  const root = join(e2eWorkspaceRoot(), '.tmp', 'e2e', namespace);
+  const scratch = join(root, 'scratch');
+  const dataDir = join(scratch, 'data');
+  const amrHome = join(scratch, 'amr-home');
+  const runtime = createToolsDevSuite({ root, dataDir, namespace, ownerPid: process.pid,
+    codexHomeDir: join(scratch, 'codex-home'), toolsDevRoot: join(scratch, 'tools-dev') });
+  await mkdir(dataDir, { recursive: true, mode: 0o700 });
+  await mkdir(amrHome, { recursive: true, mode: 0o700 });
+  await writeFile(join(amrHome, 'config.json'), JSON.stringify({ profiles: { local: {
+    controlKey: actor.controlKey, runtimeKey: actor.runtimeKey,
+    apiUrl: fixture.urls.api, linkUrl: fixture.urls.link,
+    user: { id: actor.userId, email: actor.email, name: actor.name },
+  } } }), { mode: 0o600 });
+  const config = { mode: 'daemon', agentId: 'amr', model: fixture.runtime.modelId,
+    onboardingCompleted: true, privacyDecisionAt: 1,
+    telemetry: { metrics: false, content: false, artifactManifest: false },
+    agentModels: { amr: { model: fixture.runtime.modelId } },
+    agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'local', VELA_BIN: fixture.runtime.velaBin } } };
+  await writeFile(join(dataDir, 'app-config.json'), JSON.stringify(config), { mode: 0o600 });
+  const env = { AMR_HOME: amrHome, VELA_BIN: fixture.runtime.velaBin, VELA_PROFILE: 'local',
+    OPEN_DESIGN_AMR_PROFILE: 'local', VELA_API_URL: fixture.urls.api, VELA_LINK_URL: fixture.urls.link,
+    VELA_CONTROL_KEY: actor.controlKey, VELA_OPENCODE_BIN: fixture.runtime.openCodeBin,
+    OD_WORKSPACE_CONTEXT_SOURCE: 'vela', OD_VELA_WEB_URL: fixture.urls.web,
+    OD_COLLAB_TRANSPORT: 'off', OD_RESOURCE_TRANSPORT: 'off', OD_TEAM_PROJECTS_TRANSPORT: 'off' };
+  const cases: Case[] = [];
+  try {
+    await runtime.startWeb(env);
+    await warmPlaywrightWebRuntime(runtime.url.web('/'));
+    await warmPlaywrightDaemonRuntime(runtime.url.daemon('/api/health'));
+    const headers = { 'x-od-workspace-id': fixture.space.workspaceId,
+      'x-od-workspace-member-id': actor.memberId, 'x-od-workspace-role': role,
+      'x-od-workspace-lifecycle-state': 'active', 'x-od-workspace-member-status': 'active' };
+    const context = await (await fetch(runtime.url.web('/api/workspace/context'), { headers })).json();
+    expect(context.context).toMatchObject({ workspaceId: fixture.space.workspaceId,
+      workspaceMemberId: actor.memberId, role });
+    const projectId = 'run011-' + role + '-' + attemptId;
+    const created = await fetch(runtime.url.web('/api/projects'), { method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ id: projectId, name: 'RUN011 existing project', metadata: { kind: 'prototype' } }) });
+    expect(created.ok, await created.text()).toBe(true);
+    const artifact = '<!doctype html><html><body><h1>Existing RUN011 output survives</h1></body></html>';
+    const saved = await fetch(runtime.url.web('/api/projects/' + projectId + '/files'), { method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'existing-output.html', content: artifact, encoding: 'utf8' }) });
+    expect(saved.ok, await saved.text()).toBe(true);
+    for (const surface of surfaces) {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+      const requests: Case['requests'] = [];
+      const runResponses: RunResponse[] = [];
+      const runBodies: Case['runBodies'] = [];
+      cases.push({ role, surface, actor, page, projectId: surface === 'project' ? projectId : null,
+        requests, runResponses, runBodies, draft: '', attachment: '' });
+      page.on('request', request => {
+        const path = new URL(request.url()).pathname;
+        if (path.startsWith('/api/')) requests.push({ at: new Date().toISOString(),
+          method: request.method(), path, workspaceId: request.headers()['x-od-workspace-id'] ?? null });
+        if (request.method() === 'POST' && path === '/api/runs') {
+          const body = request.postDataJSON() as {
+            currentPrompt?: unknown; attachments?: Array<{ name?: unknown }>;
+          };
+          runBodies.push({ currentPrompt: typeof body.currentPrompt === 'string' ? body.currentPrompt : null,
+            attachmentNames: Array.isArray(body.attachments)
+              ? body.attachments.map(value => String(value.name ?? '')) : [] });
+        }
+      });
+      page.on('response', response => {
+        if (response.request().method() !== 'POST' || new URL(response.url()).pathname !== '/api/runs') return;
+        void response.json().then(body => {
+          runResponses.push({ status: response.status(),
+            runId: typeof body?.runId === 'string' ? body.runId : null });
+        }).catch(() => { runResponses.push({ status: response.status(), runId: null }); });
+      });
+      await page.route('**/*', route => {
+        const url = new URL(route.request().url());
+        return !url.protocol.startsWith('http') || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+          ? route.continue() : route.abort();
+      });
+      await page.addInitScript(({ appConfig, workspaceId, workspaceMemberId }) => {
+        localStorage.setItem('open-design:config', JSON.stringify(appConfig));
+        localStorage.setItem('open-design:locale', 'zh-CN');
+        localStorage.setItem('open-design:locale-source', 'manual');
+        sessionStorage.setItem('od.workspaceSelection.v1', JSON.stringify({ workspaceId, workspaceMemberId }));
+      }, { appConfig: config, workspaceId: fixture.space.workspaceId, workspaceMemberId: actor.memberId });
+      await page.goto(runtime.url.web(surface === 'home' ? '/' : '/projects/' + projectId),
+        { waitUntil: 'domcontentloaded', timeout: T.xlong });
+      const item = cases.at(-1)!;
+      await expect(elements(item).input).toBeVisible({ timeout: T.long });
+      if (surface === 'project') await expect(page.frameLocator('[data-testid="artifact-preview-frame"]')
+        .getByRole('heading', { name: 'Existing RUN011 output survives' })).toBeVisible({ timeout: T.long });
+    }
+    return { role, actor, runtime, env, cases };
+  } catch (error) {
+    for (const item of cases) await item.page.close().catch(() => undefined);
+    await runtime.stopWeb(env).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function stopSession(session: Session) {
+  for (const item of session.cases) await item.page.close().catch(() => undefined);
+  await session.runtime.stopWeb(session.env);
+}
+
+async function preflight(item: Case, session: Session, fixture: Fixture) {
+  const url = new URL('/api/workspace/billing', session.runtime.url.web());
+  url.search = new URLSearchParams({ scope: 'workspace', workspaceId: fixture.space.workspaceId,
+    includePreflight: '1', modelId: fixture.runtime.modelId }).toString();
+  const response = await fetch(url, { headers: { 'x-od-workspace-id': fixture.space.workspaceId,
+    'x-od-workspace-member-id': item.actor.memberId, 'x-od-workspace-role': item.role } });
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.preflight).toMatchObject({ workspaceId: fixture.space.workspaceId,
+    workspaceMemberId: item.actor.memberId, modelId: fixture.runtime.modelId });
+  return body.preflight as { fundingCheck: string; [key: string]: unknown };
+}
+
+async function terminalRun(item: Case, session: Session, fixture: Fixture, runId: string) {
+  let row!: Record<string, unknown>;
+  await expect.poll(async () => {
+    const response = await fetch(session.runtime.url.web('/api/runs/' + encodeURIComponent(runId)), {
+      headers: { 'x-od-workspace-id': fixture.space.workspaceId,
+        'x-od-workspace-member-id': item.actor.memberId, 'x-od-workspace-role': item.role },
+    });
+    expect(response.ok).toBe(true);
+    row = await response.json() as Record<string, unknown>;
+    return row.status;
+  }, { timeout: T.xlong, intervals: [250, 500, 1000] }).toBe('succeeded');
+  expect(row.exitCode).toBe(0);
+  return { status: row.status, exitCode: row.exitCode ?? null, errorCode: row.errorCode ?? null };
+}
+
+function balanceNotice(item: Case) {
+  return item.page.getByTestId(item.role === 'owner' ? 'amr-balance-dialog' : 'amr-balance-owner-dialog');
+}
+
+async function dismissNotice(item: Case) {
+  if (item.role === 'owner') {
+    await balanceNotice(item).getByRole('button', { name: /暂不|稍后|not now|later/i }).click();
+  } else {
+    await item.page.getByTestId('amr-balance-owner-dismiss').click();
+  }
+}
+
+async function assertRetained(item: Case) {
+  const { input, staged } = elements(item);
+  await expect(input).toHaveText(item.draft);
+  await expect(staged).toContainText(item.attachment);
+  await expect(item.page.getByTestId('queued-send-banner')).toHaveCount(0);
+  if (item.surface === 'project') {
+    await expect(item.page.frameLocator('[data-testid="artifact-preview-frame"]')
+      .getByRole('heading', { name: 'Existing RUN011 output survives' })).toBeVisible();
+    const queue = await item.page.evaluate(projectId => {
+      const raw = localStorage.getItem('od:chat-queued-sends:' + projectId + ':v1');
+      return raw ? JSON.parse(raw) : [];
+    }, item.projectId!);
+    expect(queue).toEqual([]);
+  }
+}
+
+test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded send', async ({ browser }) => {
+  test.setTimeout(1_200_000);
+  const { fixture, binding, save, marker, receipt } = await prepare();
+  const sessions: Session[] = [];
+  try {
+    for (const role of roles) sessions.push(await startSession(browser, fixture, role, binding.attemptId));
+    const all = sessions.flatMap(session => session.cases);
+    for (const item of all) {
+      const session = sessions.find(candidate => candidate.role === item.role)!;
+      const funding = await preflight(item, session, fixture);
+      expect(funding.fundingCheck).toBe('insufficient');
+      const { input, send, file, staged } = elements(item);
+      await input.fill('RUN011 first blocked ' + caseKey(item) + ' ' + binding.attemptId);
+      await send.click();
+      await expect(balanceNotice(item)).toBeVisible({ timeout: T.long });
+      expect(runPosts(item)).toHaveLength(0);
+      if (item.role === 'owner') {
+        await expect(item.page.getByTestId('amr-balance-dialog-plans')).toBeVisible();
+      } else {
+        await expect(balanceNotice(item)).toContainText('联系团队空间所有者');
+        await expect(item.page.getByTestId('amr-balance-owner-dismiss')).toHaveText('知道了');
+      }
+      await dismissNotice(item);
+      item.draft = 'RUN011 new attached draft ' + caseKey(item) + ' ' + binding.attemptId;
+      item.attachment = 'run011-' + caseKey(item) + '.txt';
+      await input.fill(item.draft);
+      const upload = item.surface === 'project' ? item.page.waitForResponse(response =>
+        response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(
+          '/projects/' + item.projectId + '/upload')) : null;
+      await file.setInputFiles({ name: item.attachment, mimeType: 'text/plain',
+        buffer: Buffer.from('RUN011 retained attachment ' + caseKey(item)) });
+      if (upload) expect((await upload).ok()).toBe(true);
+      await expect(staged).toContainText(item.attachment);
+      await send.click({ clickCount: 2 });
+      await expect(balanceNotice(item)).toBeVisible({ timeout: T.long });
+      if (item.role === 'owner') {
+        await expect(item.page.getByTestId('amr-balance-dialog-plans')).toBeVisible();
+      } else {
+        await expect(balanceNotice(item)).toContainText('联系团队空间所有者');
+      }
+      await assertRetained(item);
+      expect(runPosts(item)).toHaveLength(0);
+      await item.page.screenshot({ path: join(output!, 'RUN011-' + caseKey(item) + '-blocked.png') });
+      await dismissNotice(item);
+    }
+    for (const item of all) {
+      expect(runPosts(item)).toHaveLength(0);
+      expect(item.runResponses).toHaveLength(0);
+      await assertRetained(item);
+    }
+    const blocked = all.map(item => ({ role: item.role, surface: item.surface,
+      memberId: item.actor.memberId, projectId: item.projectId, draft: item.draft,
+      attachment: item.attachment, runPosts: runPosts(item).length }));
+    await save('RUN011-all-blocked.safe.json', { binding, blocked });
+    for (const item of all) {
+      await item.page.context().setOffline(true);
+      expect(await item.page.evaluate(() => navigator.onLine)).toBe(false);
+    }
+    const disconnectedAt = new Date().toISOString();
+    await marker('RUN011-ready.json', { cases: blocked, fundingCheck: 'insufficient', disconnectedAt });
+    const funded = await receipt('RUN011-funded.json');
+    expect(funded.fundingCheck).toBe('available');
+    expect(funded.workspaceId).toBe(fixture.space.workspaceId);
+    for (const item of all) {
+      await item.page.context().setOffline(false);
+      expect(await item.page.evaluate(() => navigator.onLine)).toBe(true);
+    }
+    const reconnectedAt = new Date().toISOString();
+    for (const item of all) {
+      const session = sessions.find(candidate => candidate.role === item.role)!;
+      expect((await preflight(item, session, fixture)).fundingCheck).toBe('available');
+      await item.page.evaluate(() => window.dispatchEvent(new Event('od:workspace-billing-refresh')));
+    }
+    const noClickStart = new Date().toISOString();
+    const automatic = await Promise.all(all.map(item => item.page.waitForEvent('request', {
+      predicate: request => request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs',
+      timeout: 5000,
+    }).catch(() => null)));
+    expect(automatic.every(value => value === null)).toBe(true);
+    for (const item of all) {
+      expect(runPosts(item)).toHaveLength(0);
+      await assertRetained(item);
+      await item.page.screenshot({ path: join(output!, 'RUN011-' + caseKey(item) + '-funded-no-click.png') });
+    }
+    await save('RUN011-funded-no-click.safe.json', { binding, disconnectedAt, reconnectedAt, noClickStart,
+      observedAt: new Date().toISOString(), funded, cases: blocked });
+    const completed: Array<{ role: Role; surface: Surface; runId: string }> = [];
+    const allCanonicalIds: string[] = [];
+    for (const item of all) {
+      const { send } = elements(item);
+      const responseReady = item.page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/api/runs', { timeout: T.long });
+      await send.click();
+      const response = await responseReady;
+      expect(response.status()).toBe(202);
+      const body = await response.json() as { runId?: string };
+      expect(body.runId).toEqual(expect.any(String));
+      expect(body.runId?.length).toBeGreaterThan(0);
+      await expect.poll(() => item.runResponses.length, { timeout: T.long }).toBe(1);
+      expect(runPosts(item)).toHaveLength(1);
+      expect(item.runBodies).toHaveLength(1);
+      expect(item.runBodies[0]?.currentPrompt).toContain(item.draft);
+      expect(item.runBodies[0]?.attachmentNames).toContain(item.attachment);
+      expect(runPosts(item)[0]?.workspaceId).toBe(fixture.space.workspaceId);
+      for (const other of all.filter(other => other !== item && !completed.some(done =>
+        done.role === other.role && done.surface === other.surface))) {
+        expect(runPosts(other)).toHaveLength(0);
+      }
+      const session = sessions.find(candidate => candidate.role === item.role)!;
+      const terminal = await terminalRun(item, session, fixture, body.runId!);
+      await marker('RUN011-' + caseKey(item) + '-manual-ready.json', {
+        role: item.role, surface: item.surface, memberId: item.actor.memberId,
+        projectId: item.projectId, runId: body.runId, status: response.status(), terminal,
+      });
+      const verified = await receipt('RUN011-' + caseKey(item) + '-manual-verified.json');
+      expect(verified.runId).toBe(body.runId);
+      expect(verified.billingWorkspaceId).toBe(fixture.space.workspaceId);
+      expect(Number(verified.targetSuccessfulUpstreamCount)).toBeGreaterThan(0);
+      expect(Number(verified.targetUsageCount)).toBeGreaterThanOrEqual(
+        Number(verified.targetSuccessfulUpstreamCount));
+      expect(Number(verified.unsettledSuccessfulCallCount)).toBe(0);
+      expect(Number(verified.unmatchedChargeCount)).toBe(0);
+      const calls = verified.chargeableCalls as Array<{
+        canonicalRequestId: string; usageId: string; chargedWorkspaceId: string;
+      }>;
+      expect(Array.isArray(calls) && calls.length > 0).toBe(true);
+      expect(new Set(calls.map(call => call.canonicalRequestId)).size).toBe(calls.length);
+      for (const call of calls) {
+        expect(call.canonicalRequestId.length).toBeGreaterThan(0);
+        expect(call.usageId.length).toBeGreaterThan(0);
+        expect(call.chargedWorkspaceId).toBe(fixture.space.workspaceId);
+        allCanonicalIds.push(call.canonicalRequestId);
+      }
+      expect((await preflight(item, session, fixture)).fundingCheck).toBe('available');
+      await save('RUN011-' + caseKey(item) + '-manual.safe.json', { binding, verified,
+        runResponse: { status: response.status(), runId: body.runId }, terminal, requests: item.requests });
+      completed.push({ role: item.role, surface: item.surface, runId: body.runId! });
+    }
+    expect(new Set(completed.map(item => item.runId)).size).toBe(6);
+    expect(new Set(allCanonicalIds).size).toBe(allCanonicalIds.length);
+    for (const item of all) {
+      expect(runPosts(item)).toHaveLength(1);
+      expect(item.runResponses).toEqual([{ status: 202,
+        runId: completed.find(done => done.role === item.role && done.surface === item.surface)?.runId }]);
+      await expect(item.page.getByTestId('queued-send-banner')).toHaveCount(0);
+      if (item.projectId) {
+        const queue = await item.page.evaluate(projectId => {
+          const raw = localStorage.getItem('od:chat-queued-sends:' + projectId + ':v1');
+          return raw ? JSON.parse(raw) : [];
+        }, item.projectId);
+        expect(queue).toEqual([]);
+      }
+    }
+    await marker('RUN011-complete.json', { completed });
+    await save('RUN011-complete.safe.json', { binding, completed,
+      cases: all.map(item => ({ role: item.role, surface: item.surface,
+        requests: item.requests, runResponses: item.runResponses })) });
+  } finally {
+    for (const session of sessions.reverse()) await stopSession(session);
+  }
+});
