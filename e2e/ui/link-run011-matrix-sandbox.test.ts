@@ -428,6 +428,7 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
       expect(attachmentPath).not.toMatch(/^(?:\/|\.\.?\/)/);
       expect(basename(attachmentPath)).toBe(item.attachment);
       expect(sent.projectId).toEqual(expect.any(String));
+      if (item.projectId) expect(sent.projectId).toBe(item.projectId);
       expect(sent.conversationId).toEqual(expect.any(String));
       expect(sent.userMessageId).toEqual(expect.any(String));
       expect(runPosts(item)[0]?.workspaceId).toBe(fixture.space.workspaceId);
@@ -448,10 +449,12 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
         const rows = await readback.json() as { messages?: Array<Record<string, unknown>> };
         const message = rows.messages?.find(row => row.id === sent.userMessageId);
         return message ? { projectId: sent.projectId, conversationId: sent.conversationId,
-          content: message.content, attachments: message.attachments } : null;
+          content: message.content, attachments: message.attachments,
+          attachmentCount: Array.isArray(message.attachments) ? message.attachments.length : -1 } : null;
       }, { timeout: T.long, intervals: [250, 500, 1000] }).toMatchObject({
         projectId: sent.projectId, conversationId: sent.conversationId,
         content: item.draft,
+        attachmentCount: 1,
         attachments: [{ path: attachmentPath, name: item.attachment, kind: 'file', order: 0 }],
       });
       const terminal = await terminalRun(item, session, fixture, body.runId!);
