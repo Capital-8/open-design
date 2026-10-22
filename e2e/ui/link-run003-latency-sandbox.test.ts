@@ -16,7 +16,7 @@ type Fixture = {
   tuple: { odSha: string; amrSha: string };
   urls: { api: string; link: string; web: string };
   runtime: { velaBin: string; openCodeBin: string; modelId: string };
-  space: { workspaceId: string; tier: string; limit: number; actor: Actor };
+  space: { workspaceId: string; workspaceName: string; tier: string; limit: number; actor: Actor };
   background: { runId: string; workspaceId: string };
 };
 type RunResponse = { status: number; runId: string | null };
@@ -55,6 +55,7 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
   const odSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: e2eWorkspaceRoot(), encoding: 'utf8' }).trim();
   const { space, runtime: model, background } = fixture;
   if (fixture.tuple.odSha !== odSha || !fixture.tuple.amrSha || !fixture.alias || !space?.workspaceId
+    || !space.workspaceName?.trim()
     || !space.actor?.controlKey || !space.actor.runtimeKey || !space.actor.memberId
     || !model?.modelId || !model.velaBin || !model.openCodeBin || !background?.runId
     || background.workspaceId !== space.workspaceId || space.limit < 2) {
@@ -265,8 +266,32 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
       localStorage.setItem('open-design:locale-source', 'manual');
       sessionStorage.setItem('od.workspaceSelection.v1', JSON.stringify({ workspaceId, workspaceMemberId }));
     }, { appConfig: config, workspaceId: space.workspaceId, workspaceMemberId: actor.memberId });
+    const initialContextResponse = page.waitForResponse(response =>
+      response.request().method() === 'GET'
+      && new URL(response.url()).pathname === '/api/workspace/context'
+      && response.status() === 200, { timeout: T.xlong });
     await page.goto(runtime.url.web(surface === 'home' ? '/' : '/projects/' + projectId),
       { waitUntil: 'domcontentloaded', timeout: T.xlong });
+    const browserContext = await (await initialContextResponse).json() as {
+      context?: { workspaceId?: string; workspaceMemberId?: string; role?: string };
+    };
+    expect(browserContext.context).toMatchObject({ workspaceId: space.workspaceId,
+      workspaceMemberId: actor.memberId, role: 'owner' });
+    const assertBrowserSelection = async () => {
+      const rail = page.getByTestId('entry-rail-collapse');
+      if (await rail.getAttribute('aria-expanded') !== 'true') await rail.click();
+      const switcher = page.getByTestId('workspace-switcher');
+      await switcher.click();
+      const selected = page.getByTestId('workspace-switcher-list').getByRole('menuitem')
+        .filter({ hasText: space.workspaceName });
+      await expect(selected).toHaveCount(1);
+      await expect(selected).toHaveAttribute('aria-current', 'true');
+      await expect(switcher).toContainText(space.workspaceName);
+      await page.locator('.entry-nav-rail__menu-backdrop').click({ position: { x: 2, y: 2 } });
+    };
+    await assertBrowserSelection();
+    await save('RUN003-browser-identity.safe.json', { binding,
+      context: browserContext.context, selectedWorkspaceName: space.workspaceName });
     const input = page.getByTestId(surface === 'home' ? 'home-hero-input' : 'chat-composer-input');
     const send = page.getByTestId(surface === 'home' ? 'home-hero-submit' : 'chat-send');
     const staged = page.getByTestId(surface === 'home' ? 'home-hero-staged-files' : 'staged-attachments');
@@ -432,6 +457,7 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
       .getByRole('button', { name: /暂不|稍后|not now|later/i }).click();
     else await page.getByTestId('amr-concurrency-close').click();
     await assertRetained();
+    await assertBrowserSelection();
     await marker('RUN003-manual-prepare.json', { projectId, draft, attachmentName });
     const ledgerReady = await receipt('RUN003-manual-ledger-ready.json');
     expect(ledgerReady.backgroundRunId).toBe(background.runId);
