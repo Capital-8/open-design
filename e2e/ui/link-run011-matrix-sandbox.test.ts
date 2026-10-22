@@ -271,8 +271,33 @@ async function preflight(item: Case, session: Session, fixture: Fixture) {
   const url = new URL('/api/workspace/billing', session.runtime.url.web());
   url.search = new URLSearchParams({ scope: 'workspace', workspaceId: fixture.space.workspaceId,
     includePreflight: '1', modelId: fixture.runtime.modelId }).toString();
-  const response = await fetch(url, { headers: { 'x-od-workspace-id': fixture.space.workspaceId,
-    'x-od-workspace-member-id': item.actor.memberId, 'x-od-workspace-role': item.role } });
+  const headers = { 'x-od-workspace-id': fixture.space.workspaceId,
+    'x-od-workspace-member-id': item.actor.memberId, 'x-od-workspace-role': item.role };
+  const attempts: Array<{ attempt: number; at: string; status?: number; errorCode?: string | null }> = [];
+  const diagnosticPath = join(output!, 'RUN011-' + caseKey(item) + '-preflight-transport-'
+    + Date.now() + '-' + randomUUID().slice(0, 8) + '.private.json');
+  const record = () => writeFile(diagnosticPath, JSON.stringify({ role: item.role,
+    surface: item.surface, url: url.toString(), attempts }, null, 2), { mode: 0o600 });
+  let response: Response | undefined;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      response = await fetch(url, { headers });
+      attempts.push({ attempt, at: new Date().toISOString(), status: response.status });
+      break;
+    } catch (error) {
+      const cause = error instanceof Error ? error.cause : null;
+      const code = cause && typeof cause === 'object' && 'code' in cause ? String(cause.code) : null;
+      attempts.push({ attempt, at: new Date().toISOString(), errorCode: code });
+      // This is an idempotent GET. One immediate retry replaces an idle local
+      // socket reset; no send, run or wallet mutation is repeated.
+      if (code !== 'ECONNRESET' || attempt === 2) {
+        await record();
+        throw error;
+      }
+    }
+  }
+  await record();
+  if (!response) throw new Error('RUN011 preflight returned no response');
   expect(response.status).toBe(200);
   const body = await response.json();
   expect(body.preflight).toMatchObject({ workspaceId: fixture.space.workspaceId,
