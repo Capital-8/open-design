@@ -70,6 +70,10 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   // inherited app typography compressed the title and shifted all content up.
   await expect(dialog.locator('h2')).toHaveCSS('line-height', 'normal');
   await expect(dialog).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  expect.soft(await dialog.evaluate(element => {
+    const style = getComputedStyle(element.parentElement!);
+    return { background: style.backgroundColor, filter: style.backdropFilter };
+  })).toEqual({ background: 'rgba(0, 0, 0, 0.28)', filter: 'none' });
   await expect(page.getByTestId('amr-concurrency-close')).toHaveCSS('font-size', '13.5px');
   // This offer is deliberately neutral even when app appearance uses a color.
   await page.locator('html').evaluate(element => element.style.setProperty('--accent', '#1A74FF'));
@@ -140,5 +144,101 @@ test('[P0] F04 concurrency rejection renders the approved Cloud offer and stays 
   await expect(dialog).toHaveCount(0);
   await expect(input).toBeFocused();
   expect(keyboardRuns.bodies).toHaveLength(1);
+  expect(runs.bodies).toHaveLength(1);
+});
+
+// UISTATE-F06-CLIENT: supplied 2026-10-20 .limit-message.limit-member
+// has an 18px gap; .limit-cta uses neutral #353535 and #202020 only on hover.
+// A browser is required here: the shared primary Button and this CSS Module
+// participate in the real cascade; a component DOM test cannot resolve it.
+test('[P0] F06 member concurrency notice preserves the frozen spacing and button states', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.addInitScript(() => {
+    localStorage.setItem('open-design:locale', 'zh-CN');
+    localStorage.setItem('open-design:locale-source', 'manual');
+  });
+  await applyStandardMocks(page);
+  await mockSignedInVelaAccount(page, { plan: 'go', balanceUsd: '100.00' });
+  await routeAgents(page, [{ id: 'amr', name: 'OpenDesign AMR', bin: 'vela', available: true,
+    version: 'test', models: [{ id: 'glm-5', label: 'glm-5' }] }]);
+  const config = { mode: 'daemon', agentId: 'amr', skillId: null, designSystemId: null,
+    onboardingCompleted: true, privacyDecisionAt: 1, agentModels: { amr: { model: 'glm-5' } },
+    telemetry: { metrics: false, content: false, artifactManifest: false } };
+  await seedBrowserConfig(page, config);
+  await page.route('**/api/app-config', route => route.fulfill({ json: { config } }));
+  const projectId = `f06-${testInfo.testId}-${Date.now()}`;
+  await createProjectViaApi(page, projectId, 'F06 member concurrency notice', {
+    accountPlan: 'go', accountBalanceUsd: '100.00', accountCredits: 1_000_000,
+  });
+  const context = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, workspaceType: 'team', role: 'member',
+    planId: 'team_go', permissions: { ...AMR_PERSONAL_WORKSPACE_CONTEXT.permissions,
+      canManageBilling: false, canManageAutoRecharge: false, canManageMembers: false } };
+  await page.route('**/api/workspace/context', route => route.fulfill({ json: { context } }));
+  await page.route(`**/api/projects/${projectId}/workspace-scope`, route => route.fulfill({ json: {
+    scope: { kind: 'personal', projectId, workspaceId: context.workspaceId, visibility: 'personal', context },
+  } }));
+  await page.route('**/api/workspace/billing/preflight?**', route => route.fulfill({ json: { preflight: {
+    schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+    modelId: 'glm-5', generatedAt: new Date().toISOString(), balanceUsd: '100', funding: 'wallet',
+    fundingCheck: 'available', modelCovered: false, codingPlan: { workspaceId: context.workspaceId,
+      generatedAt: new Date().toISOString(), eligible: false, tier: null, windows: [] },
+  } } }));
+  const events = [
+    'event: start', 'data: {"bin":"vela"}', '',
+    'event: agent', 'data: {"type":"done_key","key":"f06-protocol-key"}', '',
+    'event: error', 'data: {"message":"membership concurrency limit exceeded","code":"AGENT_EXECUTION_FAILED","failureDetail":"membership_concurrency_limit"}', '',
+    'event: end', 'data: {"code":1,"status":"failed","failureDetail":"membership_concurrency_limit"}', '', '',
+  ].join('\n');
+  const runs = await routeSuccessfulRuns(page, { runId: `f06-rejected-${Date.now()}`, eventBody: events });
+  await gotoProject(page, projectId);
+  const input = page.getByTestId('chat-composer-input');
+  await expect(input).toBeVisible({ timeout: T.long });
+  await input.fill('F06 member retained draft');
+  await page.getByTestId('chat-send').click();
+  const dialog = page.getByTestId('amr-concurrency-dialog');
+  const acknowledge = page.getByTestId('amr-concurrency-close');
+  await expect(dialog).toBeVisible({ timeout: T.long });
+  await expect(dialog).toHaveAccessibleName('团队并发不足');
+  await expect(dialog).toContainText('当前团队并发不足，请联系团队空间所有者升级订阅。');
+  await expect(acknowledge).toHaveText('知道了');
+  await expect(page.getByTestId('amr-concurrency-upgrade')).toHaveCount(0);
+  await expect(dialog.locator('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
+  await dialog.locator('img').evaluate((image: HTMLImageElement) => image.decode());
+  await page.evaluate(() => document.fonts.ready);
+  await dialog.evaluate(async element => {
+    await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => undefined)));
+  });
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole('tooltip')).toBeHidden();
+  await testInfo.attach('f06-initial-geometry', { body: JSON.stringify(await dialog.evaluate(element =>
+    [element, ...element.querySelectorAll('h2,p,button')].map(node => {
+      const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
+      return { tag: node.tagName, text: node.textContent, width: rect.width, height: rect.height,
+        margin: style.margin, background: style.backgroundColor, hover: node.matches(':hover'),
+        focusVisible: node.matches(':focus-visible'), font: style.font };
+    })), null, 2), contentType: 'application/json' });
+  await testInfo.attach('f06-initial-viewport', { body: await page.screenshot(), contentType: 'image/png' });
+  await testInfo.attach('f06-initial-dialog', { body: await dialog.screenshot(), contentType: 'image/png' });
+  await expect.soft(dialog.locator('p')).toHaveCSS('margin-bottom', '18px', { timeout: T.short });
+  await expect.soft(acknowledge).toHaveCSS('background-color', 'rgb(53, 53, 53)', { timeout: T.short });
+  await expect(acknowledge).toHaveCSS('height', '40px');
+  await expect(acknowledge).toHaveCSS('width', '432px');
+  await expect.poll(async () => (await dialog.boundingBox())?.width).toBe(480);
+  await acknowledge.hover();
+  await expect(acknowledge).toHaveCSS('background-color', 'rgb(32, 32, 32)');
+  await page.mouse.move(0, 0);
+  await expect.soft(acknowledge).toHaveCSS('background-color', 'rgb(53, 53, 53)', { timeout: T.short });
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button').first()).toBeFocused();
+  await expect(dialog.getByRole('button').first()).toHaveCSS('outline-color', 'rgb(21, 148, 71)');
+  await expect(dialog.getByRole('button').first()).toHaveCSS('outline-width', '2px');
+  await expect(dialog.getByRole('button').first()).toHaveCSS('outline-offset', '3px');
+  await page.keyboard.press('Tab');
+  await expect(acknowledge).toBeFocused();
+  await expect(acknowledge).toHaveCSS('outline-color', 'rgb(21, 148, 71)');
+  await expect(acknowledge).toHaveCSS('outline-width', '2px');
+  await expect(acknowledge).toHaveCSS('outline-offset', '3px');
+  await acknowledge.click();
+  await expect(dialog).toHaveCount(0);
   expect(runs.bodies).toHaveLength(1);
 });

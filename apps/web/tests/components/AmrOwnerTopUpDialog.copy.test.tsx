@@ -65,6 +65,7 @@ afterEach(() => {
  * 正文仍没有 Owner 名字的位置，所以 T57 的「拿得到名字就插名字」那一变体不再成立 ——
  * 有没有名字都是同一句。下面两条把这一点正面钉住(名字不出现),而不是删掉断言。
  */
+// 2026-10-20 frozen client/r506 supersedes the earlier wording with the same Owner-only role.
 describe('AmrOwnerTopUpDialog 的正式文案', () => {
   it('标题逐字照产品稿', () => {
     renderDialog();
@@ -73,7 +74,7 @@ describe('AmrOwnerTopUpDialog 的正式文案', () => {
 
   it('拿得到 Owner 名字时仍是定稿那一句,名字不插进去', () => {
     renderDialog({ ownerName: '张三' });
-    expect(textOf('当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。')).toBeTruthy();
+    expect(textOf('当前团队额度不足，请联系团队空间所有者充值或升级订阅。')).toBeTruthy();
     expect(screen.queryByText('张三')).toBeNull();
   });
 
@@ -86,7 +87,7 @@ describe('AmrOwnerTopUpDialog 的正式文案', () => {
     '拿不到名字(%s)时也是定稿那一句',
     (ownerName) => {
       renderDialog({ ownerName: ownerName as string | null | undefined });
-      expect(textOf('当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。')).toBeTruthy();
+      expect(textOf('当前团队额度不足，请联系团队空间所有者充值或升级订阅。')).toBeTruthy();
     },
   );
 });

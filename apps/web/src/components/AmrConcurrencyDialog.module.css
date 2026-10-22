@@ -71,7 +71,7 @@
 }
 
 .upgradeButton,
-.noticeButton {
+.offerPanel .noticeButton {
   line-height: normal;
   color: var(--bg);
   background: var(--accent);
@@ -81,7 +81,7 @@
 }
 
 .upgradeButton:hover:not(:disabled),
-.noticeButton:hover:not(:disabled) {
+.offerPanel .noticeButton:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
   box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),

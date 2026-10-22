@@ -55,8 +55,25 @@ describe('AmrBalanceDialog', () => {
       onClose={vi.fn()}
       onResolved={vi.fn()}
     />);
-    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual([
+      'No complex setup, choose from leading SOTA models',
+      'Invite members for free and share allowance',
+      'Create multimodal images and text in one place',
+      'Publish in one click and share your work with a link',
+    ]);
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Invite members for free and share allowance');
+  });
+
+  it('preserves the existing sign-in invitation benefits', () => {
+    render(<AmrBalanceDialog reason="signed_out" balanceUsd={null} profile="test"
+      entrySource="home_balance_gate_upgrade" metricsConsent={false} installationId={null}
+      workspaceContext={null} onClose={vi.fn()} onResolved={vi.fn()} />);
+    expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual([
+      'No API keys — top models included', 'Invite members for free and share allowance',
+      'Official service you can rely on',
+      'Always improving: one-click publishing, multimodal generation, teams, and more',
+    ]);
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
   });
 
   it('dismisses from the corner close button', () => {

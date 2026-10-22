@@ -28,7 +28,7 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
     t('chat.amrConcurrencyGate.benefit4'),
   ];
   return (
-    <Dialog className={illustrated ? `${frame.panel} ${styles.offerPanel}` : styles.panel} onClose={onClose} closeOnEscape
+    <Dialog className={illustrated ? `${frame.panel} ${frame.frozenPanel} ${styles.offerPanel}` : styles.panel} backdropClassName={illustrated ? frame.frozenBackdrop : undefined} onClose={onClose} closeOnEscape
       ariaLabelledBy="amr-concurrency-title" data-testid="amr-concurrency-dialog">
       {illustrated ? <>
         <div className={frame.banner}>
@@ -43,7 +43,7 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
         {t(memberNotice ? 'chat.amrConcurrencyGate.teamTitle'
           : upgradeUrl ? 'chat.amrConcurrencyGate.title' : 'chat.runError.title.membershipConcurrencyLimit')}
       </h2>
-      <p className={illustrated ? frame.message : undefined}>{t(upgradeUrl
+      <p className={illustrated ? `${frame.message}${memberNotice ? ` ${frame.memberMessage}` : ''}` : undefined}>{t(upgradeUrl
         ? 'chat.amrConcurrencyGate.message'
         : branch.audience === 'member'
           ? 'chat.amrConcurrencyGate.teamMessage'
