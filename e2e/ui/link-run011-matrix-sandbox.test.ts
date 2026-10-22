@@ -389,6 +389,10 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
     const completed: Array<{ role: Role; surface: Surface; runId: string }> = [];
     const allCanonicalIds: string[] = [];
     for (const item of all) {
+      const ledgerReady = await receipt('RUN011-' + caseKey(item) + '-ledger-ready.json');
+      expect(ledgerReady.role).toBe(item.role);
+      expect(ledgerReady.surface).toBe(item.surface);
+      expect(ledgerReady.workspaceId).toBe(fixture.space.workspaceId);
       const { send } = elements(item);
       const responseReady = item.page.waitForResponse(response => response.request().method() === 'POST'
         && new URL(response.url()).pathname === '/api/runs', { timeout: T.long });
