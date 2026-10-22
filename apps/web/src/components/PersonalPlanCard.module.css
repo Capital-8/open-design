@@ -1,4 +1,4 @@
-/* Shared billing popover shell; the team plan wordmark remains the host's existing family mark. */
+/* Shared billing popover shell. */
 .panel:global(.entry-top-right-credits-panel) {
   width: min(280px, calc(100vw - 32px));
 }

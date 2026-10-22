@@ -39,7 +39,7 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
   const owner = context?.role === 'owner';
   // Preserve the existing contracts billing policy: locked workspaces remain readable.
   const readable = context?.memberStatus === 'active' && isWorkspaceLifecycleReadable(context.lifecycleState);
-  const shownBadge = badgeTier === 'team' ? 'team' : view.tier;
+  const shownBadge = view.tier ?? (badgeTier === 'team' ? 'team' : null);
   const unavailable = t('workspaceQuota.unavailable');
   // Go has 5h + 7d; other paid tiers only 7d.
   const durations = view.tier === 'free' ? [] : view.tier === 'go' ? [18_000, 604_800] : [604_800];
