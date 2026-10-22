@@ -276,3 +276,129 @@ describe('F08 same-send authoritative plan before display metadata', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 });
+
+// RUN014's plan source can settle before display metadata. Link's full hint
+// must block immediately without inventing an upgrade above a proven Max.
+describe('RUN014 same-send plan with a full request counter', () => {
+  async function mountHome(options: {
+    role: 'owner' | 'admin' | 'member';
+    tier: 'go' | 'plus' | 'pro' | 'max';
+    fundingForSubmit?: (ctx: WorkspaceCollabContext, submission: number) => Promise<Response>;
+  }) {
+    const { role, tier } = options;
+    const ctx = { ...context(`run014-${role}-${tier}`), role, planId: null,
+      permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }) };
+    const display = deferred<Response>();
+    let backgroundReads = 0, submission = 0;
+    const open = vi.fn(); vi.stubGlobal('open', open);
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/workspace/directory')) return response(workspaceDirectoryFixture([ctx]));
+      if (url.endsWith('/api/workspace/context')) return response({ context: ctx });
+      if (url.includes('/billing/request-concurrency?')) return response({ requestConcurrencyHint: {
+        workspaceId: ctx.workspaceId, workspaceMemberId: ctx.workspaceMemberId,
+        status: 'full', running: { go: 10, plus: 20, pro: 30, max: 50 }[tier],
+        limit: { go: 10, plus: 20, pro: 30, max: 50 }[tier], observedAt: new Date().toISOString(),
+      } });
+      if (url.includes('/billing/preflight?')) {
+        if (submission && options.fundingForSubmit) return options.fundingForSubmit(ctx, submission);
+        if (!submission) backgroundReads++;
+        return fundingResponse(ctx, tier);
+      }
+      if (url.includes('/api/workspace/billing?')) return display.promise;
+      if (url.endsWith('/api/workspace/projects/team')) return response({ projects: [] });
+      if (url.endsWith('/api/plugins')) return response({ plugins: [] });
+      if (url.endsWith('/api/mcp/servers')) return response({ servers: [] });
+      return response({ stale: true });
+    }) as typeof fetch;
+    const begin = vi.fn(() => ({ projectId: 'must-not-start', rollback: vi.fn() }));
+    const create = vi.fn(async () => true);
+    render(<I18nProvider initial="en"><EntryShellWithGateHost skills={[]} designTemplates={[]} designSystems={[]} projects={[]} templates={[]} promptTemplates={[]} defaultDesignSystemId={null} connectors={[]} connectorsLoading={false} config={{...config,agentCliEnv:{amr:{OPEN_DESIGN_AMR_PROFILE:'local'}}}} agents={[agent]} daemonLive onModeChange={vi.fn()} onAgentChange={vi.fn()} onAgentModelChange={vi.fn()} onApiProtocolChange={vi.fn()} onApiModelChange={vi.fn()} onConfigPersist={vi.fn()} onRefreshAgents={vi.fn(() => [agent])} onCreateProject={create} onBeginProjectCreation={begin} onCreatePluginShareProject={vi.fn()} onImportClaudeDesign={vi.fn()} onOpenProject={vi.fn()} onOpenLiveArtifact={vi.fn()} onDeleteProject={vi.fn()} onRenameProject={vi.fn()} onChangeDefaultDesignSystem={vi.fn()} onPersistComposioKey={vi.fn()} onOpenSettings={vi.fn()} onCompleteOnboarding={vi.fn()} /></I18nProvider>);
+    await waitFor(() => expect(backgroundReads).toBeGreaterThan(0));
+    setHomeHeroPrompt('RUN014 exact retained text');
+    fireEvent.change(screen.getByTestId('home-hero-file-input'), { target: { files: [new File(['original bytes'], 'run014.txt', { type: 'text/plain' })] } });
+    const submit = async () => {
+      await waitFor(() => expect(screen.getByTestId('home-hero-submit')).toBeEnabled());
+      submission++;
+      await act(async () => fireEvent.click(screen.getByTestId('home-hero-submit')));
+      return screen.findByTestId('amr-concurrency-dialog');
+    };
+    const finish = async () => {
+      await act(async () => display.resolve(response({ summary: null })));
+      vi.unstubAllGlobals();
+    };
+    return { ctx, open, begin, create, submit, finish };
+  }
+
+  function fundingResponse(ctx: WorkspaceCollabContext, tier: 'go' | 'plus' | 'pro' | 'max') {
+    const pf = preflight(ctx, 'available', '100');
+    return response({ preflight: { ...pf, codingPlan: { ...pf.codingPlan, tier } } });
+  }
+
+  it.each([
+    { role: 'owner', tier: 'go', upgrade: true },
+    { role: 'owner', tier: 'plus', upgrade: true },
+    { role: 'owner', tier: 'pro', upgrade: true },
+    { role: 'owner', tier: 'max', upgrade: false },
+    { role: 'admin', tier: 'pro', upgrade: false },
+    { role: 'member', tier: 'pro', upgrade: false },
+  ] as const)('$role / $tier retains the blocked turn and only offers an existing authorized upgrade', async ({ role, tier, upgrade }) => {
+    const home = await mountHome({ role, tier });
+    try {
+      const dialog = await home.submit();
+      expect(Boolean(screen.queryByTestId('amr-concurrency-upgrade'))).toBe(upgrade);
+      if (role !== 'owner') expect(dialog).toHaveTextContent('Ask the team workspace Owner');
+      if (upgrade) {
+        fireEvent.click(screen.getByTestId('amr-concurrency-upgrade'));
+        const target = new URL(String(home.open.mock.calls[0]?.[0]));
+        expect(target.searchParams.get('workspaceId')).toBe(home.ctx.workspaceId);
+        expect(target.searchParams.get('billing')).toBe('plan');
+      } else expect(home.open).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+      expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('RUN014 exact retained text');
+      expect(screen.getByText('run014.txt')).toBeInTheDocument();
+      expect(home.begin).not.toHaveBeenCalled(); expect(home.create).not.toHaveBeenCalled();
+    } finally { await home.finish(); }
+  });
+
+  it('blocks immediately with unknown plan and never reopens after late funding resolves', async () => {
+    const funding = deferred<Response>();
+    const home = await mountHome({ role: 'owner', tier: 'go', fundingForSubmit: () => funding.promise });
+    try {
+      await home.submit(); // This must complete while funding is still unresolved.
+      expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+      fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+      await act(async () => funding.resolve(fundingResponse(home.ctx, 'go')));
+      expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+      expect(home.open).not.toHaveBeenCalled();
+      expect(home.begin).not.toHaveBeenCalled(); expect(home.create).not.toHaveBeenCalled();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('RUN014 exact retained text');
+      expect(screen.getByText('run014.txt')).toBeInTheDocument();
+    } finally { await home.finish(); }
+  });
+
+  it.each([
+    { first: 'max', second: 'go', upgrade: true },
+    { first: 'go', second: 'max', upgrade: false },
+  ] as const)('late $first proof cannot change the next $second refusal in the same workspace', async ({ first, second, upgrade }) => {
+    const oldFunding = deferred<Response>();
+    const home = await mountHome({ role: 'owner', tier: second,
+      fundingForSubmit: async (ctx, submission) => submission === 1 ? oldFunding.promise : fundingResponse(ctx, second) });
+    try {
+      await home.submit();
+      fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+      await home.submit();
+      expect(Boolean(screen.queryByTestId('amr-concurrency-upgrade'))).toBe(upgrade);
+      await act(async () => oldFunding.resolve(fundingResponse(home.ctx, first)));
+      expect(Boolean(screen.queryByTestId('amr-concurrency-upgrade'))).toBe(upgrade);
+      expect(home.open).not.toHaveBeenCalled();
+      expect(home.begin).not.toHaveBeenCalled(); expect(home.create).not.toHaveBeenCalled();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('RUN014 exact retained text');
+      expect(screen.getByText('run014.txt')).toBeInTheDocument();
+    } finally {
+      await act(async () => oldFunding.resolve(fundingResponse(home.ctx, first)));
+      await home.finish();
+    }
+  });
+});

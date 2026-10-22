@@ -31,6 +31,7 @@ import {
   amrBalanceUpgradeIntent,
   resolveAmrBalanceAudience,
   resolveAmrBalanceBranch,
+  resolveAmrConcurrencyPresentation,
   withAmrFundingPlan,
 } from '../../src/runtime/amr-balance-branch';
 import { isMaxPlanTier, isTopPlanTier } from '../../src/collab/team-plan';
@@ -292,6 +293,26 @@ describe('F08 plan from the current validated funding observation', () => {
     if (change === 'unsupported-tier') preflight.codingPlan.tier = 'future-plan' as 'max';
     if (change === 'ineligible') preflight.codingPlan.eligible = false;
     expect(withAmrFundingPlan(branch, ctx, change === 'missing' ? null : preflight)).toBe(branch);
+  });
+  it('keeps unknown concurrency plans distinct from a proven Free or paid tier', () => {
+    const unknown = context({ role: 'owner', planId: null });
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, accountPlan: 'plus' }).upgradeAllowed).toBe(false);
+    expect(resolveAmrConcurrencyPresentation({ context: { ...unknown, billingState: 'free' } }).upgradeAllowed).toBe(true);
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: proof(unknown, 'go') }).upgradeAllowed).toBe(true);
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: proof(unknown, 'max') })).toEqual({
+      branch: { audience: 'owner', tier: 'max' }, upgradeAllowed: false,
+    });
+  });
+  it('does not let another member or workspace enable an unknown concurrency upgrade', () => {
+    const unknown = context({ role: 'owner', planId: null });
+    const foreign = proof(unknown, 'go');
+    foreign.workspaceMemberId = 'other';
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: foreign }).upgradeAllowed).toBe(false);
+    foreign.workspaceMemberId = unknown.workspaceMemberId;
+    foreign.codingPlan.workspaceId = 'other';
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: foreign }).upgradeAllowed).toBe(false);
+    const member = context({ role: 'member', planId: null });
+    expect(resolveAmrConcurrencyPresentation({ context: member, preflight: proof(member, 'go') }).upgradeAllowed).toBe(false);
   });
   it('keeps Free without guessing an account tier and accepts a proven lower plan', () => {
     const free = context({ role: 'owner', planId: null, billingState: 'free' });
