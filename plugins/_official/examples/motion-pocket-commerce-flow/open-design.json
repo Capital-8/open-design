@@ -1,0 +1,91 @@
+{
+  "name": "example-motion-pocket-commerce-flow",
+  "title": "商品到收款",
+  "title_i18n": {
+    "en": "Creator Commerce Flow",
+    "zh-CN": "商品到收款"
+  },
+  "description": "用半色调立体角色串联数字商品、手机店铺、收款面板与品牌收尾的静音动画模板。",
+  "description_i18n": {
+    "en": "A silent creator-commerce promo with an original halftone character, product cards, a mobile store and a checkout dashboard.",
+    "zh-CN": "半色调角色贯穿商品、店铺与收款流程，可编辑品牌、商品、价格与演示数据。"
+  },
+  "tags": [
+    "example",
+    "video",
+    "commerce",
+    "halftone",
+    "creator",
+    "motion"
+  ],
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "inputs": [],
+    "useCase": {
+      "query": {
+        "zh-CN": "为 Parcelglide 制作一段半色调角色贯穿的创作者收款宣传片，依次展示商品卡、手机店铺和收款面板，最后以品牌和行动按钮收尾；保持静音。",
+        "en": "Create a silent creator-commerce promo for Parcelglide with a halftone character, product cards, mobile store, checkout dashboard and a closing brand card."
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "商品到收款"
+        }
+      ]
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "团队成员上传的内部参考视频；原作者未提供",
+      "url": "reference.mp4",
+      "note": "仅提供本地参考文件，未提供公开来源链接；未复制原片像素或音频。"
+    },
+    {
+      "name": "官方商品宣传片示例的来源说明；关联原作候选 @achxvi，未验证本地文件版本",
+      "url": "https://x.com/achxvi/status/2103918792845963545",
+      "note": "仅为官方示例文档给出的关联链接；不据此认定上传者或原片授权。"
+    },
+    {
+      "name": "GSAP 3.12.5",
+      "url": "https://gsap.com/"
+    },
+    {
+      "name": "Inter、Instrument Serif、Fraunces 字体",
+      "url": "https://fonts.google.com/",
+      "license": "SIL Open Font License 1.1；授权文本随本地字体附带。"
+    }
+  ],
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  }
+}

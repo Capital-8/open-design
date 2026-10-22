@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[{"id":"brand","type":"string","label":"品牌名称","default":"Parcelglide","maxLength":13,"brandToken":"brand.name"},{"id":"domain","type":"string","label":"品牌域名","default":"parcelglide.com","maxLength":22},{"id":"primary","type":"color","label":"主色","default":"#2460ED","brandToken":"color.primary"},{"id":"font","type":"font","label":"正文字体","default":"Inter","brandToken":"font.body"},{"id":"hook","type":"string","label":"开场标题","default":"Got something","maxLength":16},{"id":"sell","type":"string","label":"强调词","default":"sell?","maxLength":8},{"id":"course","type":"string","label":"课程名称","default":"Studio Course","maxLength":17},{"id":"ebook","type":"string","label":"电子书名称","default":"Maker Ebook","maxLength":16},{"id":"app","type":"string","label":"应用名称","default":"Tempo App","maxLength":14},{"id":"coursePrice","type":"number","label":"课程价格","default":159,"min":100,"max":999},{"id":"ebookPrice","type":"number","label":"电子书价格","default":39,"min":10,"max":99},{"id":"appPrice","type":"number","label":"应用价格","default":5.99,"min":1,"max":9.99},{"id":"monthly","type":"number","label":"订阅月费","default":8,"min":1,"max":99},{"id":"upsell","type":"number","label":"练习册加购价格","default":24,"min":10,"max":99},{"id":"coaching","type":"number","label":"辅导价格","default":89,"min":10,"max":999},{"id":"taxRate","type":"number","label":"演示税率","default":18,"min":0,"max":30},{"id":"payout","type":"number","label":"累计到账","default":13260,"min":10000,"max":99999},{"id":"creators","type":"string","label":"创作者规模","default":"72,000+","maxLength":8},{"id":"countries","type":"string","label":"覆盖国家","default":"150+","maxLength":5},{"id":"card","type":"string","label":"演示卡号","default":"5555 5555 5555 5555","maxLength":19},{"id":"expiry","type":"string","label":"演示有效期","default":"09/29","maxLength":5},{"id":"bank","type":"string","label":"演示账户尾号","default":"6713","maxLength":4},{"id":"wallet","type":"string","label":"支付方式","default":"Orbit Pay","maxLength":12},{"id":"storeName","type":"string","label":"店铺名称","default":"Your Store","maxLength":14},{"id":"cta","type":"string","label":"行动按钮","default":"Start selling","maxLength":16},{"id":"closeLine","type":"string","label":"收尾首句","default":"You","maxLength":8},{"id":"createWord","type":"string","label":"收尾强调词","default":"create.","maxLength":12},{"id":"handleLine","type":"string","label":"收尾次句","default":"We handle the","maxLength":18},{"id":"flowWord","type":"string","label":"收尾蓝色强调词","default":"flow.","maxLength":8},{"id":"handled","type":"string","label":"结算印章","default":"Handled.","maxLength":12},{"id":"tagline","type":"string","label":"品牌副标题","default":"The payment infrastructure that","maxLength":40},{"id":"deserve","type":"string","label":"品牌副标题强调词","default":"you deserve.","maxLength":18}]'>
+<head><meta charset="utf-8"><meta name="od-motion-audio" content="silent"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Parcelglide · 商品到收款</title>
+<style>
+@font-face{font-family:Inter;src:url('./assets/Inter.ttf')}@font-face{font-family:Display;src:url('./assets/Fraunces.ttf');font-weight:100 900;font-variation-settings:'SOFT' 100,'WONK' 1}@font-face{font-family:Script;src:url('./assets/InstrumentSerif-Italic.ttf');font-style:italic}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#e8e8e8}body{display:flex;align-items:center;justify-content:center;overflow:hidden}#main{width:min(100vw,177.7778vh);aspect-ratio:16/9;position:relative;background:#fff}canvas{display:block;width:100%;height:100%}.controls{position:fixed;bottom:14px;display:flex;gap:12px;align-items:center;padding:8px 14px;background:#ffffffed;border-radius:30px;font:12px Inter;color:#222}.controls button{border:0;background:#2460ed;color:#fff;border-radius:20px;padding:7px 15px;cursor:pointer}.controls input{width:240px}html.od-export,html.od-export body{background:transparent;display:block}html.od-export #main{width:1920px;height:1080px}html.od-export .controls{display:none}
+</style></head>
+<body><main id="main" data-od-id="commerce-film" data-composition-id="main" data-duration="15.061333" data-width="1920" data-height="1080"><canvas id="art" data-od-id="film-canvas" width="1920" height="1080"></canvas></main>
+<div class="controls"><button id="play">暂停</button><input id="scrub" type="range" min="0" step="0.01"><span id="time">0.00</span></div>
+<script src="./assets/gsap.min.js"></script><script>
+const VARS = (window.__hyperframes && window.__hyperframes.getVariables?.()) || {};
+const CFG = {
+  duration:15.061333,
+  scenes:[
+    {id:'hook',name:'开场提问',dur:2.35},
+    {id:'catalog',name:'数字商品',dur:2.1},
+    {id:'store',name:'手机店铺',dur:2.65},
+    {id:'checkout-zoom',name:'支付按钮转场',dur:0.15},
+    {id:'dashboard',name:'收款面板',dur:3.85},
+    {id:'promise',name:'品牌宣言',dur:2.3},
+    {id:'endcard',name:'品牌收尾',dur:1.661333}
+  ],
+  cues:[
+    {id:'character-land',scene:'hook',at:0.2},
+    {id:'whisper',scene:'hook',at:0.35},
+    {id:'headline-enter',scene:'hook',at:1.12},
+    {id:'sell-enter',scene:'hook',at:1.74},
+    {id:'blue-expand',scene:'hook',at:2.22},
+    {id:'course-card',scene:'catalog',at:0.43},
+    {id:'ebook-card',scene:'catalog',at:0.88},
+    {id:'app-card',scene:'catalog',at:1.29},
+    {id:'phone-land',scene:'store',at:0.12},
+    {id:'store-words',scene:'store',at:0.08},
+    {id:'store-title',scene:'store',at:1.25},
+    {id:'minutes-enter',scene:'store',at:1.88},
+    {id:'purchase-zoom',scene:'store',at:2.46},
+    {id:'wallet-close',scene:'checkout-zoom',at:0},
+    {id:'dashboard-land',scene:'dashboard',at:0.04},
+    {id:'subscription-rise',scene:'dashboard',at:0.5},
+    {id:'upsell-enter',scene:'dashboard',at:1.28},
+    {id:'upsell-check',scene:'dashboard',at:1.66},
+    {id:'tax-enter',scene:'dashboard',at:1.95},
+    {id:'payout-rise',scene:'dashboard',at:2.36},
+    {id:'handled-stamp',scene:'dashboard',at:3.28},
+    {id:'black-expand',scene:'dashboard',at:3.8},
+    {id:'you-enter',scene:'promise',at:0.16},
+    {id:'create-enter',scene:'promise',at:0.42},
+    {id:'handle-enter',scene:'promise',at:1.13},
+    {id:'flow-enter',scene:'promise',at:2.12},
+    {id:'logo-lock',scene:'endcard',at:0.19},
+    {id:'head-pop',scene:'endcard',at:0.6},
+    {id:'cta-enter',scene:'endcard',at:0.62},
+    {id:'stats-enter',scene:'endcard',at:0.94}
+  ],
+  brand: "Parcelglide",
+  domain: "parcelglide.com",
+  primary: "#2460ED",
+  font: "Inter",
+  hook: "Got something",
+  sell: "sell?",
+  course: "Studio Course",
+  ebook: "Maker Ebook",
+  app: "Tempo App",
+  coursePrice: 159,
+  ebookPrice: 39,
+  appPrice: 5.99,
+  monthly: 8,
+  upsell: 24,
+  coaching: 89,
+  taxRate: 18,
+  payout: 13260,
+  creators: "72,000+",
+  countries: "150+",
+  card: "5555 5555 5555 5555",
+  expiry: "09/29",
+  bank: "6713",
+  wallet: "Orbit Pay",
+  storeName: "Your Store",
+  cta: "Start selling",
+  closeLine: "You",
+  createWord: "create.",
+  handleLine: "We handle the",
+  flowWord: "flow.",
+  handled: "Handled.",
+  tagline: "The payment infrastructure that",
+  deserve: "you deserve.",
+  ...VARS
+};
+const SCENE_START={};CFG.scenes.reduce((t,s)=>(SCENE_START[s.id]=t,t+s.dur),0);
+const cueTime=id=>{const c=CFG.cues.find(c=>c.id===id);return SCENE_START[c.scene]+c.at};
+const Q={land:cueTime('character-land'),whisper:cueTime('whisper'),headline:cueTime('headline-enter'),sell:cueTime('sell-enter'),blue:cueTime('blue-expand'),course:cueTime('course-card'),ebook:cueTime('ebook-card'),app:cueTime('app-card'),phone:cueTime('phone-land'),words:cueTime('store-words'),store:cueTime('store-title'),minutes:cueTime('minutes-enter'),zoom:cueTime('purchase-zoom'),wallet:cueTime('wallet-close'),dash:cueTime('dashboard-land'),sub:cueTime('subscription-rise'),upsell:cueTime('upsell-enter'),check:cueTime('upsell-check'),tax:cueTime('tax-enter'),payout:cueTime('payout-rise'),stamp:cueTime('handled-stamp'),black:cueTime('black-expand'),you:cueTime('you-enter'),create:cueTime('create-enter'),handle:cueTime('handle-enter'),flow:cueTime('flow-enter'),logo:cueTime('logo-lock'),head:cueTime('head-pop'),cta:cueTime('cta-enter'),stats:cueTime('stats-enter')};
+const FONT_READY=Promise.all([document.fonts.load('650 32px Inter'),document.fonts.load('800 32px Display'),document.fonts.load('italic 32px Script')]);
+const C=document.getElementById('art'),g=C.getContext('2d');
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));const mix=(a,b,v)=>a+(b-a)*v;const prog=(t,s,d=.3)=>clamp((t-s)/d);const ease=v=>1-Math.pow(1-clamp(v),3);const expo=v=>v>=1?1:1-Math.pow(2,-10*clamp(v));
+const money=n=>'$'+n.toFixed(2);const large=n=>'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+function rr(x,y,w,h,r=12,fill='#fff',stroke=null,lw=2){g.beginPath();g.roundRect(x,y,w,h,r);if(fill){g.fillStyle=fill;g.fill()}if(stroke){g.strokeStyle=stroke;g.lineWidth=lw;g.stroke()}}
+function text(s,x,y,size=28,color='#181818',weight=500,family=CFG.font,align='left'){g.fillStyle=color;g.font=`${family==='Script'?'italic ':''}${family==='Display'?800:weight} ${size}px ${family}`;g.textAlign=align;g.textBaseline='alphabetic';g.fillText(String(s),x,y)}
+function line(x,y,xx,yy,col='#ddd',width=2){g.beginPath();g.moveTo(x,y);g.lineTo(xx,yy);g.strokeStyle=col;g.lineWidth=width;g.stroke()}
+function reveal(t,at,x,y,h,fn,d=.32){let p=prog(t,at,d);if(!p)return;g.save();g.beginPath();g.rect(0,y-h,1920,h+20);g.clip();g.translate(0,(1-ease(p))*h);fn();g.restore()}
+function circle(x,y,r,col){g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fillStyle=col;g.fill()}
+function ellipse(ctx,x,y,rx,ry,light=245,dark=25,angle=0){ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.scale(rx,ry);let gr=ctx.createRadialGradient(-.36,-.5,.05,.2,.2,1.3);gr.addColorStop(0,`rgb(${light},${light},${light})`);gr.addColorStop(1,`rgb(${dark},${dark},${dark})`);ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,1,0,Math.PI*2);ctx.fill();ctx.restore()}
+function dither(canvas,step=1){let c=canvas.getContext('2d'),im=c.getImageData(0,0,canvas.width,canvas.height),a=im.data;const matrix=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){let i=(y*canvas.width+x)*4;if(a[i+3]<12)continue;let lum=clamp((a[i]-35)/185)*255;let v=lum>(matrix[(y%4)*4+x%4]+.5)*16?255:8;a[i]=a[i+1]=a[i+2]=v}c.putImageData(im,0,0);return canvas}
+const characterCache={};
+function characterArt(pose=0,headOnly=false){let key=pose+'-'+headOnly;if(characterCache[key])return characterCache[key];let c=document.createElement('canvas');c.width=600;c.height=750;let k=c.getContext('2d');
+// 原创侧分短卷发角色：较长脸、侧分发束、圆形胸章。
+if(!headOnly){ellipse(k,310,715,295,208,211,22);ellipse(k,296,500,47,74,143,10);ellipse(k,295,566,125,32,132,12);ellipse(k,276,554,104,25,205,38);k.strokeStyle='#181818';k.lineWidth=9;k.beginPath();k.arc(422,686,37,0,Math.PI*2);k.stroke();k.lineWidth=5;k.beginPath();k.moveTo(403,690);k.lineTo(417,704);k.lineTo(440,671);k.stroke()}
+let lean=pose===3?-.035:.015;k.save();k.translate(292,292);k.rotate(lean);k.scale(1,.97);k.translate(-292,-292);
+ellipse(k,103,302,32,52,200,55);ellipse(k,485,300,29,49,150,30);ellipse(k,292,300,199,187,255,70);
+// 新角色采用斜向大卷、右侧露额，与原角色的等宽前卷不同。
+for(let [x,y,rx,ry,a] of [[127,196,48,84,-.3],[173,130,57,70,-.6],[242,89,62,58,-.2],[307,77,62,54,.2],[371,112,66,62,.4],[432,158,54,65,.3],[468,213,35,67,-.2],[280,160,93,45,-.35],[195,184,70,47,-.35]])ellipse(k,x,y,rx,ry,112,0,a);
+// 眉眼和表情。
+k.strokeStyle='#0b0b0b';k.lineWidth=12;k.lineCap='round';k.beginPath();k.moveTo(191,244);k.lineTo(224,239);k.moveTo(347,235);k.lineTo(376,242);k.stroke();
+let blink=pose===2;
+for(let [x,y] of [[210,293],[365,290]]){if(blink){k.lineWidth=9;k.beginPath();k.moveTo(x-17,y);k.quadraticCurveTo(x,y+10,x+18,y);k.stroke()}else{ellipse(k,x,y,22,32,18,0);k.fillStyle='#fff';k.beginPath();k.ellipse(x-7,y-12,7,10,0,0,7);k.fill()}}
+ellipse(k,291,331,28,23,242,86);ellipse(k,165,350,22,10,178,126);ellipse(k,409,346,22,10,165,92);
+k.fillStyle='#080808';k.beginPath();if(pose===1){k.moveTo(248,377);k.quadraticCurveTo(296,397,344,370);k.quadraticCurveTo(310,445,272,414);k.closePath()}else{k.moveTo(252,379);k.quadraticCurveTo(296,400,341,375);k.quadraticCurveTo(304,423,274,400);k.closePath()}k.fill();k.strokeStyle='#fff';k.lineWidth=7;k.beginPath();k.moveTo(259,380);k.quadraticCurveTo(295,392,330,380);k.stroke();
+k.restore();dither(c);characterCache[key]=c;return c}
+function char(x,y,w,t,headOnly=false){let phase=Math.sin(t*6.2);let pose=phase>.45?1:Math.abs((t*1.4)%4-2)<.045?2:0;let bob=Math.sin(t*3.4)*3;g.save();g.imageSmoothingEnabled=false;g.drawImage(characterArt(pose,headOnly),x,y+bob,w,w*1.25);g.restore()}
+const productCache={};function productArt(kind){if(productCache[kind])return productCache[kind];let c=document.createElement('canvas');c.width=400;c.height=300;let k=c.getContext('2d');function poly(pts,fill){k.beginPath();pts.forEach(([x,y],i)=>i?k.lineTo(x,y):k.moveTo(x,y));k.closePath();k.fillStyle=fill;k.fill()}
+if(kind===0){poly([[45,39],[308,63],[329,226],[81,192]],'#171717');poly([[57,54],[295,76],[308,207],[87,180]],'#050505');poly([[173,102],[177,157],[221,137]],'#bababa');poly([[81,192],[329,226],[271,279],[5,229]],'#aaa');poly([[81,199],[313,230],[267,262],[40,229]],'#eee');for(let r=0;r<4;r++)for(let j=0;j<12;j++){k.fillStyle='#555';k.fillRect(86+j*14-r*6,205+r*9+j*.12,10,4)}poly([[5,229],[271,279],[272,287],[5,238]],'#222')}
+if(kind===1){for(let n=0;n<4;n++){let y=215-n*50,dx=n%2*25;poly([[35+dx,y],[310+dx,y-18],[364+dx,y+14],[84+dx,y+38]],n%2?'#777':'#aaa');poly([[84+dx,y+38],[364+dx,y+14],[364+dx,y+39],[84+dx,y+61]],'#333');poly([[35+dx,y],[84+dx,y+38],[84+dx,y+61],[35+dx,y+22]],'#ddd');for(let l=0;l<8;l++){k.strokeStyle='#999';k.beginPath();k.moveTo(87+dx,y+41+l*2);k.lineTo(359+dx,y+18+l*2);k.stroke()}}}
+if(kind===2){let vals=[122,193,150,240,181];for(let n=0;n<5;n++){let x=14+n*65,y=280-vals[n];poly([[x,y],[x+42,y-15],[x+71,y],[x+24,y+17]],'#ddd');poly([[x,y],[x+24,y+17],[x+24,278],[x,257]],'#aaa');poly([[x+24,y+17],[x+71,y],[x+71,257],[x+24,278]],'#444')}}dither(c);return productCache[kind]=c}
+function product(kind,x,y,w,h){g.imageSmoothingEnabled=false;g.drawImage(productArt(kind),x,y,w,h)}
+function metadata(t,idx,label,dark=false){let col=dark?'#555':'#999';text(`// ${String(idx).padStart(2,'0')} — ${label}`,48,58,20,col,400,'monospace');let sec=Math.floor(t),fr=Math.floor(t%1*60);text(`${CFG.brand.toUpperCase()}  00:00:${String(sec).padStart(2,'0')}:${String(fr).padStart(2,'0')}`,1872,58,20,col,400,'monospace','right')}
+function hook(t){g.fillStyle='#fff';g.fillRect(0,0,1920,1080);let p=ease(prog(t,0,.29));char(mix(2220,1080,p),207,800,t);if(t>=Q.whisper&&t<Q.headline){rr(875,481,226,72,30,'#fff','#888',2);text('psst…',900,529,27,'#333',600,'monospace');g.beginPath();g.moveTo(1080,534);g.lineTo(1130,550);g.lineTo(1100,520);g.strokeStyle='#888';g.stroke()}
+reveal(t,Q.headline-.08,135,295,45,()=>text('// for creators',140,285,26,'#888',400,'monospace'));
+let words=CFG.hook.split(' ');reveal(t,Q.headline,135,450,155,()=>text(words[0],135,450,142,'#171717',650));reveal(t,Q.headline+.17,400,450,155,()=>text(words.slice(1).join(' '),405,450,142,'#171717',650));
+reveal(t,Q.sell-.08,135,715,142,()=>text('to',135,715,132,'#171717',650));reveal(t,Q.sell,305,745,210,()=>text(CFG.sell,305,745,222,CFG.primary,400,'Script'),.28);
+if(t>Q.sell+.22){let p=prog(t,Q.sell+.22,.24);g.beginPath();g.moveTo(310,784);g.quadraticCurveTo(420,799,310+340*p,784);g.strokeStyle=CFG.primary;g.lineWidth=7;g.stroke()}
+metadata(t,1,'hook');if(t>Q.blue){let p=prog(t,Q.blue,.15);circle(480,725,12+2300*Math.pow(p,3),CFG.primary)}}
+function catalog(t){g.fillStyle=CFG.primary;g.fillRect(0,0,1920,1080);let st=SCENE_START.catalog;let land=ease(prog(t,st,.37));char(35,240+(1-land)*920,665,t);
+[Q.course,Q.ebook,Q.app].forEach((at,i)=>{let p=expo(prog(t,at,.38));if(!p)return;g.save();let targetX=712+i*385;let w=365;let x=targetX,y=214+(1-p)*740;g.translate(x+w/2,y+305);g.rotate((1-p)*(i%2?-.22:.18));g.scale(p,p);g.translate(-w/2,-305);rr(0,0,w,610,32,'#fff');text(['// course','// ebook','// app'][i],30,58,24,'#888',400,'monospace');text('0'+(i+1),w-28,58,23,'#888',400,'monospace','right');product(i,12,153,350,285);text(['Courses','Ebooks','Apps'][i],30,522,54,'#111',650);text([money(CFG.coursePrice).replace('.00',''),money(CFG.ebookPrice).replace('.00',''),money(CFG.appPrice)+'/mo'][i],30,570,28,'#666',500,'monospace');g.restore()});metadata(t,2,'anything');let wipe=prog(t,SCENE_START.store-.035,.1);if(wipe>0){g.fillStyle='#fff';g.fillRect(0,0,1920*wipe,1080)}}
+function phone(t){g.save();let p=expo(prog(t,Q.phone,.35));g.translate(1310+(1-p)*200,70);let w=480,h=938;rr(0,0,w,h,74,'#090909');rr(13,13,w-26,h-26,62,'#fff');g.save();g.beginPath();g.roundRect(13,13,w-26,h-26,62);g.clip();g.fillStyle=CFG.primary;g.fillRect(13,13,w-26,mix(900,338,expo(prog(t,Q.phone+.15,.45))));text('9:41',58,55,20,'#fff',600);rr(184,25,110,34,22,'#090909');rr(387,39,33,15,4,null,'#fff',2);rr(391,43,23,7,1,'#fff');rr(33,80,411,50,25,'#ffffff2b');text('● '+('yourname.'+CFG.domain),52,113,20,'#fff',400,'monospace');rr(385,94,42,18,10,'#fff');text('LIVE',406,107,9,CFG.primary,500,'monospace','center');g.save();g.beginPath();g.arc(240,221,57,0,7);g.clip();g.fillStyle='#fff';g.fill();char(167,163,148,t,true);g.restore();text(CFG.storeName,240,320,30,'#fff',600,CFG.font,'center');text('Products',37,405,27,'#111',600);text('3 items',443,405,19,'#888',400,'monospace','right');
+[CFG.course,CFG.ebook,CFG.app].forEach((s,i)=>{let lp=expo(prog(t,Q.phone+.31+i*.045,.4));let y=mix(320+i*43,435+i*154,lp);g.save();g.globalAlpha=lp;rr(37,y,115,115,18,'#fafafa','#e4e4e4');product(i,39,y+20,110,85);text(s,175,y+34,23,'#111',600);text([money(CFG.coursePrice),money(CFG.ebookPrice),money(CFG.appPrice)+'/mo'][i],175,y+65,20,'#666',400,'monospace');rr(175,y+77,135,38,22,'#0a0a0a');text('Get it now',242,y+103,18,'#fff',500,CFG.font,'center');g.restore()});g.restore();g.restore()}
+function store(t){g.fillStyle='#fff';g.fillRect(0,0,1920,1080);let z=1+.25*ease(prog(t,Q.zoom,.2));g.save();g.translate(1560,640);g.scale(z,z);g.translate(-1560,-640);phone(t);if(t<Q.phone+.6){[0,1,2].forEach(i=>{let fp=expo(prog(t,Q.phone-.05,.58));let a=1-prog(t,Q.phone+.28,.25);g.save();g.globalAlpha=a;g.translate(mix(1210+i*190,1370,fp),mix(360+i*50,540+i*110,fp));g.rotate((1-fp)*(.13-i*.12));let sc=mix(1,.42,fp);g.scale(sc,sc);rr(0,0,220,340,18,'#fff');product(i,10,65,200,160);text(['Courses','Ebooks','Apps'][i],18,280,32,'#111',650);text([money(CFG.coursePrice),money(CFG.ebookPrice),money(CFG.appPrice)+'/mo'][i],18,313,18,'#666',400,'monospace');g.restore()})}char(820,560,440,t);
+reveal(t,Q.words,100,280,65,()=>{text(CFG.brand,100,280,58,'#171717',400,'Display');g.font='400 58px Display';let w=g.measureText(CFG.brand).width;if(t>Q.words+.42){let p=prog(t,Q.words+.42,.37);text('turns it into'.slice(0,Math.ceil(13*p)),112+w,280,56,'#666',500)}});
+reveal(t,Q.store,100,445,132,()=>text('a store',100,445,132,'#171717',650));reveal(t,Q.minutes-.17,100,650,132,()=>text('in',100,650,130,'#171717',600));reveal(t,Q.minutes,240,677,190,()=>text('minutes.',240,677,216,CFG.primary,400,'Script'));g.restore();metadata(t,3,'store')}
+function panel(x,y,w,h,label){rr(x,y,w,h,24,'#fff','#ddd',2);text('// '+label,x+28,y+51,24,'#888',400,'monospace')}
+function check(x,y,s=38){rr(x,y,s,s,8,CFG.primary);g.beginPath();g.moveTo(x+s*.23,y+s*.52);g.lineTo(x+s*.43,y+s*.73);g.lineTo(x+s*.78,y+s*.27);g.strokeStyle='#fff';g.lineWidth=s*.13;g.lineCap='round';g.stroke()}
+function dashboard(t){g.fillStyle='#f9f9f9';g.fillRect(0,0,1920,1080);for(let x of [100,660,680,1240,1260,1820])line(x,0,x,1080,'#eee',2);for(let y of [90,530,550,990])line(0,y,1920,y,'#eee',2);
+let cam=ease(prog(t,SCENE_START.dashboard,.36));let zoom=1+5*(1-cam);g.save();g.translate(mix(480,380,cam),396);g.scale(zoom,zoom);g.translate(-380,-396);
+// 左侧结算卡。
+panel(100,90,560,900,'checkout');rr(128,170,120,120,20,'#fafafa','#e2e2e2');product(0,130,188,116,90);text(CFG.course,274,223,31,'#171717',600);text(money(CFG.coursePrice),631,223,27,'#171717',500,'monospace','right');text('lifetime access',274,257,21,'#888',400,'monospace');line(128,321,632,321);
+rr(128,356,504,80,17,'#090909');text(CFG.wallet,380,408,32,'#fff',550,CFG.font,'center');line(128,482,296,482);line(464,482,632,482);text('or pay by card',380,488,18,'#888',400,'monospace','center');rr(128,518,504,76,15,'#fff',t<Q.check?'#b2c5ff':'#e2e2e2');let n=Math.floor(mix(0,CFG.card.length,prog(t,Q.dash-.14,.55)));text(CFG.card.slice(0,n),151,567,26,'#171717',500,'monospace');if(n>=CFG.card.length)text(CFG.expiry,609,567,23,'#888',400,'monospace','right');
+let up=CFG.upsell*ease(prog(t,Q.check,.4)),tax=(CFG.coursePrice+CFG.upsell)*CFG.taxRate/100*ease(prog(t,Q.tax,.4)),total=CFG.coursePrice+up+tax;let paid=t>Q.stamp+.15;
+text('Subtotal',128,649,25,'#666');text(money(CFG.coursePrice),632,649,25,'#666',500,'monospace','right');if(t>=Q.check){text('Workbook upsell',128,693,24,'#666');text('+'+money(up),632,693,24,CFG.primary,500,'monospace','right')}if(t>=Q.tax){text('Tax · VAT '+CFG.taxRate+'%',128,737,24,'#666');text(money(tax),632,737,24,CFG.primary,500,'monospace','right')}
+line(128,761,632,761);text('Total',128,810,30,'#171717',600);text(money(total),632,810,30,'#171717',600,'monospace','right');rr(128,850,504,90,20,CFG.primary);text(paid?'✓ Paid':'Pay '+money(total),380,907,31,'#fff',600,CFG.font,'center');
+// 其余卡片按实测事件逐步建立。
+let lp=expo(prog(t,Q.dash,.28));g.save();g.globalAlpha=lp;panel(680,90,560,440,'on air');circle(715,133,7,'#b0c4ff');g.save();g.beginPath();g.rect(695,159,530,370);g.clip();char(720,75,450,t);g.restore();g.restore();
+for(let r of [[680,550,560,440],[1260,90,560,440],[1260,550,560,440]]){g.save();g.setLineDash([8,7]);rr(...r,10,null,'#e4e4e4',1);g.restore()}
+if(t>=Q.sub){let p=ease(prog(t,Q.sub,.45));g.save();g.globalAlpha=p;panel(1260,90,560,440,'subscriptions');text('⟳',1774,149,60,'#111',500,CFG.font,'center');text('$'+Math.round(CFG.monthly*p),1288,340,156,'#171717',600);text('/ month',1480,340,42,'#666');let l=prog(t,Q.sub+.22,.64);line(1304,440,1304+472*l,440,CFG.primary,5);['OCT','NOV','DEC','JAN','FEB','MAR'].forEach((m,i)=>{circle(1304+i*94,440,13,i/5<=l?CFG.primary:'#fff');text(m,1304+i*94,486,19,i/5<=l?'#171717':'#aaa',400,'monospace','center')});g.restore()}
+if(t>=Q.upsell){let p=ease(prog(t,Q.upsell,.28));g.save();g.globalAlpha=p;panel(680,550,560,440,'upsells');rr(708,634,504,150,20,t>=Q.check?'#f3f6ff':'#fff',t>=Q.check?CFG.primary:'#ddd',2);product(1,726,659,112,100);text('Add the workbook',860,699,30,'#171717',600);text('one click, same checkout',860,733,21,'#888');text('+'+money(CFG.upsell).replace('.00',''),860,765,23,CFG.primary,600);if(t>=Q.check)check(1152,690,38);else rr(1152,690,38,38,8,'#fff','#ddd');rr(708,804,504,110,20,'#fff','#ddd');text('1:1',742,869,25,'#666',600,'monospace');text('1:1 coaching call',820,855,27,'#666',600);text('+'+money(CFG.coaching).replace('.00',''),820,888,22,'#888');rr(1152,840,38,38,8,'#fff','#ddd');g.restore()}
+if(t>=Q.tax){let p=ease(prog(t,Q.tax,.25));g.save();g.globalAlpha=p;panel(1260,550,560,210,'taxes');text('We are your merchant of record.',1288,649,27,'#171717',550);['EU VAT','UK VAT','US sales tax'].forEach((s,i)=>{let x=1288+[0,146,290][i],w=i===2?190:136;rr(x,680,w,45,25,'#fff','#e5e5e5');text(s,x+20,709,20,'#171717',500,'monospace');text('✓',x+w-26,710,25,CFG.primary,700)});g.restore()}
+if(t>=Q.payout){let p=expo(prog(t,Q.payout,.65));panel(1260,780,560,210,'payouts');text(large(CFG.payout*p),1288,907,46,'#111',500,'monospace');text('to bank ···· '+CFG.bank,1288,952,20,'#888',400,'monospace');[.35,.6,.5,.84,.7,.86,.65].forEach((a,i)=>rr(1624+i*24,958-a*90*p,15,a*90*p,3,i===6?CFG.primary:'#b8c9f7'))}
+g.restore();metadata(t,4,'handled');
+if(t>Q.stamp){let p=expo(prog(t,Q.stamp,.25));g.save();g.translate(1060,785);g.rotate(-.095);g.scale(mix(2.8,1,p),mix(2.8,1,p));rr(-445,-121,890,242,23,'#fff',CFG.primary,9);text(CFG.handled,0,79,226,CFG.primary,400,'Script','center');g.restore();let p2=prog(t,Q.stamp+.12,.36);g.beginPath();g.ellipse(1080,620,620,620,0,-2.2,-2.2+Math.PI*2*p2);g.strokeStyle=CFG.primary+'99';g.lineWidth=4;g.stroke();[[630,1190],[1210,710],[1790,120],[1790,580]].forEach(([x,y])=>{circle(x,y,12,CFG.primary);text('✓',x,y+6,17,'#fff',600,CFG.font,'center')})}
+if(t>Q.black){circle(1485,745,2400*Math.pow(prog(t,Q.black,.14),2), '#090909');if(t>=SCENE_START.promise)char(1320,482,535,t)}}
+function promise(t){g.fillStyle='#090909';g.fillRect(0,0,1920,1080);char(1310,320,550,t);let white='#f3f3f3';reveal(t,Q.you,135,450,160,()=>text(CFG.closeLine,135,450,156,white,650));reveal(t,Q.create,505,450,245,()=>text(CFG.createWord,505,450,250,white,400,'Script'));reveal(t,Q.handle,135,730,125,()=>{let s=CFG.handleLine.split(' ');text(s[0],135,730,120,'#9b9b9b',550);if(t>Q.handle+.55)text(s.slice(1,2).join(' '),345,730,120,'#9b9b9b',550);if(t>Q.handle+.94)text(s.slice(2).join(' '),730,730,120,'#9b9b9b',550)});reveal(t,Q.flow,980,815,200,()=>text(CFG.flowWord,980,815,202,CFG.primary,400,'Script'),.24);metadata(t,5,'flow',true)}
+function endcard(t){g.fillStyle='#fff';g.fillRect(0,0,1920,1080);let st=SCENE_START.endcard;if(t<Q.logo-.18){text(CFG.flowWord,960,610,196,CFG.primary,400,'Script','center');return}let p=expo(prog(t,Q.logo-.18,.4));if(t>Q.head){let hp=expo(prog(t,Q.head,.24));g.save();g.beginPath();g.rect(650,0,700,530);g.clip();char(912,160+(1-hp)*380,395,t,true);g.restore()}
+g.save();g.font='800 194px Display';const logoWidth=g.measureText(CFG.brand).width;let lx=960-logoWidth/2;for(let i=0;i<CFG.brand.length;i++){let lp=expo(prog(t,Q.logo-.18+i*.012,.29));let ch=CFG.brand[i];g.save();g.translate(lx,608+(1-lp)*(i%2?230:-170));g.rotate((1-lp)*Math.sin(i*2)*.6);g.globalAlpha=lp;text(ch,0,0,194,'#171717',800,'Display');g.restore();lx+=g.measureText(ch).width}g.restore();if(t>Q.logo+.1){let p=expo(prog(t,Q.logo+.1,.2));g.save();g.globalAlpha=p;text(CFG.tagline,513,701,46,'#666',450);g.font=`450 46px ${CFG.font}`;let w=g.measureText(CFG.tagline).width;text(CFG.deserve,525+w,701,63,'#171717',400,'Script');g.restore()}
+if(t>Q.cta){g.save();g.globalAlpha=ease(prog(t,Q.cta,.2));rr(695,774,250,73,42,CFG.primary);text(CFG.cta,820,822,31,'#fff',600,CFG.font,'center');text(CFG.domain,970,821,30,'#666',500,'monospace');g.restore()}
+if(t>Q.stats){g.save();g.globalAlpha=ease(prog(t,Q.stats,.25));text(CFG.creators+' creators  ·  '+CFG.countries+' countries  ·  no monthly fee',960,1010,23,'#888',400,'monospace','center');g.restore()}}
+function render(t){t=clamp(t,0,CFG.duration);g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.clearRect(0,0,1920,1080);if(t<SCENE_START.catalog)hook(t);else if(t<SCENE_START.store)catalog(t);else if(t<SCENE_START['checkout-zoom'])store(t);else if(t<SCENE_START.dashboard){let p=prog(t,Q.wallet,.15);if(p>.4)dashboard(t);else{g.fillStyle='#090909';g.fillRect(0,0,1920,1080);for(let i=3;i>=0;i--){g.globalAlpha=i? .15:1;text('Get it now',-290+i*46,710-i*13,480,'#eee',600)}g.globalAlpha=1;g.beginPath();g.moveTo(1110,705);g.lineTo(1110,960);g.lineTo(1200,880);g.closePath();g.strokeStyle='#ddd';g.lineWidth=9;g.stroke()}}else if(t<SCENE_START.promise)dashboard(t);else if(t<SCENE_START.endcard)promise(t);else endcard(t);document.getElementById('scrub').value=t;document.getElementById('time').textContent=t.toFixed(2)}
+const clock={t:0};const tl=gsap.timeline({paused:true,onUpdate:()=>render(clock.t)}).fromTo(clock,{t:0},{t:CFG.duration,duration:CFG.duration,ease:'none',immediateRender:true});window.__timelines={main:tl};window.__odRenderAt=t=>{if(window.__odFrameRenderer)document.documentElement.classList.add('od-export');tl.pause();const at=clamp(Number(t),0,CFG.duration);tl.time(at,true);clock.t=at;render(at)};window.__odConfig=CFG;
+document.getElementById('main').dataset.duration=CFG.duration;const scrub=document.getElementById('scrub');scrub.max=CFG.duration;scrub.oninput=e=>window.__odRenderAt(+e.target.value);document.getElementById('play').onclick=()=>{if(tl.paused()){if(tl.time()>=CFG.duration)tl.restart();else tl.play();document.getElementById('play').textContent='暂停'}else{tl.pause();document.getElementById('play').textContent='播放'}};
+if(window.__OD_EXPORT__||window.__odFrameRenderer||new URLSearchParams(location.search).has('export'))document.documentElement.classList.add('od-export');
+FONT_READY.then(()=>{render(0);if(!window.__odFrameRenderer&&!window.__OD_EXPORT__)tl.play()});
+</script></body></html>
