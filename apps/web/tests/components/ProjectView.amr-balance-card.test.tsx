@@ -556,6 +556,60 @@ describe('余额判定的呈现:拦截出卡加弹窗,让位只出卡', () => {
     expect(mockedStreamViaDaemon.mock.calls[0]![0]).toMatchObject({ attachments: attachments.map((attachment) => attachment.path) });
   });
 
+  it.each(['owner', 'admin', 'member'] as const)('keeps an earlier temporarily parked input manual after %s gets a hard funding refusal and remounts with funds', async (role) => {
+    workspaceScopeMocks.ambientContext = {
+      ...CALLER_CONTEXT,
+      role,
+      permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }),
+    };
+    const currentProject = { ...project(), pendingPrompt: undefined };
+    const attachments = [{ path: 'attachments/held.txt', name: 'held.txt', kind: 'file' }];
+    mockedCheckAmrBalanceGate.mockResolvedValue({ kind: 'unavailable' });
+    const first = renderProjectView({ project: currentProject });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).not.toBeDisabled());
+    await act(async () => {
+      await chatPaneSpy.mock.calls.at(-1)![0].onSend('earlier temporarily parked input', attachments, []);
+    });
+    await waitFor(() => expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(1));
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+
+    // The next explicit Send confirms an exhausted wallet. It returns this
+    // new draft to its composer without turning the older parked submission
+    // into permission to run after payment or reload.
+    mockedCheckAmrBalanceGate.mockResolvedValue({
+      kind: 'hard', reason: 'insufficient', snapshot: snapshot('0'),
+    });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await chatPaneSpy.mock.calls.at(-1)![0].onSend('new blocked draft', [], []);
+    });
+    expect(outcome).toBe('restore-draft');
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(1);
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+
+    first.unmount();
+    mockedCheckAmrBalanceGate.mockResolvedValue({ kind: 'allow' });
+    invalidateAmrFundingFeedback();
+    renderProjectView({ project: currentProject });
+    await waitFor(() => expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(1));
+    await flushMounts();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(mockedCheckAmrBalanceGate).toHaveBeenCalledTimes(2);
+
+    const props = chatPaneSpy.mock.calls.at(-1)![0];
+    const held = props.queuedItems[0];
+    expect(held.prompt).toBe('earlier temporarily parked input');
+    await act(async () => { props.onSendQueuedNow(held.id); });
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1));
+    expect(mockedCheckAmrBalanceGate).toHaveBeenCalledTimes(3);
+    expect(mockedStreamViaDaemon.mock.calls[0]![0]).toMatchObject({
+      attachments: ['attachments/held.txt'],
+      history: expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'earlier temporarily parked input' }),
+      ]),
+    });
+  });
+
   it.each(['text and attachment', 'attachment only'] as const)('restores real composer %s after a refusal and does not duplicate a rapid Send', async (payload) => {
     useRealComposer.value = true;
     workspaceScopeMocks.projectScope = resolvedTeamScope(CALLER_CONTEXT);

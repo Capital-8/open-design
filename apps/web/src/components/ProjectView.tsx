@@ -9276,6 +9276,10 @@ export function ProjectView({
           const rejectBlockedSend = (): false => {
             retractPaintedTurn();
             amrGatePausedQueueConversationsRef.current.add(gateConversationId);
+            // A previous unavailable/sign-in check may already own a parked
+            // input. This confirmed refusal must survive a remount for those
+            // items too, before the composer-owned draft returns early.
+            requireManualStartAfterFundingRefusal(gateConversationId);
             amrGateBlockedRequestRef.current = clientRequestId;
             return false;
           };
