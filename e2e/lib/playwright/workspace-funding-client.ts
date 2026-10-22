@@ -3,6 +3,8 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import type { Page, Request, Response, TestInfo } from '@playwright/test';
+import type { WorkspaceBillingPreflight, WorkspaceBillingResponse } from '@open-design/contracts';
+import { requireScopedFundingPreflight } from './workspace-funding-preflight.ts';
 
 import { expect } from './suite.ts';
 import { warmPlaywrightDaemonRuntime, warmPlaywrightWebRuntime } from './runtime-lifecycle.ts';
@@ -11,16 +13,7 @@ import { verifyFundingLease } from './workspace-funding-lease.ts';
 import { createToolsDevSuite, e2eWorkspaceRoot } from '../tools-dev/runtime.ts';
 import { T } from '../timeouts.ts';
 
-export type Preflight = {
-  workspaceId: string;
-  workspaceMemberId: string;
-  modelId: string;
-  modelCovered: boolean;
-  billingMode: string;
-  balanceUsd: string;
-  fundingCheck: string;
-  codingPlan: { eligible: boolean; tier: string | null; windows: Array<{ remainingCredits: string }> };
-};
+export type Preflight = WorkspaceBillingPreflight;
 
 export async function startFundingClient(page: Page, info: TestInfo, options: {
   preserveSelectedLocale?: boolean; initialSpace?: keyof FundingFixture['spaces'];
@@ -68,7 +61,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
       }
       if (alias === 'dp') {
         expect(Number(preflight.balanceUsd)).toBe(0);
-        requireDpModelCoverage(preflight.modelCovered);
+        requireDpModelCoverage(preflight.modelCovered === true);
         expect(preflight.codingPlan.eligible).toBe(true);
         expect(preflight.codingPlan.windows.length).toBe(2);
         expect(preflight.codingPlan.windows.every(w => Number(w.remainingCredits) > 0)).toBe(true);
@@ -179,12 +172,19 @@ export async function startScopedFundingClient(page: Page, info: TestInfo, optio
       url.search = new URLSearchParams({ scope: 'workspace', workspaceId: space.workspaceId,
         includePreflight: '1', modelId: fixture.runtime.modelId }).toString();
       const response = await fetch(url, { headers: fundingHeaders(space) });
+      const rawBody = await response.text();
+      // Keep the exact failed prerequisite too; a failed assertion must not
+      // leave only an undefined-field error with no original response.
+      await attach(`real-sandbox-preflight-${alias}`, {
+        workspaceId: space.workspaceId, modelId: fixture.runtime.modelId,
+        status: response.status, body: rawBody,
+      });
       expect(response.ok).toBe(true);
-      const { preflight } = await response.json() as { preflight: Preflight };
-      expect(preflight.workspaceId).toBe(space.workspaceId);
-      expect(preflight.workspaceMemberId).toBe(space.actorMemberId ?? space.ownerMemberId);
-      expect(preflight.modelId).toBe(fixture.runtime.modelId);
-      expect(preflight.billingMode).toBe('shared');
+      const preflight = requireScopedFundingPreflight(JSON.parse(rawBody) as WorkspaceBillingResponse, {
+        workspaceId: space.workspaceId,
+        workspaceMemberId: space.actorMemberId ?? space.ownerMemberId,
+        modelId: fixture.runtime.modelId,
+      });
       await options.checkPreflight(alias, space, preflight);
       preconditions[alias] = preflight;
     }
