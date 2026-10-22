@@ -3026,24 +3026,22 @@ describe('ProjectView conversation run isolation', () => {
     }));
     await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
     await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
-    if (freshFunding === 'insufficient') {
-      const originalFetch = globalThis.fetch;
-      vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        const url = new URL(String(input), 'http://localhost');
-        if (url.pathname === '/api/workspace/billing/preflight') {
-          return Promise.resolve(new Response(JSON.stringify({ preflight: {
-            schemaVersion: 1,
-            workspaceId: 'workspace-personal',
-            workspaceMemberId: 'member-personal',
-            modelId: url.searchParams.get('modelId'),
-            generatedAt: new Date().toISOString(),
-            fundingCheck: 'insufficient',
-            balanceUsd: '0',
-          } }), { status: 200, headers: { 'content-type': 'application/json' } }));
-        }
-        return originalFetch(input, init);
-      }));
-    }
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/api/workspace/billing/preflight') {
+        return Promise.resolve(new Response(JSON.stringify({ preflight: {
+          schemaVersion: 1,
+          workspaceId: 'workspace-personal',
+          workspaceMemberId: 'member-personal',
+          modelId: url.searchParams.get('modelId'),
+          generatedAt: new Date().toISOString(),
+          fundingCheck: freshFunding,
+          balanceUsd: freshFunding === 'available' ? '10.00' : '0',
+        } }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      }
+      return originalFetch(input, init);
+    }));
     fireEvent.click(screen.getByTestId('send-queued-0'));
     if (freshFunding === 'insufficient') {
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -3051,8 +3049,11 @@ describe('ProjectView conversation run isolation', () => {
         expect.anything(),
       ));
       await waitFor(() => expect(screen.getByTestId('amr-balance-dialog')).toBeInTheDocument());
-      await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('idle'));
+      // RUN-003: rejecting the replacement must not cancel the task that was
+      // already running when the user requested this queued send.
+      expect(screen.getByTestId('streaming-state').textContent).toBe('streaming');
       expect(streamViaDaemon).toHaveBeenCalledTimes(2);
+      expect((streamViaDaemon.mock.calls[1]?.[0] as { signal: AbortSignal }).signal.aborted).toBe(false);
       expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b');
       // The failed fresh check must revoke the one-item explicit start even
       // before a reload, so unrelated state churn cannot re-send this item.

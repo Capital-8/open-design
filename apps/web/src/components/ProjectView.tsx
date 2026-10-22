@@ -185,7 +185,7 @@ import {
   isAmrBalanceGateScope,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { checkAmrFundingEvidence } from '../runtime/amr-funding-feedback';
+import { checkAmrFundingEvidence, readFreshAmrFundingEvidence } from '../runtime/amr-funding-feedback';
 import {
   amrBalanceBlockedDialog,
   amrBalanceDialogUpgradeIntent,
@@ -3410,6 +3410,7 @@ export function ProjectView({
   // exactly the queue item the user selected. Keep that one-click intent
   // distinct from the durable funding pause on every other queued item.
   const explicitlyStartedQueuedSendIdRef = useRef<string | null>(null);
+  const busyQueuedSendPreflightRef = useRef<string | null>(null);
   const requireManualStartAfterFundingRefusal = useCallback((conversationId: string) => {
     const current = queuedChatSendsRef.current;
     if (!current.some((item) => item.conversationId === conversationId && !item.manualStartOnly)) return;
@@ -3801,6 +3802,8 @@ export function ProjectView({
   const currentConversationBusy = currentConversationReadPending
     || currentConversationStreaming
     || currentConversationHasActiveRun;
+  const currentConversationBusyRef = useRef(currentConversationBusy);
+  currentConversationBusyRef.current = currentConversationBusy;
   const currentConversationAwaitingActiveRunAttach =
     currentConversationHasActiveRun
     && !currentConversationStreaming
@@ -11458,7 +11461,7 @@ export function ProjectView({
   const sendQueuedChatSendNow = useCallback((id: string) => {
     const item = queuedChatSendsRef.current.find((candidate) => candidate.id === id);
     if (!item) return;
-    if (currentConversationBusy) {
+    const stopAndPrioritize = () => {
       // "Send now" while the agent is still working: the user has explicitly
       // chosen this turn over the in-flight one, so interrupt the running run
       // and move this item to the front. Stopping flips the conversation out
@@ -11479,6 +11482,53 @@ export function ProjectView({
       explicitlyStartedQueuedSendIdRef.current = id;
       prioritizeQueuedChatSend(id);
       handleStop();
+    };
+    if (currentConversationBusy) {
+      // A balance-paused AMR item needs fresh, exact member/model evidence
+      // before replacing an already running task. If the selected item is
+      // still unfunded, its Send now must not stop that earlier task.
+      if (config.mode === 'daemon' && config.agentId === 'amr'
+        && item.manualStartOnly && amrBalanceCardScope) {
+        if (busyQueuedSendPreflightRef.current) return;
+        busyQueuedSendPreflightRef.current = id;
+        const conversationId = item.conversationId;
+        const authorityKey = projectRunAuthorityKey;
+        const accountGeneration = currentWorkspaceAccountGeneration();
+        const modelId = effectiveAgentModelId(agentsById.get('amr'), config.agentModels?.amr);
+        const selectionGeneration = fundingSelectionRef.current.generation;
+        const isCurrent = () => mountedRef.current && projectIdRef.current === project.id
+          && projectRunAuthorityKeyRef.current === authorityKey
+          && currentWorkspaceAccountGeneration() === accountGeneration
+          && activeConversationIdRef.current === conversationId
+          && messagesConversationIdRef.current === conversationId
+          && fundingSelectionRef.current.generation === selectionGeneration
+          && fundingDialogContextRef.current.modelId === modelId;
+        void (async () => {
+          try {
+            const evidence = await readFreshAmrFundingEvidence(amrBalanceCardScope, modelId, isCurrent);
+            if (!isCurrent() || !queuedChatSendsRef.current.some((send) => send.id === id)) return;
+            if (evidence.kind === 'insufficient') {
+              showAmrFundingFailure({
+                code: AMR_INSUFFICIENT_BALANCE_CODE, runKey: id,
+                conversationId, authorityKey, accountGeneration,
+                source: 'preflight', modelId, preflight: evidence.preflight,
+              });
+              return;
+            }
+            if (currentConversationBusyRef.current) {
+              stopAndPrioritize();
+              return;
+            }
+            armSlideNavForQueuedSend(item);
+            const started = await startQueuedChatSend(item);
+            if (started) removeQueuedChatSend(id);
+          } finally {
+            if (busyQueuedSendPreflightRef.current === id) busyQueuedSendPreflightRef.current = null;
+          }
+        })();
+        return;
+      }
+      stopAndPrioritize();
       return;
     }
     void (async () => {
@@ -11486,7 +11536,7 @@ export function ProjectView({
       const started = await startQueuedChatSend(item);
       if (started) removeQueuedChatSend(id);
     })();
-  }, [armSlideNavForQueuedSend, currentConversationBusy, handleStop, prioritizeQueuedChatSend, removeQueuedChatSend, startQueuedChatSend]);
+  }, [amrBalanceCardScope, agentsById, armSlideNavForQueuedSend, config, currentConversationBusy, handleStop, prioritizeQueuedChatSend, project.id, projectRunAuthorityKey, removeQueuedChatSend, showAmrFundingFailure, startQueuedChatSend]);
 
   /*
    * B11 「引导对话」 —— 队列行领头那颗按钮走的就是上面的
