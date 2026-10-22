@@ -663,6 +663,82 @@ describe('余额判定的呈现:拦截出卡加弹窗,让位只出卡', () => {
     });
   });
 
+  it('keeps a funding-refused input manual across agent and workspace changes, then rechecks A on explicit send', async () => {
+    workspaceScopeMocks.projectScope = resolvedTeamScope(CALLER_CONTEXT);
+    const currentProject = { ...project(), pendingPrompt: undefined };
+    mockedCheckAmrBalanceGate.mockResolvedValue({ kind: 'unavailable' });
+    const first = renderProjectView({ project: currentProject });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).not.toBeDisabled());
+    await act(async () => {
+      await chatPaneSpy.mock.calls.at(-1)![0].onSend('held after funding refusal', [], []);
+    });
+    await waitFor(() => expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(1));
+
+    mockedCheckAmrBalanceGate.mockResolvedValue({
+      kind: 'hard', reason: 'insufficient', snapshot: snapshot('0'),
+    });
+    await act(async () => {
+      await chatPaneSpy.mock.calls.at(-1)![0].onSend('blocked draft', [], []);
+    });
+    first.unmount();
+
+    const agents = [
+      { id: 'amr', name: 'amr', available: true },
+      { id: 'claude', name: 'claude', available: true },
+    ] as unknown as AgentInfo[];
+    const view = renderProjectView({
+      project: currentProject,
+      config: { ...config, agentId: 'claude' },
+      agents,
+    });
+    await waitFor(() => expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(1));
+    await flushMounts();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+
+    // The browser's ambient selection is B, but this project and its queued
+    // request still belong to A. B having funds cannot admit A's request.
+    workspaceScopeMocks.ambientContext = {
+      ...CALLER_CONTEXT, workspaceId: 'funded-workspace-b', workspaceMemberId: 'member-b',
+    };
+    let aFunding: 'insufficient' | 'available' = 'insufficient';
+    const checkedWorkspaceIds: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/workspace/billing/preflight?')) {
+        const query = new URL(url, 'http://localhost').searchParams;
+        const workspaceId = query.get('workspaceId') ?? '';
+        checkedWorkspaceIds.push(workspaceId);
+        return new Response(JSON.stringify({ preflight: {
+          schemaVersion: 1, workspaceId,
+          workspaceMemberId: workspaceId === TEAM_WORKSPACE ? TEAM_MEMBER : 'member-b',
+          modelId: query.get('modelId'), generatedAt: new Date().toISOString(),
+          fundingCheck: workspaceId === TEAM_WORKSPACE ? aFunding : 'available',
+          balanceUsd: workspaceId === TEAM_WORKSPACE && aFunding === 'insufficient' ? '0' : '10',
+        } }));
+      }
+      return new Response('{}');
+    }));
+    mockedCheckAmrBalanceGate.mockResolvedValue({ kind: 'allow' });
+    view.rerender(projectViewElement({ project: currentProject, config, agents }));
+    await flushMounts();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+
+    let held = chatPaneSpy.mock.calls.at(-1)![0].queuedItems[0];
+    await act(async () => { chatPaneSpy.mock.calls.at(-1)![0].onSendQueuedNow(held.id); });
+    await waitFor(() => expect(checkedWorkspaceIds).toHaveLength(1));
+    expect(checkedWorkspaceIds).toEqual([TEAM_WORKSPACE]);
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(1);
+
+    aFunding = 'available';
+    invalidateAmrFundingFeedback();
+    held = chatPaneSpy.mock.calls.at(-1)![0].queuedItems[0];
+    await act(async () => { chatPaneSpy.mock.calls.at(-1)![0].onSendQueuedNow(held.id); });
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1));
+    expect(checkedWorkspaceIds).toEqual([TEAM_WORKSPACE, TEAM_WORKSPACE]);
+    expect(mockedStreamViaDaemon.mock.calls[0]![0].workspaceContext?.workspaceId).toBe(TEAM_WORKSPACE);
+  });
+
   it.each(['text and attachment', 'attachment only'] as const)('restores real composer %s after a refusal and does not duplicate a rapid Send', async (payload) => {
     useRealComposer.value = true;
     workspaceScopeMocks.projectScope = resolvedTeamScope(CALLER_CONTEXT);

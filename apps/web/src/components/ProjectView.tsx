@@ -11596,10 +11596,10 @@ export function ProjectView({
     ) {
       return;
     }
-    if (
-      config.mode === 'daemon' && config.agentId === 'amr' &&
-      next.manualStartOnly && !explicitlyStarted
-    ) return;
+    // Funding refusal belongs to this queued input, not the currently
+    // selected agent. Switching away from AMR must not turn the old input
+    // into an automatic run with another provider.
+    if (next.manualStartOnly && !explicitlyStarted) return;
     startingQueuedChatSendIdRef.current = next.id;
     armSlideNavForQueuedSend(next);
     void (async () => {
