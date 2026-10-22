@@ -216,10 +216,10 @@ const nextConfig: NextConfig = {
     root: WORKSPACE_ROOT,
   },
   typescript: {
+    tsconfigPath: DEV_TSCONFIG_PATH ?? (isProd ? 'tsconfig.build.json' : 'tsconfig.json'),
     // The build script runs native TypeScript 7 after Next generates route types.
     // Next 16's in-process checker still requires the TypeScript 6 JS API.
     ignoreBuildErrors: true,
-    ...(DEV_TSCONFIG_PATH ? { tsconfigPath: DEV_TSCONFIG_PATH } : {}),
   },
   // Static exports keep Next.js's default `out/` output directory so static
   // hosts like Vercel can publish the generated site directly. Server runtimes

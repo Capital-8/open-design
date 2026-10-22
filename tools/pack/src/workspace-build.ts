@@ -41,13 +41,13 @@ export const WORKSPACE_BUILD_COMMANDS = [
       "--filter", "@open-design/packaged^...",
       "--workspace-concurrency=1", "--if-present", "run", "build",
     ],
-    env: ["OD_WEB_OUTPUT_MODE"],
+    env: ["OD_WEB_OUTPUT_MODE", "OD_WEB_TYPECHECK=external"],
   },
   { args: ["--filter", "@open-design/web", "run", "build:sidecar"] },
   { args: ["--filter", "@open-design/packaged", "run", "build"] },
 ] as const;
 
-export const WORKSPACE_BUILD_CACHE_SCHEMA_VERSION = 11;
+export const WORKSPACE_BUILD_CACHE_SCHEMA_VERSION = 12;
 
 /**
  * V8 old-space ceiling (MB) for the packaged closure build, the stage that runs
@@ -55,8 +55,9 @@ export const WORKSPACE_BUILD_CACHE_SCHEMA_VERSION = 11;
  * in-process TypeScript checker, which exceeded Node's 2 GB default on macOS CI.
  * Type checking now runs in the native TS 7 process after Next's build; keep the
  * existing Node ceiling for the remaining Next/bundler work. It does not control
- * native compiler memory. The ceiling changes resource limits, not emitted
- * output, so it is not a cache-key determinant or a schema-version change.
+ * native compiler memory. 4 GB fits the 7 GB runners. The ceiling changes
+ * resource limits, not emitted output, so it is not a cache-key determinant or a
+ * schema-version change.
  */
 export const WORKSPACE_BUILD_MAX_OLD_SPACE_MB = 4096;
 
@@ -173,6 +174,7 @@ export async function runWorkspaceBuild(
       {
         NODE_OPTIONS: workspaceBuildNodeOptions(process.env.NODE_OPTIONS),
         OD_WEB_OUTPUT_MODE: config.webOutputMode,
+        OD_WEB_TYPECHECK: "external",
       },
     );
     await runPnpm([...WORKSPACE_BUILD_COMMANDS[2].args]);
