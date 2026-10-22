@@ -8938,12 +8938,47 @@ export function ProjectView({
         return meta?.acceptDurableQueue === true;
       }
       const runConversationId = activeConversationId;
+      if (amrGateApplies && amrConcurrencyReadsRef.current.has(runConversationId)) {
+        if (meta?.composerOwnedDraft) amrGateBlockedRequestRef.current = clientRequestId;
+        return false;
+      }
+      const selectedAgent =
+        config.mode === 'daemon' && config.agentId
+          ? agentsById.get(config.agentId)
+          : null;
+      const selectedAgentChoice =
+        config.mode === 'daemon' && config.agentId
+          ? config.agentModels?.[config.agentId]
+          : undefined;
+      const effectiveSelectedAgentChoice = effectiveAgentModelChoice(
+        selectedAgent,
+        selectedAgentChoice,
+      );
+      const assistantAgentId =
+        config.mode === 'daemon'
+          ? config.agentId ?? undefined
+          : apiProtocolAgentId(config.apiProtocol);
+      const fundingModelId = effectiveAgentModelId(selectedAgent, selectedAgentChoice);
+      // Read funding alongside the independent concurrency hint, rather than
+      // adding their round trips. Both keep their exact scope/model guards;
+      // a known refusal still settles before persistence or provider dispatch.
+      const modelRequestIdentityIsCurrent = () => mountedRef.current
+        && projectIdRef.current === project.id
+        && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
+        && currentWorkspaceAccountGeneration() === sendAccountGeneration
+        && fundingDialogContextRef.current.isAmr;
+      const fundingSelectionGeneration = fundingSelectionRef.current.generation;
+      const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
+        && fundingDialogContextRef.current.modelId === fundingModelId
+        && fundingSelectionRef.current.generation === fundingSelectionGeneration;
+      const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
+        ? checkAmrFundingEvidence(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
+        : Promise.resolve({ kind: 'unknown' as const, preflight: null });
       if (amrGateApplies) {
         const restoreComposer = () => {
           if (meta?.composerOwnedDraft) amrGateBlockedRequestRef.current = clientRequestId;
           return false;
         };
-        if (amrConcurrencyReadsRef.current.has(runConversationId)) return restoreComposer();
         const intentGeneration = concurrencyIntentRef.current.generation;
         amrConcurrencyReadsRef.current.add(runConversationId);
         let hint;
@@ -9030,22 +9065,6 @@ export function ProjectView({
           chatAttachmentsFromPreviewCommentImages(attachment.imageAttachments),
         ),
       );
-      const selectedAgent =
-        config.mode === 'daemon' && config.agentId
-          ? agentsById.get(config.agentId)
-          : null;
-      const selectedAgentChoice =
-        config.mode === 'daemon' && config.agentId
-          ? config.agentModels?.[config.agentId]
-          : undefined;
-      const effectiveSelectedAgentChoice = effectiveAgentModelChoice(
-        selectedAgent,
-        selectedAgentChoice,
-      );
-      const assistantAgentId =
-        config.mode === 'daemon'
-          ? config.agentId ?? undefined
-          : apiProtocolAgentId(config.apiProtocol);
       const assistantAgentName =
         config.mode === 'daemon'
           ? agentModelDisplayName(
@@ -9128,22 +9147,6 @@ export function ProjectView({
         setAmrBalanceGateBlock((previous) => previous?.fundingSource === 'preflight'
           && previous.fundingRunKey === assistantId ? null : previous);
       };
-      const fundingModelId = effectiveAgentModelId(selectedAgent, selectedAgentChoice);
-      // Start the exact member/model read alongside preparation, but a known
-      // insufficiency must settle before run persistence or provider dispatch.
-      // Unknown/unavailable reads still defer authority to the backend.
-      const modelRequestIdentityIsCurrent = () => mountedRef.current
-        && projectIdRef.current === project.id
-        && projectRunAuthorityKeyRef.current === projectRunAuthorityKey
-        && currentWorkspaceAccountGeneration() === sendAccountGeneration
-        && fundingDialogContextRef.current.isAmr;
-      const fundingSelectionGeneration = fundingSelectionRef.current.generation;
-      const fundingIdentityIsCurrent = () => modelRequestIdentityIsCurrent()
-        && fundingDialogContextRef.current.modelId === fundingModelId
-        && fundingSelectionRef.current.generation === fundingSelectionGeneration;
-      const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
-        ? checkAmrFundingEvidence(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
-        : Promise.resolve({ kind: 'unknown' as const, preflight: null });
       /**
        * 把刚画出去的那一轮收回 —— 只有预检拒绝时才走这里。
        *

@@ -556,6 +556,59 @@ describe('余额判定的呈现:拦截出卡加弹窗,让位只出卡', () => {
     expect(mockedStreamViaDaemon.mock.calls[0]![0]).toMatchObject({ attachments: attachments.map((attachment) => attachment.path) });
   });
 
+  it('returns a funding refusal within 500ms when the independent billing reads each take 300ms', async () => {
+    workspaceScopeMocks.projectScope = resolvedTeamScope(CALLER_CONTEXT);
+    renderProjectView({ project: { ...project(), pendingPrompt: undefined } });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).not.toBeDisabled());
+    await flushMounts();
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/billing/request-concurrency?')) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return new Response(JSON.stringify({ requestConcurrencyHint: {
+          workspaceId: TEAM_WORKSPACE, workspaceMemberId: TEAM_MEMBER,
+          status: 'available', running: 0, limit: 10, observedAt: new Date().toISOString(),
+        } }));
+      }
+      if (url.includes('/billing/preflight?')) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return new Response(JSON.stringify({ preflight: {
+          schemaVersion: 1, workspaceId: TEAM_WORKSPACE, workspaceMemberId: TEAM_MEMBER,
+          modelId: new URL(url, 'http://localhost').searchParams.get('modelId'),
+          generatedAt: new Date().toISOString(), fundingCheck: 'insufficient', balanceUsd: '0',
+        } }));
+      }
+      return new Response('{}');
+    }));
+    const attachments = [{ path: 'attachments/held.txt', name: 'held.txt', kind: 'file' }];
+    let outcome: unknown;
+    let finishedAt: number | undefined;
+    const startedAt = Date.now();
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = chatPaneSpy.mock.calls.at(-1)![0].onSend('keep my timed draft', attachments, [])
+        .then((result: unknown) => { outcome = result; finishedAt = Date.now() - startedAt; });
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(299); });
+    expect(finishedAt).toBeUndefined();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(201); });
+    const finishedWithinDeadline = finishedAt;
+    const dialogWithinDeadline = screen.queryByRole('alertdialog') !== null;
+    // Drain even the old serial implementation so a baseline failure leaves
+    // no pending request or React work behind for the next test.
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); await pending; });
+    expect(finishedWithinDeadline).toBeDefined();
+    expect(finishedWithinDeadline).toBeLessThanOrEqual(500);
+    expect(dialogWithinDeadline).toBe(true);
+    expect(outcome).toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(vi.mocked(saveMessage)).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems ?? []).toHaveLength(0);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].messages.some((m: ChatMessage) => m.content === 'keep my timed draft')).toBe(false);
+  });
+
   it.each(['owner', 'admin', 'member'] as const)('keeps an earlier temporarily parked input manual after %s gets a hard funding refusal and remounts with funds', async (role) => {
     workspaceScopeMocks.ambientContext = {
       ...CALLER_CONTEXT,
