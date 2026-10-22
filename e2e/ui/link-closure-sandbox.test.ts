@@ -73,6 +73,9 @@ test('[P0] RUN-011/012 Owner Home actual A/B funding never submits without anoth
     expect(found).toMatchObject({ ...binding, workspaceId });
     expect(Date.parse(String(found.at))).toBeGreaterThanOrEqual(Date.parse(readyAt));
     expect(found.receiptDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(found.receiptFile).toMatch(/^[a-zA-Z0-9.-]+\.safe\.json$/);
+    const evidence = await readFile(join(markerDir, String(found.receiptFile)));
+    expect(createHash('sha256').update(evidence).digest('hex')).toBe(found.receiptDigest);
     await save(name, found);
     return found;
   };
