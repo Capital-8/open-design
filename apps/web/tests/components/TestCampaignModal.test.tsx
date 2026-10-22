@@ -353,7 +353,7 @@ describe("CMS modal host cleanup", () => {
 });
 
 describe("TestCampaignModal host guards", () => {
-	it("reopens only after an explicit Test replay and never clears impression history", async () => {
+	it("keeps a recorded Test activity closed without a replay button or clearing impression history", async () => {
 		const subject = "explicit-test-replay";
 		const key = `touchpoint-displayed:v1:${subject}:activity-1`;
 		localStorage.setItem(key, "1");
@@ -362,17 +362,9 @@ describe("TestCampaignModal host guards", () => {
 		const decision = runtime() as TestDecision;
 		authorizeMount(decision);
 		render(<ProductionCampaignModal authenticated sessionSubject={subject} />);
-		expect(screen.queryByRole("dialog")).toBeNull();
-		fireEvent.click(screen.getByRole("button", { name: "Reopen test activity" }));
-		await screen.findByRole("dialog");
-		fireEvent.keyDown(document, { key: "Escape" });
-		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-		expect(localStorage.getItem(key)).toBe("1");
-		fireEvent.click(screen.getByRole("button", { name: "Reopen test activity" }));
-		await screen.findByRole("dialog");
-		act(() => clearTestRuntimeSession());
 		expect(screen.queryByRole("button", { name: "Reopen test activity" })).toBeNull();
 		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(localStorage.getItem(key)).toBe("1");
 		localStorage.removeItem(key);
 	});
 
