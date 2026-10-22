@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCloudSignIn } from './use-cloud-sign-in';
 import { createPortal } from 'react-dom';
 import { Button } from '@open-design/components';
@@ -33,6 +33,11 @@ interface Props {
  * another account. Workspace membership IDs intentionally are not account IDs. */
 export function HomeInviteSurface({ accountId, context, active, signedOut = false, identityReady = true }: Props) {
   const { t } = useI18n();
+  const bannerSlot = useRef<HTMLDivElement>(null);
+  const [bannerHost, setBannerHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setBannerHost(active ? bannerSlot.current?.closest<HTMLElement>('.home-view') ?? null : null);
+  }, [active, context?.workspaceId, signedOut]);
   const storageKey = accountId ? `od.invitation-banner.dismissed:${encodeURIComponent(accountId)}` : signedOut ? 'od.invitation-banner.dismissed:local' : null;
   const [dismissal, setDismissal] = useState<string | null>(() => {
     try { return storageKey && window.localStorage.getItem(storageKey) === '1' ? storageKey : null; } catch { return null; }
@@ -95,15 +100,17 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
   }, [active, context, storageKey]);
   if (!signedOut && (!context || context.memberStatus !== 'active'
     || context.lifecycleState !== 'active' || !context.permissions.canInviteMembers)) return null;
+  const banner = active && storageKey && dismissal !== storageKey ? (
+    <div className={`${styles.banner} ${bannerHost ? styles.anchored : ''}`} role="region" aria-label={t('homeInvite.invite')}>
+      <span className={styles.copy}>{t('homeInvite.banner')}</span>
+      <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => signedOut ? void begin() : setOpen(true)}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
+      <Button variant="ghost" className={styles.close} aria-label={t('homeInvite.dismiss')} onClick={dismiss}><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="m4.5 4.5 7 7m0-7-7 7" /></svg></Button>
+    </div>
+  ) : null;
   return (
     <>
-      {active && storageKey && dismissal !== storageKey ? (
-        <div className={styles.banner} role="region" aria-label={t('homeInvite.invite')}>
-          <span className={styles.copy}>{t('homeInvite.banner')}</span>
-          <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => signedOut ? void begin() : setOpen(true)}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
-          <Button variant="ghost" className={styles.close} aria-label={t('homeInvite.dismiss')} onClick={dismiss}><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="m4.5 4.5 7 7m0-7-7 7" /></svg></Button>
-        </div>
-      ) : active ? <div className={styles.bannerSpace} aria-hidden="true" /> : null}
+      {active ? <div ref={bannerSlot} className={styles.bannerSpace} aria-hidden="true" style={!bannerHost && storageKey && dismissal !== storageKey ? { display: 'none' } : undefined} /> : null}
+      {banner && (bannerHost ? createPortal(banner, bannerHost) : banner)}
       {signedOut && signInState === 'error' ? <p role="alert">{t('settings.amrLoginErrorCompact')}</p> : null}
       {signedOut && signInState === 'signing' ? <div role="status">{signInStatus?.activationUrl ? <a href={signInStatus.activationUrl} target="_blank" rel="noopener noreferrer">{t('settings.amrActivationOpen')}</a> : null}<Button onClick={() => void cancel()}>{t('settings.amrCancelSignIn')}</Button></div> : null}
       {sent ? <Toast key={sentGeneration} className={styles.toast} message={t('homeInvite.sent', { n: sent })} tone="success" placement="top" portalToBody ttlMs={4000} onDismiss={() => setSent(0)} /> : null}

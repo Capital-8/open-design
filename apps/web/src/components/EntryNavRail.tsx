@@ -259,6 +259,7 @@ interface Props {
   /** Extra content for the top-right chrome cluster, rendered LEFT of the
    *  account module (e.g. the DeepSeek campaign badge). */
   topRightSlot?: ReactNode;
+  inviteSlot?: ReactNode;
   /** The one shared workspace context; null → local (no cloud identity) state. */
   context: WorkspaceCollabContext | null;
   /** Account billing metadata (via the vela CLI 收口). Null → the billing
@@ -982,6 +983,7 @@ interface EntryTopRightClusterProps {
   /** Extra content rendered LEFT of the credits pill (e.g. the DeepSeek
    *  campaign badge on Home). */
   leadingSlot?: ReactNode;
+  inviteSlot?: ReactNode;
   /** Update-ready host; rides the account row right after the avatar chip. */
   updaterSlot?: ReactNode;
   /**
@@ -1026,6 +1028,7 @@ export function EntryTopRightCluster({
   billingResponse,
   balanceUsd,
   leadingSlot,
+  inviteSlot,
   updaterSlot,
   accountHost,
   onOpenSettings,
@@ -1360,7 +1363,7 @@ export function EntryTopRightCluster({
   }
 
   if (typeof document === 'undefined' || !chromeActionsHost) return null;
-  if (!leadingSlot && !context && !updaterSlot) return null;
+  if (!leadingSlot && !inviteSlot && !context && !updaterSlot) return null;
 
   // With a rail host the account module — and the update-ready rocket that
   // rides its row (per product: 升级提醒按钮跟在头像后边) — render at the foot
@@ -1371,7 +1374,7 @@ export function EntryTopRightCluster({
   // an update reminder parked in a hidden column is no reminder.
   const accountInRail = Boolean(context && accountHost);
   const updaterInRail = accountInRail && !railAutoCollapsed;
-  const clusterVisible = Boolean(leadingSlot || context || updaterControlVisible);
+  const clusterVisible = Boolean(leadingSlot || inviteSlot || context || updaterControlVisible);
   const updaterHostVisible = !updaterInRail && Boolean(context || updaterControlVisible);
 
   return (
@@ -1400,6 +1403,7 @@ export function EntryTopRightCluster({
               <span>{githubStars == null ? GITHUB_STARS_FALLBACK_LABEL : formatStars(githubStars)}</span>
             </a>
           ) : null}
+          {inviteSlot}
           {/* The capsule holds the credits segment alone — the avatar moved
               to the rail, and with it the account menu's hover region. The
               anchor around it owns the hover region for the billing panel
@@ -1965,6 +1969,7 @@ export function EntryNavRail({
   newProjectDisabled,
   open,
   topRightSlot,
+  inviteSlot,
   context,
   billing,
   billingResponse,
@@ -2738,6 +2743,7 @@ export function EntryNavRail({
         billingResponse={billingResponse}
         balanceUsd={balanceUsd}
         leadingSlot={topRightSlot}
+        inviteSlot={inviteSlot}
         updaterSlot={updaterSlot}
         accountHost={accountHost}
         onOpenSettings={onOpenSettings}
