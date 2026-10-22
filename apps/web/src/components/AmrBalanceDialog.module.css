@@ -333,6 +333,9 @@
 }
 
 .frozenBackdrop.frozenBackdrop {
+  /* The shared .modal-backdrop may be injected after this module in the
+   * integrated app. Keep the frozen F04 scrim blur-free at the token too. */
+  --scrim-backdrop: none;
   position: fixed;
   inset: 0;
   display: flex;
