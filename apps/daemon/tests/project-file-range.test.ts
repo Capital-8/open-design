@@ -1453,7 +1453,7 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
         window.dispatchEvent(new MessageEvent('message',{data:query}));
         return {found,replacement,missing:window.posted.at(-1)};
       })()`);
-      expect(result).toMatchObject({ found: { type: 'od:comment-active-target-update', elementId: 'new', text: 'Changed copy' },
+      expect(result).toMatchObject({ found: { type: 'od:comment-active-target-update', documentVersion: `url:${rawUrl('body.html')}`, elementId: 'new', text: 'Changed copy' },
         replacement: { elementId: 'cmt:12345678-1234-4234-8234-123456789abc',
           selector: '[data-od-comment-id="12345678-1234-4234-8234-123456789abc"]', requestedSelector: 'body > button:nth-of-type(1)' },
         missing: { type: 'od:comment-location-missing', requestId: 'save' } });

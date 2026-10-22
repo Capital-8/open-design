@@ -10,7 +10,7 @@ it('save validation follows the current selector across text/replacement changes
     const replies: Record<string, unknown>[] = [];
     Object.defineProperty(win, 'parent', { value: { postMessage: (data: Record<string, unknown>) => replies.push(data) } });
     Object.defineProperty(win.HTMLElement.prototype, 'getBoundingClientRect', { value: () => ({ x: 0, y: 20, width: 100, height: 40 }) });
-    const script = buildSrcdoc('<body></body>', { commentBridge: true, inspectBridge: true }).match(/<script data-od-selection-bridge>([\s\S]*?)<\/script>/)?.[1];
+    const script = buildSrcdoc('<body></body>', { commentBridge: true, inspectBridge: true, transportActivationGeneration: 'document-2' }).match(/<script data-od-selection-bridge>([\s\S]*?)<\/script>/)?.[1];
     if (!script) throw new Error('missing bridge');
     new win.Function(script).call(win);
     const save = () => {
@@ -18,7 +18,7 @@ it('save validation follows the current selector across text/replacement changes
         requestId: 'save', elementId: 'old-id', selector: 'body > button:nth-of-type(1)' } }));
       return replies.at(-1);
     };
-    expect(save()).toMatchObject({ type: 'od:comment-active-target-update', text: 'Original' });
+    expect(save()).toMatchObject({ type: 'od:comment-active-target-update', documentVersion: 'srcdoc:document-2', text: 'Original' });
     win.document.querySelector('button')!.textContent = 'Changed copy';
     expect(save()).toMatchObject({ type: 'od:comment-active-target-update', text: 'Changed copy' });
     win.document.querySelector('button')!.outerHTML = '<button data-od-id="new">Replacement</button>';

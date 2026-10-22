@@ -15557,7 +15557,9 @@ function HtmlViewer({
   async function currentCommentSaveTarget(snapshot: PreviewCommentSnapshot) {
     // Free-position and area notes do not refer to one DOM element.
     if (snapshot.elementId.startsWith('pin-') || snapshot.selectionKind === 'pod') return snapshot;
-    const checked = await validateCommentSaveTarget(iframeRef.current, snapshot);
+    const checked = await validateCommentSaveTarget(iframeRef.current, snapshot, () =>
+      useUrlLoadPreview ? `url:${iframeRef.current?.src ?? ''}`
+        : `srcdoc:${expectedSrcDocTransportGenerationRef.current}`);
     if (checked === 'missing' || checked === 'unavailable') {
       commentReselectPendingRef.current = checked === 'missing';
       setCommentSavedToast(t(checked === 'missing' ? 'comment.saveTargetMissing' : 'comment.savePreviewNotReady'));

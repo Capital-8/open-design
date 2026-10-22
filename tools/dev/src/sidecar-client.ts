@@ -22,7 +22,9 @@ function convergedStamp(runtime: AppRuntimeLookup, app: (typeof APP_KEYS)[keyof 
 }
 
 export const DAEMON_STARTUP_TIMEOUT_MS = 120_000;
-const WEB_STARTUP_TIMEOUT_MS = 35_000;
+// Next dev cold initialization can exceed 35s on concurrent CI workers.
+// Keep the wait bounded and retain the immediate process-exit check below.
+const WEB_STARTUP_TIMEOUT_MS = 120_000;
 const DESKTOP_STARTUP_TIMEOUT_MS = 15_000;
 
 type ProcessAliveProbe = () => boolean;

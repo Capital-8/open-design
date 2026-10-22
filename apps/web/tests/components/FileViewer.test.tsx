@@ -12704,7 +12704,9 @@ describe('FileViewer tweaks toolbar', () => {
       const request = data as { validateForSave?: boolean; requestId: string; selector: string };
       if (!request.validateForSave) return;
       queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-        data: { type: 'od:comment-active-target-update', requestId: request.requestId,
+        data: { type: 'od:comment-active-target-update', documentVersion: frame.dataset.odRenderMode === 'srcdoc'
+            ? `srcdoc:${new DOMParser().parseFromString(frame.srcdoc, 'text/html').querySelector('template[data-od-srcdoc-transport-body-complete]')?.getAttribute('data-od-srcdoc-transport-body-complete') ?? ''}`
+            : `url:${frame.src}`, requestId: request.requestId,
           requestedSelector: request.selector, selector: '[data-od-id="hero"]', elementId: 'hero',
           position: { x: 8, y: 12, width: 120, height: 48 } } })));
     });
@@ -12819,7 +12821,9 @@ describe('FileViewer tweaks toolbar', () => {
       const request = data as { validateForSave?: boolean; requestId: string; selector: string };
       if (!request.validateForSave) return;
       queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-        data: { type: 'od:comment-active-target-update', requestId: request.requestId,
+        data: { type: 'od:comment-active-target-update', documentVersion: frame.dataset.odRenderMode === 'srcdoc'
+            ? `srcdoc:${new DOMParser().parseFromString(frame.srcdoc, 'text/html').querySelector('template[data-od-srcdoc-transport-body-complete]')?.getAttribute('data-od-srcdoc-transport-body-complete') ?? ''}`
+            : `url:${frame.src}`, requestId: request.requestId,
           requestedSelector: request.selector, selector: '[data-od-id="hero"]', elementId: 'hero',
           position: { x: 8, y: 12, width: 120, height: 48 } } })));
     });
@@ -12870,7 +12874,9 @@ describe('FileViewer tweaks toolbar', () => {
       const request = data as { validateForSave?: boolean; requestId: string; selector: string };
       if (!request.validateForSave) return;
       queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-        data: { type: 'od:comment-active-target-update', requestId: request.requestId,
+        data: { type: 'od:comment-active-target-update', documentVersion: frame.dataset.odRenderMode === 'srcdoc'
+            ? `srcdoc:${new DOMParser().parseFromString(frame.srcdoc, 'text/html').querySelector('template[data-od-srcdoc-transport-body-complete]')?.getAttribute('data-od-srcdoc-transport-body-complete') ?? ''}`
+            : `url:${frame.src}`, requestId: request.requestId,
           requestedSelector: request.selector, selector: '[data-od-id="hero"]', elementId: 'hero',
           position: { x: 8, y: 12, width: 120, height: 48 } } })));
     });
@@ -12926,7 +12932,9 @@ describe('FileViewer tweaks toolbar', () => {
       const request = data as { validateForSave?: boolean; requestId: string; selector: string };
       if (!request.validateForSave) return;
       queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-        data: { type: 'od:comment-active-target-update', requestId: request.requestId,
+        data: { type: 'od:comment-active-target-update', documentVersion: frame.dataset.odRenderMode === 'srcdoc'
+            ? `srcdoc:${new DOMParser().parseFromString(frame.srcdoc, 'text/html').querySelector('template[data-od-srcdoc-transport-body-complete]')?.getAttribute('data-od-srcdoc-transport-body-complete') ?? ''}`
+            : `url:${frame.src}`, requestId: request.requestId,
           requestedSelector: request.selector, selector: '[data-od-id="hero"]', elementId: 'hero',
           position: { x: 8, y: 12, width: 120, height: 48 } } })));
     });

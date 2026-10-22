@@ -1364,8 +1364,8 @@ ${COMMENT_IDENTITY_HELPERS}
       try { saveNode = document.querySelector(String(data.selector)); } catch (_) {}
       var saveTarget = saveNode && targetFrom(saveNode, true);
       window.parent.postMessage(saveTarget
-        ? Object.assign({}, saveTarget, { type: 'od:comment-active-target-update', requestId: data.requestId, requestedSelector: data.selector })
-        : { type: 'od:comment-location-missing', requestId: data.requestId }, '*');
+        ? Object.assign({}, saveTarget, { type: 'od:comment-active-target-update', documentVersion: 'url:' + window.location.href, requestId: data.requestId, requestedSelector: data.selector })
+        : { type: 'od:comment-location-missing', documentVersion: 'url:' + window.location.href, requestId: data.requestId }, '*');
       return;
     }
     if (data.type === 'od:comment-active-target') {

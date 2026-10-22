@@ -204,8 +204,8 @@ it.each(['present', 'missing'] as const)('validates the current selector at save
     const request = data as { validateForSave?: boolean; requestId?: string };
     if (!request.validateForSave) return;
     queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, data: state === 'missing'
-      ? { type: 'od:comment-location-missing', requestId: request.requestId }
-      : { ...target, requestedSelector: target.selector, elementId: 'replacement', text: 'Changed text', type: 'od:comment-active-target-update', requestId: request.requestId } })));
+      ? { type: 'od:comment-location-missing', documentVersion: `url:${frame.src}`, requestId: request.requestId }
+      : { ...target, requestedSelector: target.selector, elementId: 'replacement', text: 'Changed text', type: 'od:comment-active-target-update', documentVersion: `url:${frame.src}`, requestId: request.requestId } })));
   });
   await act(async () => fireEvent.click(screen.getByTestId('probe-save')));
   if (state === 'present') {
@@ -248,7 +248,7 @@ it('allows Update while a comment save is waiting for the frame', async () => {
   await act(async () => fireEvent.click(update));
   expect(route.writes.mock.calls.filter(call => String(call[0]).endsWith('/publish-public'))).toHaveLength(1);
   await act(async () => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-    data: { type: 'od:comment-location-missing', requestId } })));
+    data: { type: 'od:comment-location-missing', documentVersion: `url:${frame.src}`, requestId } })));
   expect(route.saveComment).not.toHaveBeenCalled();
 });
 
@@ -275,9 +275,9 @@ it.each(['present', 'missing'] as const)('validates the live target before sendi
     const request = data as { validateForSave?: boolean; requestId: string };
     if (!request.validateForSave) return;
     queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-      data: state === 'missing' ? { type: 'od:comment-location-missing', requestId: request.requestId }
+      data: state === 'missing' ? { type: 'od:comment-location-missing', documentVersion: `url:${frame.src}`, requestId: request.requestId }
         : { ...target, text: 'Current replacement', style: { color: 'blue' }, slideIndex: 3,
-          requestedSelector: target.selector, type: 'od:comment-active-target-update', requestId: request.requestId } })));
+          requestedSelector: target.selector, type: 'od:comment-active-target-update', documentVersion: `url:${frame.src}`, requestId: request.requestId } })));
   });
   await act(async () => fireEvent.click(screen.getByTestId('probe-send')));
   if (state === 'missing') {

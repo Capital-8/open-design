@@ -6,11 +6,13 @@ import type { PreviewCommentSnapshot } from './anchor';
 export function validateCommentSaveTarget(
   frame: HTMLIFrameElement | null,
   target: PreviewCommentSnapshot,
+  currentDocumentVersion: () => string = () => `url:${frame?.src ?? ''}`,
 ): Promise<PreviewCommentSnapshot | 'missing' | 'unavailable'> {
   if (!frame?.contentWindow) return Promise.resolve('unavailable');
   const recipient = frame.contentWindow;
   const src = frame.src;
   const srcdoc = frame.srcdoc;
+  const documentVersion = currentDocumentVersion();
   const requestId = `comment-save-${randomUUID()}`;
   return new Promise(resolve => {
     const finish = (result: PreviewCommentSnapshot | 'missing' | 'unavailable') => {
@@ -22,6 +24,7 @@ export function validateCommentSaveTarget(
       const data = event.data;
       if (event.source !== recipient || data?.requestId !== requestId) return;
       if (!frame.isConnected || frame.src !== src || frame.srcdoc !== srcdoc) return finish('unavailable');
+      if (currentDocumentVersion() !== documentVersion || data.documentVersion !== documentVersion) return finish('unavailable');
       if (data.type === 'od:comment-location-missing') return finish('missing');
       if (data.type !== 'od:comment-active-target-update') return;
       if (data.requestedSelector !== target.selector || typeof data.selector !== 'string' || !data.selector || typeof data.elementId !== 'string' || !data.elementId
