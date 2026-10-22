@@ -287,7 +287,7 @@ async function dismissNotice(item: Case) {
 async function assertRetained(item: Case) {
   const { input, staged } = elements(item);
   await expect(input).toHaveText(item.draft);
-  await expect(staged).toContainText(item.attachment);
+  await assertStagedAttachment(item, staged);
   await expect(item.page.getByTestId('queued-send-banner')).toHaveCount(0);
   if (item.surface === 'project') {
     await expect(item.page.frameLocator('[data-testid="artifact-preview-frame"]')
@@ -297,6 +297,16 @@ async function assertRetained(item: Case) {
       return raw ? JSON.parse(raw) : [];
     }, item.projectId!);
     expect(queue).toEqual([]);
+  }
+}
+
+async function assertStagedAttachment(item: Case, staged: ReturnType<typeof elements>['staged']) {
+  if (item.surface === 'project') {
+    // The project composer intentionally middle-truncates long names in the
+    // visible card; its title retains the complete uploaded filename.
+    await expect(staged.getByTitle(item.attachment, { exact: true })).toBeVisible();
+  } else {
+    await expect(staged).toContainText(item.attachment);
   }
 }
 
@@ -332,7 +342,7 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
       await file.setInputFiles({ name: item.attachment, mimeType: 'text/plain',
         buffer: Buffer.from('RUN011 retained attachment ' + caseKey(item)) });
       if (upload) expect((await upload).ok()).toBe(true);
-      await expect(staged).toContainText(item.attachment);
+      await assertStagedAttachment(item, staged);
       await send.click({ clickCount: 2 });
       await expect(balanceNotice(item)).toBeVisible({ timeout: T.long });
       if (item.role === 'owner') {
