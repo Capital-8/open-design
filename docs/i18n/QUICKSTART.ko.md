@@ -344,7 +344,7 @@ open-design/
 
 ## 비전과 다시 잇기
 
-이 빠른 시작은 [`docs/`](../../docs/)에 담긴 스펙을 실제로 돌릴 수 있게 만든 씨앗입니다. 스펙은 이것이 어디로 자라날지 설명합니다([Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md) 참고). 핵심만 짚으면 다음과 같습니다.
+이 빠른 시작은 [`docs/`](../../docs/)에 담긴 스펙을 실제로 돌릴 수 있게 만든 씨앗입니다. 스펙은 이것이 어디로 자라날지 설명합니다([보관 문서: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md) 참고). 핵심만 짚으면 다음과 같습니다.
 
 - `apps/AGENTS.md`는 출시된 스택을 설명합니다. 앞단의 Next.js 16 App Router, 그 뒤의 로컬 daemon, 그리고 dev에서 `apps/web/next.config.ts`의 rewrite가 브라우저를 같은 `/api` 표면과 계속 통신하게 유지하는 구조입니다.
 - `docs/skills-protocol.md`는 현재 `SKILL.md`/`od:` frontmatter와 기능 skill·렌더링 템플릿의 분리를 설명합니다. 파서와 정규화의 구현 기준은 `apps/daemon/src/skills.ts`입니다.

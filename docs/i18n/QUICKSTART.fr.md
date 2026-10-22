@@ -350,7 +350,7 @@ open-design/
 
 ## Retour à la vision
 
-Ce guide accompagne la documentation dans [`docs/`](../../docs/). La [Historical: spécification](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/spec.md) et la [Historical: feuille de route](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md) historiques sont archivées ; les documents ci-dessous décrivent les contrats actuels. Points clés :
+Ce guide accompagne la documentation dans [`docs/`](../../docs/). La [spécification](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/spec.md) et la [feuille de route](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md) historiques sont archivées ; les documents ci-dessous décrivent les contrats actuels. Points clés :
 
 - `apps/AGENTS.md` décrit le stack livré : Next.js 16 App Router devant, daemon local derrière, et rewrites `apps/web/next.config.ts` en dev pour que le navigateur parle toujours à la même surface `/api`.
 - `docs/skills-protocol.md` décrit le frontmatter actuel de `SKILL.md` / `od:` et la séparation entre skills fonctionnels et modèles de rendu. Le parseur et la normalisation de référence se trouvent dans `apps/daemon/src/skills.ts`.

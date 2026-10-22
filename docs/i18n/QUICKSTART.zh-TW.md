@@ -332,7 +332,7 @@ open-design/
 
 ## 回到產品願景
 
-本 Quickstart 對應 [`docs/`](../../docs/) 中 spec 的可執行起點；spec 描述了其演進方向（見 [Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)）。要點如下：
+本 Quickstart 對應 [`docs/`](../../docs/) 中 spec 的可執行起點；spec 描述了其演進方向（見 [歷史文件：`5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)）。要點如下：
 
 - `apps/AGENTS.md` 描述了目前這套已交付的 stack：前端為 Next.js 16 App Router，後端為本地 daemon；`apps/web/next.config.ts` 在 dev 模式下進行 rewrite，使瀏覽器始終透過同一套 `/api` 入口通訊。
 - `docs/skills-protocol.md` 描述目前的 `SKILL.md`/`od:` frontmatter，以及功能性 skill 與渲染範本的分離。`apps/daemon/src/skills.ts` 中的解析與正規化邏輯是實作層事實來源。

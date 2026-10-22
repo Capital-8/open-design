@@ -188,7 +188,7 @@ spec:
             - containerPort: 7456
           env:
             # Storage env vars are intentionally omitted here.
-            # Before setting them, you MUST read docs/daemon-data.md.
+            # Before setting them, you MUST read apps/daemon/AGENTS.md#data-ownership.
             - name: OD_BIND_HOST
               value: "0.0.0.0"            # required so the readinessProbe and Service can reach the daemon
             - name: OD_API_TOKEN
@@ -199,7 +199,7 @@ spec:
             - name: OD_ALLOWED_ORIGINS
               value: "https://design.example.cn"  # set when fronting with an Ingress; daemon reads OD_*, not OPEN_DESIGN_*
           # Storage volume mounts are intentionally omitted here.
-          # Before adding them, you MUST read docs/daemon-data.md.
+          # Before adding them, you MUST read apps/daemon/AGENTS.md#data-ownership.
           readinessProbe:
             httpGet: { path: /api/health, port: 7456 }
             initialDelaySeconds: 10

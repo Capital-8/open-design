@@ -332,7 +332,7 @@ open-design/
 
 ## ビジョンへのマッピング
 
-このクイックスタートは [`docs/`](../../docs/) にある仕様の実行可能なシードです。仕様は、これがどこへ成長するかを記述しています（[Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md) を参照）。ハイライト：
+このクイックスタートは [`docs/`](../../docs/) にある仕様の実行可能なシードです。仕様は、これがどこへ成長するかを記述しています（[アーカイブ: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md) を参照）。ハイライト：
 
 - `apps/AGENTS.md` は、出荷されたスタックを説明しています：前面に Next.js 16 App Router、その背後にローカル daemon、そして `apps/web/next.config.ts` の dev 時 rewrites によってブラウザが同じ `/api` 表面と通信し続けるようにします。
 - `docs/skills-protocol.md` は現在の `SKILL.md`／`od:` フロントマターと、機能スキルとレンダリングテンプレートの分離を説明します。パーサーと正規化の実装上の真実は `apps/daemon/src/skills.ts` です。

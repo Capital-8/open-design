@@ -363,7 +363,7 @@ open-design/
 
 ## Mapping back to the vision
 
-Quickstart นี้คือ runnable seed ของ spec ใน [`docs/`](../../docs/). Spec อธิบายว่าโปรเจกต์จะโตไปทางไหน (ดู [Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)). Highlights:
+Quickstart นี้คือ runnable seed ของ spec ใน [`docs/`](../../docs/). Spec อธิบายว่าโปรเจกต์จะโตไปทางไหน (ดู [เอกสารย้อนหลัง: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)). Highlights:
 
 - `apps/AGENTS.md` อธิบาย shipped stack: Next.js 16 App Router อยู่หน้า local daemon และ `apps/web/next.config.ts` rewrite ใน dev เพื่อให้ browser คุยกับ `/api` surface เดียวกัน.
 - `docs/skills-protocol.md` อธิบาย `SKILL.md`/`od:` frontmatter ปัจจุบันและการแยก functional skills ออกจาก rendering templates. Parser และ normalization ใน `apps/daemon/src/skills.ts` คือ implementation source of truth.

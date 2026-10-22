@@ -158,7 +158,7 @@ pnpm tools-dev run web
 #        <artifact> block is emitted.
 #      * text_artifact: with no filesystem tools, one complete standalone
 #        <artifact> block is the canonical result and must not claim file writes.
-#      Storage configuration and ownership: docs/daemon-data.md.
+#      Storage configuration and ownership: apps/daemon/AGENTS.md#data-ownership.
 #    - Verify preview iframe renders correctly
 #    - Verify export (PPTX / PDF) works if the mode supports it
 ```

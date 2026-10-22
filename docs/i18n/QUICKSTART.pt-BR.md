@@ -332,7 +332,7 @@ open-design/
 
 ## Voltando à visão
 
-Este Início rápido é a semente executável da spec em [`docs/`](../../docs/). A spec descreve para onde isso evolui (veja [Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)). Destaques:
+Este Início rápido é a semente executável da spec em [`docs/`](../../docs/). A spec descreve para onde isso evolui (veja [Arquivo histórico: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)). Destaques:
 
 - `apps/AGENTS.md` descreve a stack entregue: Next.js 16 App Router na frente, daemon local atrás, e os rewrites de `apps/web/next.config.ts` em dev mantendo o navegador conversando com a mesma superfície `/api`.
 - `docs/skills-protocol.md` descreve o frontmatter atual de `SKILL.md`/`od:` e a separação entre skills funcionais e templates de renderização. O parser e a normalização em `apps/daemon/src/skills.ts` são a fonte de verdade da implementação.

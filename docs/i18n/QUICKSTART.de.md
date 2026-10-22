@@ -332,7 +332,7 @@ open-design/
 
 ## Bezug zur Vision
 
-Dieser Schnellstart ist der lauffähige Einstieg zur Spec in [`docs/`](../../docs/). Die Spec beschreibt, wohin das Projekt wächst (siehe [Historical: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)). Highlights:
+Dieser Schnellstart ist der lauffähige Einstieg zur Spec in [`docs/`](../../docs/). Die Spec beschreibt, wohin das Projekt wächst (siehe [Archiviert: `5aa368514d:docs/roadmap.md`](https://github.com/nexu-io/open-design/blob/5aa368514d3d715792a4aca95b04157c771ca9a0/docs/roadmap.md)). Highlights:
 
 - `apps/AGENTS.md` beschreibt den ausgelieferten Stack: Next.js 16 App Router vorne, lokaler daemon dahinter und `apps/web/next.config.ts` Rewrites in dev, damit der Browser mit derselben `/api` Oberfläche spricht.
 - `docs/skills-protocol.md` beschreibt das aktuelle `SKILL.md`-/`od:`-Frontmatter und die Trennung zwischen funktionalen Skills und Rendering-Templates. Parser und Normalisierung in [`apps/daemon/src/skills.ts`](../../apps/daemon/src/skills.ts) sind die Implementierungsquelle der Wahrheit.
