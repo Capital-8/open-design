@@ -40,7 +40,6 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
   // Preserve the existing contracts billing policy: locked workspaces remain readable.
   const readable = context?.memberStatus === 'active' && isWorkspaceLifecycleReadable(context.lifecycleState);
   const shownBadge = view.tier ?? (badgeTier === 'team' ? 'team' : null);
-  const unavailable = t('workspaceQuota.unavailable');
   // Go has 5h + 7d; other paid tiers only 7d.
   const durations = view.tier === 'free' ? [] : view.tier === 'go' ? [18_000, 604_800] : [604_800];
   function resetCountdown(raw: string | null | undefined) {
@@ -73,17 +72,18 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
     </span>;
   }
   const walletContent = <>
-    <span className={quota.value}><bdi>{formatVelaBalanceUsd(view.balanceUsd) ?? unavailable}</bdi>
+    <span className={quota.value}><bdi>{formatVelaBalanceUsd(view.balanceUsd) ?? '—'}</bdi>
       {consoleUrl && readable ? <Icon name="chevron-right" size={14} /> : null}
     </span>
   </>;
   return (
     <div className={`entry-nav-rail__menu-credits ${card.card}`} data-plan-status={view.planStatus ?? undefined}>
       <div className="entry-nav-rail__menu-credits-head">
-        <span className="entry-nav-rail__menu-credits-plan" role={shownBadge !== 'team' ? 'img' : undefined}
-          aria-label={shownBadge !== 'team' ? shownBadge ?? unavailable : undefined}>
+        <span className="entry-nav-rail__menu-credits-plan" role={shownBadge && shownBadge !== 'team' ? 'img' : undefined}
+          aria-label={shownBadge && shownBadge !== 'team' ? shownBadge : undefined}>
           {shownBadge === 'team' ? planLabel : null}
-          {shownBadge ? <PlanWordmark tier={shownBadge} height={shownBadge === 'team' ? 11 : 20} /> : unavailable}
+          {/* A scoped balance alone does not prove a plan tier. */}
+          {shownBadge ? <PlanWordmark tier={shownBadge} height={shownBadge === 'team' ? 11 : 20} /> : null}
         </span>
         {/* Role, not wallet balance, chooses the action. */}
         {readable && owner && view.planKnown && actionUrl ? (

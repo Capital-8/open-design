@@ -118,7 +118,8 @@ it('E12 uses identical default loading markup for every tier and unknown tier (d
     expect(within(skeleton).queryAllByTestId('workspace-quota-wallet-skeleton')).toHaveLength(1);
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText(/加载|重试|刷新|错误|\$0/)).toBeNull();
+    expect(screen.queryByText(/加载|重试|刷新|错误|暂不可用|\$0/)).toBeNull();
+    expect(screen.queryByRole('img', { name: /暂不可用/ })).toBeNull();
     const html = skeleton.innerHTML;
     mounted.unmount();
     return html;
@@ -126,9 +127,17 @@ it('E12 uses identical default loading markup for every tier and unknown tier (d
   for (const html of skeletons) expect(html).toBe(skeletons[0]);
 });
 
+it('does not call an unknown plan unavailable when a scoped balance has loaded', () => {
+  render(panel({ ...view('free'), tier: null, balanceUsd: '24' }));
+  expect(screen.getByText('$24.00')).toBeTruthy();
+  expect(screen.queryByText('明细暂不可用')).toBeNull();
+  expect(screen.queryByRole('img')).toBeNull();
+});
+
 it('E03 missing breakdown/modelRestriction/windows stays unavailable, never fake $0 (VIEW-012)', () => {
   render(panel({ ...view('go'), windows: null, balanceUsd: null }));
-  expect(within(screen.getByRole('region', { name: '按量额度' })).getByText('明细暂不可用')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: '按量额度' })).getByText('—')).toBeTruthy();
+  expect(screen.queryByText('明细暂不可用')).toBeNull();
   expect(within(screen.getByRole('region', { name: 'Design Plan 额度' })).getAllByText('暂未获取用量')).toHaveLength(2);
   expect(screen.getByRole('button', { name: /性价比模型/ })).toBeTruthy();
   expect(screen.getByRole('button', { name: /顶级模型/ })).toBeTruthy();
