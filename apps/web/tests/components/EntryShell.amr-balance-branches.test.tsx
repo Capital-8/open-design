@@ -60,6 +60,7 @@ function workspace(
   return {
     workspaceId: workspaceType === 'team' ? 'ws-team-t58' : 'ws-personal-t58',
     workspaceType,
+    memberCount: workspaceType === 'personal' ? 2 : undefined,
     workspaceMemberId: `wm-${role}-t58`,
     role,
     memberStatus: 'active',
@@ -142,7 +143,9 @@ function stubFetch(
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith('/api/workspace/directory')) {
-      return jsonResponse(workspaceDirectoryFixture([context]));
+      const directory = workspaceDirectoryFixture([context]);
+      if (context.memberCount !== undefined) directory.items[0]!.memberCount = context.memberCount;
+      return jsonResponse(directory);
     }
     if (url.endsWith('/api/workspace/context')) {
       return jsonResponse({ context });
@@ -311,6 +314,19 @@ describe('T58 · 首页余额耗尽的身份 × 订阅四格', () => {
     ['团队 member · 非 Max', 'member' as const, 'team_pro'],
   ])('%s:拿到「找所有者充值」那张,不外跳', async (_name, role, tier) => {
     stubFetch(workspace(role, 'team'), accountBilling(tier));
+    const onCreateProject = vi.fn(async () => true);
+    renderHome(onCreateProject);
+
+    await submitHome('Make me a poster.');
+
+    await screen.findByTestId('amr-balance-owner-dialog');
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+    expect(onCreateProject).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it.each(['admin', 'member'] as const)('个人空间受邀 %s:余额不足显示 F10 而非 Owner 转化弹窗', async (role) => {
+    stubFetch(workspace(role, 'personal'), accountBilling('go'));
     const onCreateProject = vi.fn(async () => true);
     renderHome(onCreateProject);
 

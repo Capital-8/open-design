@@ -706,13 +706,12 @@ export function buildWorkspacePermissions(input: {
  * without it can only produce a button that fails on arrival. That gate is
  * correct and this predicate keeps it exactly as strict.
  *
- * A PERSONAL workspace has no second member. The wallet is the signed-in
- * user's own, there is nobody to ask, and there is no one to protect the money
- * from. Asking a team-membership permission whether someone may pay for
- * themselves does not gate anything — it only deletes the person's own way to
- * pay. That is how an empty personal wallet ended up looking at a dialog that
- * said "upgrade to keep creating" under a single 「暂不需要」 button
- * (`run-error-catalog.md` §6.Y, reproduced on a real runtime 2026-09-07).
+ * A single-member Personal workspace may reach its own billing entrance even
+ * when a project-scope placeholder has no billing permission. An invited
+ * Member or Admin in a multi-member Personal workspace cannot spend the
+ * Owner's money: the authenticated directory's memberCount distinguishes
+ * that real member from the single-member placeholder. Older providers omit
+ * memberCount and retain the historical single-member fallback.
  *
  * This is the ONE predicate every billing entrance must agree on. The audience
  * split that decides WHICH dialog appears (`runtime/amr-balance-branch.ts`) and
@@ -727,10 +726,11 @@ export function buildWorkspacePermissions(input: {
  */
 export function canReachWorkspaceBillingEntrance(
   context: Pick<WorkspaceCollabContext, 'workspaceType'> & {
+    memberCount?: number;
     permissions?: Pick<WorkspacePermissions, 'canManageBilling'>;
   },
 ): boolean {
-  if (context.workspaceType !== 'team') return true;
+  if (context.workspaceType === 'personal' && (context.memberCount === undefined || context.memberCount <= 1)) return true;
   return context.permissions?.canManageBilling === true;
 }
 
@@ -764,7 +764,8 @@ export function canReachWorkspaceBillingEntrance(
  * owner" for the team owner themselves (§6.V / OPEND-2720, reproduced on a
  * real runtime 2026-09-07).
  *
- * So this adopts exactly one thing — the membership role — and only from an
+ * So this adopts billing-only directory facts — the membership role and
+ * member count — and only from an
  * authoritative context (`GET /api/workspace/context`) that names the very same
  * workspace AND the very same member. Permissions are re-derived through
  * {@link buildWorkspacePermissions} using the SCOPE's own lifecycle and member
@@ -797,20 +798,24 @@ export function workspaceBillingAuthorityContext(
 ): WorkspaceCollabContext | null {
   if (!scoped) return null;
   if (!authoritative) return scoped;
-  if (
-    !isSameWorkspacePrincipal(authoritative, scoped)
-    || authoritative.role === scoped.role
-  ) {
+  if (!isSameWorkspacePrincipal(authoritative, scoped)) {
     return scoped;
   }
+  const roleChanged = authoritative.role !== scoped.role;
+  const memberCountChanged = authoritative.memberCount !== undefined
+    && authoritative.memberCount !== scoped.memberCount;
+  if (!roleChanged && !memberCountChanged) return scoped;
   return {
     ...scoped,
-    role: authoritative.role,
-    permissions: buildWorkspacePermissions({
+    ...(authoritative.memberCount !== undefined ? { memberCount: authoritative.memberCount } : {}),
+    ...(roleChanged ? {
       role: authoritative.role,
-      lifecycleState: scoped.lifecycleState,
-      memberStatus: scoped.memberStatus,
-    }),
+      permissions: buildWorkspacePermissions({
+        role: authoritative.role,
+        lifecycleState: scoped.lifecycleState,
+        memberStatus: scoped.memberStatus,
+      }),
+    } : {}),
   };
 }
 

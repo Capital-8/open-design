@@ -311,6 +311,7 @@ export function workspaceContextFromDirectoryItem(
     workspaceId: item.workspaceId,
     workspaceType: item.workspaceType,
     workspaceMemberId: item.workspaceMemberId,
+    ...(item.memberCount !== undefined ? { memberCount: item.memberCount } : {}),
     role: item.role,
     memberStatus: item.memberStatus,
     lifecycleState: item.lifecycleState,

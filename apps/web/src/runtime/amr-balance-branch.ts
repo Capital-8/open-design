@@ -86,6 +86,7 @@ export type AmrBalanceUpgradeIntent = 'pricing' | 'auto_recharge' | 'ask_owner';
  * 一个刻意的兜底:**完全没有工作区上下文**(账号级 / 旧客户端)→ 按 owner。
  * 没有工作区身份可授权时,`workspaceUpgradeUrl` 本来就走 profile 兜底给出 plans
  * 链接;这里跟着它,免得一个正常的个人账号突然被告知「去找你的所有者」。
+ * 个人工作区若已有受邀成员(`memberCount > 1`),仍按实际账单权限分流。
  */
 export function resolveAmrBalanceAudience(
   context: WorkspaceCollabContext | null | undefined,

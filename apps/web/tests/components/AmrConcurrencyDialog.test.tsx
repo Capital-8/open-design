@@ -153,6 +153,25 @@ it('uses the frozen Chinese F06 message and acknowledgement without adding purch
   expect(onClose).toHaveBeenCalledOnce();
 });
 
+it.each(['admin', 'member'] as const)('invited Personal %s receives frozen F06 and no upgrade action', (role) => {
+  translation.language = 'zh-CN';
+  const context = workspaceContextFixture({
+    workspaceId: 'shared-personal-f06', workspaceType: 'personal', memberCount: 2,
+    workspaceMemberId: `personal-${role}`, role, planId: 'go',
+    permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }),
+  });
+  const open = vi.fn(); vi.stubGlobal('open', open);
+  const onClose = vi.fn();
+  render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
+    workspaceContext={context} profile="local" onClose={onClose} />);
+
+  expect(screen.getByRole('heading', { name: '团队并发不足' })).toBeTruthy();
+  expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '知道了' }));
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(open).not.toHaveBeenCalled();
+});
+
 it('retains production origin pinning even when an explicit origin is supplied', () => {
   const context = workspaceContextFixture({ workspaceId: 'prod-pinned-space', workspaceMemberId: 'prod-owner',
     role: 'owner', planId: 'team_plus', permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });

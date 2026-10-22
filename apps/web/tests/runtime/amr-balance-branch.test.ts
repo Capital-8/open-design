@@ -106,13 +106,22 @@ describe('身份判据:谁算 owner', () => {
     expect(resolveAmrBalanceAudience(context({ role: 'member' }))).toBe('member');
   });
 
-  // 个人工作区没有「另一个所有者」可以找,把人推去「联系所有者」是新的死胡同。
-  it('个人工作区一律按 owner 处理', () => {
+  it('个人工作区的受邀 Member / Admin 仍应找 Owner', () => {
     expect(
       resolveAmrBalanceAudience(
-        context({ role: 'member', workspaceType: 'personal' }),
+        context({ role: 'member', workspaceType: 'personal', memberCount: 2 }),
       ),
-    ).toBe('owner');
+    ).toBe('member');
+    expect(
+      resolveAmrBalanceAudience(
+        context({ role: 'admin', workspaceType: 'personal', memberCount: 2 }),
+      ),
+    ).toBe('member');
+    for (const role of ['admin', 'member'] as const) {
+      const invited = context({ role, workspaceType: 'personal', memberCount: 2 });
+      expect(resolveAmrConcurrencyPresentation({ context: invited }).branch.audience).toBe('member');
+      expect(amrBalanceBlockedDialog(resolveAmrBalanceBranch({ context: invited }))).toBe('ask_owner');
+    }
   });
 
   // 没有工作区身份可授权时沿用今天的兜底(和 `workspaceUpgradeUrl` 一致)。
@@ -253,6 +262,8 @@ describe('分支判定与升级链接必须对同一个人给出同一个答案'
       name: '个人工作区 · 没有账单权限',
       context: context({ role: 'member', workspaceType: 'personal' }),
     },
+    { name: '个人工作区 · 受邀 Member', context: context({ role: 'member', workspaceType: 'personal', memberCount: 2 }) },
+    { name: '个人工作区 · 受邀 Admin', context: context({ role: 'admin', workspaceType: 'personal', memberCount: 2 }) },
   ];
 
   it.each(cases)('$name', ({ context: ctx }) => {

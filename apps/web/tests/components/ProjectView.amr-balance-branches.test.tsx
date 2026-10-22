@@ -566,6 +566,17 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
   });
 
+  it.each(['admin', 'member'] as const)('invited Personal %s sees the Member balance dialog', async (role) => {
+    await sendAs(callerContext(role, 'go', {
+      workspaceType: 'personal',
+      memberCount: 2,
+    }), EMPTY_WALLET);
+
+    expect(await screen.findByTestId('amr-balance-owner-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+    expect(mockedWindowOpen).not.toHaveBeenCalled();
+  });
+
   // 反向对照(T58 的对照组)。这一格**没有变**:同一张弹窗、主按钮仍然落在
   // 套餐页。少了它,把两格合并成「都跳自动充值」也会全绿。
   it('非 Max · owner:卡 + 会员转化弹窗,卡和弹窗都跳 console 的套餐页', async () => {
