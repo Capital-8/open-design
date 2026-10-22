@@ -107,8 +107,8 @@ describe('C-01 state and role matrix (VIEW-001/002/021)', () => {
     it.each(['owner', 'admin', 'member'] as const)(`${id} ${tier}: %s sees the shared amount and its role action`, role => {
       render(panel(view(tier, balance, percent), role));
       expect(Boolean(screen.queryByRole('region', { name: 'Design Plan 额度' }))).toBe(tier !== 'free');
-      expect(Boolean(screen.queryByRole('region', { name: '按量额度' }))).toBe(Number(balance) !== 0);
-      expect(Boolean(screen.queryByText(`$${Number(balance).toFixed(2)}`))).toBe(Number(balance) !== 0);
+      expect(screen.getByRole('region', { name: '按量额度' })).toBeTruthy();
+      expect(screen.getByText(`$${Number(balance).toFixed(2)}`)).toBeTruthy();
       expect(screen.queryAllByRole('progressbar').length).toBe(tier === 'free' ? 0 : tier === 'go' ? 2 : 1);
       expect(screen.queryByText('未订阅')).toBeNull();
       expect(screen.queryByText('订阅套餐后可用')).toBeNull();
@@ -123,10 +123,8 @@ describe('C-01 state and role matrix (VIEW-001/002/021)', () => {
         expect(screen.queryByRole('button', { name: /升级|充值/ })).toBeNull();
       }
       // VIEW-003: every role's arrow is a view link, never a recharge intent.
-      if (Number(balance) !== 0) {
-        fireEvent.click(screen.getByRole('button', { name: '查看余额' }));
-        expect(window.open).toHaveBeenLastCalledWith(quotaPopoverConsoleUrl('local', 'workspace-a'), '_blank', 'noopener,noreferrer');
-      }
+      fireEvent.click(screen.getByRole('button', { name: '查看余额' }));
+      expect(window.open).toHaveBeenLastCalledWith(quotaPopoverConsoleUrl('local', 'workspace-a'), '_blank', 'noopener,noreferrer');
     });
   }
 });
@@ -281,7 +279,8 @@ describe.each(['go', 'plus', 'pro', 'max'] as const)('PRD §5.3 exhausted %s', t
     render(panel(value));
     expect(screen.getAllByText('已用完')).toHaveLength(1);
     expect(Boolean(screen.queryByText('重置前将自动使用按量额度继续生成'))).toBe(balance === '24');
-    expect(Boolean(screen.queryByRole('region', { name: '按量额度' }))).toBe(balance == null || Number(balance) !== 0);
+    expect(screen.getByRole('region', { name: '按量额度' })).toBeTruthy();
+    if (balance === '0' || balance === '0.00') expect(screen.getByText('$0.00')).toBeTruthy();
     if (balance == null) expect(screen.getByText('—')).toBeTruthy();
     if (balance === '-1.25') expect(screen.getByText('-$1.25')).toBeTruthy();
   });

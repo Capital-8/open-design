@@ -90,7 +90,6 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
   // Go has 5h + 7d; other paid tiers only 7d.
   const durations = view.tier === 'free' ? [] : view.tier === 'go' ? [18_000, 604_800] : [604_800];
   const showPlan = view.tier != null && view.tier !== 'free';
-  const showMetered = view.balanceUsd == null || Number(view.balanceUsd) !== 0;
   const exhausted = durations.some(duration => view.windows?.some(window => window.durationSeconds === duration && window.exhausted));
   function resetCountdown(raw: string | null | undefined) {
     if (!raw) return null;
@@ -176,7 +175,7 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
             })}
             {exhausted && view.balanceUsd != null && Number(view.balanceUsd) > 0 ? <p className={styles.fallback}>{t('workspaceQuota.meteredFallback')}</p> : null}
           </section> : null}
-          {showMetered ? <section className={styles.metered} aria-label={t('workspaceQuota.payAsYouGo')}>
+          <section className={styles.metered} aria-label={t('workspaceQuota.payAsYouGo')}>
             <div className={styles.sectionHead}>
               <h3>{t('workspaceQuota.payAsYouGo')}{help('metered')}</h3>
               {consoleUrl && readable ? <button type="button" className={styles.balance}
@@ -184,7 +183,7 @@ function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, ba
                 onClick={() => navigate(consoleUrl, 'credits')}>{walletContent}</button>
                 : <div className={styles.balance}>{walletContent}</div>}
             </div>
-          </section> : null}
+          </section>
         </>
       )}
       {context ? <div className={styles.footer} role="note">
