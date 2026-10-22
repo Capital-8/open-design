@@ -168,6 +168,10 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     }, { appConfig: config, workspaceId: space.workspaceId, workspaceMemberId: actor.memberId });
     await page.goto(surface === 'home' ? runtime.url.web('/') : runtime.url.web(`/projects/${projectId}`),
       { waitUntil: 'domcontentloaded', timeout: T.xlong });
+    if (surface === 'project') {
+      await expect(page.frameLocator('[data-testid="artifact-preview-frame"]')
+        .getByRole('heading', { name: 'Existing F04 output survives' })).toBeVisible({ timeout: T.long });
+    }
     const input = page.getByTestId(surface === 'home' ? 'home-hero-input' : 'chat-composer-input');
     const send = page.getByTestId(surface === 'home' ? 'home-hero-submit' : 'chat-send');
     const staged = page.getByTestId(surface === 'home' ? 'home-hero-staged-files' : 'staged-attachments');
@@ -214,6 +218,10 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     }
     const existing = await fetch(runtime.url.web(`/api/projects/${projectId}/files/${artifactName}`), { headers });
     expect(existing.ok && await existing.text() === artifact).toBe(true);
+    if (surface === 'project') {
+      await expect(page.frameLocator('[data-testid="artifact-preview-frame"]')
+        .getByRole('heading', { name: 'Existing F04 output survives' })).toBeVisible();
+    }
     const rejectedPosts = postCount() - before;
     expect(rejectedPosts).toBeLessThanOrEqual(1);
     await expect.poll(() => runResponses.length, { timeout: T.long }).toBe(rejectedPosts);
@@ -259,6 +267,10 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     const automatic = await page.waitForEvent('request', { predicate: request => request.method() === 'POST'
       && new URL(request.url()).pathname === '/api/runs', timeout: 5000 }).catch(() => null);
     expect(automatic).toBeNull();
+    if (surface === 'project') {
+      await expect(page.frameLocator('[data-testid="artifact-preview-frame"]')
+        .getByRole('heading', { name: 'Existing F04 output survives' })).toBeVisible();
+    }
     await save('F04-released-no-click.safe.json', { binding, idleStart, observedAt: new Date().toISOString(),
       released, requests });
     await page.screenshot({ path: join(output, 'F04-released-no-click.png') });
