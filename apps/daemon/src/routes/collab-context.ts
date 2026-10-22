@@ -1002,6 +1002,20 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
       workspaceId: requestedWorkspaceId,
       workspaceMemberId: membership.workspaceMemberId,
     });
+    const includePreflight = req.query.includePreflight === '1';
+    const modelId = typeof req.query.modelId === 'string' ? req.query.modelId.trim() || null : null;
+    // Independent reads share the verified membership but not each other's
+    // results. Settle preflight immediately so a runtime failure can retain
+    // its existing precedence without leaving a rejected promise unobserved.
+    const preflightRead = includePreflight
+      ? Promise.resolve().then(() =>
+          (deps.fetchBillingPreflight ?? ((id, model) =>
+            fetchVelaBillingPreflight(id, model, { configuredEnv: configuredEnv() })))(requestedWorkspaceId, modelId),
+        ).then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        )
+      : null;
     let accountSummary: WorkspaceBillingSummary | null;
     let runtimeResult: WorkspaceBillingRuntimeResult;
     try {
@@ -1081,11 +1095,11 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
           }
         : {}),
     };
-    if (req.query.includePreflight === '1') {
-      const modelId = typeof req.query.modelId === 'string' ? req.query.modelId.trim() || null : null;
+    if (preflightRead) {
       try {
-        const preflight = await (deps.fetchBillingPreflight ?? ((id, model) =>
-          fetchVelaBillingPreflight(id, model, { configuredEnv: configuredEnv() })))(requestedWorkspaceId, modelId);
+        const result = await preflightRead;
+        if (!result.ok) throw result.error;
+        const preflight = result.value;
         body.preflight = preflight?.workspaceId === requestedWorkspaceId &&
           preflight.workspaceMemberId === membership.workspaceMemberId ? preflight : null;
       } catch (error) {

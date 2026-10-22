@@ -89,6 +89,12 @@ const TEAM_CONTEXT_PARSED: WorkspaceCollabContext = {
     : {}),
 };
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
 async function startContextServer(
   overrides: Partial<Omit<RegisterCollabContextRoutesDeps, 'workspaceContext'>> = {},
 ) {
@@ -1227,6 +1233,102 @@ describe('workspace billing routes', () => {
       workspaceMemberId: 'member-1',
       observedAt: action.body.workspaceRuntime.observedAt,
     });
+  });
+
+  it('starts all independent billing reads after membership authorization without waiting for another read', async () => {
+    const directory = deferred<Awaited<ReturnType<NonNullable<RegisterCollabContextRoutesDeps['listWorkspaceDirectory']>>>>();
+    const directoryStarted = deferred<void>();
+    const summary = deferred<null>();
+    const summaryStarted = deferred<void>();
+    const projection = deferred<Awaited<ReturnType<NonNullable<RegisterCollabContextRoutesDeps['fetchWorkspaceBillingProjection']>>>>();
+    const projectionStarted = deferred<void>();
+    const preflight = deferred<null>();
+    const fetchBilling = vi.fn(() => {
+      summaryStarted.resolve();
+      return summary.promise;
+    });
+    const fetchWorkspaceBillingProjection = vi.fn(() => {
+      projectionStarted.resolve();
+      return projection.promise;
+    });
+    const fetchBillingPreflight = vi.fn(() => preflight.promise);
+    const api = await startContextServer({
+      listWorkspaceDirectory: () => {
+        directoryStarted.resolve();
+        return directory.promise;
+      },
+      fetchBilling,
+      fetchWorkspaceBillingProjection,
+      fetchBillingPreflight,
+    });
+    const request = api.req('/api/workspace/billing?scope=workspace&workspaceId=wm-1&includePreflight=1&modelId=model');
+    try {
+      await directoryStarted.promise;
+      expect(fetchBilling).not.toHaveBeenCalled();
+      expect(fetchWorkspaceBillingProjection).not.toHaveBeenCalled();
+      expect(fetchBillingPreflight).not.toHaveBeenCalled();
+      directory.resolve(teamDirectory('wm-1'));
+      await Promise.all([summaryStarted.promise, projectionStarted.promise]);
+      // Every upstream result is still unresolved: preflight must already be
+      // running, rather than adding a second network round trip afterwards.
+      expect(fetchBillingPreflight).toHaveBeenCalledExactlyOnceWith('wm-1', 'model');
+    } finally {
+      directory.resolve(teamDirectory('wm-1'));
+      summary.resolve(null);
+      projection.resolve({ snapshot: null, workspaceBalance: null });
+      preflight.resolve(null);
+      const result = await request;
+      expect(result.status).toBe(200);
+      expect(result.body.preflight).toBeNull();
+    }
+  });
+
+  it.each(['unauthorized', 'unavailable', 'inactive'] as const)('keeps all billing reads cold when membership is %s', async (reason) => {
+    const fetchBilling = vi.fn(async () => null);
+    const fetchWorkspaceBillingProjection = vi.fn(async () => ({ snapshot: null, workspaceBalance: null }));
+    const fetchBillingPreflight = vi.fn(async () => null);
+    const api = await startContextServer({
+      fetchWorkspaceDirectory: async () => reason === 'inactive'
+        ? { ok: true, items: [{ ...teamDirectory('wm-1')[0]!, memberStatus: 'removed' }] }
+        : { ok: false, items: [], ...(reason === 'unauthorized' ? { reason: 'unauthorized' as const } : {}) },
+      fetchBilling,
+      fetchWorkspaceBillingProjection,
+      fetchBillingPreflight,
+    });
+    const result = await api.req('/api/workspace/billing?scope=workspace&workspaceId=wm-1&includePreflight=1');
+    const expectedStatus = { unauthorized: 401, unavailable: 503, inactive: 403 };
+    expect(result.status).toBe(expectedStatus[reason]);
+    expect(fetchBilling).not.toHaveBeenCalled();
+    expect(fetchWorkspaceBillingProjection).not.toHaveBeenCalled();
+    expect(fetchBillingPreflight).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])('preserves preflight authorization rejection (%s)', async (status) => {
+    const api = await startContextServer({
+      listWorkspaceDirectory: async () => teamDirectory('wm-1'),
+      fetchBilling: async () => null,
+      fetchWorkspaceBillingProjection: async () => ({ snapshot: null, workspaceBalance: null }),
+      fetchBillingPreflight: async () => {
+        throw new Error(`API request failed with status ${status}: forbidden`);
+      },
+    });
+    const result = await api.req('/api/workspace/billing?scope=workspace&workspaceId=wm-1&includePreflight=1');
+    expect(result).toEqual({ status: 403, body: { error: 'workspace_not_authorized' } });
+  });
+
+  it('preserves authoritative runtime failure priority while consuming an early preflight rejection', async () => {
+    const api = await startContextServer({
+      listWorkspaceDirectory: async () => teamDirectory('wm-1'),
+      fetchBilling: async () => null,
+      fetchWorkspaceBillingProjection: async () => {
+        throw Object.assign(new Error('runtime unavailable'), { code: 'temporary' });
+      },
+      fetchBillingPreflight: async () => {
+        throw new Error('API request failed with status 403: forbidden');
+      },
+    });
+    const result = await api.req('/api/workspace/billing?scope=workspace&workspaceId=wm-1&includePreflight=1&freshness=authoritative');
+    expect(result).toEqual({ status: 503, body: { error: 'temporary' } });
   });
 
   it.each([true, false])('reports upstream quota health separately from wallet freshness (%s)', async (healthy) => {
