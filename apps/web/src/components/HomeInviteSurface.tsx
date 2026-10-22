@@ -109,7 +109,7 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
   ) : null;
   return (
     <>
-      {active ? <div ref={bannerSlot} className={styles.bannerSpace} aria-hidden="true" style={!bannerHost && storageKey && dismissal !== storageKey ? { display: 'none' } : undefined} /> : null}
+      {active ? <div ref={bannerSlot} className={styles.bannerSpace} data-dismissed={dismissal === storageKey ? "true" : undefined} aria-hidden="true" style={!bannerHost && storageKey && dismissal !== storageKey ? { display: 'none' } : undefined} /> : null}
       {banner && (bannerHost ? createPortal(banner, bannerHost) : banner)}
       {signedOut && signInState === 'error' ? <p role="alert">{t('settings.amrLoginErrorCompact')}</p> : null}
       {signedOut && signInState === 'signing' ? <div role="status">{signInStatus?.activationUrl ? <a href={signInStatus.activationUrl} target="_blank" rel="noopener noreferrer">{t('settings.amrActivationOpen')}</a> : null}<Button onClick={() => void cancel()}>{t('settings.amrCancelSignIn')}</Button></div> : null}

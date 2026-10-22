@@ -23,12 +23,17 @@ async function configureReferenceExamples(page: Page) {
   await page.route('**/api/plugins', route => route.fulfill({ json: { plugins: [prototype, ...plugins] } }));
 }
 async function selectReferencePrototype(page: Page) {
-  await page.getByTestId('home-hero-template-picker').getByRole('button', { name: '创作类型', exact: true }).click();
-  await page.getByTestId('home-hero-template-menu').getByRole('option', { name: '原型', exact: true }).click();
-  await expect(page.getByTestId('home-hero-template-picker')).toHaveAttribute('data-type', 'prototype');
+  await expect(async () => {
+    const selected = page.getByTestId('home-hero-template-picker');
+    if (!await selected.count() || await selected.getAttribute('data-type') !== 'prototype') {
+      const pill = page.getByTestId('home-hero-type-pill-prototype');
+      if (await pill.isEnabled().catch(() => false)) await pill.click();
+    }
+    await expect(selected).toHaveAttribute('data-type', 'prototype');
+  }).toPass();
   await page.getByTestId('home-hero-input').blur();
 }
-async function setup(page: Page, role: 'owner' | 'admin' | 'member', openInvite = true, workspaceCount = 2, options: { workspaceName?: string; workspaceType?: 'personal' | 'team'; dismissBanner?: boolean; registration?: boolean; beforeHome?: (context: Record<string, unknown>) => Promise<void> } = {}) {
+async function setup(page: Page, role: 'owner' | 'admin' | 'member', openInvite = true, workspaceCount = 2, options: { workspaceName?: string; workspaceType?: 'personal' | 'team'; dismissBanner?: boolean; registration?: boolean; referenceHome?: boolean; planId?: string; beforeHome?: (context: Record<string, unknown>) => Promise<void> } = {}) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await configureVisualPage(page);
   await configureReferenceExamples(page);
@@ -37,7 +42,7 @@ async function setup(page: Page, role: 'owner' | 'admin' | 'member', openInvite 
     memberCount: 3,
     workspaceId: 'members-visual-workspace', workspaceName: options.workspaceName ?? 'Xiaoyi’s Workspace', workspaceType: options.workspaceType ?? 'team',
     workspaceMemberId: `members-visual-${role}`, role, memberStatus: 'active', lifecycleState: 'active',
-    billingState: 'active', planId: 'team-pro', workspaceSettingsUrl: 'https://console.example.test/settings?workspaceId=members-visual-workspace',
+    billingState: 'active', planId: options.planId ?? 'team-pro', workspaceSettingsUrl: 'https://console.example.test/settings?workspaceId=members-visual-workspace',
     seatSummary: { seatLimit: 3, usedSeats: 3, availableSeats: 0, isSeatFull: true },
     permissions: { canInviteMembers: true, canManageMembers: role === 'owner', canManageBilling: role === 'owner', canManageAutoRecharge: false, canShareProjects: true, canWriteSyncedFiles: true, canViewWorkspaceSettings: role === 'owner', canManageSharedResources: role === 'owner' },
   };
@@ -76,6 +81,7 @@ async function setup(page: Page, role: 'owner' | 'admin' | 'member', openInvite 
   await gotoVisualHome(page);
   // The invitation is independent of the current home composer mode.
   // Keep the actual integration homepage rather than requiring a retired picker.
+  if (options.referenceHome) await selectReferencePrototype(page);
   await ensureRailOpen(page);
   await page.getByTestId('workspace-switcher').click();
   if (!openInvite) return page.getByRole('menu');
@@ -109,6 +115,19 @@ async function capture(page: Page, state: string) {
   if (await menu.count() && await menu.first().isVisible()) await menu.first().screenshot({ path: path.join(artifactRoot, `${state}-menu.png`), animations: 'disabled' });
   const tooltip = page.getByRole('tooltip');
   if (await tooltip.count() && await tooltip.first().isVisible()) await tooltip.first().screenshot({ path: path.join(artifactRoot, `${state}-tooltip.png`), animations: 'disabled' });
+}
+async function capturePermissionsNarrow(page: Page, state: string) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await waitForVisualStable(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  if (state === 'H01') {
+    await expect(page.getByRole('alertdialog').getByRole('button', { name: '确认', exact: true })).toBeInViewport();
+    await expect(page.getByTestId('home-hero')).toHaveCount(0);
+  }
+  if (state === 'H12') await expect(page.getByTestId('entry-top-right-credits')).toBeInViewport();
+  await capture(page, `${state}-narrow`);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await waitForVisualStable(page);
 }
 for (const [state, role] of [['B02', 'owner'], ['B03', 'member'], ['B27', 'admin']] as const) {
   test(`[P1] ${state} reference viewport invitation role and layout`, async ({ page }) => {
@@ -372,9 +391,19 @@ for (const removal of ['exact', 'other-member', 'other-workspace'] as const) {
     let contextReads = 0;
     const writes: unknown[] = [];
     try {
-      await setup(page, 'owner', false, 2, { workspaceName: 'Xiaoyi’s Workspace', dismissBanner: true, beforeHome: async current => {
-        const fallback = { ...current, workspaceId: 'members-default', workspaceMemberId: 'members-default-owner', workspaceName: 'Xiaoyi’s Workspace', isDefault: true };
+      await setup(page, 'owner', false, 2, { workspaceName: 'Xiaoyi’s Workspace', workspaceType: 'personal', planId: 'pro', dismissBanner: true, referenceHome: true, beforeHome: async current => {
+        const fallback = { ...current, workspaceId: 'members-default', workspaceMemberId: 'members-default-owner', workspaceName: 'Xiaoyi’s Workspace', planId: 'free', billingState: 'free', isDefault: true };
         await page.route('**/api/workspace/directory', route => route.fulfill({ json: { items: removed && exact ? [fallback] : removed && removal === 'other-workspace' ? [{ ...current, isDefault: false }] : [{ ...current, isDefault: false }, fallback], activeWorkspaceId: switched ? fallback.workspaceId : current.workspaceId } }));
+        await page.route('**/api/workspace/billing**', route => {
+          const isDefault = new URL(route.request().url()).searchParams.get('workspaceId') === fallback.workspaceId;
+          const scope = isDefault ? fallback : current;
+          const wallet = { workspaceId: scope.workspaceId, workspaceMemberId: scope.workspaceMemberId, billingScopeVersion: 2, balanceUsd: '0.00', expiresAt: null, updatedAt: null };
+          return route.fulfill({ json: { summary: null, workspaceBalance: wallet, workspaceSnapshot: {
+            schemaVersion: 1, billingScopeVersion: 2, workspaceId: scope.workspaceId, workspaceMemberId: scope.workspaceMemberId,
+            billing: { planId: scope.planId, billingState: scope.billingState }, wallet,
+            revisions: { billing: `visual-${scope.workspaceId}`, wallet: `visual-${scope.workspaceId}` },
+          } } });
+        });
         await page.route('**/api/workspace/context', route => {
           contextReads += 1;
           return route.fulfill({ json: { context: route.request().headers()['x-od-workspace-id'] === fallback.workspaceId ? fallback : current } });
@@ -407,7 +436,10 @@ for (const removal of ['exact', 'other-member', 'other-workspace'] as const) {
         if (removal === 'other-workspace') {
           await page.getByTestId('workspace-switcher').click();
           await expect(page.getByRole('menu')).toContainText('1/50');
+          await expect(page.locator('.home-hero__title')).toHaveText('让我们创建原型');
+          expect((await page.locator('.home-hero__title').boundingBox())!.y).toBeCloseTo(184, 0);
           await capture(page, 'H02');
+          await capturePermissionsNarrow(page, 'H02');
         }
         return;
       }
@@ -415,9 +447,12 @@ for (const removal of ['exact', 'other-member', 'other-workspace'] as const) {
       await expect(dialog).toBeVisible();
       await expect(dialog.getByRole('heading')).toContainText('Xiaoyi’s Workspace');
       await expect(page.getByTestId('home-hero')).toHaveCount(0);
+      await expect(dialog).toHaveCSS('font-family', 'Inter, -apple-system, system-ui, \"Segoe UI\", \"PingFang SC\", sans-serif');
       await capture(page, 'H01');
+      await capturePermissionsNarrow(page, 'H01');
       await dialog.getByRole('button').click();
       await expect(dialog.getByRole('alert')).toBeVisible();
+      await capture(page, 'H01-retry');
       await expect(page.getByTestId('home-hero')).toHaveCount(0);
       await dialog.getByRole('button').click();
       await expect(dialog).toHaveCount(0);
@@ -425,7 +460,11 @@ for (const removal of ['exact', 'other-member', 'other-workspace'] as const) {
       await expect(page.getByTestId('home-hero')).toBeVisible();
       await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('od.workspaceSelection.v1') ?? '{}').workspaceId)).toBe('members-default');
       expect(writes).toEqual(Array.from({ length: 2 }, () => ({ workspaceId: 'members-default', workspaceMemberId: 'members-default-owner' })));
+      await expect(page.getByRole('button', { name: '升级', exact: true })).toBeVisible();
+      await selectReferencePrototype(page);
+      await expect(page.locator('.entry-top-right-account-pill--upgrade')).toBeVisible();
       await capture(page, 'H12');
+      await capturePermissionsNarrow(page, 'H12');
     } finally { deliver?.(); }
   });
 }
@@ -543,7 +582,7 @@ test('[P1] H04 rejoined workspace uses a new membership identity without a resto
   let activeId = 'members-visual-workspace';
   const writes: unknown[] = [];
   try {
-    const menu = await setup(page, 'owner', false, 2, { dismissBanner: true, beforeHome: async current => {
+    const menu = await setup(page, 'owner', false, 2, { workspaceType: 'personal', planId: 'pro', dismissBanner: true, referenceHome: true, beforeHome: async current => {
       const old = { ...current, workspaceId: 'members-rejoined-design', workspaceMemberId: 'members-rejoined-old', workspaceName: 'Design space' };
       const rejoined = { ...old, workspaceMemberId: 'members-rejoined-new' };
       await page.route('**/api/workspace/directory', route => {
@@ -574,6 +613,7 @@ test('[P1] H04 rejoined workspace uses a new membership identity without a resto
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     phase = 'rejoined';
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await selectReferencePrototype(page);
     await ensureRailOpen(page);
     await page.getByTestId('workspace-switcher').click();
     await page.getByRole('menuitem', { name: 'Design space', exact: true }).click();
@@ -584,7 +624,9 @@ test('[P1] H04 rejoined workspace uses a new membership identity without a resto
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await page.getByTestId('workspace-switcher').click();
     await expect(page.getByRole('menuitem', { name: 'Design space', exact: true })).toHaveAttribute('aria-current', 'true');
+    expect((await page.locator('.home-hero__title').boundingBox())!.y).toBeCloseTo(184, 0);
     await capture(page, 'H04');
+    await capturePermissionsNarrow(page, 'H04');
   } finally { deliver?.(); }
 });
 

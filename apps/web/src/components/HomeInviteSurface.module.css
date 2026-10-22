@@ -22,3 +22,8 @@ button.trigger:focus-visible { outline: 1px solid rgb(26,116,255); outline-offse
 .banner.anchored { position:absolute;top:60px;left:0;right:0;margin:0 auto; }
 @media(max-width:760px) { .banner.anchored { top:132px;margin-top:0; } }
 @media(max-width:760px) { button.trigger { padding:5px 8px;line-height:1.3; } }
+
+/* The workspace-list reference has no invitation row above the composer.
+   Keep the dismissed row on Home (including recovery), and collapse only
+   that empty row while the workspace switcher is expanded. */
+:global(.entry-shell:has([data-testid="workspace-switcher"][aria-expanded="true"])) .bannerSpace[data-dismissed="true"] { display: none; }
