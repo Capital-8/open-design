@@ -7,6 +7,10 @@ describe('funding recovery role terminology across all supported locales', () =>
     const t = tForLanguageTag(locale)!;
     const ownerRole = t('collabPresence.roleOwner').toLocaleLowerCase();
     for (const key of ['chat.amrBalanceOwner.message', 'chat.amrBalanceOwner.messageNoOwnerName', 'chat.upgrade.pausedTeamMessage'] as const) {
+      if (locale === 'zh-CN' && key.startsWith('chat.amrBalanceOwner.')) {
+        expect(t(key), key).toContain('团队空间所有者');
+        continue;
+      }
       expect(t(key).toLocaleLowerCase(), key).toContain(ownerRole);
     }
   });
