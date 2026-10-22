@@ -107,7 +107,7 @@ export const fa: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "نشانی ایمیل را وارد کنید…",
   "workspaceInvite.onboardingErrorAlreadyMember": "این ایمیل از قبل عضو فضای کاری است و نیازی به دعوت ندارد",
   "workspaceInvite.onboardingErrorPendingInvite": "این ایمیل از قبل دعوت‌نامه در انتظار پذیرش دارد",
-  "workspaceInvite.onboardingPartialSummary": "{count} همکار دعوت شدند؛ نشانی‌های ناموفق را بررسی کنید.",
+  "workspaceInvite.onboardingPartialSummary": "{count} همکار دعوت شدند؛ ارسال به {failed} نشانی ناموفق بود. نشانی‌های ناموفق را بررسی کنید.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

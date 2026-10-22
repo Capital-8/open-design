@@ -107,7 +107,7 @@ export const fr: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "Saisir une adresse e-mail…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Cette adresse est déjà membre de l’espace de travail ; aucune invitation nécessaire",
   "workspaceInvite.onboardingErrorPendingInvite": "Cette adresse a déjà une invitation en attente",
-  "workspaceInvite.onboardingPartialSummary": "{count} collègues invités ; vérifiez les adresses en échec.",
+  "workspaceInvite.onboardingPartialSummary": "{count} collègues invités ; {failed} adresses en échec. Vérifiez-les.",
   "workspaceInvite.removeRow": "Retirer",
   "workspaceInvite.addMember": "Ajouter un membre",
   "workspaceInvite.visibilityQuestion": "Les membres de l'équipe verront-ils mes designs ?",

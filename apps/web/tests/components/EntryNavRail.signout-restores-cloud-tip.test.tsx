@@ -105,9 +105,6 @@ describe('EntryNavRail sign-out (recvqbkcLqIFH7)', () => {
     );
 
     expect(screen.getByTestId('entry-cloud-signin-tip')).toBeTruthy();
-    // A01's approved local sign-in card keeps the sign-out recovery entry.
-    expect(screen.getByText('登录')).toBeTruthy();
-    expect(screen.getByText('免费邀请同事')).toBeTruthy();
-    expect(screen.getByText('额度共享，一起创作')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'OpenDesign Cloud 版' })).toBeTruthy();
   });
 });

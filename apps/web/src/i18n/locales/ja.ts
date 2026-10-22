@@ -107,7 +107,7 @@ export const ja: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "メールアドレスを入力…",
   "workspaceInvite.onboardingErrorAlreadyMember": "このメールアドレスは既にワークスペースのメンバーのため招待は不要です",
   "workspaceInvite.onboardingErrorPendingInvite": "このメールアドレスには承認待ちの招待があります",
-  "workspaceInvite.onboardingPartialSummary": "{count} 人を招待しました。送信できなかったアドレスを確認してください。",
+  "workspaceInvite.onboardingPartialSummary": "{count} 人を招待しました。{failed} 件の送信に失敗しました。送信できなかったアドレスを確認してください。",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

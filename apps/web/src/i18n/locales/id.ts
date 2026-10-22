@@ -107,7 +107,7 @@ export const id: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "Masukkan alamat email…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Email ini sudah menjadi anggota ruang kerja; tidak perlu diundang",
   "workspaceInvite.onboardingErrorPendingInvite": "Email ini sudah memiliki undangan tertunda",
-  "workspaceInvite.onboardingPartialSummary": "{count} rekan telah diundang; periksa alamat yang gagal.",
+  "workspaceInvite.onboardingPartialSummary": "{count} rekan telah diundang; {failed} alamat gagal. Periksa alamat yang gagal.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

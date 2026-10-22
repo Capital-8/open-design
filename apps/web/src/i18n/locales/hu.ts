@@ -107,7 +107,7 @@ export const hu: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "E-mail-cím megadása…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Ez az e-mail-cím már a munkaterület tagja; nem szükséges meghívó",
   "workspaceInvite.onboardingErrorPendingInvite": "Ehhez az e-mail-címhez már tartozik függő meghívó",
-  "workspaceInvite.onboardingPartialSummary": "{count} munkatárs meghívva; javítsa a sikertelen címeket.",
+  "workspaceInvite.onboardingPartialSummary": "{count} munkatárs meghívva; {failed} cím sikertelen. Javítsa a sikertelen címeket.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

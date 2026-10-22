@@ -107,7 +107,7 @@ export const ptBR: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "Digite o endereço de e-mail…",
   "workspaceInvite.onboardingErrorAlreadyMember": "Este e-mail já pertence ao espaço de trabalho; não é necessário convidar",
   "workspaceInvite.onboardingErrorPendingInvite": "Este e-mail já tem um convite pendente",
-  "workspaceInvite.onboardingPartialSummary": "{count} colegas convidados; verifique os endereços que falharam.",
+  "workspaceInvite.onboardingPartialSummary": "{count} colegas convidados; {failed} endereços falharam. Verifique-os.",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

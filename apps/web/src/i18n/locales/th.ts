@@ -107,7 +107,7 @@ export const th: Dict = {
   "workspaceInvite.onboardingEmailPlaceholder": "กรอกที่อยู่อีเมล…",
   "workspaceInvite.onboardingErrorAlreadyMember": "อีเมลนี้เป็นสมาชิกพื้นที่ทำงานอยู่แล้ว ไม่ต้องเชิญอีก",
   "workspaceInvite.onboardingErrorPendingInvite": "อีเมลนี้มีคำเชิญที่รอการตอบรับอยู่แล้ว",
-  "workspaceInvite.onboardingPartialSummary": "เชิญเพื่อนร่วมงานแล้ว {count} คน โปรดตรวจสอบอีเมลที่ส่งไม่สำเร็จ",
+  "workspaceInvite.onboardingPartialSummary": "เชิญเพื่อนร่วมงานแล้ว {count} คน ส่งไม่สำเร็จ {failed} รายการ โปรดตรวจสอบอีเมลที่ส่งไม่สำเร็จ",
   "workspaceInvite.removeRow": "Remove",
   "workspaceInvite.addMember": "Add member",
   "workspaceInvite.visibilityQuestion": "Will team members see my designs?",

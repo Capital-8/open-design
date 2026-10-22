@@ -31,7 +31,7 @@ import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext
 import { advanceWorkspaceAccountGeneration, resetWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 import { fetchAmrWalletSnapshot, fetchChatRunStatus, reattachDaemonRun, streamViaDaemon } from '../../src/providers/daemon';
 import { checkAmrBalanceGate, hasAmrFundingRecovered } from '../../src/runtime/amr-balance-gate';
-import { checkAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
+import { checkAmrFundingEvidence } from '../../src/runtime/amr-funding-feedback';
 import {
   createConversation,
   listConversations,
@@ -173,7 +173,7 @@ vi.mock('../../src/providers/project-events', () => ({
 }));
 
 vi.mock('../../src/runtime/amr-funding-feedback', () => ({
-  checkAmrFundingFeedback: vi.fn().mockResolvedValue('unknown'),
+  checkAmrFundingEvidence: vi.fn().mockResolvedValue({ kind: 'unknown', preflight: null }),
 }));
 
 // 呈现层曾经用 `isPaidAmrPlan(await resolveAmrPlan(...))` 把免费档的告警滤掉。
@@ -553,7 +553,7 @@ describe('跑到一半余额不足:谁点亮升级卡', () => {
     // 发送前那道闸门放行 —— 这一页要的正是「闸门看不出问题,run 起来了,
     // 跑到一半才死在钱上」那一格。
     mockedCheckAmrBalanceGate.mockResolvedValue({ kind: 'allow' });
-    vi.mocked(checkAmrFundingFeedback).mockResolvedValue('unknown');
+    vi.mocked(checkAmrFundingEvidence).mockResolvedValue({ kind: 'unknown', preflight: null });
     workspaceScopeMocks.projectScope = { loading: true, scope: null };
     workspaceScopeMocks.ambientContext = CALLER_CONTEXT;
     projectCollabMocks.writerAuthority = 'allowed';
@@ -646,18 +646,18 @@ describe('跑到一半余额不足:谁点亮升级卡', () => {
       ...CALLER_CONTEXT, role,
       permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }),
     };
-    let finish!: (result: 'insufficient') => void;
-    vi.mocked(checkAmrFundingFeedback).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    let finish!: (result: { kind: 'insufficient'; preflight: null }) => void;
+    vi.mocked(checkAmrFundingEvidence).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     mockedStreamViaDaemon.mockImplementation(() => new Promise(() => {}));
     renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
     await waitFor(() => expect((screen.getByTestId('normal-send') as HTMLButtonElement).disabled).toBe(false));
     const file = { path: 'funding-draft.pdf', name: 'funding-draft.pdf', kind: 'file' };
     let sending!: Promise<unknown>;
     act(() => { sending = chatPaneSpy.mock.calls.at(-1)![0].onSend('keep original funding draft', [file], []); });
-    await waitFor(() => expect(checkAmrFundingFeedback).toHaveBeenCalled());
+    await waitFor(() => expect(checkAmrFundingEvidence).toHaveBeenCalled());
     expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
     let outcome: unknown;
-    await act(async () => { finish('insufficient'); outcome = await sending; });
+    await act(async () => { finish({ kind: 'insufficient', preflight: null }); outcome = await sending; });
     expect(outcome).toBe('restore-draft');
     await screen.findByTestId(role === 'owner' ? 'amr-balance-dialog' : 'amr-balance-owner-dialog');
     expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
@@ -665,7 +665,7 @@ describe('跑到一半余额不足:谁点亮升级卡', () => {
     expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toHaveLength(0);
     expect(screen.getByTestId('failed-assistant-id').textContent).toBe('');
     // A later available observation itself does not execute the retained draft.
-    vi.mocked(checkAmrFundingFeedback).mockResolvedValue('available');
+    vi.mocked(checkAmrFundingEvidence).mockResolvedValue({ kind: 'available', preflight: null });
     await act(async () => { await Promise.resolve(); });
     expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
     await act(async () => { await chatPaneSpy.mock.calls.at(-1)![0].onSend('keep original funding draft', [file], []); });
@@ -677,17 +677,17 @@ describe('跑到一半余额不足:谁点亮升级卡', () => {
   });
 
   it.each([false, true])('a deferred available response starts once only for its original account (changed=%s)', async (changed) => {
-    let finish!: (result: 'available') => void;
-    vi.mocked(checkAmrFundingFeedback).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    let finish!: (result: { kind: 'available'; preflight: null }) => void;
+    vi.mocked(checkAmrFundingEvidence).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     mockedStreamViaDaemon.mockImplementation(() => new Promise(() => {}));
     renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
     await waitFor(() => expect((screen.getByTestId('normal-send') as HTMLButtonElement).disabled).toBe(false));
     let sending!: Promise<unknown>;
     act(() => { sending = chatPaneSpy.mock.calls.at(-1)![0].onSend('wait for exact funding', [], []); });
-    await waitFor(() => expect(checkAmrFundingFeedback).toHaveBeenCalled());
+    await waitFor(() => expect(checkAmrFundingEvidence).toHaveBeenCalled());
     expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
     if (changed) advanceWorkspaceAccountGeneration('account-changed-during-preflight');
-    await act(async () => { finish('available'); await sending; });
+    await act(async () => { finish({ kind: 'available', preflight: null }); await sending; });
     expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(changed ? 0 : 1);
     expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
     expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toHaveLength(0);
@@ -711,7 +711,7 @@ describe('跑到一半余额不足:谁点亮升级卡', () => {
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(send);
     await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalled());
-    expect(checkAmrFundingFeedback).not.toHaveBeenCalled();
+    expect(checkAmrFundingEvidence).not.toHaveBeenCalled();
   });
 
   it('does not reopen a dismissed dialog when the same run reports its failure again', async () => {

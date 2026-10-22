@@ -154,6 +154,9 @@ async function wireSignedInAmrHome(
     await route.fulfill({ json: { config: AMR_CONFIG } });
   });
   await routeAgents(page, [AMR_AGENT]);
+  await page.route('**/api/amr/models', (route) => route.fulfill({
+    json: { source: 'remote', models: AMR_AGENT.models, refreshing: false },
+  }));
   await mockSignedInVelaAccount(page, { balanceUsd: options.accountBalanceUsd ?? '20.00' });
   await mockAmrPersonalWorkspace(page, undefined, {
     accountBalanceUsd: options.accountBalanceUsd ?? '20.00',
