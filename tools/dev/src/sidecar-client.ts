@@ -22,8 +22,7 @@ function convergedStamp(runtime: AppRuntimeLookup, app: (typeof APP_KEYS)[keyof 
 }
 
 export const DAEMON_STARTUP_TIMEOUT_MS = 120_000;
-// Cold Next.js startup can exceed 35s when CI runs isolated clients concurrently.
-const WEB_STARTUP_TIMEOUT_MS = 90_000;
+const WEB_STARTUP_TIMEOUT_MS = 35_000;
 const DESKTOP_STARTUP_TIMEOUT_MS = 15_000;
 
 type ProcessAliveProbe = () => boolean;
