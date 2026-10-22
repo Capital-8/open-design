@@ -3,8 +3,9 @@ import { currentWorkspaceAccountGeneration } from '../collab/workspace-identity'
 import type { AmrBalanceGateScope } from './amr-balance-gate';
 
 type FundingFeedback = 'available' | 'insufficient' | 'unknown';
-const pending = new Map<string, { generation: number; promise: Promise<FundingFeedback> }>();
-let positive: { key: string; expiresAt: number } | null = null;
+interface FundingEvidence { kind: FundingFeedback; preflight: WorkspaceBillingPreflight | null }
+const pending = new Map<string, { generation: number; promise: Promise<FundingEvidence> }>();
+let positive: { key: string; expiresAt: number; preflight: WorkspaceBillingPreflight } | null = null;
 const homeBlocks = new Map<string, AmrWalletSnapshot>();
 let blockAccountGeneration = currentWorkspaceAccountGeneration();
 let cacheGeneration = 0;
@@ -45,7 +46,7 @@ export async function readFreshAmrFundingEvidence(
   scope: AmrBalanceGateScope,
   modelId: string | null,
   isCurrent: () => boolean = () => true,
-): Promise<{ kind: FundingFeedback; preflight: WorkspaceBillingPreflight | null }> {
+): Promise<FundingEvidence> {
   const unknown = { kind: 'unknown' as const, preflight: null };
   if (!isCurrent()) return unknown;
   const generation = currentWorkspaceAccountGeneration();
@@ -73,15 +74,16 @@ export async function readFreshAmrFundingEvidence(
 
 /** Project sends always re-read negative evidence. Home retains the block
  * while confirming it; only a fresh available response removes that block. */
-export function checkAmrFundingFeedback(
+export function checkAmrFundingEvidence(
   scope: AmrBalanceGateScope | undefined,
   modelId: string | null,
   isCurrent: () => boolean = () => true,
-): Promise<FundingFeedback> {
-  if (!scope || !isCurrent()) return Promise.resolve('unknown');
+): Promise<FundingEvidence> {
+  const unknown: FundingEvidence = { kind: 'unknown', preflight: null };
+  if (!scope || !isCurrent()) return Promise.resolve(unknown);
   const generation = currentWorkspaceAccountGeneration();
   const key = fundingKey(scope, modelId);
-  if (positive?.key === key && positive.expiresAt > Date.now()) return Promise.resolve('available');
+  if (positive?.key === key && positive.expiresAt > Date.now()) return Promise.resolve({ kind: 'available', preflight: positive.preflight });
   const requestGeneration = cacheGeneration;
   const existing = pending.get(key);
   if (existing) {
@@ -89,18 +91,18 @@ export function checkAmrFundingFeedback(
     // A newer billing publication supersedes this read. Wait for it to settle
     // before checking again; all queued callers then share the latest read.
     return existing.promise.then(() => generation === currentWorkspaceAccountGeneration()
-      ? checkAmrFundingFeedback(scope, modelId, isCurrent) : 'unknown');
+      ? checkAmrFundingEvidence(scope, modelId, isCurrent) : unknown);
   }
-  const request = (async (): Promise<FundingFeedback> => {
+  const request = (async (): Promise<FundingEvidence> => {
     try {
       const evidence = await readFreshAmrFundingEvidence(scope, modelId, () =>
         isCurrent() && generation === currentWorkspaceAccountGeneration() && requestGeneration === cacheGeneration);
       const preflight = evidence.preflight;
-      if (!preflight) return 'unknown';
+      if (!preflight) return unknown;
       if (preflight.fundingCheck === 'available') {
         homeBlocks.delete(key);
-        positive = { key, expiresAt: Date.now() + 5_000 };
-        return 'available';
+        positive = { key, expiresAt: Date.now() + 5_000, preflight };
+        return evidence;
       }
       if (preflight.fundingCheck === 'insufficient') {
         const balance = preflight.balanceUsd?.trim();
@@ -111,14 +113,23 @@ export function checkAmrFundingFeedback(
             stale: false, source: 'daemon_cache',
           });
         }
-        return 'insufficient';
+        return evidence;
       }
-      return 'unknown';
+      return unknown;
     } catch {
-      return 'unknown';
+      return unknown;
     }
   })();
   pending.set(key, { generation: requestGeneration, promise: request });
   void request.finally(() => pending.delete(key));
   return request;
+}
+
+/** Legacy verdict callers share the exact request/cache with display consumers. */
+export function checkAmrFundingFeedback(
+  scope: AmrBalanceGateScope | undefined,
+  modelId: string | null,
+  isCurrent: () => boolean = () => true,
+): Promise<FundingFeedback> {
+  return checkAmrFundingEvidence(scope, modelId, isCurrent).then((evidence) => evidence.kind);
 }

@@ -6165,6 +6165,7 @@ function AppInner() {
       <HomeAmrBalanceGateDialogs
         block={homeAmrBalanceGateBlock}
         runtimeProfile={amrLoginStatus?.profile?.trim() || amrProfileForConfig(config)}
+        consoleOrigin={amrLoginStatus?.consoleOrigin}
         metricsConsent={config.telemetry?.metrics === true}
         installationId={config.installationId}
       />

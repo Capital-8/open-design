@@ -28,6 +28,7 @@
 import {
   canReachWorkspaceBillingEntrance,
   type WorkspaceBillingSummary,
+  type WorkspaceBillingPreflight,
   type WorkspaceCollabContext,
 } from '@open-design/contracts';
 
@@ -129,6 +130,23 @@ export function resolveAmrBalanceBranch(
     tier: isMaxPlanTier(tier) ? 'max' : 'below_max',
     audience: resolveAmrBalanceAudience(context),
   };
+}
+
+/** Keep role/permission decisions, but use the same validated funding read for
+ * the plan being explained. Callers retain their account/model/current guards;
+ * a loading account/display snapshot cannot downgrade a proven Workspace Max. */
+export function withAmrFundingPlan(
+  branch: AmrBalanceBranch,
+  context: WorkspaceCollabContext | null | undefined,
+  preflight: WorkspaceBillingPreflight | null | undefined,
+): AmrBalanceBranch {
+  const plan = preflight?.codingPlan;
+  if (!context || !preflight || preflight.schemaVersion !== 1
+    || preflight.workspaceId !== context.workspaceId
+    || preflight.workspaceMemberId !== context.workspaceMemberId
+    || plan?.workspaceId !== context.workspaceId || plan.eligible !== true
+    || !['go', 'plus', 'pro', 'max'].includes(plan.tier ?? '')) return branch;
+  return { ...branch, tier: isMaxPlanTier(plan.tier) ? 'max' : 'below_max' };
 }
 
 export function amrBalanceBlockedDialog(
