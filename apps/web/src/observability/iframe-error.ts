@@ -475,11 +475,21 @@ export function isPreviewFrameVisible(iframe: HTMLIFrameElement): boolean {
 }
 
 
+/** Render modes whose frames carry the observability bridge and can answer
+ * `od:preview-metric-probe`. URL-loaded artifacts never receive that bridge, so
+ * an unanswered probe there is not evidence of failure; counting them would
+ * turn every visible, successful URL preview into an `error` result. */
+export function previewModeAnswersProbe(renderMode: PreviewRenderMode): boolean {
+  return renderMode !== 'url_load';
+}
+
 /** Bounded probes; no authored text/URL/DOM enters the metric transport.
- * Retained frames are cancelled by activity attributes, even without unmount. */
+ * Retained frames are cancelled by activity attributes, even without unmount.
+ * Frames that cannot answer the probe are excluded from the denominator. */
 export function trackVisiblePreview(options: {
   iframe: HTMLIFrameElement; renderMode: PreviewRenderMode; artifactKind: string | null;
 }): () => void {
+  if (!previewModeAnswersProbe(options.renderMode)) return () => {};
   const { iframe } = options;
   let current: ReturnType<typeof createPreviewAttempt> | null = null;
   let attemptId: string | null = null;

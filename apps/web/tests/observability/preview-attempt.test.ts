@@ -73,6 +73,21 @@ it('accepts only a current-frame/current-attempt terminal and ignores duplicate 
   frame.remove(); vi.restoreAllMocks();
 });
 
+it('excludes visible url_load previews from the denominator instead of timing them out as errors', async () => {
+  const { reportClientMetricEvent } = await import('../../src/analytics/error-tracking');
+  vi.mocked(reportClientMetricEvent).mockClear(); vi.useFakeTimers();
+  const frame = document.createElement('iframe'); document.body.append(frame);
+  vi.spyOn(frame, 'getBoundingClientRect').mockReturnValue({ width: 100, height: 100, top: 0, left: 0, bottom: 100, right: 100 } as DOMRect);
+  const post = vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
+  const stop = trackVisiblePreview({ iframe: frame, renderMode: 'url_load', artifactKind: 'html' });
+  frame.dispatchEvent(new Event('load'));
+  vi.advanceTimersByTime(60_000);
+  stop();
+  expect(reportClientMetricEvent).not.toHaveBeenCalled();
+  expect(post.mock.calls.filter(([d]) => d.type === 'od:preview-metric-probe')).toHaveLength(0);
+  frame.remove(); vi.useRealTimers(); vi.restoreAllMocks();
+});
+
 it('bounds probes and classifies missing transport evidence as error, not white screen', async () => {
   const { reportClientMetricEvent } = await import('../../src/analytics/error-tracking');
   vi.mocked(reportClientMetricEvent).mockClear(); vi.useFakeTimers();
