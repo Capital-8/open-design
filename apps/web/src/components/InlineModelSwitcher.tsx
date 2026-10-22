@@ -18,7 +18,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react';
-import type { AmrWalletSnapshot } from '@open-design/contracts';
+import { canReachWorkspaceBillingEntrance, type AmrWalletSnapshot } from '@open-design/contracts';
 import { VisuallyHidden } from '@open-design/components';
 import { useT } from '../i18n';
 import {
@@ -33,7 +33,7 @@ import {
   recordAmrEntry,
   type AmrEntryAttribution,
 } from '../analytics/amr-attribution';
-import { amrPlansUrlForProfile } from '../runtime/amr-guidance';
+import { amrPlansUrlForWorkspace } from '../runtime/amr-guidance';
 import { getResolvedDeviceId } from '../analytics/client';
 import {
   trackDeepSeekCampaignModelBenefitSurfaceView,
@@ -50,6 +50,7 @@ import {
   useWorkspaceBillingResponse,
   useWorkspaceContext,
   workspaceBillingBalanceUsd,
+  workspaceBillingSummaryForContext,
 } from '../collab/useWorkspaceContext';
 import { KNOWN_PROVIDERS } from '../state/config';
 import { fetchProviderModels } from '../providers/provider-models';
@@ -857,9 +858,32 @@ export function InlineModelSwitcher({
     open,
   ]);
 
+  const amrLoggedIn = isAmrSessionAuthenticated(amrStatus);
+  const scopedWorkspaceBilling = workspaceBillingSummaryForContext(
+    workspaceBillingResponse,
+    workspaceContext,
+  );
+  // An account's personal plan cannot decide a team's upgrade eligibility.
+  const amrUpgradePlan = workspaceContext?.workspaceType === 'team'
+    ? scopedWorkspaceBilling?.membershipTier?.trim() || null
+    : scopedWorkspaceBilling?.membershipTier?.trim() || amrStatus?.account?.plan;
+  const amrPlansUrl = workspaceContextLoading
+    ? null
+    : amrPlansUrlForWorkspace(
+        amrStatus?.profile ?? config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE,
+        workspaceContext?.workspaceId,
+      );
+  const amrCanUpgrade =
+    amrLoggedIn &&
+    canUpgradeVelaPlan(amrUpgradePlan?.replace(/^team[_-]/i, '')) &&
+    workspaceContext !== null &&
+    canReachWorkspaceBillingEntrance(workspaceContext) &&
+    amrPlansUrl !== null;
+
   /** Where a refused model pick sends the user instead — the same plans
    *  destination the settings picker's upgrade lock already opens. */
   const openAmrModelUpgrade = useCallback(() => {
+    if (!amrCanUpgrade || !amrPlansUrl) return;
     const attribution = recordAmrEntry(
       analytics.track,
       campaignNeedsUpgrade
@@ -883,9 +907,7 @@ export function InlineModelSwitcher({
     });
     window.open(
       attributedAmrUrl(
-        amrPlansUrlForProfile(
-          amrStatus?.profile ?? config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE,
-        ),
+        amrPlansUrl,
         attribution,
         deviceId,
       ),
@@ -893,14 +915,13 @@ export function InlineModelSwitcher({
       'noopener,noreferrer',
     );
   }, [
-    amrStatus?.profile,
+    amrCanUpgrade,
+    amrPlansUrl,
     analytics.track,
     campaignNeedsUpgrade,
-    config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE,
     config.installationId,
     config.telemetry?.metrics,
   ]);
-  const amrLoggedIn = isAmrSessionAuthenticated(amrStatus);
 
   useEffect(() => {
     if (!amrLoggedIn || workspaceContext?.workspaceType === 'team') {
@@ -960,13 +981,6 @@ export function InlineModelSwitcher({
               : t('common.loading')
       )
     : null;
-  // Personal workspaces always resolve `canManageBilling` true (the user is
-  // their own owner), so this does not affect the personal-workspace upgrade
-  // path.
-  const amrCanUpgrade =
-    amrLoggedIn &&
-    canUpgradeVelaPlan(amrStatus?.account?.plan) &&
-    Boolean(workspaceContext?.permissions?.canManageBilling);
   const amrActionLabel = amrLoginPending
     ? t('settings.amrSigningIn')
     : amrLoggedIn
@@ -1658,29 +1672,7 @@ export function InlineModelSwitcher({
                         data-testid="inline-model-switcher-account-upgrade"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const attribution = recordAmrEntry(
-                            analytics.track,
-                            'inline_amr_upgrade',
-                            new Date(),
-                            { metricsConsent: config.telemetry?.metrics === true },
-                          );
-                          const deviceId = amrHandoffDeviceId({
-                            metricsConsent: config.telemetry?.metrics === true,
-                            resolvedDeviceId: getResolvedDeviceId(),
-                            installationId: config.installationId,
-                          });
-                          window.open(
-                            attributedAmrUrl(
-                              amrPlansUrlForProfile(
-                                amrStatus?.profile ??
-                                  config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE,
-                              ),
-                              attribution,
-                              deviceId,
-                            ),
-                            '_blank',
-                            'noopener,noreferrer',
-                          );
+                          openAmrModelUpgrade();
                         }}
                       >
                         {t('settings.amrUpgrade')}
@@ -1779,7 +1771,7 @@ export function InlineModelSwitcher({
                         : undefined
                     }
                     onDisabledOptionUpgrade={
-                      currentAgent?.id === 'amr'
+                      currentAgent?.id === 'amr' && amrCanUpgrade
                         ? openAmrModelUpgrade
                         : undefined
                     }

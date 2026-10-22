@@ -20,6 +20,7 @@ import {
   buildWorkspacePermissions,
   buildWorkspaceSeatSummary,
   type WorkspaceBillingSummary,
+  type WorkspaceBillingPreflight,
   type WorkspaceCollabContext,
 } from '@open-design/contracts';
 import { describe, expect, it } from 'vitest';
@@ -30,6 +31,8 @@ import {
   amrBalanceUpgradeIntent,
   resolveAmrBalanceAudience,
   resolveAmrBalanceBranch,
+  resolveAmrConcurrencyPresentation,
+  withAmrFundingPlan,
 } from '../../src/runtime/amr-balance-branch';
 import { isMaxPlanTier, isTopPlanTier } from '../../src/collab/team-plan';
 import { workspaceUpgradeUrl } from '../../src/components/EntryNavRail';
@@ -262,5 +265,60 @@ describe('分支判定与升级链接必须对同一个人给出同一个答案'
       // 看不到这张弹窗的人(走「找所有者充值」),不外跳才是对的。
       expect(url).toBeNull();
     }
+  });
+});
+
+
+describe('F08 plan from the current validated funding observation', () => {
+  function proof(ctx: WorkspaceCollabContext, tier: 'go' | 'plus' | 'pro' | 'max' | null = 'max'): WorkspaceBillingPreflight {
+    return { schemaVersion: 1, workspaceId: ctx.workspaceId, workspaceMemberId: ctx.workspaceMemberId,
+      modelId: 'flash', generatedAt: new Date().toISOString(), balanceUsd: '0', modelCovered: true,
+      funding: 'gateway', fundingCheck: 'insufficient', codingPlan: { workspaceId: ctx.workspaceId,
+        generatedAt: new Date().toISOString(), eligible: tier !== null, tier, windows: [] } };
+  }
+  it.each(['owner', 'admin', 'member'] as const)('uses same-scope Max while preserving %s permissions', role => {
+    const ctx = context({ role, planId: null });
+    const branch = resolveAmrBalanceBranch({ context: ctx });
+    const result = withAmrFundingPlan(branch, ctx, proof(ctx));
+    expect(result).toEqual({ ...branch, tier: 'max' });
+    expect(amrBalanceUpgradeIntent(result)).toBe(role === 'owner' ? 'auto_recharge' : 'ask_owner');
+  });
+  it.each(['workspace', 'member', 'plan-workspace', 'unsupported-tier', 'ineligible', 'missing'] as const)('does not adopt %s funding metadata', change => {
+    const ctx = context({ role: 'owner', planId: 'team_pro' });
+    const branch = resolveAmrBalanceBranch({ context: ctx });
+    const preflight = proof(ctx);
+    if (change === 'workspace') preflight.workspaceId = 'other';
+    if (change === 'member') preflight.workspaceMemberId = 'other';
+    if (change === 'plan-workspace') preflight.codingPlan.workspaceId = 'other';
+    if (change === 'unsupported-tier') preflight.codingPlan.tier = 'future-plan' as 'max';
+    if (change === 'ineligible') preflight.codingPlan.eligible = false;
+    expect(withAmrFundingPlan(branch, ctx, change === 'missing' ? null : preflight)).toBe(branch);
+  });
+  it('keeps unknown concurrency plans distinct from a proven Free or paid tier', () => {
+    const unknown = context({ role: 'owner', planId: null });
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, accountPlan: 'plus' }).upgradeAllowed).toBe(false);
+    expect(resolveAmrConcurrencyPresentation({ context: { ...unknown, billingState: 'free' } }).upgradeAllowed).toBe(true);
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: proof(unknown, 'go') }).upgradeAllowed).toBe(true);
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: proof(unknown, 'max') })).toEqual({
+      branch: { audience: 'owner', tier: 'max' }, upgradeAllowed: false,
+    });
+  });
+  it('does not let another member or workspace enable an unknown concurrency upgrade', () => {
+    const unknown = context({ role: 'owner', planId: null });
+    const foreign = proof(unknown, 'go');
+    foreign.workspaceMemberId = 'other';
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: foreign }).upgradeAllowed).toBe(false);
+    foreign.workspaceMemberId = unknown.workspaceMemberId;
+    foreign.codingPlan.workspaceId = 'other';
+    expect(resolveAmrConcurrencyPresentation({ context: unknown, preflight: foreign }).upgradeAllowed).toBe(false);
+    const member = context({ role: 'member', planId: null });
+    expect(resolveAmrConcurrencyPresentation({ context: member, preflight: proof(member, 'go') }).upgradeAllowed).toBe(false);
+  });
+  it('keeps Free without guessing an account tier and accepts a proven lower plan', () => {
+    const free = context({ role: 'owner', planId: null, billingState: 'free' });
+    const freeBranch = resolveAmrBalanceBranch({ context: free, accountPlan: 'max' });
+    expect(withAmrFundingPlan(freeBranch, free, proof(free, null))).toEqual({ audience: 'owner', tier: 'below_max' });
+    const oldMax = resolveAmrBalanceBranch({ context: context({ role: 'owner', planId: 'team_max' }) });
+    expect(withAmrFundingPlan(oldMax, free, proof(free, 'pro')).tier).toBe('below_max');
   });
 });

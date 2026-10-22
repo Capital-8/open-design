@@ -1,5 +1,6 @@
 import { homeAutoSendIdentity, stableIdentityDigest, type HomeRequestConcurrencyRejection } from '../runtime/home-auto-send-identity';
 import { withLiveArtifactDeliveries } from '../runtime/live-artifact-delivery';
+import { readAmrRequestConcurrency } from '../runtime/amr-request-concurrency';
 import { readRetriedErrorSurface, retriedErrorSurfaceKey, writeRetriedErrorSurface } from '../runtime/chat/retried-error-surface';
 import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './share/observed-public-share-link';
 import type { ShareLoginReturn } from './share/share-login-return';
@@ -184,12 +185,13 @@ import {
   isAmrBalanceGateScope,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { checkAmrFundingFeedback } from '../runtime/amr-funding-feedback';
+import { checkAmrFundingEvidence } from '../runtime/amr-funding-feedback';
 import {
   amrBalanceBlockedDialog,
   amrBalanceDialogUpgradeIntent,
   amrBalanceUpgradeIntent,
   resolveAmrBalanceBranch,
+  withAmrFundingPlan,
   type AmrBalanceBranch,
   type AmrBalanceBlockedDialogKind,
 } from '../runtime/amr-balance-branch';
@@ -271,6 +273,7 @@ import type {
   InstalledPluginRecord,
   RunContextSelection,
   WorkspaceCollabContext,
+  WorkspaceBillingPreflight,
   WorkspaceContextItem,
 } from '@open-design/contracts';
 import type {
@@ -869,6 +872,8 @@ function ensureConversationPresent(
 interface Props {
   project: Project;
   workspaceQuotaStatus?: Pick<VelaLoginStatus, 'profile' | 'consoleOrigin'> | null;
+  /** Authenticated daemon profile (or explicit runtime configuration), independent of wallet availability. */
+  amrProfile?: string | null;
   /**
    * Exact project-bound Workspace authority resolved by the route gate.
    * Production deep links pass this instead of borrowing the shell's mutable
@@ -2127,6 +2132,7 @@ export function reconcileProjectDetail(
 export function ProjectView({
   project,
   workspaceQuotaStatus,
+  amrProfile,
   workspaceContextOverride,
   initialWorkspaceScope,
   initialProjectDetail,
@@ -2950,6 +2956,8 @@ export function ProjectView({
        */
       upgradeIntent: 'pricing' | 'auto_recharge';
       snapshot: AmrWalletSnapshot | null;
+      profile?: string | null;
+      consoleOrigin?: string | null;
       conversationId: string;
       /** Live gateway rejections do not wait for a wallet display read. */
       failureAuthorityKey?: string;
@@ -3239,6 +3247,9 @@ export function ProjectView({
   // arrive during the check queue instead of racing a duplicate run through
   // the not-yet-busy window the gate's await opens.
   const amrGateInFlightConversationsRef = useRef<Set<string>>(new Set());
+  // A hint read is not an accepted/queued send. Repeated submissions wait for
+  // another explicit user action rather than queueing behind this advisory read.
+  const amrConcurrencyReadsRef = useRef(new Set<string>());
   // Conversations whose queue auto-drain is paused because the balance gate
   // blocked a send. Without the pause, every unrelated re-run of the drain
   // effect would re-hit the wallet endpoint and re-pop the dialog. Lifted by
@@ -3585,6 +3596,9 @@ export function ProjectView({
   const shownFundingFailuresRef = useRef(new Set<string>());
   const fundingDialogContext = {
     isAmr: config.mode === 'daemon' && config.agentId === 'amr',
+    profile: workspaceQuotaStatus?.profile?.trim() || (amrProfile !== undefined
+      ? amrProfile : config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null),
+    consoleOrigin: workspaceQuotaStatus?.consoleOrigin,
     branch: amrBalanceBranch,
     scope: amrBalanceCardScope,
     workspaceContext: projectRunBillingAuthorityContext,
@@ -3613,6 +3627,14 @@ export function ProjectView({
     };
   }
 
+  const concurrencyIntentKey = JSON.stringify([fundingSelectionKey, activeConversationId]);
+  const concurrencyIntentRef = useRef({ key: concurrencyIntentKey, generation: 0 });
+  if (concurrencyIntentRef.current.key !== concurrencyIntentKey) {
+    concurrencyIntentRef.current = {
+      key: concurrencyIntentKey, generation: concurrencyIntentRef.current.generation + 1,
+    };
+  }
+
   // AMR funding feedback owns one dialog in its original conversation/account.
   // Display-wallet reads and historical replays cannot open or reopen it.
   const showAmrFundingFailure = useCallback((input: {
@@ -3623,6 +3645,7 @@ export function ProjectView({
     accountGeneration: number;
     source?: 'preflight' | 'gateway';
     modelId?: string | null;
+    preflight?: WorkspaceBillingPreflight | null;
   }) => {
     if (
       input.code !== AMR_INSUFFICIENT_BALANCE_CODE
@@ -3643,12 +3666,17 @@ export function ProjectView({
       return;
     }
     shownFundingFailuresRef.current.add(key);
-    const { branch, scope, workspaceContext, modelId } = fundingDialogContextRef.current;
+    const { branch: displayBranch, scope, workspaceContext, modelId, profile, consoleOrigin } = fundingDialogContextRef.current;
+    const branch = source === 'preflight'
+      ? withAmrFundingPlan(displayBranch, workspaceContext, input.preflight)
+      : displayBranch;
     setAmrBalanceGateBlock({
       reason: 'insufficient',
       dialog: amrBalanceBlockedDialog(branch),
       upgradeIntent: amrBalanceDialogUpgradeIntent(branch),
       snapshot: null,
+      profile,
+      consoleOrigin,
       modelId,
       fundingScope: scope,
       workspaceContext,
@@ -8877,6 +8905,49 @@ export function ProjectView({
         return meta?.acceptDurableQueue === true;
       }
       const runConversationId = activeConversationId;
+      if (amrGateApplies) {
+        const restoreComposer = () => {
+          if (meta?.composerOwnedDraft) amrGateBlockedRequestRef.current = clientRequestId;
+          return false;
+        };
+        if (amrConcurrencyReadsRef.current.has(runConversationId)) return restoreComposer();
+        const intentGeneration = concurrencyIntentRef.current.generation;
+        amrConcurrencyReadsRef.current.add(runConversationId);
+        let hint;
+        try {
+          hint = await readAmrRequestConcurrency(amrBalanceGateScopeForWorkspaceContext(projectRunPreflightContext));
+        } finally {
+          amrConcurrencyReadsRef.current.delete(runConversationId);
+        }
+        if (!mountedRef.current || projectIdRef.current !== project.id
+          || projectRunAuthorityKeyRef.current !== projectRunAuthorityKey
+          || currentWorkspaceAccountGeneration() !== sendAccountGeneration
+          || concurrencyIntentRef.current.generation !== intentGeneration
+          || activeConversationIdRef.current !== runConversationId
+          || messagesConversationIdRef.current !== runConversationId
+          || !fundingDialogContextRef.current.isAmr) return restoreComposer();
+        if (hint?.status === 'full') {
+          amrGatePausedQueueConversationsRef.current.add(runConversationId);
+          setConcurrencyRejection({
+            conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
+            accountGeneration: sendAccountGeneration,
+            branch: amrBalanceBranchRef.current,
+            workspaceContext: fundingDialogContextRef.current.workspaceContext,
+            initialHomeSend: meta?.initialHomeSend === true,
+            draft: meta?.initialHomeSend ? {
+              nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
+              commentAttachments, meta,
+            } : null,
+          });
+          setConcurrencyDialogOpen(true);
+          // Consume a Home handoff only into its restored draft, never into an
+          // automatic retry when a slot later becomes available.
+          if (meta?.initialHomeSend) return true;
+          return restoreComposer();
+        }
+        // Unsupported/unavailable is not evidence of a slot. Keep the real
+        // Link admission/refusal path as the final authority, without a lease.
+      }
       latestRequestSendRef.current.set(runConversationId, clientRequestId);
       setConcurrencyDialogOpen(false);
       setConcurrencyRejection(null);
@@ -9038,8 +9109,8 @@ export function ProjectView({
         && fundingDialogContextRef.current.modelId === fundingModelId
         && fundingSelectionRef.current.generation === fundingSelectionGeneration;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
-        ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
-        : Promise.resolve('unknown' as const);
+        ? checkAmrFundingEvidence(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
+        : Promise.resolve({ kind: 'unknown' as const, preflight: null });
       /**
        * 把刚画出去的那一轮收回 —— 只有预检拒绝时才走这里。
        *
@@ -9196,7 +9267,7 @@ export function ProjectView({
             return acceptedDurableQueue(queueGateSend());
           }
           if (streamingConversationIdRef.current !== runConversationId) return false;
-          if (funding === 'insufficient' && gate.kind !== 'hard') {
+          if (funding.kind === 'insufficient' && gate.kind !== 'hard') {
             const accepted = meta?.composerOwnedDraft
               ? rejectBlockedSend()
               : acceptedDurableQueue(parkBlockedSend());
@@ -9206,6 +9277,7 @@ export function ProjectView({
               code: AMR_INSUFFICIENT_BALANCE_CODE, runKey: assistantId,
               conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
               accountGeneration: sendAccountGeneration, source: 'preflight', modelId: fundingModelId,
+              preflight: funding.preflight,
             });
             return accepted;
           }
@@ -14693,10 +14765,12 @@ export function ProjectView({
           modelId={amrBalanceGateBlock.modelId}
           fundingScope={amrBalanceGateBlock.fundingScope}
           balanceUsd={amrBalanceGateBlock.snapshot?.balanceUsd ?? null}
-          profile={amrBalanceGateBlock.snapshot?.profile
-            || workspaceQuotaStatus?.profile?.trim()
-            || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE
-            || null}
+          profile={amrBalanceGateBlock.snapshot?.profile ?? (amrBalanceGateBlock.profile !== undefined
+            ? amrBalanceGateBlock.profile
+            : workspaceQuotaStatus?.profile?.trim() || amrProfile
+              || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null)}
+          consoleOrigin={amrBalanceGateBlock.profile !== undefined
+            ? amrBalanceGateBlock.consoleOrigin : workspaceQuotaStatus?.consoleOrigin}
           entrySource="chat_balance_gate_upgrade"
           upgradeIntent={amrBalanceGateBlock.upgradeIntent}
           // 弹窗和卡上那颗必须从**同一份**上下文算落点。默认那条(环境里选中

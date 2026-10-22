@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AmrModelLoadingCache } from '../../src/runtimes/amr-model-cache.js';
+import { amrModelScope, buildAmrModelCacheKey } from '../../src/runtimes/amr-model-probe.js';
+import { resetLiveModelsForTests } from '../../src/runtimes/models.js';
+import { amrRunModels, AmrModelLoadingCache } from '../../src/runtimes/amr-model-cache.js';
 
 const preset = [{ id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' }];
 
@@ -60,5 +62,50 @@ describe('AmrModelLoadingCache.getAuthoritative', () => {
     const pending = cache.getAuthoritative('k', fetchers, 1_000);
     await vi.advanceTimersByTimeAsync(300);
     await expect(pending).resolves.toMatchObject({ source: 'remote', models: remote });
+  });
+});
+
+// A remote catalog's enabled flags are workspace entitlements, even when two
+// workspaces share the same account, credentials and installed CLI binary.
+describe('AMR model catalog workspace partition', () => {
+  afterEach(() => resetLiveModelsForTests());
+
+  it('never falls back to another workspace or credential revision remembered catalog', () => {
+    const revision = {
+      authSource: 'file' as const, profile: 'local', loggedIn: true,
+      userId: 'user', userEmail: 'same@example.test', configMtimeMs: 1,
+      credentialFingerprint: 'credential-a',
+    };
+    const env = { VELA_PROFILE: 'local', VELA_WORKSPACE_ID: 'go-b', VELA_RUNTIME_KEY: 'secret-not-for-scope' };
+    const goScope = amrModelScope(env, revision);
+    amrRunModels('amr', goScope, { source: 'remote', models: [{ id: 'pro', label: 'Pro', enabled: true }] });
+    const freeScope = amrModelScope({ ...env, VELA_WORKSPACE_ID: 'free-a' }, revision);
+    const otherCredential = amrModelScope(env, { ...revision, credentialFingerprint: 'credential-b' });
+
+    expect(amrRunModels('amr', freeScope, { source: 'preset', models: preset })).toEqual(preset);
+    expect(amrRunModels('amr', otherCredential, { source: 'preset', models: preset })).toEqual(preset);
+    expect(goScope).not.toContain('secret-not-for-scope');
+  });
+
+  it('never reuses one workspace entitlement catalog for another workspace', () => {
+    const shared = {
+      launchPath: '/fixture/vela',
+      credentialRevision: {
+        authSource: 'file' as const,
+        profile: 'local',
+        loggedIn: true,
+        userId: 'same-user',
+        userEmail: 'same@example.test',
+        configMtimeMs: 1,
+        credentialFingerprint: 'same-credential',
+      },
+    };
+    const keyFor = (workspaceId: string) => buildAmrModelCacheKey({
+      ...shared,
+      env: { VELA_WORKSPACE_ID: workspaceId },
+    });
+
+    expect(keyFor('free-a')).not.toBe(keyFor('go-b'));
+    expect(keyFor('free-a')).toBe(keyFor('free-a'));
   });
 });

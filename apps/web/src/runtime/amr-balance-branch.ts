@@ -28,10 +28,11 @@
 import {
   canReachWorkspaceBillingEntrance,
   type WorkspaceBillingSummary,
+  type WorkspaceBillingPreflight,
   type WorkspaceCollabContext,
 } from '@open-design/contracts';
 
-import { isMaxPlanTier, resolvePlanTier } from '../collab/team-plan';
+import { isMaxPlanTier, resolvePlanLabelTier, resolvePlanTier } from '../collab/team-plan';
 
 /** 谁在看这张卡:能自己付钱的人,还是只能去找付钱的人。 */
 export type AmrBalanceAudience = 'owner' | 'member';
@@ -128,6 +129,51 @@ export function resolveAmrBalanceBranch(
     // 一次读数失败不该把人送进一个他可能根本没有的自动充值面板。
     tier: isMaxPlanTier(tier) ? 'max' : 'below_max',
     audience: resolveAmrBalanceAudience(context),
+  };
+}
+
+/** Keep role/permission decisions, but use the same validated funding read for
+ * the plan being explained. Callers retain their account/model/current guards;
+ * a loading account/display snapshot cannot downgrade a proven Workspace Max. */
+export function withAmrFundingPlan(
+  branch: AmrBalanceBranch,
+  context: WorkspaceCollabContext | null | undefined,
+  preflight: WorkspaceBillingPreflight | null | undefined,
+): AmrBalanceBranch {
+  const tier = scopedFundingPlanTier(context, preflight);
+  return tier ? { ...branch, tier: isMaxPlanTier(tier) ? 'max' : 'below_max' } : branch;
+}
+
+function scopedFundingPlanTier(
+  context: WorkspaceCollabContext | null | undefined,
+  preflight: WorkspaceBillingPreflight | null | undefined,
+): string | null {
+  const plan = preflight?.codingPlan;
+  if (!context || !preflight || preflight.schemaVersion !== 1
+    || preflight.workspaceId !== context.workspaceId
+    || preflight.workspaceMemberId !== context.workspaceMemberId
+    || plan?.workspaceId !== context.workspaceId || plan.eligible !== true
+    || !['go', 'plus', 'pro', 'max'].includes(plan.tier ?? '')) return null;
+  return plan.tier ?? null;
+}
+
+/** A full counter proves the refusal, not the subscription tier. Keep that
+ * refusal immediate, but offer a higher plan only after scoped plan proof. */
+export function resolveAmrConcurrencyPresentation(
+  sources: AmrBalanceBranchSources & { preflight?: WorkspaceBillingPreflight | null },
+): { branch: AmrBalanceBranch; upgradeAllowed: boolean } {
+  const branch = withAmrFundingPlan(
+    resolveAmrBalanceBranch(sources), sources.context, sources.preflight,
+  );
+  const knownTier = scopedFundingPlanTier(sources.context, sources.preflight)
+    || resolvePlanLabelTier({
+      context: sources.context,
+      billing: sources.billing,
+      accountPlan: sources.context?.workspaceType === 'team' ? null : sources.accountPlan,
+    });
+  return {
+    branch,
+    upgradeAllowed: Boolean(knownTier) && branch.audience === 'owner' && branch.tier !== 'max',
   };
 }
 

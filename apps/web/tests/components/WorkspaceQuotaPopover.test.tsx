@@ -94,14 +94,31 @@ describe('C-01 state and role matrix (VIEW-001/002/021)', () => {
   }
 });
 
-it.each(['free', 'go', 'plus', 'pro', 'max'] as const)('E12 %s retains header with only the required gray skeleton rows (VIEW-017)', tier => {
+it.each(['free', 'go', 'plus', 'pro', 'max'] as const)('E12 %s retains header with the unified default loading block (decision 5)', tier => {
   render(panel({ ...view(tier), loading: true }));
   expect(screen.getByRole('img', { name: tier })).toBeTruthy();
   expect(screen.getByTestId('workspace-quota-skeleton').getAttribute('aria-busy')).toBe('true');
-  expect(screen.queryAllByTestId('workspace-quota-window-skeleton')).toHaveLength(tier === 'free' ? 0 : tier === 'go' ? 2 : 1);
+  expect(screen.queryAllByTestId('workspace-quota-window-skeleton')).toHaveLength(1);
+  expect(screen.queryAllByTestId('workspace-quota-wallet-skeleton')).toHaveLength(1);
   expect(screen.queryByText(/加载|重试|刷新|错误|明细暂不可用|\$0/)).toBeNull();
   expect(screen.queryByRole('progressbar')).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('E12 uses identical default loading markup for every tier and unknown tier (decision 5)', () => {
+  const skeletons = (['free', 'go', 'plus', 'pro', 'max', null] as const).map(tier => {
+    const mounted = render(panel({ ...view(tier ?? 'free'), tier, loading: true }));
+    const skeleton = screen.getByTestId('workspace-quota-skeleton');
+    expect(within(skeleton).queryAllByTestId('workspace-quota-window-skeleton')).toHaveLength(1);
+    expect(within(skeleton).queryAllByTestId('workspace-quota-wallet-skeleton')).toHaveLength(1);
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(/加载|重试|刷新|错误|\$0/)).toBeNull();
+    const html = skeleton.innerHTML;
+    mounted.unmount();
+    return html;
+  });
+  for (const html of skeletons) expect(html).toBe(skeletons[0]);
 });
 
 it('E03 missing breakdown/modelRestriction/windows stays unavailable, never fake $0 (VIEW-012)', () => {
@@ -186,12 +203,12 @@ it('E04 preserves the existing readable locked-workspace billing entrance', () =
   expect(screen.getByRole('button', { name: '查看余额' })).toBeTruthy();
 });
 
-it('E12 keeps a scoped host Go header and two skeletons while a directory-only read is pending', () => {
+it('E12 keeps a scoped host Go header and the unified loading block while a directory-only read is pending', () => {
   const unknown = workspaceContextFixture({ ...context, workspaceType: 'personal', planId: null, billingState: undefined });
   const state = workspaceQuotaView({ context: unknown, response: null, tier: 'go' });
   render(panel(state));
   expect(screen.getByRole('img', { name: 'go' })).toBeTruthy();
-  expect(screen.getAllByTestId('workspace-quota-window-skeleton')).toHaveLength(2);
+  expect(screen.getAllByTestId('workspace-quota-window-skeleton')).toHaveLength(1);
 });
 
 it('E04 owner action preserves locked-workspace recovery priority and falls back to the scoped wrapper (MAIN-REVIEW F-2)', () => {

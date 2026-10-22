@@ -45,14 +45,17 @@ import { STAGE_ATTACHMENT_EVENT } from '../../src/components/ChatComposer';
 import { ProjectView } from '../../src/components/ProjectView';
 import type { ProjectWorkspaceScopeState } from '../../src/collab/useProjectWorkspaceScope';
 import { resetWorkspaceContextCache } from '../../src/collab/useWorkspaceContext';
+import { advanceWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 import { streamViaDaemon } from '../../src/providers/daemon';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
+import { setRuntimeAmrConsoleOrigin } from '../../src/runtime/amr-guidance';
 import {
   createConversation,
   listConversations,
   listMessages,
   loadTabs,
+  saveMessage,
 } from '../../src/state/projects';
 import {
   fetchPreviewComments,
@@ -506,6 +509,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     window.sessionStorage.clear();
     window.localStorage.clear();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
     stubFetch();
     vi.stubGlobal('open', mockedWindowOpen);
     mockedListConversations.mockImplementation(async (projectId: string) => [
@@ -534,6 +538,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /** 用给定身份发一条,并把余额门钉在给定判定上。 */
@@ -589,6 +594,17 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     const dialogUrl = String(mockedWindowOpen.mock.calls[1]?.[0]);
     expect(dialogUrl).toContain('billing=plan');
     expect(dialogUrl).not.toContain('billing=auto-recharge');
+  });
+
+  it('wallet snapshot profile takes priority over the authenticated fallback', async () => {
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');
+    mockedCheckAmrBalanceGate.mockResolvedValue(EMPTY_WALLET as never);
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never, amrProfile: 'local' });
+    await clickSendWhenReady();
+    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+    expect(new URL(String(mockedWindowOpen.mock.calls[0]![0])).origin).toBe('https://open-design.ai');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
   });
 
   it('非 Max · 非 owner:卡 + 找所有者充值弹窗,不外跳', async () => {
@@ -770,6 +786,7 @@ describe('死胡同:没有账单权限的成员必须拿到一条前进的路', 
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /**
@@ -830,6 +847,7 @@ describe('守卫:判定放行时四种分支一个都不许冒出来', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     resetWorkspaceContextCache();
+    setRuntimeAmrConsoleOrigin(null);
   });
 
   /**
@@ -874,7 +892,253 @@ describe('Link request concurrency rejection preserves the original send', () =>
     workspaceScopeMocks.billingResponse = null; projectCollabMocks.writerAuthority = 'allowed'; projectCollabMocks.viewerOnly = false;
     mockedStreamViaDaemon.mockResolvedValue(undefined);
   });
-  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); resetWorkspaceContextCache(); setRuntimeAmrConsoleOrigin(null); });
+
+  it.each(['owner', 'admin', 'member'] as const)('%s reads a full counter before creating project messages or a run', async (role) => {
+    const context = callerContext(role, 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+    } })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'local' } } } });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    await act(async () => { outcome = await chatPaneSpy.mock.calls.at(-1)![0].onSend('exact full counter draft',
+      [{ path: 'counter-brief.txt', name: 'counter-brief.txt', kind: 'file' }], []); });
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(outcome).toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toEqual([]);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('amr-concurrency-upgrade') !== null).toBe(role === 'owner');
+  });
+
+  it('keeps a full-counter draft and files in the real composer, and sends only after one new manual action', async () => {
+    realChatPane.enabled = true;
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    let status = 'full';
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status, running: status === 'full' ? 10 : 0, limit: 10,
+    } })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    const props = { project: { ...project(), pendingPrompt: null } as never };
+    const view = renderProjectView(props);
+    await flushMounts();
+    await typeAndSettle('retain this full counter project draft');
+    act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT, { detail: {
+      attachments: [{ path: 'brief.txt', name: 'brief.txt', kind: 'file' }, { path: 'reference.html', name: 'reference.html', kind: 'file' }],
+    } })));
+    await waitFor(() => expect(screen.getByTestId('chat-send')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await screen.findByTestId('amr-concurrency-dialog');
+    await waitFor(() => expect(composerText()).toBe('retain this full counter project draft'));
+    expect(within(screen.getByTestId('staged-attachments')).getByTitle('brief.txt')).toBeTruthy();
+    expect(within(screen.getByTestId('staged-attachments')).getByTitle('reference.html')).toBeTruthy();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toEqual([]);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    status = 'available';
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    view.rerender(projectViewElement(props));
+    await flushMounts();
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    expect(counterRead).toHaveBeenCalledTimes(2);
+    await flushMounts();
+    const sent = mockedStreamViaDaemon.mock.calls[0]![0];
+    expect(sent.history.at(-1)?.content).toBe('retain this full counter project draft');
+    expect(sent.attachments).toEqual(['brief.txt', 'reference.html']);
+  });
+
+  it('leaves unavailable counter reads to real Link admission', async () => {
+    workspaceScopeMocks.ambientContext = callerContext('owner', 'team_go');
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response('{}', { status: 503 }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+  });
+
+  it('does not queue a second submission while the first counter read is pending', async () => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const counterRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let first: unknown;
+    act(() => { first = chatPaneSpy.mock.calls.at(-1)![0].onSend('first full draft', [], []); });
+    await waitFor(() => expect(counterRead).toHaveBeenCalledOnce());
+    let second: unknown;
+    await act(async () => { second = await chatPaneSpy.mock.calls.at(-1)![0].onSend('second full draft', [], []); });
+    expect(second).toBe('restore-draft');
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    await act(async () => { finish(new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+    } }))); });
+    await expect(first).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+  });
+
+  it.each(['scope', 'model', 'conversation', 'account', 'unmount'] as const)('discards pending full counter evidence across a %s boundary', async (boundary) => {
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    const secondConversation = { ...conversation(PROJECT_ID), id: 'second-counter-conversation' };
+    mockedListConversations.mockResolvedValue([conversation(PROJECT_ID), secondConversation]);
+    const agents = [{ id: 'amr', name: 'amr', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }, { id: 'deepseek-v4.1-flash', label: 'Flash' }] }] as AgentInfo[];
+    const props = { project: { ...project(), pendingPrompt: null } as never, agents,
+      config: { ...config, agentModels: { amr: { model: 'glm-5' } } }, routeConversationId: conversation(PROJECT_ID).id };
+    const originalFetch = globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const counterRead = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    const view = renderProjectView(props);
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    act(() => { outcome = chatPaneSpy.mock.calls.at(-1)![0].onSend('old counter draft', [], []); });
+    await waitFor(() => expect(counterRead).toHaveBeenCalledOnce());
+    if (boundary === 'account') advanceWorkspaceAccountGeneration('counter-account-boundary');
+    else if (boundary === 'unmount') view.unmount();
+    else {
+      let changed: Partial<ComponentProps<typeof ProjectView>>;
+      if (boundary === 'model') changed = { config: { ...config, agentModels: { amr: { model: 'deepseek-v4.1-flash' } } } };
+      else if (boundary === 'scope') changed = { project: { ...project(), pendingPrompt: null, workspaceId: 'other-counter-space' } as never };
+      else changed = { routeConversationId: secondConversation.id };
+      view.rerender(projectViewElement({ ...props, ...changed }));
+      await flushMounts();
+      view.rerender(projectViewElement(props));
+      await flushMounts();
+    }
+    await act(async () => { finish(new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+    } }))); });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+  });
+
+  it('restores a full-counter Home handoff once without auto-sending when a slot later frees', async () => {
+    realChatPane.enabled = true;
+    const context = callerContext('owner', 'team_go');
+    workspaceScopeMocks.ambientContext = context;
+    window.sessionStorage.setItem(`od:auto-send-first:${PROJECT_ID}`, '1');
+    window.sessionStorage.setItem(`od:auto-send-prompt:${PROJECT_ID}`, 'original Home full prompt');
+    window.sessionStorage.setItem(`od:auto-send-attachments:${PROJECT_ID}`, JSON.stringify([{ path: 'home.txt', name: 'home.txt', kind: 'file' }]));
+    let status = 'full';
+    const originalFetch = globalThis.fetch;
+    const counterRead = vi.fn(async () => new Response(JSON.stringify({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status, running: status === 'full' ? 10 : 0, limit: 10,
+    } })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
+    const onRejected = vi.fn().mockReturnValue(true);
+    const props = { project: { ...project(), pendingPrompt: 'original Home full prompt' } as never,
+      onInitialHomeRequestConcurrencyRejected: onRejected };
+    const view = renderProjectView(props);
+    await screen.findByTestId('amr-concurrency-dialog');
+    await waitFor(() => expect(onRejected).toHaveBeenCalledOnce());
+    expect(composerText()).toBe('original Home full prompt');
+    expect(within(screen.getByTestId('staged-attachments')).getByTitle('home.txt')).toBeTruthy();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+    status = 'available';
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    view.rerender(projectViewElement(props));
+    await flushMounts();
+    expect(counterRead).toHaveBeenCalledOnce();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(onRejected).toHaveBeenCalledOnce();
+  });
+
+
+  it.each([
+    { role: 'owner', tier: 'max', expected: 'auto-recharge' },
+    { role: 'owner', tier: 'pro', expected: 'plan' },
+    { role: 'owner', tier: null, expected: 'plan' },
+    { role: 'admin', tier: 'max', expected: null },
+    { role: 'member', tier: 'max', expected: null },
+  ] as const)('F08 $role / $tier adopts the current funding plan without display metadata', async ({role,tier,expected}) => {
+    const context = callerContext(role, null);
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/preflight?') ? Promise.resolve(new Response(JSON.stringify({preflight:{
+        schemaVersion:1, workspaceId:context.workspaceId, workspaceMemberId:context.workspaceMemberId,
+        modelId:null, generatedAt:new Date().toISOString(), balanceUsd:'0', fundingCheck:'insufficient',
+        modelCovered:true, funding:'gateway', codingPlan:{workspaceId:context.workspaceId,
+          generatedAt:new Date().toISOString(),eligible:tier!==null,tier,windows:[]},
+      }}))) : originalFetch(input, init)));
+    renderProjectView({ project:{...project(),pendingPrompt:null} as never, amrProfile:'local' });
+    await clickSendWhenReady();
+    if (role === 'owner') {
+      fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+      const url=new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+      expect(url.searchParams.get('billing')).toBe(expected);
+      expect(url.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    } else {
+      await screen.findByTestId('amr-balance-owner-dialog');
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+      expect(mockedWindowOpen).not.toHaveBeenCalled();
+    }
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+  });
+
+  it('a late old-account Max preflight cannot open a funding dialog or run', async () => {
+    const context=callerContext('owner',null);
+    workspaceScopeMocks.ambientContext=context;
+    const originalFetch=globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const read=vi.fn(()=>new Promise<Response>(resolve=>{finish=resolve;}));
+    vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>
+      String(input).includes('/billing/preflight?')?read():originalFetch(input,init)));
+    renderProjectView({project:{...project(),pendingPrompt:null} as never,amrProfile:'local'});
+    await waitFor(()=>expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome:unknown;
+    act(()=>{outcome=chatPaneSpy.mock.calls.at(-1)![0].onSend('Original account draft',[],[]);});
+    await waitFor(()=>expect(read).toHaveBeenCalledOnce());
+    await act(async()=>{
+      advanceWorkspaceAccountGeneration('F08-different-account');
+      finish(new Response(JSON.stringify({preflight:{schemaVersion:1,
+        workspaceId:context.workspaceId,workspaceMemberId:context.workspaceMemberId,modelId:null,
+        generatedAt:new Date().toISOString(),balanceUsd:'0',fundingCheck:'insufficient',
+        codingPlan:{workspaceId:context.workspaceId,eligible:true,tier:'max',windows:[]}}})));
+    });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+  });
 
   it('StrictMode funding rejection retracts the provisional turn without replacing existing output', async () => {
     const context = callerContext('owner', 'team_go');
@@ -939,7 +1203,8 @@ describe('Link request concurrency rejection preserves the original send', () =>
 
   it.each(['owner', 'admin', 'member'] as const)('%s sees a real request-limit dialog, retains text/files and retries only manually', async (role) => {
     workspaceScopeMocks.ambientContext = callerContext(role, 'team_pro');
-    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'local' } } } });
     await waitFor(() => expect((screen.getByTestId('normal-send') as HTMLButtonElement).disabled).toBe(false));
     const attachments = [{ name: 'brief.txt', path: 'brief.txt', kind: 'file' }];
     await act(async () => { await chatPaneSpy.mock.calls.at(-1)![0].onSend('keep exact draft', attachments, []); });
@@ -963,6 +1228,81 @@ describe('Link request concurrency rejection preserves the original send', () =>
     await clickSendWhenReady();
     await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2));
   });
+  it.each([
+    ['local', 'http://127.0.0.1:49195'],
+    ['test', 'http://127.0.0.1:49195'],
+    ['prod', 'https://open-design.ai'],
+    ['unrecognized', 'https://open-design.ai'],
+    [null, null],
+  ] as const)('snapshot-less funding failure freezes supplied %s profile and payer', async (profile, origin) => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    const props = { project: { ...project(), pendingPrompt: null } as never, amrProfile: profile,
+      config: { ...config, agentCliEnv: {} } };
+    const view = renderProjectView(props);
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('profile-funding-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link insufficient funding'), {
+        code: 'AMR_INSUFFICIENT_BALANCE',
+      }));
+    });
+    await screen.findByTestId('amr-balance-dialog');
+    if (profile === null) {
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+    }
+    // A later status/profile render cannot change the failure's billing link.
+    view.rerender(projectViewElement({ ...props, amrProfile: profile === 'prod' ? 'local' : 'prod' }));
+    if (origin === null) {
+      // Integration's existing explicit-unknown contract waits for a runtime
+      // profile; it must not guess production, even after a later render.
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+      expect(mockedWindowOpen).not.toHaveBeenCalled();
+    } else {
+      fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+      const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+      expect(target.origin).toBe(origin);
+      expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+      expect(target.searchParams.get('billing')).toBe('plan');
+    }
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+    setRuntimeAmrConsoleOrigin(null);
+  });
+
+
+  it('freezes the authenticated status profile and origin ahead of stale configuration', async () => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    const props = { project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'prod' } } },
+      amrProfile: 'prod',
+      workspaceQuotaStatus: { profile: 'test', consoleOrigin: 'http://127.0.0.1:49196' } };
+    const view = renderProjectView(props);
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('status-funding-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link insufficient funding'), {
+        code: 'AMR_INSUFFICIENT_BALANCE',
+      }));
+    });
+    await screen.findByTestId('amr-balance-dialog-plans');
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49197');
+    view.rerender(projectViewElement({ ...props,
+      workspaceQuotaStatus: { profile: 'prod', consoleOrigin: 'https://open-design.ai' } }));
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-plans'));
+    const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+    expect(target.origin).toBe('http://127.0.0.1:49196');
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ['local', 'http://localhost:5173'],
     ['test', 'https://open-design.powerformer.net'],

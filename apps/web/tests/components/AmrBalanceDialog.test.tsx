@@ -40,6 +40,42 @@ afterEach(() => {
 });
 
 describe('AmrBalanceDialog', () => {
+  it('shows four F07 benefits including free invitations and shared allowance', () => {
+    render(<AmrBalanceDialog
+      reason="insufficient"
+      balanceUsd="0.00"
+      profile="local"
+      entrySource="home_balance_gate_upgrade"
+      workspaceContext={workspaceContextFixture({
+        workspaceId: 'f07-free-space', workspaceMemberId: 'f07-owner',
+        workspaceType: 'team', role: 'owner', planId: null,
+      })}
+      metricsConsent={false}
+      installationId={null}
+      onClose={vi.fn()}
+      onResolved={vi.fn()}
+    />);
+    expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual([
+      'No complex setup, choose from leading SOTA models',
+      'Invite members for free and share allowance',
+      'Create multimodal images and text in one place',
+      'Publish in one click and share your work with a link',
+    ]);
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Invite members for free and share allowance');
+  });
+
+  it('preserves the existing sign-in invitation benefits', () => {
+    render(<AmrBalanceDialog reason="signed_out" balanceUsd={null} profile="test"
+      entrySource="home_balance_gate_upgrade" metricsConsent={false} installationId={null}
+      workspaceContext={null} onClose={vi.fn()} onResolved={vi.fn()} />);
+    expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual([
+      'No API keys — top models included', 'Invite members for free and share allowance',
+      'Official service you can rely on',
+      'Always improving: one-click publishing, multimodal generation, teams, and more',
+    ]);
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+  });
+
   it('dismisses from the corner close button', () => {
     const onClose = vi.fn();
 
@@ -361,6 +397,41 @@ describe('AmrBalanceDialog', () => {
       'https://open-design.ai/cloud/dashboard',
     );
     expect(target.searchParams.get('billing')).toBe('plan');
+  });
+
+
+  it.each([
+    {profile:'local',origin:'http://127.0.0.1:49195'},
+    {profile:'prod',origin:'https://open-design.ai'},
+    {profile:null,origin:null},
+  ])('Home uses authenticated runtime $profile rather than a default wallet profile', async ({profile,origin}) => {
+    const open=vi.spyOn(window,'open').mockImplementation(()=>null);
+    const context=workspaceContextFixture({workspaceId:'home-runtime-origin',workspaceMemberId:'home-runtime-owner',workspaceType:'team',role:'owner'});
+    context.permissions.canManageBilling=true;
+    context.permissions.canManageAutoRecharge=true;
+    vi.spyOn(globalThis,'fetch').mockImplementation(async input=>{
+      const url=String(input);
+      if(url.includes('/api/workspace/directory'))return new Response(JSON.stringify(workspaceDirectoryFixture([context])));
+      if(url.includes('/api/workspace/context'))return new Response(JSON.stringify({context}));
+      return new Response(JSON.stringify({summary:null}));
+    });
+    render(<HomeAmrBalanceGateDialogs
+      block={{reason:'insufficient',dialog:'upgrade',upgradeIntent:'auto_recharge',
+        snapshot:{status:'available',profile:'default',user:null,balanceUsd:'0',updatedAt:null,
+          fetchedAt:new Date().toISOString(),stale:false,source:'daemon_cache'},resolve:vi.fn()}}
+      runtimeProfile={profile} consoleOrigin="http://127.0.0.1:49195"
+      metricsConsent={false} installationId={null}/>);
+    await screen.findByTestId('amr-balance-dialog');
+    if(profile===null){
+      await waitFor(()=>expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull());
+      expect(open).not.toHaveBeenCalled();
+    }else{
+      fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+      const target=new URL(String(open.mock.calls[0]![0]));
+      expect(target.origin).toBe(origin);
+      expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+      expect(target.searchParams.get('billing')).toBe('auto-recharge');
+    }
   });
 
   it('Home actual wallet watch dismisses the block on exact funding recovery instead of authorizing an automatic submit', async () => {
