@@ -82,6 +82,7 @@ export async function startScopedFundingClient(page: Page, info: TestInfo, optio
   attachmentPrefix?: string;
   requireNamePrefix: boolean;
   preserveSelectedLocale?: boolean;
+  disableOdNextStrategy?: boolean;
   checkPreflight: (alias: string, space: FundingSpace, preflight: Preflight) => void | Promise<void>;
 }) {
   if (process.env.OD_FUNDING_OWNER_RUNNER !== 'active') {
@@ -117,6 +118,7 @@ export async function startScopedFundingClient(page: Page, info: TestInfo, optio
   await writeFile(join(runtime.dataDir, 'app-config.json'), JSON.stringify(config));
   const env = {
     AMR_HOME: amrHome, VELA_BIN: fixture.runtime.velaBin, VELA_PROFILE: 'local',
+    ...(options.disableOdNextStrategy ? { OD_NEXT_STRATEGY_ROLLOUT: 'off' } : {}),
     OPEN_DESIGN_AMR_PROFILE: 'local', VELA_API_URL: fixture.upstream.apiUrl,
     VELA_LINK_URL: fixture.upstream.linkUrl, VELA_CONTROL_KEY: fixture.actor.controlKey,
     VELA_OPENCODE_BIN: fixture.runtime.openCodeBin,
