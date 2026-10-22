@@ -155,9 +155,7 @@ OD_API_TOKEN=
 
 ## Stockage persistant
 
-Avant de documenter, modifier ou choisir un chemin de stockage persistant du daemon,
-vous DEVEZ lire `AGENTS.md` à la racine, section **Daemon data directory contract**.
-Ce Quickstart NE DOIT PAS répéter ce contrat ni définir de chemins de stockage.
+Docker Compose conserve les données dans un volume nommé persistant. Préservez ce volume lors des mises à jour. Configuration et sauvegarde : [Daemon storage](../daemon-data.md)
 
 ---
 
@@ -184,7 +182,7 @@ Pour le shell desktop et tous les sidecars gérés en arrière-plan :
 pnpm tools-dev # démarre daemon + web + desktop en arrière-plan
 ```
 
-Au premier chargement, l’app détecte les runtimes locaux disponibles et propose aussi les runtimes BYOK configurés dans Settings. Choisissez un runtime, une design template et un Design System, puis tapez un prompt et cliquez sur **Send**. Les runtimes locaux structurés écrivent les fichiers canoniques du projet et diffusent les événements de fichiers/outils ; l’espace de fichiers et la preview se mettent à jour depuis ces écritures. Les exécutions texte uniquement et BYOK renvoient à la place un bloc `<artifact>` complet que l’hôte parse. Avant de documenter ou de modifier un chemin de stockage d’artifact, vous DEVEZ lire `AGENTS.md` à la racine, section **Daemon data directory contract**.
+Au premier chargement, l’app détecte les runtimes locaux disponibles et propose aussi les runtimes BYOK configurés dans Settings. Choisissez un runtime, une design template et un Design System, puis tapez un prompt et cliquez sur **Send**. Les runtimes locaux structurés écrivent les fichiers canoniques du projet et diffusent les événements de fichiers/outils ; l’espace de fichiers et la preview se mettent à jour depuis ces écritures. Les exécutions texte uniquement et BYOK renvoient à la place un bloc `<artifact>` complet que l’hôte parse.
 
 Le catalogue **Design Systems** est chargé directement depuis les paquets `DESIGN.md` de [`design-systems/`](../../design-systems/). Choisissez-en un pour appliquer le langage visuel de la marque à l’artifact.
 

@@ -95,7 +95,7 @@ Guidelines:
 - Prefer explicit domain service interfaces in route files over `any` or `unknown`.
 - Use types from the implementation module or `packages/contracts` instead of restating response shapes by hand.
 - Keep `packages/contracts` pure. Do not move daemon-only Node, SQLite, Express, filesystem, or process types into contracts.
-- Daemon data paths must follow the root **Daemon data directory contract**. Route all daemon-owned data through `RUNTIME_DATA_DIR` or constants derived from it.
+- Daemon data paths must follow the [daemon data contract](../../docs/daemon-data.md). Route all daemon-owned data through `RUNTIME_DATA_DIR` or constants derived from it.
 
 ## CLI and Surface Parity
 
@@ -152,3 +152,19 @@ Before handing off daemon changes, check:
 - CLI parity is handled or explicitly not applicable.
 - Daemon data paths derive from the resolved daemon data root.
 - Tests are under `tests/` and relevant checks were run.
+
+## Product question artifacts
+
+The product recognizes `<question-form>` in streamed text, including markers
+split across `text_delta` chunks, for `run_finished.asked_user_question` analytics
+(`runAskedUserQuestion`). This signal is not tool-call detection. Host rendering
+and answer submission are documented in `apps/web/AGENTS.md`; prompt paths are
+indexed by `docs/prompt-composition.md` (repository-relative paths).
+
+## Physical Run lifecycle
+
+- Every physical Run is started through `internalRunCreation.start(run, analytics, starter)` (`apps/daemon/src/services/internal-run-service.ts`). Calling the run registry's `start` directly bypasses the Run analytics lifecycle, so the Run reports no `run_created` and no `run_finished` and nothing says so. `pnpm guard`'s "run start choke point" check enforces this; the only allowed caller of `.runs.start(` is the service itself.
+- The `analytics` argument is required on purpose. A caller with no identity to attribute the Run to — a scheduled Automation, a background refresh — passes `requestAnalyticsContext: null` explicitly; the lifecycle then stays silent instead of inventing one. Stating "no identity" is a decision the code has to record, not a step a caller can skip.
+- A daemon-created Run that continues an existing task inherits its analytics identity and lineage from the Run that caused it, via `inheritedRunLineageHints` (`apps/daemon/src/services/run-analytics-lifecycle.ts`). Resolve lineage through that helper rather than from the source Run's `analyticsRecovery`: the lifecycle re-reads host facts before it captures, so a short Run can hand off before its own recovery record exists.
+
+Read `src/runtimes/AGENTS.md` before stream/parser changes and `docs/prompt-composition.md` before prompt changes (repository-relative paths). Product `<question-form>` instructions describe generated product behavior, not repository-maintenance conversation rules.

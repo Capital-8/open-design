@@ -133,7 +133,7 @@ on `/api/agents` for the AMR model list.
   `pnpm typecheck`, plus package-scoped tests/builds matching touched files.
   Source: `AGENTS.md` "Validation strategy".
 - New i18n keys must be added to `apps/web/src/i18n/types.ts` and all 18
-  locale files. Source: `AGENTS.md` "i18n keys".
+  locale files. Source: `apps/web/AGENTS.md` "i18n keys".
 
 ## Design
 

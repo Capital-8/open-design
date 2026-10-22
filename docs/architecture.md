@@ -157,8 +157,7 @@ the user-selected external `metadata.baseDir`. The daemon validates and bounds
 file operations against that selected workspace instead of copying it into the
 managed-project root.
 
-This document intentionally gives no concrete daemon data path. The root
-`AGENTS.md` section **Daemon data directory contract** is the only path
+This document intentionally gives no concrete daemon data path. The [daemon data contract](daemon-data.md) is the only path
 authority.
 
 ### 3.6 Preview renderer

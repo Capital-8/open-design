@@ -368,7 +368,7 @@ decisions:
   receive an explicit storage root derived from the daemon's already-resolved
   `RUNTIME_DATA_DIR`; it must not independently reinterpret `OD_DATA_DIR` or
   choose a cwd-relative fallback. The exact daemon path is intentionally left
-  to root [`AGENTS.md`](../../AGENTS.md) → **Daemon data directory contract**.
+  to [daemon data contract](../../docs/daemon-data.md).
 - **Portability.** `od memory export --to <path>` and `od memory import <path>`
   for moving memory across machines without a cloud sync layer. The engine's
   storage is already plain JSON; this is just CLI plumbing.
@@ -396,9 +396,8 @@ integration boundaries.
 | B. Daemon owns raw events | Daemon-managed storage | Engine becomes a pure derivation function over an event slice handed in by the daemon. |
 | C. Hybrid — daemon writes, engine reads | Daemon writes through its storage contract; engine reads through a typed accessor | Decouples write path (event capture is a host concern) from derivation (engine concern). |
 
-This spec MUST NOT define daemon data paths. Before documenting or changing
-daemon storage, read root [`AGENTS.md`](../../AGENTS.md) → **Daemon data
-directory contract**.
+Before documenting or changing
+daemon storage, read [daemon data contract](../../docs/daemon-data.md).
 
 Media config storage is outside this spec. Read the same root contract before
 documenting any storage exception. Raw events are general daemon runtime data

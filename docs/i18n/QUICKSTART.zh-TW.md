@@ -45,7 +45,7 @@ pnpm tools-dev run web # 在前景啟動 daemon + web
 pnpm tools-dev # 在背景啟動 daemon + web + desktop
 ```
 
-首次載入時，應用程式會偵測可用的本地 runtime，並顯示在 Settings 中設定的 BYOK runtime。選擇 runtime、design template 與 design system，輸入 prompt，然後點擊 **Send**。結構化的本地 runtime 會寫入規範專案檔案並串流傳送檔案/工具事件；檔案工作區與預覽由這些寫入更新。純文字與 BYOK 執行則回傳一個完整的 `<artifact>` 區塊供宿主解析。在記錄或修改任何 artifact 儲存路徑之前，必須閱讀儲存庫根目錄 `AGENTS.md` 中的 **Daemon data directory contract**。
+首次載入時，應用程式會偵測可用的本地 runtime，並顯示在 Settings 中設定的 BYOK runtime。選擇 runtime、design template 與 design system，輸入 prompt，然後點擊 **Send**。結構化的本地 runtime 會寫入規範專案檔案並串流傳送檔案/工具事件；檔案工作區與預覽由這些寫入更新。純文字與 BYOK 執行則回傳一個完整的 `<artifact>` 區塊供宿主解析。
 
 **Design systems** 目錄直接從 [`design-systems/`](../../design-systems/) 下的 `DESIGN.md` 套件載入。選擇任意一套，即可將該品牌的視覺語言套用到 artifact。
 
@@ -191,9 +191,7 @@ OD_API_TOKEN=
 
 ## 持久化儲存
 
-在記錄、修改或選擇任何持久 daemon 儲存路徑之前，
-必須閱讀儲存庫根目錄 `AGENTS.md` 中的 **Daemon data directory contract**。
-本 Quickstart 不得重述該契約，也不得定義儲存路徑。
+Docker Compose 使用持久命名磁碟區儲存資料。升級時保留該磁碟區；設定與備份請見 [Daemon storage](../daemon-data.md)
 
 ---
 

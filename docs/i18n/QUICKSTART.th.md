@@ -198,7 +198,7 @@ pnpm tools-dev run web # starts daemon + web in the foreground
 pnpm tools-dev # starts daemon + web + desktop in the background
 ```
 
-เมื่อโหลดครั้งแรก แอปจะตรวจ local runtimes ที่พร้อมใช้และแสดง BYOK runtimes ที่ตั้งค่าไว้ใน Settings ด้วย. เลือก runtime, design template และ design system จากนั้นพิมพ์ prompt แล้วกด **Send**. Structured local runtime จะเขียน canonical project files และ stream file/tool events; file workspace กับ preview จะอัปเดตจากการเขียนเหล่านั้น. ส่วน text-only และ BYOK runs จะส่ง `<artifact>` block ที่สมบูรณ์ให้ host parse. ก่อน document หรือเปลี่ยน artifact storage path ต้องอ่าน `AGENTS.md` ที่ root ในส่วน **Daemon data directory contract**.
+เมื่อโหลดครั้งแรก แอปจะตรวจ local runtimes ที่พร้อมใช้และแสดง BYOK runtimes ที่ตั้งค่าไว้ใน Settings ด้วย. เลือก runtime, design template และ design system จากนั้นพิมพ์ prompt แล้วกด **Send**. Structured local runtime จะเขียน canonical project files และ stream file/tool events; file workspace กับ preview จะอัปเดตจากการเขียนเหล่านั้น. ส่วน text-only และ BYOK runs จะส่ง `<artifact>` block ที่สมบูรณ์ให้ host parse.
 
 Catalog **Design systems** โหลดโดยตรงจาก packages `DESIGN.md` ใน [`design-systems/`](../../design-systems/). เลือกหนึ่งชุดเพื่อใช้ visual language ของ brand นั้นกับ artifact.
 

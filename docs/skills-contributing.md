@@ -158,9 +158,7 @@ pnpm tools-dev run web
 #        <artifact> block is emitted.
 #      * text_artifact: with no filesystem tools, one complete standalone
 #        <artifact> block is the canonical result and must not claim file writes.
-#      This guide MUST NOT define daemon data paths; read the root AGENTS.md
-#      section "Daemon data directory contract" before changing or documenting
-#      artifact storage.
+#      Storage configuration and ownership: docs/daemon-data.md.
 #    - Verify preview iframe renders correctly
 #    - Verify export (PPTX / PDF) works if the mode supports it
 ```

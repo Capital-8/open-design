@@ -165,7 +165,7 @@ The uninstaller:
 2. On Linux: disables and removes the systemd unit.
 3. Removes `deploy/.env`.
 
-> **Data:** Before documenting, changing, deleting, or preserving persistent daemon storage, you MUST read root [`AGENTS.md`](../AGENTS.md) → **Daemon data directory contract**. This guide MUST NOT restate that contract or define storage paths.
+> **Data:** Keep the daemon data root when upgrading or reinstalling. Stop the daemon before backing it up; imported-folder projects also require backups of their external folders. See [daemon storage](daemon-data.md) for launch-specific configuration.
 
 ## Configuration
 

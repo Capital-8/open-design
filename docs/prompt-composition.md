@@ -9,7 +9,7 @@ A generation run is composed by ONE of two independent implementations, and
 the top of `composeSystemPrompt`:
 
 ```ts
-// apps/daemon/src/prompts/system.ts:905
+// apps/daemon/src/prompts/system.ts
 }: ComposeInput): string {
   if (odNextStrategyRecipe) {
     return composeOdNextStrategyRequestPromptV2(odNextStrategyRecipe, {...});
@@ -17,14 +17,14 @@ the top of `composeSystemPrompt`:
   // ↓ everything below — the entire legacy stack — is skipped on the OD Next path
 ```
 
-The API/BYOK mirror at `packages/contracts/src/prompts/system.ts:318` forks the
+The API/BYOK mirror at `packages/contracts/src/prompts/system.ts` forks the
 same way. The two sides share no composition floor: a rule added to one holds
 only for the runs that take that side.
 
 ## Which runs take which path
 
 OD Next is on by default and gated. `evaluateOdNextRollout`
-(`apps/daemon/src/strategies/od-next/rollout.ts:151`) is an AND over the policy
+(`apps/daemon/src/strategies/od-next/rollout.ts`) is an AND over the policy
 and one run's facts, and some of its inputs vary run to run on one machine —
 which is why a divergence between the two sides surfaces as an **intermittent**
 bug rather than a reproducible one:
@@ -54,10 +54,10 @@ Changing "the prompt" can mean up to four edits. Check each one:
 
 | Axis | Switch | A side | B side |
 |---|---|---|---|
-| Strategy | `odNextStrategyRecipe` (`apps/daemon/src/prompts/system.ts:905`) | `apps/daemon/src/prompts/` | `plugins/_official/scenarios/od-next-strategy/assets/**` plus TypeScript in `packages/contracts/src/prompts/od-next-strategy.ts` |
-| Legacy core | `OD_PROMPT_CORE` (`apps/daemon/src/server.ts:10049`) — **default is `slim`**, `classic` is the opt-out | `apps/daemon/src/prompts/core-slim.ts` | `official-system.ts` + `discovery.ts` |
+| Strategy | `odNextStrategyRecipe` (`apps/daemon/src/prompts/system.ts`) | `apps/daemon/src/prompts/` | `plugins/_official/scenarios/od-next-strategy/assets/**` plus TypeScript in `packages/contracts/src/prompts/od-next-strategy.ts` |
+| Legacy core | `OD_PROMPT_CORE` (`apps/daemon/src/server.ts`) — **default is `slim`**, `classic` is the opt-out | `apps/daemon/src/prompts/core-slim.ts` | `official-system.ts` + `discovery.ts` |
 | Execution mode | none; hand-maintained mirror | `apps/daemon/src/prompts/*.ts` | `packages/contracts/src/prompts/*.ts` (API/BYOK) |
-| OD Next internals | none; the same list is declared twice | `OD_NEXT_PROMPT_STAGE_CONTRACT_V2` (`packages/contracts/src/prompts/od-next-strategy.ts:214`) | `od.pipeline.stages` in the plugin's `open-design.json` |
+| OD Next internals | none; the same list is declared twice | `OD_NEXT_PROMPT_STAGE_CONTRACT_V2` (`packages/contracts/src/prompts/od-next-strategy.ts`) | `od.pipeline.stages` in the plugin's `open-design.json` |
 
 On the third axis, five pairs are still hand-maintained and have already
 drifted, so diffing a pair is not a reliable way to find what a change is
@@ -87,7 +87,7 @@ to the **host**, not to either strategy — if a strategy is retired, these stay
 
 | Contract | Host consumer | Legacy | OD Next |
 |---|---|---|---|
-| `data-od-deck-protocol="1"` on `<html>` | `apps/web/src/runtime/srcdoc.ts:3136` — how the host recognizes a v1-native deck | ✅ | ✅ |
+| `data-od-deck-protocol="1"` on `<html>` | `apps/web/src/runtime/srcdoc.ts` — how the host recognizes a v1-native deck | ✅ | ✅ |
 | `od:deck-ready` announce (`protocolVersion`, `capabilities`) | `srcdoc.ts` ready listener — a message without `protocolVersion === 1` is ignored | ✅ | ✅ |
 | `od:slide-state` `{active, count}` posts | unified slide counter and toolbar state | ✅ | ✅ |
 | `od:slide` navigate listener | host-driven paging (`next`/`prev`/`first`/`last`/`go`) | ✅ | ✅ |
@@ -105,7 +105,7 @@ Two things to read off this table.
 **The deck rows are the model for how a host contract should be carried.** One
 source — `renderDeckFrameworkDirective` /
 `renderLegacyDeckCompatibilityDirective` in
-`packages/contracts/src/prompts/deck-framework.ts:573`, whose skeleton pins
+`packages/contracts/src/prompts/deck-framework.ts`, whose skeleton pins
 `data-od-deck-protocol="1"` at line 48 — feeds all three prompt paths. The
 daemon file is now a ten-line re-export whose own docblock states the reason:
 "the canonical deck scaffold lives in contracts so classic, BYOK, and OD Next
@@ -115,7 +115,7 @@ prompt paths cannot drift." OD Next reaches it through
 deck HTML is present, and the directive is emitted as an
 `<od-next-context kind="instruction" name="deck-framework">` block
 (`od-next-strategy.ts:548`). The wiring that supplies those inputs lives at
-`apps/daemon/src/server.ts:10125`. Copy this shape for the next contract.
+`apps/daemon/src/server.ts`. Copy this shape for the next contract.
 
 **The divergence still runs both ways.** OD Next is not a superset of legacy;
 it owns `.od-frames/` device shells that legacy has no equivalent for. And OD
@@ -204,7 +204,7 @@ one `assets/task-profiles/<taskType>.md` are decoded and concatenated verbatim
 into the prompt bundle
 (`apps/daemon/src/strategies/od-next/initial-prompt-bundle-service.ts`).
 
-`apps/daemon/src/plugins/strategy-package.ts:158` builds an explicit roster:
+`apps/daemon/src/plugins/strategy-package.ts` builds an explicit roster:
 
 ```
 ./open-design.json, ./SKILL.md,

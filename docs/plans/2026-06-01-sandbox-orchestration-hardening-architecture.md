@@ -21,8 +21,8 @@ guards and smoke coverage.
 The protected use case is:
 
 1. An external orchestrator launches OpenDesign with `OD_SANDBOX_MODE=1` and
-   isolated daemon storage. This plan MUST NOT define daemon data paths; read
-   root `AGENTS.md` → **Daemon data directory contract** before documenting
+   isolated daemon storage. read
+   [daemon data contract](../daemon-data.md) before documenting
    storage isolation.
 2. The orchestrator creates runs over HTTP/SSE and supplies only run-scoped
    policy, tools, and project context.
@@ -49,8 +49,7 @@ they are proving.
 
 Namespace and daemon storage isolation are separate axes. Namespace identifies
 sidecar processes, IPC sockets, pointers, and launcher-managed runtime files.
-Daemon storage isolation rules live only in root `AGENTS.md` → **Daemon data
-directory contract**; this plan MUST NOT restate them.
+Daemon storage isolation follows the [daemon data contract](../daemon-data.md).
 
 ## Safety Invariants
 
@@ -100,8 +99,7 @@ Hardening:
 - Keep the existing unit coverage for run-scoped bundle selection.
 - Add one tools-dev/e2e variant that launches with `OD_SANDBOX_MODE=1` and
   isolated daemon storage, then asserts run-scoped tools and runtime homes are
-  contained. Before documenting the storage path, read root `AGENTS.md` →
-  **Daemon data directory contract**.
+  contained. Before documenting the storage path, read [daemon data contract](../daemon-data.md).
 - Pin `applySandboxRuntimeEnv` behavior with primitive tests that inspect the
   child environment assembled for an agent.
 
@@ -158,7 +156,7 @@ being changed:
 | Media policy parser and denial codes | `apps/daemon/tests/media-policy.test.ts` |
 | In-run media route behavior, disabled policy, surface/model denial, token/no-token legacy behavior | `apps/daemon/tests/media-policy-routes.test.ts` |
 | Run-scoped MCP bundle parsing and sandbox-mode bundle selection | `apps/daemon/tests/run-tool-bundle.test.ts` |
-| Sandbox mode parsing and storage isolation requirements. This plan MUST NOT define daemon data paths; read root `AGENTS.md` → **Daemon data directory contract**. | `apps/daemon/tests/sandbox-mode.test.ts`, `apps/daemon/tests/resolve-data-dir.test.ts` |
+| Sandbox mode parsing and storage isolation requirements. read [daemon data contract](../daemon-data.md). | `apps/daemon/tests/sandbox-mode.test.ts`, `apps/daemon/tests/resolve-data-dir.test.ts` |
 | Sandbox runtime directory/bootstrap behavior | `apps/daemon/tests/sandbox-runtime-bootstrap.test.ts` |
 | Tool-token issuance and route authorization | `apps/daemon/tests/tool-tokens.test.ts` |
 | Export manifest shape and sandbox imported-folder denial | `apps/daemon/tests/export-manifest-route.test.ts` |
@@ -218,7 +216,7 @@ opening, so review catches conflicts within the stack instead of at merge time.
 
 - Plumb `OD_SANDBOX_MODE=1` and isolated daemon storage through a
   `createSmokeSuite(...).with.toolsDev(...)` variant. This plan MUST NOT define
-  daemon data paths; read root `AGENTS.md` → **Daemon data directory contract**.
+  daemon data paths; read [daemon data contract](../daemon-data.md).
 - Assert sandbox mode through `/api/daemon/status`.
 - Start one run with a run-scoped MCP tool and verify persisted MCP registry
   state is not visible in the child.

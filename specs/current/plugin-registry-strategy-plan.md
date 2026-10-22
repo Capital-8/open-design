@@ -153,8 +153,7 @@ Default community registry
 `Available` entries are supply candidates, not runnable capabilities. The agent should consume the installed set: bundled official plugins, user-created plugins, direct GitHub/URL/local installs, and marketplace-installed plugins. A future "Use from Available" shortcut can auto-install first, but it must still produce an installed record before the agent runs it.
 
 User-created and user-installed plugins live in daemon-managed storage. This
-plan MUST NOT define daemon data paths; read root [`AGENTS.md`](../../AGENTS.md)
-→ **Daemon data directory contract** before documenting storage. The daemon
+plan See [daemon data contract](../../docs/daemon-data.md) before documenting storage. The daemon
 reloads those installed records and folders on later boots. Runtime-bundled
 official plugins stay inside the app/repo image and are re-registered on boot as
 official-source preinstalls; updating them can later happen by
@@ -590,8 +589,7 @@ Goal: move from "catalog index" to "registry entry".
 - [x] Add `od marketplace plugins <id>` with pagination/search/filter.
 - [x] Add `od plugin install <name>@<version-or-tag>`.
 - [x] Add resolver support for exact version, dist-tag, and conservative `^`/`~` ranges.
-- [x] Add initial daemon-managed plugin lockfile shape with name, version, source, marketplace id, resolved ref, manifest digest, archive integrity. This plan MUST NOT define daemon data paths.
-- [ ] Add `od plugin lock verify`.
+- [x] Add initial daemon-managed plugin lockfile shape with name, version, source, marketplace id, resolved ref, manifest digest, archive integrity. - [ ] Add `od plugin lock verify`.
 - [ ] Add `od plugin outdated`.
 - [x] Add yanking metadata and resolver behavior: yanked versions are visible for audit and refused for new resolution. Exact locked replay warning remains a route-level follow-up once lock verify lands.
 
@@ -720,7 +718,7 @@ Additional validation by area:
 
 - Should the official registry live in this monorepo or a separate `open-design/plugin-registry` repo? Separate is cleaner for community PR review and static-site generation.
 - Should `official` marketplace trust be allowed for user-added URLs, or only for built-in source ids shipped by OpenDesign? Recommendation: only built-in sources can be `official`; user-added sources can be `trusted` or `restricted`.
-- Should lockfile be project-local or user-global? Recommendation: project-local for reproducible runs, with user-global cache as an implementation detail. This plan MUST NOT define daemon data paths; read root [`AGENTS.md`](../../AGENTS.md) → **Daemon data directory contract**.
+- Should lockfile be project-local or user-global? Recommendation: project-local for reproducible runs, with user-global cache as an implementation detail. read [daemon data contract](../../docs/daemon-data.md).
 - Should `od plugin publish --to marketplace-json` mutate a local catalog file directly or create a branch/PR when the catalog URL maps to GitHub? Recommendation: support both, but default to PR when a GitHub remote is detectable.
 - How much popularity/ranking data should the official site show before telemetry policy is settled? Recommendation: show stars/downloads only when sourced from public GitHub or explicit registry events; keep install telemetry opt-in.
 

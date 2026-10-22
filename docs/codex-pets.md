@@ -52,8 +52,7 @@ If `~/.codex/pets/` does not exist, the daemon does **not** auto-create
 it — empty list is returned and the UI shows "no recently hatched pets
 yet". Creating the directory is intentionally an explicit user step so
 the daemon does not write into external tool homes without a user opting in.
-Before documenting daemon-owned write paths, you MUST read root `AGENTS.md` →
-**Daemon data directory contract**; this guide MUST NOT restate it.
+Daemon-owned write paths follow the [daemon data contract](daemon-data.md).
 
 ## Manifest shape
 

@@ -278,13 +278,11 @@ CREATE INDEX IF NOT EXISTS idx_critique_runs_status
 | `status` | `TEXT` | Constrained lifecycle value, including the in-flight `running` state and terminal statuses. |
 | `score` | `REAL` | Final composite when one is available. |
 | `rounds_json` | `TEXT` | Compact per-round summaries; the full event transcript remains file-backed. |
-| `transcript_path` | `TEXT` | Relative transcript filename resolved inside daemon-managed artifact storage. This spec MUST NOT define daemon data paths; read root [`AGENTS.md`](../../AGENTS.md) → **Daemon data directory contract**. |
+| `transcript_path` | `TEXT` | Relative transcript filename resolved inside daemon-managed artifact storage. read [daemon data contract](../../docs/daemon-data.md). |
 | `protocol_version` | `INTEGER` | Pins the parser version used for replay. |
 | `created_at`, `updated_at` | `INTEGER` | Millisecond lifecycle timestamps. |
 
-Transcripts are written through daemon-managed artifact storage (one `PanelEvent` per line). Files larger than 256 KiB are gzipped. The orchestrator chooses the format at write time; the replay path detects the format by extension. This spec MUST NOT define daemon data paths.
-
-## UI surface
+Transcripts are written through daemon-managed artifact storage (one `PanelEvent` per line). Files larger than 256 KiB are gzipped. The orchestrator chooses the format at write time; the replay path detects the format by extension. ## UI surface
 
 Theater production code lives under `apps/web/src/components/Theater/`; its
 tests mirror that structure under `apps/web/tests/components/Theater/`.

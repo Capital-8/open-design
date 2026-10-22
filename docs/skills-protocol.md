@@ -287,7 +287,7 @@ existing user skill first, then install the new bundle. `od skills` remains the
 compatibility alias for list/show/install/uninstall. Repository-owned
 functional skills and rendering templates still live under `skills/` and
 `design-templates/` respectively. Do not document a concrete daemon-managed
-install path here; the root `AGENTS.md` **Daemon data directory contract** is
+install path here; [daemon data contract](daemon-data.md) is
 the only path authority.
 
 ## 7. Worked example — running the bundled guizang deck template
@@ -310,7 +310,7 @@ license preserved and OpenDesign metadata applied:
    deck export surfaces consume the produced project files.
 
 The protocol intentionally does not define the workspace's concrete path; read
-the root `AGENTS.md` **Daemon data directory contract** before changing or
+[daemon data contract](daemon-data.md) before changing or
 documenting artifact storage.
 
 ## 8. Writing a rendering template — minimal example

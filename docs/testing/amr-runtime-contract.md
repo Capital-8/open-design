@@ -27,7 +27,7 @@ Obtain the immutable platform manifest and payload/installer from the selected
 release. Verify the archive against its published SHA-256 before extraction or
 installation. Select the actual package's Resources directory, not a source
 checkout or a developer CLI path. Daemon data directory handling follows the
-[root contract](../../AGENTS.md#daemon-data-directory-contract).
+[daemon data contract](../daemon-data.md).
 
 ```sh
 corepack pnpm tools-pack verify-runtime \

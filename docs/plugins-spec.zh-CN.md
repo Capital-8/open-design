@@ -364,7 +364,7 @@ my-plugin/
 - `od.context.atoms`：**无序集合**——声明插件需要的 atoms。daemon 仅以默认顺序使用它们；用于不需要自定义流程的简单插件。
 - `od.pipeline`：**有序管线**——插件作者显式编排 atoms 的 stages、循环、终止条件（§10.1）。当 `od.pipeline` 与 `od.context.atoms` 同时出现时，pipeline 优先；context.atoms 仅作为 chip strip 展示。
 - `od.genui.surfaces[]`：**Generative UI 声明**——agent 在 run 中可能触发的 surface 集合（§10.3）。每条 entry 的 `kind` 是 v1 内置的 `form` / `choice` / `confirmation` / `oauth-prompt` 之一；`persist` 决定回答的留存层级（`run` / `conversation` / `project`）；`trigger` 把 surface 绑定到具体 stage / atom，避免 agent 滥用；`schema` 是 JSON Schema，daemon 据此渲染默认表单并校验回答。**未在 manifest 中声明的 surface kind 不可在 run 中触发**——doctor 校验保证 plugin 不会动态产生未知 UI。
-- `od.connectors`：**Connector 依赖声明**——`required[]` 列出 plugin 必须的 daemon-内置 connector（[`apps/daemon/src/connectors/`](../apps/daemon/src/connectors/)；当前由 Composio 驱动），每条 `{ id, tools[] }` 对应 catalog 里的 `ConnectorCatalogDefinition.id` 与 `allowedToolNames` 子集；`optional[]` 是「有就用、没有降级」。`od plugin doctor` 在 install / apply 时校验：(a) 每个 `id` 在 `connectorService.listAll()` 里存在；(b) 每个 `tools[]` 都在该 connector 的 `allowedToolNames` 内；(c) `required[].id` 必须有匹配的 `connector:<id>` capability（§5.3 / §9）。`required` 中的 connector 在 apply 时若未 connect，会自动派生一条 `oauth-prompt` GenUI surface（§10.3.1，`route: 'connector'`）；`optional` 不会，但 agent 可以在 run 中显式触发。**Plugin 不直接持有 OAuth token**——token 由从已解析 daemon 数据根派生的 daemon-owned connector credential storage 管理，plugin 只声明依赖。本 spec 不定义该文件系统路径；参见根目录 [`AGENTS.md`](../AGENTS.md) → **Daemon data directory contract**。
+- `od.connectors`：**Connector 依赖声明**——`required[]` 列出 plugin 必须的 daemon-内置 connector（[`apps/daemon/src/connectors/`](../apps/daemon/src/connectors/)；当前由 Composio 驱动），每条 `{ id, tools[] }` 对应 catalog 里的 `ConnectorCatalogDefinition.id` 与 `allowedToolNames` 子集；`optional[]` 是「有就用、没有降级」。`od plugin doctor` 在 install / apply 时校验：(a) 每个 `id` 在 `connectorService.listAll()` 里存在；(b) 每个 `tools[]` 都在该 connector 的 `allowedToolNames` 内；(c) `required[].id` 必须有匹配的 `connector:<id>` capability（§5.3 / §9）。`required` 中的 connector 在 apply 时若未 connect，会自动派生一条 `oauth-prompt` GenUI surface（§10.3.1，`route: 'connector'`）；`optional` 不会，但 agent 可以在 run 中显式触发。**Plugin 不直接持有 OAuth token**——token 由从已解析 daemon 数据根派生的 daemon-owned connector credential storage 管理，plugin 只声明依赖。本 spec 不定义该文件系统路径；参见根目录 [daemon data contract](daemon-data.md)。
 - `od.inputs`：详情页与 inline composer 中展示的表单字段；其值会 template 到 `useCase.query` 以及任何 string-valued context entry。
 - `od.capabilities`：声明式能力；如果一个 `restricted` 插件省略此字段，默认是 `['prompt:inject']`。
 
@@ -457,8 +457,8 @@ Marketplace 顶层 `version` 是 catalog snapshot 版本；每个 `plugins[]` en
 | --- | --- | --- | --- |
 | 1 | `<projectCwd>/.open-design/plugins/<id>/` | plugin bundle | 新增，与用户代码一起提交；必须显式安装到 project |
 | 2 | `<projectCwd>/.claude/skills/<id>/` | legacy `SKILL.md` | 沿用 [`skills-protocol.md`](skills-protocol.md) 的 project-private skill 兼容路径 |
-| 3 | Daemon-managed plugin location | plugin bundle | 本 spec 绝不能定义 daemon 数据路径；修改或记录存储位置前必须阅读 root `AGENTS.md` → **Daemon data directory contract** |
-| 4 | 用户级 skill 位置 | legacy `SKILL.md` | 本 spec 绝不能定义 daemon 数据路径；修改或记录存储位置前必须阅读 root `AGENTS.md` → **Daemon data directory contract** |
+| 3 | Daemon-managed plugin location | plugin bundle | 修改或记录存储位置前必须阅读 [daemon data contract](daemon-data.md) |
+| 4 | 用户级 skill 位置 | legacy `SKILL.md` | 修改或记录存储位置前必须阅读 [daemon data contract](daemon-data.md) |
 | 5 | `~/.claude/skills/<id>/` | legacy `SKILL.md` | 外部 Claude Code / skills 工具写入的兼容路径，只读扫描 |
 | 6 | repo root `skills/`, `design-systems/`, `craft/` | bundled resources | 现有一方资源，不变 |
 
@@ -1239,7 +1239,7 @@ OD 运行在三种 operating modes，它们共享**同一个** daemon、**同一
 解锁的能力：
 
 - 用户只有 **Claude Code**（或任意 code agent）加 `npm i -g @open-design/cli`，再启动一个 headless daemon，就能完成 install plugin → create project → run → consume artifacts 全流程。不需要 OD desktop。
-- OD desktop UI 安装相同 daemon 与相同 CLI；它只是加了一个窗口。用户之后安装 desktop 时，会看到 headless 流程创建的同一批 projects、plugins、history。不存在「headless project format」与「desktop project format」之分。本 spec 绝不能定义 daemon 数据路径；修改或记录共享存储前必须阅读 root `AGENTS.md` → **Daemon data directory contract**。
+- OD desktop UI 安装相同 daemon 与相同 CLI；它只是加了一个窗口。用户之后安装 desktop 时，会看到 headless 流程创建的同一批 projects、plugins、history。不存在「headless project format」与「desktop project format」之分。修改或记录共享存储前必须阅读 [daemon data contract](daemon-data.md)。
 - CI 是一等公民：GitHub Action 可以 `npm i -g @open-design/cli && od daemon start --headless && od plugin install … && od run start --project … --follow`。无 display、无 electron、无 UI scripting。
 - 外部产品可以通过启动 headless daemon 并 shell out 嵌入 OD：`od` 是 public surface，internals 可以自由演进。
 
@@ -1325,7 +1325,7 @@ od run logs   <runId>                # historical tail; --since for incremental
 
 #### Project 文件系统操作（新增）
 
-daemon 当前已经拥有 project filesystems（或者 imported folder 的 `metadata.baseDir`）。这些命令以 project 为 scope：agent 不需要知道 project 在磁盘哪里。本 spec 绝不能定义 daemon 数据路径；修改或记录 project storage 前必须阅读 root `AGENTS.md` → **Daemon data directory contract**。
+daemon 当前已经拥有 project filesystems（或者 imported folder 的 `metadata.baseDir`）。这些命令以 project 为 scope：agent 不需要知道 project 在磁盘哪里。修改或记录 project storage 前必须阅读 [daemon data contract](daemon-data.md)。
 
 ```
 od files list   <projectId> [--path <subdir>] [--json]
@@ -1591,7 +1591,7 @@ open slides.html      # or however the user wants to view the file
 
 - 完整 marketplace → plugin → apply → run → artifact pipeline 可以在终端里用不到 10 行触达。
 - OD daemon 不需要渲染任何东西；它作为 project + plugin + artifact server 工作。
-- 同一个 project 之后在 OD desktop UI 中打开时，会显示 headless run 产生的完整 conversation history、files、artifacts。本 spec 绝不能定义 daemon 数据路径；修改或记录共享存储前必须阅读 root `AGENTS.md` → **Daemon data directory contract**。
+- 同一个 project 之后在 OD desktop UI 中打开时，会显示 headless run 产生的完整 conversation history、files、artifacts。修改或记录共享存储前必须阅读 [daemon data contract](daemon-data.md)。
 
 ### 14.4 类比：Cursor vs `cursor-agent`，OD desktop vs `od` CLI
 
@@ -1600,7 +1600,7 @@ open slides.html      # or however the user wants to view the file
 | Layer | Cursor | OpenDesign |
 | --- | --- | --- |
 | Headless agent CLI | `cursor-agent`（驱动 agent loop） | `od run start --agent claude --follow` + `od plugin run` |
-| Local services / db | Cursor 的 background indexing / state | OD daemon-managed state。存储路径只受 root `AGENTS.md` → **Daemon data directory contract** 约束。 |
+| Local services / db | Cursor 的 background indexing / state | OD daemon-managed state。存储路径只受 [daemon data contract](daemon-data.md) 约束。 |
 | GUI productivity layer | Cursor IDE | OD desktop / web UI（`apps/web` + `apps/desktop`） |
 | Plugin / skill format | `.cursor/rules/`、MCP servers | `SKILL.md` + `open-design.json` + atoms |
 
@@ -1626,7 +1626,7 @@ base image 是 `node:24-bookworm-slim`。container 内用户是 non-root（`uid 
 
 ### 15.2 Persistence
 
-本部署草案绝不能定义 daemon 数据路径、挂载路径或 persistence 示例。选择、记录或修改 persistence 前必须阅读 root [`AGENTS.md`](../AGENTS.md) → **Daemon data directory contract**；该块是唯一真相源。
+存储配置与挂载示例应遵循 [daemon data contract](daemon-data.md)。
 
 ### 15.3 Configuration
 
@@ -1635,7 +1635,7 @@ base image 是 `node:24-bookworm-slim`。container 内用户是 non-root（`uid 
 ```env
 OD_PORT=17456
 OD_BIND_HOST=0.0.0.0                 # 当前 daemon 已读取的变量名（[`apps/daemon/src/server.ts`](../apps/daemon/src/server.ts)）
-# 只有阅读 root AGENTS.md -> Daemon data directory contract 后，才能设置 daemon storage env vars。
+# 存储变量的配置与归属见 docs/daemon-data.md。
 OD_TRUST_DEFAULT=restricted          # safe default for hosted (§9) — Phase 5 引入
 OD_AGENT_BACKEND=claude              # default code agent backend
 OD_API_TOKEN=<random>                # required when OD_BIND_HOST != 127.0.0.1 — Phase 5 引入 bearer middleware
@@ -1659,7 +1659,7 @@ docker run --rm -p 17456:17456 ghcr.io/nexu-io/od:latest
 open http://localhost:17456
 ```
 
-持久服务器 storage 示例在此处有意省略。编写前必须阅读 root [`AGENTS.md`](../AGENTS.md) → **Daemon data directory contract**。
+持久服务器的存储配置、挂载与备份见 [daemon data contract](daemon-data.md)。
 
 在 container 内触达相同 surfaces：
 
@@ -1838,7 +1838,7 @@ Validation：从本地 mock marketplace.json 安装 plugin、rotate ref、uninst
   - Plugin manifest 升级允许 `od.genui.surfaces[].component`：相对路径指向 plugin 内 React 组件（capability gate `genui:custom-component`），由 desktop / web renderer 在 sandbox 中加载。
   - Open-Ended (MCP-Apps / Open-JSON) 模式：让 plugin 通过 MCP server 推送任意 JSON UI tree，desktop / web 以受限 schema 渲染。
 
-Validation：  
+Validation：
 (a) install a published plugin → export from a real project that used it → diff produced manifest against original。  
 (b) 「UI vs CLI parity test」：挑 5 个 desktop-UI workflows，仅通过 `od …` 重放，byte-for-byte 比较 produced artifacts（对应 §12.6 implementation rule）。
 

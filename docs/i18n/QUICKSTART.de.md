@@ -45,7 +45,7 @@ Für die Desktop-Shell und alle verwalteten Sidecars im Hintergrund:
 pnpm tools-dev # startet daemon + web + desktop im Hintergrund
 ```
 
-Beim ersten Laden erkennt die App die verfügbaren lokalen Runtimes und bietet zusätzlich die in den Einstellungen konfigurierten BYOK-Runtimes an. Wählen Sie eine Runtime, ein Design-Template und ein Design System, geben Sie einen Prompt ein und klicken Sie auf **Senden**. Strukturierte lokale Runtimes schreiben kanonische Projektdateien und streamen Datei-/Tool-Events; Dateiarbeitsbereich und Vorschau aktualisieren sich aus diesen Schreibvorgängen. Reine Text- und BYOK-Läufe liefern stattdessen einen vollständigen `<artifact>`-Block, den der Host parst. Bevor Sie einen Artifact-Speicherpfad dokumentieren oder ändern, MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**.
+Beim ersten Laden erkennt die App die verfügbaren lokalen Runtimes und bietet zusätzlich die in den Einstellungen konfigurierten BYOK-Runtimes an. Wählen Sie eine Runtime, ein Design-Template und ein Design System, geben Sie einen Prompt ein und klicken Sie auf **Senden**. Strukturierte lokale Runtimes schreiben kanonische Projektdateien und streamen Datei-/Tool-Events; Dateiarbeitsbereich und Vorschau aktualisieren sich aus diesen Schreibvorgängen. Reine Text- und BYOK-Läufe liefern stattdessen einen vollständigen `<artifact>`-Block, den der Host parst.
 
 Der Katalog **Design Systems** wird direkt aus den `DESIGN.md`-Paketen unter [`design-systems/`](../../design-systems/) geladen. Wählen Sie eines aus, um die visuelle Sprache der Marke auf das Artifact anzuwenden.
 
@@ -191,9 +191,7 @@ OD_API_TOKEN=
 
 ## Dauerhafter Speicher
 
-Bevor Sie einen persistenten Daemon-Speicherpfad dokumentieren, ändern oder auswählen,
-MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**.
-Dieser Quickstart DARF diesen Vertrag NICHT wiederholen oder Speicherpfade definieren.
+Docker Compose speichert Daten in einem persistenten benannten Volume. Behalten Sie es beim Upgrade. Konfiguration und Sicherung: [Daemon storage](../daemon-data.md)
 
 ---
 

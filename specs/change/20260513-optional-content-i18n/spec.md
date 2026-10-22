@@ -115,7 +115,7 @@ flowchart TD
 - E2E: run `pnpm --filter @open-design/e2e test tests/localized-content.test.ts` to verify real repository resources remain displayable under `de` / `fr` / `ru`, and missing category / tag translations do not block. Source: `e2e/tests/localized-content.test.ts:333-377`; `e2e/AGENTS.md:40-55`
 - Web unit: run `pnpm --filter @open-design/web test` to cover localized ids still coming from dictionaries, plus skill/design-system/prompt-template field-level fallback. Source: `apps/web/tests/i18n/content.test.ts:12-80`; `apps/AGENTS.md:27-33,47-59`
 - Probe: temporarily add a probe content resource without matching `de` / `fr` / `ru` localized dictionary entries, then run CI-equivalent verification to confirm English fallback is displayable and missing optional translations do not block; remove the temporary probe content afterward. Source: `e2e/tests/localized-content.test.ts:155-409`; `docs/skills-contributing.md:188-202`
-- Repo checks: run `pnpm guard` and `pnpm typecheck` to cover repository-level scripts and type boundaries. Source: `AGENTS.md#validation-strategy`
+- Repo checks: run `pnpm guard` and `pnpm typecheck` to cover repository-level scripts and type boundaries. Source: `AGENTS.md#validation-and-common-commands`
 
 ### Pseudocode
 

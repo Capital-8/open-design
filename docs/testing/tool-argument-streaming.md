@@ -126,7 +126,7 @@ stream settles outstanding rows as errors instead of leaving a spinner.
 - Existing inline and daemon overlay plugin lists are preserved. No user-global
   configuration is written; the child-only overlay refers to an atomically
   staged module under the daemon-owned root. Path ownership follows the root
-  [AGENTS.md data-directory contract](../../AGENTS.md#daemon-data-directory-contract).
+  [daemon data contract](../daemon-data.md).
 - No patched CLI, separately installed app-server, npm plugin package or new
   dependency imported by OD's module is required. OpenCode itself can still
   initialize npm dependencies and wait for them before loading local plugins;

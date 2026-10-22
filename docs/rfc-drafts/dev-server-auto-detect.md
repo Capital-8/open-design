@@ -94,8 +94,7 @@ timeout) before resolving, so the UI can show a clear "starting…" /
    server's stdout/stderr to the UI (so users see Next/Vite errors
    inline) or just spawn detached?
 6. **Non-folder projects** — current OD can generate project-owned files
-   outside imported folders. This RFC MUST NOT define daemon data paths;
-   read the root `AGENTS.md` section **Daemon data directory contract**
+   outside imported folders. Read [daemon data contract](../daemon-data.md)
    before changing or documenting project storage. Should those projects also
    get a "launch dev server" affordance if they happen to have a
    `package.json`? Or is this strictly a folder-import feature?

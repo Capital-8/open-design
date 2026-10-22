@@ -7,7 +7,7 @@ This document captures the maintainability risks in the current `apps/web` + `ap
 The architectural boundary stays unchanged:
 
 - `apps/web`: Next.js frontend and thin BFF/proxy layer.
-- `apps/daemon`: local runtime/backend for SQLite, daemon-managed filesystem state, AI agent CLI processes, and SSE streaming. This roadmap MUST NOT define daemon data paths; read root [`AGENTS.md`](../../AGENTS.md) → **Daemon data directory contract** before documenting storage.
+- `apps/daemon`: local runtime/backend for SQLite, daemon-managed filesystem state, AI agent CLI processes, and SSE streaming. read [daemon data contract](../../docs/daemon-data.md) before documenting storage.
 
 The first-principles maintainability goals are:
 

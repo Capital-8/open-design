@@ -97,7 +97,7 @@ v1." Its estimates and checkboxes are retained as historical context.
 3. Without Claude Code installed: API-fallback produces prototypes (not decks — guizang-ppt-skill needs native skill loading).
 4. A user can drop a DESIGN.md into the project root and subsequent generations respect it.
 5. A third party can publish a skill repo; `od skill add <url>` installs it and it works.
-6. Artifacts are plain files. This roadmap MUST NOT define daemon data paths; read the root `AGENTS.md` section **Daemon data directory contract** before changing or documenting artifact storage.
+6. Artifacts are plain files. read [daemon data contract](daemon-data.md) before changing or documenting artifact storage.
 7. No Electron, no Tauri, no desktop packaging anywhere in the repo.
 
 ---

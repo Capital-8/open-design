@@ -232,7 +232,7 @@ Jedes Deck exportiert als **HTML** (einzelne Datei, eingebettete Assets), **PDF*
 
 - 🤖 **Agent-native, modellunabhängig.** Wir liefern keinen Agent. Die `claude` / `codex` / `cursor-agent` / `copilot` / `hermes` / `kimi`, die bereits in deinem `PATH` liegen, sind die Design-Engine. Mit einem Klick wechseln.
 - 🧠 **Markenreif von Haus aus.** Jedes Rendering liest die `DESIGN.md` des aktiven Pakets als zentralen Markenvertrag. 151 Designsystem-Pakete werden mit dem Repo ausgeliefert; ältere Pakete können nur aus `DESIGN.md` bestehen, neuere zusätzlich `manifest.json`, `tokens.css`, Komponenten, Assets und Herkunftsangaben enthalten. Lege einen Ordner ab, der Picker findet ihn.
-- 🖥️ **Local-first, BYOK auf jeder Ebene.** Native Desktop-Apps bleiben local-first. Produktanalysen und Sitzungsaufzeichnungen erfordern eine Einwilligung; bereinigte Sicherheits- und Zuverlässigkeitstelemetrie bleibt aktiv. Bevor Sie Daemon-Datenpfade beschreiben, MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**.
+- 🖥️ **Local-first, BYOK auf jeder Ebene.** Native Desktop-Apps bleiben local-first. Produktanalysen und Sitzungsaufzeichnungen erfordern eine Einwilligung; bereinigte Sicherheits- und Zuverlässigkeitstelemetrie bleibt aktiv.
 - 🌍 **Komponierbar auf vier Ebenen.** **Plugins** tragen lauffähige Workflows · funktionale **Skills** tragen Agent-Verhalten · **Designvorlagen** tragen Rendering-Blaupausen · **Designsysteme** tragen die Marke. Alle vier verwenden portable, versionierbare Verzeichnisse, die jeder erstellen und veröffentlichen kann.
 - 🔁 **Eine bestehende Codebasis auffrischen.** Übergib dem Agent ein `git`-Repo + `DESIGN.md`, und er refaktoriert deine echten Komponenten auf die Markenvorgabe.
 - 🔒 **Datenschutz aus Überzeugung.** Projekte können lokal oder in einer eigenen Bereitstellung laufen. Anfragen an Cloud-Modelle und OpenDesign Cloud werden an die jeweiligen Dienste gesendet. Der BYOK-Proxy bietet SSRF-Schutz.
@@ -514,7 +514,7 @@ Plugin-Registry-Endpunkt: `GET /api/plugins`. Verzeichnisübersicht → [`plugin
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE-Streaming · `better-sqlite3` |
-| Speicher | Bevor Sie Daemon-Speicherpfade ändern oder dokumentieren, MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**. Dieses README DARF ihn NICHT wiederholen. |
+| Speicher | Lokale Daten bleiben im Daemon-Datenverzeichnis erhalten. Konfiguration und Sicherung: [Daemon storage](../daemon-data.md) |
 | Vorschau | Dateisystemläufe rendern kanonische Projektdateien; BYOK-/Plain-API-Läufe parsen einen vollständigen `<artifact>`-Block in ein Sandbox-`srcdoc`-iframe |
 | Export | HTML (eingebettet) · PDF (Browser-Druck) · PPTX (agentengesteuert) · ZIP · Markdown · MP4 (HyperFrames) |
 | Desktop | Electron-Shell + Sandboxed Renderer + Sidecar-IPC (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |

@@ -134,8 +134,7 @@ future "Use from Available" convenience action may auto-install first, but it
 must still create an installed record before execution.
 
 User-created and user-installed plugins are persisted through daemon-managed
-storage. This plan MUST NOT define daemon data paths; read the root
-`AGENTS.md` section **Daemon data directory contract** before changing or
+storage. read [daemon data contract](../daemon-data.md) before changing or
 documenting plugin storage. Daemon startup reloads installed records from
 SQLite and resolves those user-state plugin folders; a packaged runtime upgrade
 should not overwrite them. Bundled official plugins stay inside the runtime

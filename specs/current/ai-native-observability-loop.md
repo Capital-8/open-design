@@ -69,8 +69,7 @@ observability boundary:
   runtime.
 
 This planning spec does not define a concrete daemon data path. Before changing
-or documenting storage, read root [`AGENTS.md`](../../AGENTS.md) → **Daemon data
-directory contract**; that contract is the repository-wide source of truth.
+or documenting storage, read [daemon data contract](../../docs/daemon-data.md); that contract is the repository-wide source of truth.
 
 The gap is therefore not "does OpenDesign know how to talk to object storage?"
 The gap is productizing that substrate for user attachments, generated

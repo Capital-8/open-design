@@ -1,5 +1,7 @@
 # 20260823 ChatPanel 重构 Dev Design
 
+> 当前维护入口：[`apps/web/AGENTS.md`](../../apps/web/AGENTS.md) 与 [chat 指南](../../apps/web/src/components/chat/AGENTS.md)。下文关于根 `AGENTS.md` 的实现细则引用记录当时的决策背景；这些细则现由 web 层维护。
+
 > 按 Plane「Dev Design 模板」(`pages/fc9ec07b`)重梳一遍。**Plane 页面**:`pages/70da5c18-9004-4a21-b723-b502d8e5cc60`(2026-08-23 发布,内容与本文件同源;改了本文件要重新同步过去)。
 > **图**:PNG 与重出脚本在 `docs/design/chat-panel-diagrams/`。本文里的图用 mermaid 源码写(GitHub 直接渲染);Plane 不渲染 mermaid,那边是同一份源码渲成 PNG 传上去的 —— 改图先改这里的源码,再重出 PNG 换掉 Plane 上那张。
 > **权威规格仍是 `chat-panel-next.md`**(决策 D1–D43、对齐状态 §13 是开工闸门);本文是它的架构视角复述 + 模板要求但那边没有的几节(情景分析、上线、稳定性)。两边冲突时以 `chat-panel-next.md` 为准,并回填本文。

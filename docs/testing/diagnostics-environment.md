@@ -55,7 +55,7 @@ schedule work; they never wait for a subprocess or filesystem write.
   state and any available checkpoint files under `logs/diagnostics/` in the ZIP.
 
 Persistence receives the resolved daemon data root. See the repository's
-[Daemon data directory contract](../../AGENTS.md#daemon-data-directory-contract).
+[daemon data contract](../daemon-data.md).
 Existing log-file collection limits are unchanged.
 
 ## Privacy and verification

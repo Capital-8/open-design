@@ -357,8 +357,7 @@ Add live-artifact and connector-specific `ApiErrorCode` values such as `TOOL_TOK
 ### 7.1 Storage layout
 
 Use project-scoped files under daemon-managed storage. This historical spec
-MUST NOT define daemon data paths; read root [`AGENTS.md`](../../AGENTS.md) →
-**Daemon data directory contract** before documenting storage.
+See [daemon data contract](../../docs/daemon-data.md) before documenting storage.
 
 ```text
 project artifact storage
@@ -638,8 +637,7 @@ Connector policy must be enforced at execution and refresh time, not only when t
 
 Default decision:
 
-- OAuth connection state and credentials live outside project artifacts, under daemon-controlled storage or an app database. This spec MUST NOT define daemon data paths.
-- Project artifacts only store stable references: `connectorId`, `accountLabel`, provider tool id/name, minimized input, and provenance.
+- OAuth connection state and credentials live outside project artifacts, under daemon-controlled storage or an app database. - Project artifacts only store stable references: `connectorId`, `accountLabel`, provider tool id/name, minimized input, and provenance.
 - Access tokens, refresh tokens, headers, cookies, OAuth state, and raw provider responses are never written under project artifact storage.
 - Refresh resolves credentials through the daemon connector service at execution time.
 - UI must show the connector/account label so users understand which global connection backs a project artifact.

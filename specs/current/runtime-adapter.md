@@ -111,8 +111,7 @@ For a local runtime, the shared execution pipeline:
 1. Resolves `RuntimeAgentDef` from the request's `agentId` and validates the
    selected model, reasoning option, project, attachments, and tool bundle.
 2. Resolves the project working directory. This spec MUST NOT define daemon
-   data paths; read root [`AGENTS.md`](../../AGENTS.md) → **Daemon data
-   directory contract**.
+   data paths; read [daemon data contract](../../docs/daemon-data.md).
 3. Composes the daemon system prompt, applicable conversation context, active
    skill and design-system content, attachments, and the current user turn.
 4. Stages active skill side files inside the project when possible and builds

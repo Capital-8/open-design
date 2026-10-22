@@ -1,5 +1,7 @@
 # ChatPanel 重构 ·「边界」族盘点与差异清单(组件 6 / 17 / 18 / 19 / 20 / 22)
 
+> 当前维护入口：[`apps/web/AGENTS.md`](../../apps/web/AGENTS.md) 与 [chat 指南](../../apps/web/src/components/chat/AGENTS.md)。下文关于根 `AGENTS.md` 的实现细则引用记录当时的决策背景；这些细则现由 web 层维护。
+
 > **范围** 84 格状态矩阵的第 **70–84** 格 ·「边界」段(设计稿 `chat-panel-next.html` 的
 > `data-od-id="stage-edge"`,段落副标题原话:「不在主流程上,但缺了会把人锁死」)。
 > **权威源** `docs/design/chat-panel-next.html`(PR #7170 head `1bbdce0b06`,组件稿)+

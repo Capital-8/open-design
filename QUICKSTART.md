@@ -153,9 +153,9 @@ OD_API_TOKEN=
 
 ## Persistent Storage
 
-Before documenting, changing, or choosing any persistent daemon storage path,
-you MUST read the root `AGENTS.md` section **Daemon data directory contract**.
-This Quickstart MUST NOT restate that contract or define storage paths.
+Docker Compose stores daemon data in the `open_design_data` named volume, mounted
+at `/app/.od`. Container replacement preserves the volume; keep it when upgrading.
+See [daemon storage](docs/daemon-data.md) for configuration and backup guidance.
 
 ---
 
@@ -182,7 +182,7 @@ For the desktop shell and all managed sidecars in the background:
 pnpm tools-dev # starts daemon + web + desktop in the background
 ```
 
-On first load, the app detects the available local runtimes and also offers BYOK runtimes configured in Settings. Choose a runtime, a design template, and a design system, then type a prompt and hit **Send**. Structured local runtimes write canonical project files and stream file/tool events; the file workspace and preview update from those writes. Plain text-only and BYOK runs instead return a complete `<artifact>` block for the host to parse. Before documenting or changing any artifact storage path, you MUST read `AGENTS.md` → **Daemon data directory contract**.
+On first load, the app detects the available local runtimes and also offers BYOK runtimes configured in Settings. Choose a runtime, a design template, and a design system, then type a prompt and hit **Send**. Structured local runtimes write canonical project files and stream file/tool events; the file workspace and preview update from those writes. Plain text-only and BYOK runs instead return a complete `<artifact>` block for the host to parse.
 
 The **Design systems** catalog is loaded from the `DESIGN.md` packages in [`design-systems/`](design-systems/). Pick one to apply that brand's visual language to the artifact.
 

@@ -35,7 +35,7 @@ Agent's bounded independent web search instead of repeating the stock tool.
 The result keeps provider search/download attempts in stdout JSON and the CLI
 prints diagnostics to stderr. The daemon journals content-free request results
 and final slot results under its resolved data root.
-Data ownership and propagation follow [AGENTS.md](../AGENTS.md#daemon-data-directory-contract).
+Data ownership and propagation follow [daemon data contract](daemon-data.md).
 There is no project-cwd or user-home fallback when `OD_DATA_DIR` is absent.
 
 The JSON result includes `telemetry.callId` and `telemetry.collectionStatus`.

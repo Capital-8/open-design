@@ -365,7 +365,7 @@ Rules of authorship:
 - `od.context.atoms` — **unordered set** declaring the atoms a plugin needs. The daemon uses them in default order; intended for simple plugins that don't customize flow.
 - `od.pipeline` — **ordered pipeline** in which the plugin author explicitly composes atoms into stages, loops, and termination conditions (§10.1). When both `od.pipeline` and `od.context.atoms` are present, `pipeline` wins; `context.atoms` is treated only as chip-strip metadata.
 - `od.genui.surfaces[]` — **Generative UI declaration**: the set of surfaces the agent may trigger during a run (§10.3). Each entry's `kind` is one of the v1 built-ins (`form` / `choice` / `confirmation` / `oauth-prompt`); `persist` decides where the answer is remembered (`run` / `conversation` / `project`); `trigger` binds the surface to a specific stage / atom so the agent cannot summon arbitrary UI; `schema` is a JSON Schema used to render the default form and validate the answer. **Surface kinds not declared in the manifest cannot be raised at runtime** — `od plugin doctor` plus daemon runtime jointly enforce that no unknown UI is ever produced.
-- `od.connectors` — **connector dependency declaration**: `required[]` lists the daemon-built-in connectors ([`apps/daemon/src/connectors/`](../apps/daemon/src/connectors/), currently Composio-backed) the plugin needs, each `{ id, tools[] }` mapping to `ConnectorCatalogDefinition.id` and a subset of its `allowedToolNames`; `optional[]` is "use if connected, degrade gracefully if not". `od plugin doctor` validates at install/apply time: (a) every `id` exists in `connectorService.listAll()`; (b) every `tools[]` is a subset of that connector's `allowedToolNames`; (c) every `required[].id` has a matching `connector:<id>` capability declared (§5.3 / §9). Required connectors that are not yet connected at apply time auto-derive an `oauth-prompt` GenUI surface (§10.3.1 with `route: 'connector'`); optional connectors do not, but the agent can trigger one explicitly during the run. **Plugins never hold OAuth tokens directly** — tokens stay in daemon-owned connector credential storage derived from the resolved daemon data root; the plugin only declares dependencies. This spec does not define that filesystem path; see root [`AGENTS.md`](../AGENTS.md) → **Daemon data directory contract**.
+- `od.connectors` — **connector dependency declaration**: `required[]` lists the daemon-built-in connectors ([`apps/daemon/src/connectors/`](../apps/daemon/src/connectors/), currently Composio-backed) the plugin needs, each `{ id, tools[] }` mapping to `ConnectorCatalogDefinition.id` and a subset of its `allowedToolNames`; `optional[]` is "use if connected, degrade gracefully if not". `od plugin doctor` validates at install/apply time: (a) every `id` exists in `connectorService.listAll()`; (b) every `tools[]` is a subset of that connector's `allowedToolNames`; (c) every `required[].id` has a matching `connector:<id>` capability declared (§5.3 / §9). Required connectors that are not yet connected at apply time auto-derive an `oauth-prompt` GenUI surface (§10.3.1 with `route: 'connector'`); optional connectors do not, but the agent can trigger one explicitly during the run. **Plugins never hold OAuth tokens directly** — tokens stay in daemon-owned connector credential storage derived from the resolved daemon data root; the plugin only declares dependencies. This spec does not define that filesystem path; see [daemon data contract](daemon-data.md).
 - `od.inputs` — surfaced as form fields on the detail page; their values template `useCase.query` and any string-valued context entries.
 - `od.capabilities` — declarative; defaults to `['prompt:inject']` if omitted on a `restricted` plugin.
 
@@ -458,8 +458,8 @@ Multiple marketplaces coexist — the user runs `od marketplace add <url>` to re
 | -------- | ------------------------------------------------ | ------------------ | ---------------------------------------------------------------------- |
 | 1        | `<projectCwd>/.open-design/plugins/<id>/`        | plugin bundle      | New; explicitly installed into the project and committed with user code |
 | 2        | `<projectCwd>/.claude/skills/<id>/`              | legacy `SKILL.md`  | Keeps the project-private skill path from [`skills-protocol.md`](skills-protocol.md) compatible |
-| 3        | Daemon-managed plugin location                   | plugin bundle      | This spec MUST NOT define daemon data paths; read root `AGENTS.md` → **Daemon data directory contract** before documenting storage |
-| 4        | User-global skill location                       | legacy `SKILL.md`  | This spec MUST NOT define daemon data paths; read root `AGENTS.md` → **Daemon data directory contract** before documenting storage |
+| 3        | Daemon-managed plugin location                   | plugin bundle      | read [daemon data contract](daemon-data.md) before documenting storage |
+| 4        | User-global skill location                       | legacy `SKILL.md`  | read [daemon data contract](daemon-data.md) before documenting storage |
 | 5        | `~/.claude/skills/<id>/`                         | legacy `SKILL.md`  | Compatibility scan for external Claude Code / skills tooling            |
 | 6        | repo root `skills/`, `design-systems/`, `craft/` | bundled resources  | Existing first-party resources, unchanged                              |
 
@@ -1244,7 +1244,7 @@ In practice this means:
 What this unlocks:
 
 - A user with **only Claude Code** (or any code agent) plus `npm i -g @open-design/cli` plus a running headless daemon can do the entire user journey: install plugin → create project → run → consume artifacts. No OD desktop required.
-- The OD desktop UI installs the same daemon and the same CLI; it just adds a window. Users who later install the desktop find the same projects, plugins, and history that the headless flow produced — there is no "headless project format" vs. "desktop project format". This spec MUST NOT define daemon data paths; read root `AGENTS.md` → **Daemon data directory contract** before changing or documenting shared storage.
+- The OD desktop UI installs the same daemon and the same CLI; it just adds a window. Users who later install the desktop find the same projects, plugins, and history that the headless flow produced — there is no "headless project format" vs. "desktop project format". read [daemon data contract](daemon-data.md) before changing or documenting shared storage.
 - CI is a first-class citizen: a GitHub Action can `npm i -g @open-design/cli && od daemon start --headless && od plugin install … && od run start --project … --follow`. No display, no electron, no per-step UI scripting.
 - External products can embed OD by spawning a headless daemon and shelling out — `od` is the public surface, internals are free to evolve.
 
@@ -1330,7 +1330,7 @@ od run logs   <runId>                # historical tail; --since for incremental
 
 #### File system operations on a project (new)
 
-The daemon already owns project filesystems (or `metadata.baseDir` for imported folders). These commands are project-scoped — agents do not need to know where the project lives on disk. This spec MUST NOT define daemon data paths; read root `AGENTS.md` → **Daemon data directory contract** before changing or documenting project storage.
+The daemon already owns project filesystems (or `metadata.baseDir` for imported folders). These commands are project-scoped — agents do not need to know where the project lives on disk. read [daemon data contract](daemon-data.md) before changing or documenting project storage.
 
 ```
 od files list   <projectId> [--path <subdir>] [--json]
@@ -1419,7 +1419,7 @@ od config set <key> --value-json '<json>' [--json]
 od config unset <key> [--json]                              # backed by app config
 ```
 
-`od daemon start --headless` is the entry for the headless mode in §11.7 (no web bundle, no electron). `od daemon start --serve-web` adds the local web UI without electron. Both keep using the existing tools-dev port conventions ([`OD_PORT`, `OD_WEB_PORT`](../AGENTS.md)).
+`od daemon start --headless` is the entry for the headless mode in §11.7 (no web bundle, no electron). `od daemon start --serve-web` adds the local web UI without electron. Both keep using the existing tools-dev port conventions ([`OD_PORT`, `OD_WEB_PORT`](../tools/AGENTS.md#orchestration-boundary)).
 
 #### Existing agent-callable tools (unchanged)
 
@@ -1596,7 +1596,7 @@ What this proves:
 
 - The full marketplace -> plugin -> apply -> run -> artifact pipeline is reachable from a terminal in <10 lines.
 - The OD daemon does not need to render anything; it acts as a project + plugin + artifact server.
-- The same project, when later opened in the OD desktop UI, shows the full conversation history, files, and artifacts produced by the headless run. This spec MUST NOT define daemon data paths; read root `AGENTS.md` → **Daemon data directory contract** before changing or documenting shared storage.
+- The same project, when later opened in the OD desktop UI, shows the full conversation history, files, and artifacts produced by the headless run. read [daemon data contract](daemon-data.md) before changing or documenting shared storage.
 
 ### 14.4 Analogy: Cursor vs `cursor-agent`, OD desktop vs `od` CLI
 
@@ -1605,7 +1605,7 @@ The mental model:
 | Layer                 | Cursor                                       | OpenDesign                                          |
 | --------------------- | -------------------------------------------- | ---------------------------------------------------- |
 | Headless agent CLI    | `cursor-agent` (drives the agent loop)       | `od run start --agent claude --follow` + `od plugin run` |
-| Local services / db   | Cursor's background indexing / state         | OD daemon-managed state. Storage paths are governed only by root `AGENTS.md` → **Daemon data directory contract**. |
+| Local services / db   | Cursor's background indexing / state         | OD daemon-managed state. Storage paths are governed only by [daemon data contract](daemon-data.md). |
 | GUI productivity layer| Cursor IDE                                   | OD desktop / web UI (`apps/web` + `apps/desktop`)    |
 | Plugin / skill format | `.cursor/rules/`, MCP servers                | `SKILL.md` + `open-design.json` + atoms              |
 
@@ -1631,10 +1631,7 @@ The base image is `node:24-bookworm-slim`. The user inside the container is non-
 
 ### 15.2 Persistence
 
-This deployment draft MUST NOT define daemon data paths, mount paths, or
-persistence examples. Before choosing, documenting, or changing persistence,
-you MUST read root [`AGENTS.md`](../AGENTS.md) → **Daemon data directory
-contract**. That section is mandatory and is the only truth source.
+Storage configuration, launch-specific mount examples, and backup guidance are described in [daemon storage](daemon-data.md).
 
 ### 15.3 Configuration
 
@@ -1643,7 +1640,7 @@ All configuration flows through env vars and an optional pre-baked config file. 
 ```env
 OD_PORT=17456
 OD_BIND_HOST=0.0.0.0                 # the variable the daemon already reads ([`apps/daemon/src/server.ts`](../apps/daemon/src/server.ts))
-# Set daemon storage env vars only after reading root AGENTS.md -> Daemon data directory contract.
+# Storage configuration and ownership: docs/daemon-data.md.
 OD_TRUST_DEFAULT=restricted          # safe default for hosted (§9) — introduced in Phase 5
 OD_AGENT_BACKEND=claude              # default code agent backend
 OD_API_TOKEN=<random>                # required when OD_BIND_HOST != 127.0.0.1 — Phase 5 introduces the bearer middleware
@@ -1659,7 +1656,7 @@ TAVILY_API_KEY=...
 > - `OD_BIND_HOST` already exists in the daemon ([`apps/daemon/src/server.ts`](../apps/daemon/src/server.ts), [`apps/daemon/src/origin-validation.ts`](../apps/daemon/src/origin-validation.ts)). Earlier draft text referred to the same variable as `OD_HOST`; the correct name is `OD_BIND_HOST`, and this spec uses it everywhere. **No `OD_HOST` alias is introduced** — that would invite double-name drift.
 > - `OD_TRUST_DEFAULT`, `OD_API_TOKEN`, and the corresponding bearer-token middleware are **not yet implemented**; they are part of Phase 5 "Cloud deployment + pluggable storage" (§15.7, §16 Phase 5). Until landed, hosted deployments must rely on a reverse proxy / network ACL for access control; §15.7 explicitly calls out this prerequisite.
 
-Anything settable via the desktop UI is also settable via `docker exec od od config set ...`. This document MUST NOT provide concrete storage paths.
+Anything settable via the desktop UI is also settable via `docker exec od od config set ...`. Storage configuration follows [daemon storage](daemon-data.md).
 
 ### 15.4 One-command deploy
 
@@ -1670,9 +1667,8 @@ docker run --rm -p 17456:17456 ghcr.io/nexu-io/od:latest
 open http://localhost:17456
 ```
 
-Persistent server storage examples are intentionally omitted here. Before
-writing one, you MUST read root [`AGENTS.md`](../AGENTS.md) → **Daemon data
-directory contract**.
+For persistent server storage, configure a writable data root and retain its
+volume across container replacement; see [daemon storage](daemon-data.md).
 
 Reach the same surfaces inside the container:
 

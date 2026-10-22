@@ -219,3 +219,14 @@ GitHub artifact behavior is easy to drift: artifact names must be unique per upl
 ### Where should tests live?
 
 Cross-workflow topology tests belong in `e2e/tests/` when they observe repository-level behavior. Root `scripts/` is test-free (enforced by `pnpm guard`); script behavior-contract coverage lives in `e2e/tests/scripts/`. Do not add one-off `*.test.ts` files just because a workflow helper exists; prefer existing topology coverage and helper self-checks when that is enough.
+
+## CI orchestration methodology
+
+Before reorganizing scope routing or test-set scheduling, read
+[`specs/current/ci.md`](../specs/current/ci.md). It owns the incremental
+source-unit/test-set/workload model, omission confidence, conservative fallback,
+and the distinction between relevance and reusable results. Existing coarse
+lanes do not force unrelated work to repay orchestration debt.
+
+Release-channel policy and release-card ownership live in
+[`tools/release/README.md`](../tools/release/README.md).

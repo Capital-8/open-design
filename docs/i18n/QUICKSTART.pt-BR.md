@@ -45,7 +45,7 @@ Para a shell desktop e todos os sidecars gerenciados em background:
 pnpm tools-dev # starts daemon + web + desktop in the background
 ```
 
-No primeiro carregamento, o app detecta os runtimes locais disponíveis e também oferece runtimes BYOK configurados em Settings. Escolha um runtime, uma design template e um design system, digite um prompt e clique em **Send**. Runtimes locais estruturados escrevem os arquivos canônicos do projeto e transmitem eventos de arquivo/ferramenta; o workspace de arquivos e o preview se atualizam a partir dessas escritas. Execuções somente texto e BYOK retornam, em vez disso, um bloco `<artifact>` completo para o host parsear. Antes de documentar ou alterar qualquer caminho de armazenamento de artifact, você DEVE ler o `AGENTS.md` na raiz, seção **Daemon data directory contract**.
+No primeiro carregamento, o app detecta os runtimes locais disponíveis e também oferece runtimes BYOK configurados em Settings. Escolha um runtime, uma design template e um design system, digite um prompt e clique em **Send**. Runtimes locais estruturados escrevem os arquivos canônicos do projeto e transmitem eventos de arquivo/ferramenta; o workspace de arquivos e o preview se atualizam a partir dessas escritas. Execuções somente texto e BYOK retornam, em vez disso, um bloco `<artifact>` completo para o host parsear.
 
 O catálogo **Design systems** é carregado diretamente dos pacotes `DESIGN.md` em [`design-systems/`](../../design-systems/). Escolha um para aplicar a linguagem visual da marca ao artefato.
 
@@ -191,9 +191,7 @@ OD_API_TOKEN=
 
 ## Armazenamento persistente
 
-Antes de documentar, alterar ou escolher qualquer caminho persistente de armazenamento do daemon,
-você DEVE ler o `AGENTS.md` na raiz, seção **Daemon data directory contract**.
-Este Quickstart NÃO DEVE repetir esse contrato nem definir caminhos de armazenamento.
+O Docker Compose armazena os dados em um volume nomeado persistente. Preserve esse volume nas atualizações. Configuração e backup: [Daemon storage](../daemon-data.md)
 
 ---
 

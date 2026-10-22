@@ -232,7 +232,7 @@ Her deste **HTML** (tek dosya, gömülü varlıklar), **PDF** (tarayıcı yazdı
 
 - 🤖 **Ajan-yerel, modelden bağımsız.** Bir ajan sunmuyoruz. `PATH`'inizde zaten bulunan `claude` / `codex` / `cursor-agent` / `copilot` / `hermes` / `kimi` tasarım motorudur. Tek tıkla değiştirin.
 - 🧠 **Varsayılan olarak marka düzeyinde.** Her render etkin paketin `DESIGN.md` dosyasını temel marka sözleşmesi olarak okur. Depoda 151 tasarım sistemi paketi bulunur; eski paketler yalnızca `DESIGN.md` içerebilir, yenileri `manifest.json`, `tokens.css`, bileşenler, varlıklar ve provenance ekleyebilir. Bir klasör bırakın, seçici onu bulur.
-- 🖥️ **Yerel öncelikli, her katmanda BYOK.** Yerel masaüstü uygulamaları yerel öncelikli kalır. Ürün analitiği ve oturum tekrarı onay gerektirir; hassas verilerden arındırılmış güvenlik ve güvenilirlik telemetrisi her zaman açıktır. Daemon veri yollarını açıklamadan önce kökteki `AGENTS.md` dosyasında **Daemon data directory contract** bölümünü MUTLAKA okuyun.
+- 🖥️ **Yerel öncelikli, her katmanda BYOK.** Yerel masaüstü uygulamaları yerel öncelikli kalır. Ürün analitiği ve oturum tekrarı onay gerektirir; hassas verilerden arındırılmış güvenlik ve güvenilirlik telemetrisi her zaman açıktır.
 - 🌍 **Dört düzlemde birleştirilebilir.** **Eklentiler** çalıştırılabilir iş akışları taşır · işlevsel **beceriler** ajan davranışını taşır · **tasarım şablonları** render planlarını taşır · **tasarım sistemleri** markayı taşır. Dördü de herkesin yazıp yayınlayabileceği taşınabilir, sürümlenebilir dizinler kullanır.
 - 🔁 **Mevcut bir kod tabanını yenileyin.** Ajana bir `git` deposu + `DESIGN.md` verin, gerçek bileşenlerinizi marka spesifikasyonuna göre yeniden düzenler.
 - 🔒 **İlkesel gizlilik.** Projeler yerel olarak veya kendi dağıtımınızda çalışabilir. Bulut modellerine ve OpenDesign Cloud’a yapılan istekler ilgili hizmetlere gönderilir. BYOK proxy SSRF koruması içerir.
@@ -513,7 +513,7 @@ Eklenti kayıt uç noktası: `GET /api/plugins`. Dizin genel bakışı → [`plu
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
-| Depolama | Daemon depolama yollarını değiştirmeden veya belgelemeden önce kökteki `AGENTS.md` dosyasında **Daemon data directory contract** bölümünü MUTLAKA okuyun. Bu README onu TEKRAR ETMEMELİDİR. |
+| Depolama | Yerel veriler daemon veri dizininde saklanır. Yapılandırma ve yedekleme: [Daemon storage](../daemon-data.md) |
 | Önizleme | Filesystem çalıştırmaları kanonik dosyaları render eder; BYOK/API eksiksiz bir `<artifact>` bloğunu yalıtılmış `srcdoc` iframe'e ayrıştırır |
 | Dışa aktarma | HTML (gömülü) · PDF (tarayıcı yazdırma) · PPTX (ajan güdümlü) · ZIP · Markdown · MP4 (HyperFrames) |
 | Masaüstü | Electron shell + yalıtılmış renderer + sidecar IPC (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
