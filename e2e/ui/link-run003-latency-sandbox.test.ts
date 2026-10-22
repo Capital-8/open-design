@@ -154,8 +154,55 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
       return ['succeeded', 'failed', 'canceled'].includes(String(row.status));
     }, { timeout: 180_000, intervals: [250, 500, 1000] }).toBe(true);
     expect(allowed, 'unexpected OD run terminal state').toContain(row.status);
-    return { status: row.status, exitCode: row.exitCode ?? null,
-      errorCode: row.errorCode ?? null, cancelOrigin: row.cancelOrigin ?? null };
+    expect(row).toMatchObject({ id: runId, status: 'succeeded', signal: null,
+      cancelRequested: false, cancelOrigin: null, error: null, errorCode: null,
+      failureCategory: null, endedWithUnfinishedWork: false });
+    expect([0, 130]).toContain(row.exitCode);
+    let acpEvidence: { eventsSha256: string; completedSteps: number;
+      completedMessages: number; retryDiagnostics: number } | null = null;
+    if (row.exitCode === 130) {
+      // Vela may exit 130 after clean ACP completion. Require its original
+      // stream to prove completion, then retain the independent AMR ledger
+      // receipt below as the settlement authority for every model call.
+      expect(runId).toMatch(/^[0-9a-f-]{36}$/i);
+      const eventsPath = join(dataDir, 'runs', runId, 'events.jsonl');
+      await expect.poll(async () => {
+        try {
+          const lines = (await readFile(eventsPath, 'utf8')).trim().split('\n');
+          return (JSON.parse(lines.at(-1) ?? '{}') as { event?: string }).event ?? null;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+          throw error;
+        }
+      }, { timeout: T.long, intervals: [100, 250, 500] }).toBe('end');
+      const bytes = await readFile(eventsPath);
+      const events = bytes.toString().trim().split('\n').map(line => JSON.parse(line) as {
+        event: string; data?: Record<string, unknown>;
+      });
+      const diagnostics = events.filter(event => event.event === 'agent'
+        && event.data?.type === 'diagnostic');
+      const completedSteps = diagnostics.filter(event => event.data?.name === 'model_step_lifecycle'
+        && event.data.phase === 'end' && event.data.status === 'completed').length;
+      const completedMessages = diagnostics.filter(event => event.data?.name === 'assistant_message_lifecycle'
+        && event.data.phase === 'end' && event.data.status === 'completed').length;
+      expect(completedSteps).toBeGreaterThan(0);
+      expect(completedMessages).toBeGreaterThan(0);
+      expect(events.some(event => event.event === 'agent' && event.data?.type === 'usage')).toBe(true);
+      expect(events.some(event => event.event === 'agent' && event.data?.type === 'error')).toBe(false);
+      expect(diagnostics.some(event => ['model_step_lifecycle', 'assistant_message_lifecycle'].includes(
+        String(event.data?.name)) && event.data?.phase === 'end'
+        && event.data.status !== 'completed')).toBe(false);
+      expect(events.some(event => event.event === 'diagnostic' && event.data?.type === 'runtime_close'
+        && event.data.status === 'succeeded' && event.data.exit_code === 130)).toBe(true);
+      expect(events.at(-1)).toMatchObject({ event: 'end',
+        data: { status: 'succeeded', code: 130, signal: null, endedWithUnfinishedWork: false,
+          failureCategory: null } });
+      acpEvidence = { eventsSha256: createHash('sha256').update(bytes).digest('hex'),
+        completedSteps, completedMessages,
+        retryDiagnostics: diagnostics.filter(event => event.data?.name === 'model_retry').length };
+    }
+    return { status: row.status, exitCode: row.exitCode, errorCode: row.errorCode,
+      cancelOrigin: row.cancelOrigin, acpEvidence };
   };
   const requests: Array<{ method: string; path: string; workspaceId: string | null }> = [];
   const runResponses: RunResponse[] = [];
@@ -430,10 +477,10 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     });
     const manualTerminal = await terminalRun(body.runId!, ['succeeded', 'failed', 'canceled']);
     expect(manualTerminal.status).toBe('succeeded');
-    expect(manualTerminal.exitCode).toBe(0);
     await marker('RUN003-manual-ready.json', { projectId, runId: body.runId,
       status: response.status(), terminal: { status: manualTerminal.status,
-        exitCode: manualTerminal.exitCode }, backgroundRunId: background.runId });
+        exitCode: manualTerminal.exitCode, acpEvidence: manualTerminal.acpEvidence },
+      backgroundRunId: background.runId });
     const manual = await receipt('RUN003-manual-verified.json');
     expect(manual.runId).toBe(body.runId);
     expect(manual.billingWorkspaceId).toBe(space.workspaceId);
@@ -457,7 +504,8 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     }
     expect(postCount()).toBe(before + blockedPosts + 1);
     await save('RUN003-complete.safe.json', { binding, elapsedMs, blocked, recovered,
-      manual, ledgerReady, manualTerminal: { status: manualTerminal.status, exitCode: manualTerminal.exitCode },
+      manual, ledgerReady, manualTerminal: { status: manualTerminal.status,
+        exitCode: manualTerminal.exitCode, acpEvidence: manualTerminal.acpEvidence },
       sent, requests, runResponses });
   } finally {
     await save('RUN003-request-timeline.safe.json', { binding, requests, runResponses });
