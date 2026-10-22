@@ -168,3 +168,29 @@ it('keeps both shared Design Plan windows unavailable for an explicit empty arra
   expect(screen.getAllByText('暂未获取用量')).toHaveLength(2);
   expect(screen.queryAllByRole('progressbar')).toHaveLength(0);
 });
+
+it('team migration uses the existing preflight read and switching cards does not start a second read', async () => {
+  const team = { ...a, workspaceType: 'team' as const, planId: 'team_max' };
+  let billingMode = 'legacy';
+  read = async () => {
+    const generatedAt = new Date().toISOString();
+    return Response.json({ ...response(team, '24'),
+      workspaceSnapshot: { ...snapshotWithWindows(), billing: { billingState: 'active', planId: 'team_max' }, wallet: { balanceUsd: '24', expiresAt: null, updatedAt: null } },
+      preflight: { schemaVersion: 1, billingMode, workspaceId: team.workspaceId, workspaceMemberId: team.workspaceMemberId,
+        generatedAt, modelId: null, balanceUsd: '24', modelCovered: false, funding: 'wallet',
+        codingPlan: { workspaceId: team.workspaceId, generatedAt, eligible: false, tier: null, windows: [] } },
+    });
+  };
+  await act(async () => { render(<Harness context={team} />); });
+  expect(screen.getByRole('button', { name: '管理' })).toBeTruthy();
+  expect(request.mock.calls.some(([url]) => String(url).includes('includePreflight=1'))).toBe(true);
+  const before = calls();
+  billingMode = 'shared';
+  await act(async () => { await vi.advanceTimersByTimeAsync(251); notifyWorkspaceBillingRefresh(); });
+  expect(screen.getByRole('button', { name: '充值' })).toBeTruthy();
+  expect(calls()).toBe(before + 1);
+  billingMode = 'legacy';
+  await act(async () => { await vi.advanceTimersByTimeAsync(251); notifyWorkspaceBillingRefresh(); });
+  expect(screen.getByRole('button', { name: '管理' })).toBeTruthy();
+  expect(calls()).toBe(before + 2);
+});

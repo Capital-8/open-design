@@ -10,7 +10,7 @@ import { workspaceContextFixture } from '../helpers/workspace-context';
 const origin = 'http://127.0.0.1:52677';
 const context = workspaceContextFixture({ workspaceId: 'odlocal-plus', workspaceMemberId: 'owner', role: 'owner' });
 const view: WorkspaceQuotaView = {
-  tier: 'plus', planKnown: true, loading: false, balanceUsd: '24', planStatus: null,
+  tier: 'plus', planKnown: true, sharedBilling: true, loading: false, balanceUsd: '24', planStatus: null,
   windows: null, breakdown: null, modelRestriction: null,
 };
 

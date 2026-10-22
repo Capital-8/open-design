@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import card from './PersonalPlanCard.module.css';
 import quota from './CodingPlanUsage.module.css';
 import styles from './WorkspaceQuotaPopover.module.css';
+import { LegacyWorkspaceQuotaPopover } from './LegacyWorkspaceQuotaPopover';
 
 function QuotaHelp({ label, kind }: { label: string; kind: 'plan' | 'metered' }) {
   const id = useId();
@@ -53,7 +54,7 @@ function QuotaHelp({ label, kind }: { label: string; kind: 'plan' | 'metered' })
   </span>;
 }
 
-export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, badgeTier, planLabel, onNavigate }: {
+export interface WorkspaceQuotaPopoverProps {
   view: WorkspaceQuotaView;
   context: WorkspaceCollabContext | null;
   profile?: string | null;
@@ -61,16 +62,22 @@ export function WorkspaceQuotaPopover({ view, context, profile, consoleOrigin, b
   badgeTier?: PlanBadgeTier | null;
   planLabel?: string;
   onNavigate?: (action: 'upgrade' | 'credits') => void;
-}) {
-  const { t } = useI18n();
-  const workspaceId = context?.workspaceId;
-  const memberId = context?.workspaceMemberId;
-  // Entering/reopening and switching reuse the shared read,
-  // which already rejects late results and refreshes on focus/payment signals.
+}
+
+export function WorkspaceQuotaPopover(props: WorkspaceQuotaPopoverProps) {
+  const workspaceId = props.context?.workspaceId;
+  const memberId = props.context?.workspaceMemberId;
   useEffect(() => {
     if (workspaceId && memberId) notifyWorkspaceBillingRefresh();
   }, [workspaceId, memberId]);
+  return props.view.sharedBilling === true
+    ? <SharedWorkspaceQuotaPopover {...props} />
+    : <LegacyWorkspaceQuotaPopover {...props} />;
+}
 
+function SharedWorkspaceQuotaPopover({ view, context, profile, consoleOrigin, badgeTier, planLabel, onNavigate }: WorkspaceQuotaPopoverProps) {
+  const { t } = useI18n();
+  const workspaceId = context?.workspaceId;
   const consoleUrl = quotaPopoverConsoleUrl(profile, workspaceId, 'console', consoleOrigin);
   const max = view.tier === 'max';
   // Preserve base EntryNavRail's locked/past-due recovery priority.

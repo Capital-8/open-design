@@ -1170,7 +1170,7 @@ function workspaceContextIdentity(context: WorkspaceCollabContext | null): strin
 const cachedWorkspaceBillingResponses = new Map<string, WorkspaceBillingResponse>();
 const MAX_BROWSER_TIMER_DELAY_MS = 2_147_483_647;
 
-function workspaceBillingRuntimeProjectionIsUsable(
+export function workspaceBillingRuntimeProjectionIsUsable(
   runtime: WorkspaceBillingRuntimeState,
   now = Date.now(),
 ): boolean {
@@ -1287,7 +1287,7 @@ export function useWorkspaceBillingResponse(
       : `workspace-billing:workspace:${workspaceId}:member:${workspaceMemberId}`;
   const billingUrl =
     billingScopeKey
-      ? `/api/workspace/billing?scope=workspace&workspaceId=${encodeURIComponent(workspaceId)}${context?.workspaceType === 'personal' ? '&includePreflight=1' : ''}`
+      ? `/api/workspace/billing?scope=workspace&workspaceId=${encodeURIComponent(workspaceId)}&includePreflight=1`
       : null;
   // The same workspace can be left and selected again while an earlier read is
   // still in flight. The context revision makes A→B→A a new request identity.
