@@ -3183,7 +3183,13 @@ export function ProjectView({
       setAmrOwnerTopUpFromCard(true);
       return;
     }
-    const fallbackProfile = amrBalanceCardProfile;
+    // Archived cards outlive later successful sends, which clear the live
+    // balance-card profile. Use the authenticated runtime for the current
+    // billing entrance, while keeping this project's payer/workspace context.
+    const fallbackProfile = workspaceQuotaStatus
+      ? workspaceQuotaStatus.profile?.trim() || null
+      : amrBalanceCardProfile;
+    const consoleOrigin = workspaceQuotaStatus?.consoleOrigin;
     // 自动充值链接对「可读但不可写」的工作区会返回 null(权限位不同,见
     // `workspaceAutoRechargeUrl`)。那时退回 Pricing —— 少一个功能好过一颗死按钮。
     // 落点和上面那个 `intent` 必须问同一份上下文。分支已经按权威身份算过了,
@@ -3192,9 +3198,9 @@ export function ProjectView({
     // null,把一个 Max 所有者退回套餐页 —— 而同一格的弹窗跳的是自动充值。
     const url =
       (intent === 'auto_recharge'
-        ? workspaceAutoRechargeUrl(projectRunBillingAuthorityContext, { fallbackProfile })
+        ? workspaceAutoRechargeUrl(projectRunBillingAuthorityContext, { fallbackProfile, consoleOrigin })
         : null)
-      ?? workspaceUpgradeUrl(projectRunBillingAuthorityContext, null, { fallbackProfile });
+      ?? workspaceUpgradeUrl(projectRunBillingAuthorityContext, null, { fallbackProfile, consoleOrigin });
     if (!url) return;
     const entrySource =
       intent === 'auto_recharge'
@@ -3220,6 +3226,8 @@ export function ProjectView({
     config.installationId,
     config.telemetry?.metrics,
     projectRunBillingAuthorityContext,
+    workspaceQuotaStatus?.profile,
+    workspaceQuotaStatus?.consoleOrigin,
   ]);
   // Conversations with a balance-gate check currently in flight. Sends that
   // arrive during the check queue instead of racing a duplicate run through
