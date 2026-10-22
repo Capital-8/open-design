@@ -218,7 +218,7 @@ describe('client RUN-003 parallel authoritative Home reads', () => {
 
 describe('F08 same-send authoritative plan before display metadata', () => {
   it.each([
-    { role: 'owner', tier: 'max', expected: 'auto-recharge' },
+    { role: 'owner', tier: 'max', expected: null },
     { role: 'owner', tier: 'pro', expected: 'plan' },
     { role: 'owner', tier: null, expected: 'plan' },
     { role: 'admin', tier: 'max', expected: null },
@@ -257,11 +257,16 @@ describe('F08 same-send authoritative plan before display metadata', () => {
       fireEvent.click(screen.getByTestId('home-hero-submit'));
       if (role === 'owner') {
         await screen.findByTestId('amr-balance-dialog');
-        fireEvent.click(screen.getByTestId('amr-balance-dialog-plans'));
-        expect(open).toHaveBeenCalledOnce();
-        const url = new URL(String(open.mock.calls[0]![0]));
-        expect(url.searchParams.get('billing')).toBe(expected);
-        expect(url.searchParams.get('workspaceId')).toBe(ctx.workspaceId);
+        if (expected === null) {
+          expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+          expect(open).not.toHaveBeenCalled();
+        } else {
+          fireEvent.click(screen.getByTestId('amr-balance-dialog-plans'));
+          expect(open).toHaveBeenCalledOnce();
+          const url = new URL(String(open.mock.calls[0]![0]));
+          expect(url.searchParams.get('billing')).toBe(expected);
+          expect(url.searchParams.get('workspaceId')).toBe(ctx.workspaceId);
+        }
       } else {
         await screen.findByTestId('amr-balance-owner-dialog');
         expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
