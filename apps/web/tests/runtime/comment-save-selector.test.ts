@@ -32,3 +32,24 @@ it('save validation follows the current selector across text/replacement changes
     expect(save()).toMatchObject({ type: 'od:comment-location-missing', requestId: 'save' });
   } finally { dom.window.close(); }
 });
+
+it.each(['span', 'div'])('save accepts an existing %s after picker eligibility changes', tag => {
+  const dom = new JSDOM(`<body><${tag}>Original</${tag}></body>`, { runScripts: 'outside-only', pretendToBeVisual: true });
+  try {
+    const win = dom.window;
+    const replies: Record<string, unknown>[] = [];
+    Object.defineProperty(win, 'parent', { value: { postMessage: (data: Record<string, unknown>) => replies.push(data) } });
+    Object.defineProperty(win.HTMLElement.prototype, 'getBoundingClientRect', { value: () => ({ x: 0, y: 20, width: 100, height: 40 }) });
+    const script = buildSrcdoc('<body></body>', { commentBridge: true }).match(/<script data-od-selection-bridge>([\s\S]*?)<\/script>/)?.[1];
+    if (!script) throw new Error('missing bridge');
+    new win.Function(script).call(win);
+    const save = () => {
+      win.dispatchEvent(new win.MessageEvent('message', { data: { type: 'od:comment-active-target', validateForSave: true,
+        requestId: 'save', elementId: 'old', selector: `body > ${tag}:nth-of-type(1)` } }));
+      return replies.at(-1);
+    };
+    expect(save()).toMatchObject({ type: 'od:comment-active-target-update', text: 'Original' });
+    win.document.querySelector(tag)!.innerHTML = tag === 'span' ? '' : '<span>A</span><span>B</span>';
+    expect(save()).toMatchObject({ type: 'od:comment-active-target-update', text: tag === 'span' ? '' : 'AB' });
+  } finally { dom.window.close(); }
+});

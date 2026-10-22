@@ -15556,7 +15556,7 @@ function HtmlViewer({
 
   async function currentCommentSaveTarget(snapshot: PreviewCommentSnapshot) {
     // Free-position and area notes do not refer to one DOM element.
-    if (snapshot.elementId.startsWith('pin-') || snapshot.selectionKind === 'pod') return snapshot;
+    if (snapshot.elementId.startsWith('pin-') || snapshot.elementId.startsWith('file-comment-') || snapshot.selectionKind === 'pod') return snapshot;
     const checked = await validateCommentSaveTarget(iframeRef.current, snapshot, () =>
       useUrlLoadPreview ? `url:${iframeRef.current?.src ?? ''}`
         : `srcdoc:${expectedSrcDocTransportGenerationRef.current}`);

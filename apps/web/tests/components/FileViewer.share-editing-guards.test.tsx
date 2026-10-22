@@ -290,3 +290,15 @@ it.each(['present', 'missing'] as const)('validates the live target before sendi
   }
   expect(screen.getByTestId('probe-draft')).toHaveValue('Keep draft');
 });
+
+it.each(['save', 'send'] as const)('keeps file-level comment %s independent of DOM validation', async action => {
+  const route = setup({ currentPrepared: true });
+  await acknowledge();
+  fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+  const frame = await selectLegacy({ elementId: 'file-comment-existing', selector: 'html' });
+  const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+  fireEvent.change(screen.getByTestId('probe-draft'), { target: { value: 'File feedback' } });
+  await act(async () => fireEvent.click(screen.getByTestId(action === 'save' ? 'probe-save' : 'probe-send')));
+  expect(action === 'save' ? route.saveComment : route.sendComments).toHaveBeenCalledTimes(1);
+  expect(post.mock.calls.some(([message]) => message?.validateForSave)).toBe(false);
+});
