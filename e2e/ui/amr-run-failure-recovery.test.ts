@@ -372,6 +372,38 @@ test('[P0] @critical AMR project preflight retains text and files, rejects other
     expect((await persistedAfterRecovery.json()).messages).toEqual([]);
     await testInfo.attach('recovered-project-awaits-manual-send', { body: await page.screenshot(), contentType: 'image/png' });
 
+    // RUN-003 also requires a disconnected client to keep the rejected
+    // draft parked when connectivity returns. Exercise the browser's real
+    // network boundary here, then let the existing explicit send below prove
+    // that reconnection did not grant consent to run the prompt.
+    try {
+      await page.context().setOffline(true);
+      expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+      expect(await page.evaluate(async () => {
+        try {
+          await fetch('/api/health', { cache: 'no-store' });
+          return true;
+        } catch {
+          return false;
+        }
+      })).toBe(false);
+      await expect(input).toHaveText(prompt);
+      await expect(attachment).toBeVisible();
+      await expect(page).toHaveURL(originalProjectUrl);
+      await runs.expectNone();
+      expect(runPosts).toBe(0);
+    } finally {
+      await page.context().setOffline(false);
+    }
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+    expect(await page.evaluate(async () => (await fetch('/api/health', { cache: 'no-store' })).ok)).toBe(true);
+    await page.clock.fastForward(T.short * 2);
+    await expect(input).toHaveText(prompt);
+    await expect(attachment).toBeVisible();
+    await expect(page).toHaveURL(originalProjectUrl);
+    await runs.expectNone();
+    expect(runPosts).toBe(0);
+
     await writeFakeVelaBin(join(amr.root, 'bin'), {
       sessionId: `manual-funding-${amr.projectId}`, requireLoginConfig: false, requireSetModel: false,
       fundingCheck: { status: 'available', workspaceMemberId: AMR_PERSONAL_WORKSPACE_ITEM.workspaceMemberId, balanceUsd: '10' },
