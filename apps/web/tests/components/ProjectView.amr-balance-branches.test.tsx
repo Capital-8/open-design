@@ -1303,6 +1303,30 @@ describe('Link request concurrency rejection preserves the original send', () =>
     expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
   });
 
+  it('keeps an archived funding card linked to the authenticated console after a later allowed send', async () => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    const props = { project: { ...project(), pendingPrompt: null } as never,
+      amrProfile: 'prod',
+      workspaceQuotaStatus: { profile: 'local', consoleOrigin: 'http://127.0.0.1:49196' } };
+    mockedCheckAmrBalanceGate
+      .mockResolvedValueOnce({ kind: 'hard', reason: 'insufficient', snapshot: snapshot('0') })
+      .mockResolvedValueOnce({ kind: 'allow' });
+    renderProjectView(props);
+    await clickSendWhenReady();
+    await waitFor(() => expect(screen.getByTestId('amr-balance-card-prop').textContent).toBe('0'));
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByTestId('upgrade-card-click'));
+    expect(mockedWindowOpen).toHaveBeenCalledOnce();
+    const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+    expect(target.origin).toBe('http://127.0.0.1:49196');
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(target.searchParams.get('od_entry_source')).toBe('chat_upgrade_card');
+  });
+
   it.each([
     ['local', 'http://localhost:5173'],
     ['test', 'https://open-design.powerformer.net'],
