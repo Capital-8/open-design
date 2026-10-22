@@ -174,7 +174,25 @@ async function startSession(browser: Browser, fixture: Fixture, role: Role, atte
     const headers = { 'x-od-workspace-id': fixture.space.workspaceId,
       'x-od-workspace-member-id': actor.memberId, 'x-od-workspace-role': role,
       'x-od-workspace-lifecycle-state': 'active', 'x-od-workspace-member-status': 'active' };
-    const context = await (await fetch(runtime.url.web('/api/workspace/context'), { headers })).json();
+    const contextResponse = await fetch(runtime.url.web('/api/workspace/context'), { headers });
+    const contextText = await contextResponse.text();
+    let context: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(contextText);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        context = parsed as Record<string, unknown>;
+      }
+    } catch { /* diagnostic below */ }
+    if (contextResponse.status !== 200 || !context.context) {
+      const diagnostic = { role, status: contextResponse.status,
+        contentType: contextResponse.headers.get('content-type'),
+        keys: Object.keys(context), error: context.error ?? null,
+        message: context.message ?? null, bodyStart: contextText.slice(0, 500) };
+      await writeFile(join(output!, 'RUN011-' + role + '-workspace-context.private.json'),
+        JSON.stringify(diagnostic, null, 2), { mode: 0o600 });
+      throw new Error('Workspace context preflight failed: status=' + diagnostic.status
+        + ' error=' + String(diagnostic.error) + ' keys=' + diagnostic.keys.join(','));
+    }
     expect(context.context).toMatchObject({ workspaceId: fixture.space.workspaceId,
       workspaceMemberId: actor.memberId, role });
     const projectId = 'run011-' + role + '-' + attemptId;
