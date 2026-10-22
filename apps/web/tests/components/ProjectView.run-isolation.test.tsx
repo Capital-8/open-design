@@ -2958,6 +2958,67 @@ describe('ProjectView conversation run isolation', () => {
     await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
   });
 
+  it('does not auto-send a gateway-paused AMR queue after remount and funding recovery', async () => {
+    conversationAMessages = [];
+    fetchPreviewComments.mockResolvedValue([previewComment]);
+    const amrAgents: AgentInfo[] = [{
+      id: 'amr', name: 'AMR', bin: 'amr', available: true,
+      models: [{ id: 'glm-5', label: 'GLM 5' }],
+    }];
+    const amrConfig = { ...config, agentId: 'amr' };
+    let firstRunError: ((error: Error) => void) | undefined;
+    streamViaDaemon.mockImplementation(async (input: unknown) => {
+      const options = input as {
+        handlers: { onError: (error: Error) => void };
+        onRunCreated?: (runId: string) => void;
+        onRunStatus?: (status: NonNullable<ChatMessage['runStatus']>) => void;
+      };
+      if (streamViaDaemon.mock.calls.length === 1) {
+        firstRunError = options.handlers.onError;
+        options.onRunCreated?.('run-before-gateway-rejection');
+        options.onRunStatus?.('running');
+      }
+    });
+
+    const firstRender = renderProjectView(amrConfig, project, amrAgents);
+    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
+    fireEvent.click(screen.getByTestId('send-message'));
+    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
+
+    fireEvent.click(screen.getByTestId('attach-first-comment'));
+    await waitFor(() => expect(screen.getByTestId('attached-comment-count').textContent).toBe('1'));
+    fireEvent.click(screen.getByTestId('send-message-alt'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from c'));
+    expect(screen.getByTestId('queued-comment-count-0').textContent).toBe('1');
+
+    const error = new Error('AMR Cloud reported insufficient balance') as Error & { code: string };
+    error.code = 'AMR_INSUFFICIENT_BALANCE';
+    await act(async () => { firstRunError?.(error); });
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('idle'));
+    expect(streamViaDaemon).toHaveBeenCalledTimes(1);
+    const queuedBeforeRemount = window.localStorage.getItem('od:chat-queued-sends:project-1:v1');
+    expect(queuedBeforeRemount).toContain('hello from c');
+    expect(queuedBeforeRemount).toContain(previewComment.id);
+
+    firstRender.unmount();
+    // The wallet now has funds. A prior gateway refusal still cannot grant
+    // consent to run a different queued submission after a page reload.
+    renderProjectView(amrConfig, project, amrAgents);
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from c'));
+    expect(streamViaDaemon).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('queued-comment-count-0').textContent).toBe('1');
+
+    fireEvent.click(screen.getByTestId('send-queued-0'));
+    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(2));
+    expect(streamViaDaemon.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+      history: expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'hello from c' }),
+      ]),
+    }));
+  });
+
   it('restores only one queued send for each stable request id', async () => {
     reattachDaemonRun.mockImplementation(async () => new Promise<void>(() => {}));
     const duplicateQueuedSend = {
