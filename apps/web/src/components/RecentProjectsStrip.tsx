@@ -77,6 +77,7 @@ import {
 export { deckPreviewSrcDoc } from '../lib/project-cover-pipeline';
 import { useInView } from './plugins-home/useInView';
 import { currentWorkspaceAccountGeneration, workspaceIdentityCacheKey } from '../collab/workspace-identity';
+import { mutedMotionCoverUrl } from '../lib/muted-motion-cover-url';
 import { useAnalytics } from '../analytics/provider';
 import {
   trackProjectCollectionClick,
@@ -2136,7 +2137,7 @@ function VerifiedHtmlCoverFrame({
   return (
     <iframe
       className="recent-projects__thumb-iframe"
-      src={src}
+      src={mutedMotionCoverUrl(src)}
       title=""
       loading="lazy"
       sandbox="allow-scripts"

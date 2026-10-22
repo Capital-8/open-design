@@ -56,6 +56,12 @@ export function composeToolsDevEnv(
     // Each e2e runtime has its own Next dist dir, so Turbopack cannot reuse a stale chunk graph.
     OD_WEB_DEV_BUNDLER: 'turbopack',
     ...extraEnv,
+    // Preserve caller preloads; use a file URL so spaces in checkout paths do
+    // not split NODE_OPTIONS. Descendant sidecars inherit the same isolation.
+    NODE_OPTIONS: [
+      extraEnv.NODE_OPTIONS ?? baseEnv.NODE_OPTIONS,
+      `--import=${new URL('./next-version-preload.ts', import.meta.url).href}`,
+    ].filter(Boolean).join(' '),
     CODEX_HOME: suite.codexHomeDir,
     OD_DATA_DIR: suite.dataDir,
     OD_MEDIA_CONFIG_DIR: suite.dataDir,
