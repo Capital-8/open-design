@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // D4 quota popover: the supplied client design uses the scoped Free/Go/Plus/Pro/Max
-// wordmark. The host's earlier team-family badge rule remains in its own helper;
-// the popover falls back to TEAM only for an unrecognized legacy team plan.
+// wordmark in both the entry pill and popover. The host's earlier team-family
+// helper remains the fallback for an unrecognized legacy team plan.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { WorkspaceBillingSummary, WorkspaceCollabContext } from '@open-design/contracts';
@@ -63,7 +63,7 @@ function renderRail(props: {
   );
 }
 
-const ALL_TIERS: PlanBadgeTier[] = ['free', 'plus', 'pro', 'max', 'team'];
+const ALL_TIERS: PlanBadgeTier[] = ['free', 'go', 'plus', 'pro', 'max', 'team'];
 
 /**
  * Read back WHICH wordmark a slot is drawing.
@@ -153,6 +153,12 @@ describe('plan wordmark — the quota popover names the current workspace tier',
       expected: 'plus',
     },
     {
+      name: 'team_go',
+      entitlement: { billingState: 'active', planId: 'team_go' },
+      membershipTier: 'team_go',
+      expected: 'go',
+    },
+    {
       name: 'team_pro',
       entitlement: { billingState: 'active', planId: 'team_pro' },
       membershipTier: 'team_pro',
@@ -178,6 +184,7 @@ describe('plan wordmark — the quota popover names the current workspace tier',
     });
 
     expect(nameplateTier()).toBe(expected);
+    expect(drawnTier(screen.getByTestId('entry-top-right-credits'))).toBe(expected === 'free' ? null : expected);
   });
 
   it('draws the paid tier wordmark for a team plan', () => {

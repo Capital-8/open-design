@@ -1091,14 +1091,10 @@ export function EntryTopRightCluster({
   // reader's locale — `formatVelaBalanceUsd`'s bare `$` is kept for every
   // other surface that already sits next to something naming the currency.
   const walletBalanceLabel = formatWalletBalance(balanceUsd);
-  // #5517: wordmark badge inside the menu's billing card. It names the plan
-  // FAMILY, so a TEAM workspace draws the one `team` wordmark at every tier —
-  // free through max — while the personal ladder keeps its per-tier glyph
-  // (product ruling, see `planBadgeTierForWorkspace`). The workspace kind is
-  // passed because it is the only thing that can name the FREE team tier: B
-  // reports it with a null `planId` and an empty `membershipTier`, an id no
-  // different from a personal free account.
-  const planTier = planBadgeTierForWorkspace({
+  // The pill and the card name the same scoped tier. Keep the legacy TEAM
+  // fallback for a team plan that has no recognized D4 tier.
+  const quotaView = workspaceQuotaView({ context, response: billingResponse, tier: labelTier, balanceUsd });
+  const planTier = quotaView.tier ?? planBadgeTierForWorkspace({
     tier: rawTier || tierLabel,
     workspaceType: context?.workspaceType,
   });
@@ -1479,7 +1475,7 @@ export function EntryTopRightCluster({
                   data-testid="entry-top-right-credits-panel"
                 >
                   <WorkspaceQuotaPopover
-                    view={workspaceQuotaView({ context, response: billingResponse, tier: labelTier, balanceUsd })}
+                    view={quotaView}
                     context={context}
                     profile={workspaceQuotaStatus?.profile ?? priorityAnnouncementAmrProfile}
                     consoleOrigin={workspaceQuotaStatus?.consoleOrigin}
