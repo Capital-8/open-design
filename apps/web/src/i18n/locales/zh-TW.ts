@@ -147,6 +147,8 @@ export const zhTW: Dict = {
     "OpenDesign Cloud 額度不足。儲值後即可繼續執行目前任務。",
   "chat.amrError.authorizeCta": "授權並重試",
   "chat.amrError.rechargeCta": "儲值",
+  "chat.amrConcurrencyCard.available": "可用並行",
+  "chat.amrConcurrencyCard.full": "已用滿",
   "chat.amrConcurrencyGate.title": "可用並行容量不足",
   "chat.amrConcurrencyGate.message": "目前並行容量不足，請升級方案後再試。",
   "chat.amrConcurrencyGate.teamTitle": "團隊並行額度不足",
@@ -577,7 +579,7 @@ export const zhTW: Dict = {
   "settings.cloudCalloutButton": "登入 / 註冊",
   "settings.modeApiMeta": "API 供應商",
   "settings.byokNoFileToolsNotice":
-    "BYOK 無法讀取、寫入或編輯專案檔案。需要變更程式碼時，請使用 Local CLI。",
+    "BYOK 透過 OpenCode 讀取、寫入和編輯專案檔案，需要已安裝且可用的 OpenCode。",
   "settings.byokDraftNotice":
     "填寫必填欄位後即可儲存此供應商；目前的設定將繼續維持生效。",
   "settings.codeAgent": "程式碼代理",
@@ -1097,7 +1099,6 @@ export const zhTW: Dict = {
   "homeHero.loadingContext": "正在載入上下文…",
   "homeHero.noResults": "找不到「{query}」的結果。",
   "homeHero.searchPrompt": "搜尋檔案、外掛、技能、MCP 伺服器與連接器。",
-  "homeHero.parameters": "{n} 個參數",
   "homeHero.details": "詳細資料",
   "homeHero.toRun": "執行",
   "homeHero.forNewLine": "換行",
@@ -2470,7 +2471,7 @@ export const zhTW: Dict = {
   "chat.upgrade.pausedTitle": "額度不足，任務已暫停",
   "chat.upgrade.pausedMessage": "目前額度不足，請儲值或升級方案後再試。",
   "chat.upgrade.pausedTeamTitle": "團隊額度不足，任務已暫停",
-  "chat.upgrade.pausedTeamMessage": "目前團隊額度不足，請聯絡工作空間 Owner 儲值或升級訂閱。",
+  "chat.upgrade.pausedTeamMessage": "目前團隊額度不足，請聯絡團隊空間所有者儲值或升級訂閱。",
   "chat.openFile": "開啟 {name}",
   "chat.copyPrompt": "複製提示詞",
   "chat.copyErrorDiagnostic": "複製錯誤診斷資訊",
@@ -6037,5 +6038,7 @@ export const zhTW: Dict = {
   'comment.unsentDiscardNotice': '有尚未送出的評論。再次點擊將捨棄並切換。',
   'comment.anchorState.reanchored': '基於較舊版本',
   'comment.anchorState.stale': '錨點可能已移動',
+  'comment.saveTargetMissing': '評論目標已不存在，請重新選擇元素；草稿已保留。',
+  'comment.savePreviewNotReady': '預覽正在重新整理，草稿已保留，請在完成後重試儲存。',
   'comment.anchorState.lost': '錨點已遺失',
 };

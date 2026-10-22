@@ -53,6 +53,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { ChatHistoryGlyph } from './chat/ChatHistoryGlyph';
 import historyStyles from './chat/ConversationHistoryDock.module.css';
 import { hasOdCard, OD_NEXT_STRATEGY_ID, type ProjectMediaTask } from '@open-design/contracts';
 import { useAnalytics } from '../analytics/provider';
@@ -176,6 +177,7 @@ import {
   type ChatSendOutcome,
   type ChatSendMeta,
 } from './ChatComposer';
+import { attachmentLocalPreviewUrl } from '../runtime/chat/creation-handoff';
 import type { PendingUpload } from '../runtime/chat/staged-attachment';
 import type { PlaceholderScenario } from './home-hero/placeholderScenarios';
 import { listDesignArtifactCandidates } from './design-files/designArtifacts';
@@ -812,6 +814,12 @@ interface Props {
    * OPEND-2849)。宿主读不出时按 `owner` 说 —— 那是今天的默认身份。
    */
   amrBalanceAudience?: 'owner' | 'member';
+  /** Frozen r506 F12/F15 card for a refused Link request before a run exists. */
+  amrConcurrencyCardAudience?: 'owner' | 'member' | null;
+  /** Owner needs scoped proof of an upgrade path; members can contact the owner. */
+  amrConcurrencyCardEligible?: boolean;
+  /** Opens the matching F04/F06 explanation; it never resends the draft. */
+  onAmrConcurrencyUpgrade?: () => void;
   /**
    * **失败之后的那次钱包补查已经落地,而且没读出数字。**
    *
@@ -982,13 +990,6 @@ interface Props {
   // switcher above the card (OPEND-3128 / OPEND-3258). Otherwise the control
   // renders in a title-less row at the top of the card.
   historyPortalTarget?: HTMLElement | null;
-  /**
-   * The pane is laid out but parked out of sight under the creation hand-off
-   * card (ProjectView `creationHandoff`, OPEND-2170). The composer normally
-   * portals into a body-level fixed layer that `visibility: hidden` on the
-   * pane cannot reach, so the layer hides itself on this flag.
-   */
-  composerLayerHidden?: boolean;
   designSystemPicker?: ReactNode;
   config?: AppConfig;
 }
@@ -1318,15 +1319,6 @@ const HEAD_GLYPH = {
   'aria-hidden': true,
 } as const;
 
-/** Filled discuss-line glyph (Demo #8113), sized like the other head icons. */
-function ChatHistoryGlyph(): ReactElement {
-  return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
-      <path d="M14 22.5L11.2 19H6C5.44772 19 5 18.5523 5 18V7.10256C5 6.55028 5.44772 6.10256 6 6.10256H22C22.5523 6.10256 23 6.55028 23 7.10256V18C23 18.5523 22.5523 19 22 19H16.8L14 22.5ZM15.8387 17H21V8.10256H7V17H11.2H12.1613L14 19.2984L15.8387 17ZM2 2H19V4H3V15H1V3C1 2.44772 1.44772 2 2 2Z" />
-    </svg>
-  );
-}
-
 /** 描边十字(`src/body-scene.html:8`)—— 一条 path 走两笔,和稿子同形 */
 function NewSessionGlyph(): ReactElement {
   return (
@@ -1414,6 +1406,9 @@ export function ChatPane({
   amrBalanceCardUsd = null,
   amrBalanceCardAnchorMessageId = null,
   amrBalanceAudience = 'owner',
+  amrConcurrencyCardAudience = null,
+  amrConcurrencyCardEligible = true,
+  onAmrConcurrencyUpgrade,
   amrBalanceCardUnavailable = false,
   onAmrBalanceUpgrade,
   onOpenAmrSettings,
@@ -1477,7 +1472,6 @@ export function ChatPane({
   collapseControlLifted,
   backLabel,
   historyPortalTarget,
-  composerLayerHidden = false,
   designSystemPicker,
   config,
 }: Props) {
@@ -2013,7 +2007,14 @@ export function ChatPane({
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false);
   // SDF liquid-glass refraction on the jump pill (frosted fallback via CSS).
   const jumpBtnGlassRef = useLiquidGlass<HTMLButtonElement>({ strength: 0.2 });
-  const [composerPortalTarget, setComposerPortalTarget] = useState<HTMLElement | null>(null);
+  // Resolved in the initializer, not in an effect: with the target known at
+  // mount, the layout effects below measure the slot and portal the composer
+  // before the first paint. Resolving it after paint drew the composer in-flow
+  // for one frame first — 12px lower and with the in-flow send button — on
+  // every mount of this pane (OPEND-3334).
+  const [composerPortalTarget] = useState<HTMLElement | null>(() =>
+    typeof document === 'undefined' ? null : document.body,
+  );
   const [composerPortalRect, setComposerPortalRect] = useState<{
     left: number;
     width: number;
@@ -2496,6 +2497,12 @@ export function ChatPane({
   const displayErrorTitle = accessErrorCopy
     ? t(accessErrorCopy.titleKey)
     : t(runFailureUi?.titleKey ?? 'chat.runError.title.generic', runFailureCopyVars);
+  const frozenConcurrencyCardAudience = amrConcurrencyCardEligible
+    ? (amrConcurrencyCardAudience
+      ?? (!accessErrorCopy && displayError && retryAssistant?.agentId === 'amr'
+        && runFailureUi?.titleKey === 'chat.runError.title.membershipConcurrencyLimit'
+        ? amrBalanceAudience : null))
+    : null;
   /*
    * 这张顶层报错卡代表**哪一轮**。
    *
@@ -4016,11 +4023,6 @@ export function ChatPane({
     syncFollowState();
   }
 
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    setComposerPortalTarget(document.body);
-  }, []);
-
   useLayoutEffect(() => {
     if (tab !== 'chat') {
       setComposerPortalRect(null);
@@ -4560,7 +4562,10 @@ export function ChatPane({
                   }}
                   highlightedUserMessageId={chatRailHighlightedMessageId}
                 />
-                {displayError ? (
+                {frozenConcurrencyCardAudience ? (
+                  <UpgradeCard balanceUsd={0} concurrencyAudience={frozenConcurrencyCardAudience}
+                    onUpgrade={onAmrConcurrencyUpgrade} />
+                ) : displayError ? (
                   /*
                    * 报错卡(稿子组件 19)。终于接回产品 —— 之前 `RunErrorCard` 抽出来了
                    * 却只有验收陈列页在用,产品这一格仍是 `UserActionCard`:
@@ -4808,7 +4813,6 @@ export function ChatPane({
                    */
                   <div
                     {...chatSeam('chat-composer-fixed-layer')}
-                    data-composer-layer-hidden={composerLayerHidden ? '' : undefined}
                     ref={composerLayerRef}
                     data-chat-panel-top={composerPortalRect.top}
                     style={{
@@ -6976,7 +6980,9 @@ const UserMessage = memo(UserMessageImpl);
           const openable = !!onRequestOpenFile;
           const handleOpen = openable ? () => onRequestOpenFile?.(openName) : undefined;
           const label = openable ? t('chat.openFile', { name: baseName }) : a.path;
-          return a.kind === 'image' && projectId ? (
+          // A staged file that is not in the project yet previews itself.
+          const localPreviewUrl = attachmentLocalPreviewUrl(a);
+          return a.kind === 'image' && (projectId || localPreviewUrl) ? (
             <button
               type="button"
               key={a.path}
@@ -6989,7 +6995,7 @@ const UserMessage = memo(UserMessageImpl);
               <span className="msg-att-ph">
                 <img
                   className="msg-att-mini"
-                  src={projectRawUrl(projectId, a.path, workspaceContext)}
+                  src={localPreviewUrl ?? projectRawUrl(projectId ?? '', a.path, workspaceContext)}
                   alt=""
                 />
               </span>

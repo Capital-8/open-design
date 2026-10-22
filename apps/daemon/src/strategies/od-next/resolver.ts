@@ -5,7 +5,6 @@ type Availability = { id: string; available: boolean };
 export interface OdNextIntakePreflightInput {
   inputRefs: ReadonlyArray<{ id: string; accessible: boolean }>;
   selectedAgentAvailable: boolean;
-  nativeContinuation: 'verified' | 'advertised' | 'unknown' | 'unsupported';
   taskProfileAvailable: boolean;
   dependencies: ReadonlyArray<Availability>;
 }
@@ -59,9 +58,6 @@ export function runIntakePreflight(input: OdNextIntakePreflightInput): OdNextPre
       .map((value) => `od_next_preflight_input_unavailable:${value.id}`)
       .sort(),
     ...(!input.selectedAgentAvailable ? ['od_next_preflight_agent_unavailable'] : []),
-    ...(input.nativeContinuation !== 'verified'
-      ? ['od_next_preflight_native_continuation_unverified']
-      : []),
     ...(!input.taskProfileAvailable ? ['od_next_preflight_task_profile_unavailable'] : []),
     ...availabilityReasonCodes(
       input.dependencies,

@@ -956,6 +956,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
     }
     await act(async () => { pendingPreflights[0]!(new Response(JSON.stringify(preflight(tier === 'max' ? 'go' : 'max')))); });
     expect(screen.queryByTestId('amr-concurrency-upgrade') !== null).toBe(upgrade);
+    expect(chatPaneSpy.mock.calls.at(-1)![0].amrConcurrencyCardEligible).toBe(upgrade);
     expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
     expect(saveMessage).not.toHaveBeenCalled();
   });

@@ -67,6 +67,21 @@
   overflow: hidden;
 }
 
+/* Frozen r506 F12/F15 use the 480 × 118 in-conversation concurrency card.
+   Balance cards retain their existing fluid width. */
+.concurrency {
+  width: min(100%, 480px);
+  min-height: 118px;
+}
+
+.concurrency .head {
+  padding-bottom: 6px;
+}
+
+.up.concurrency .bottom .cta {
+  padding-right: 18px;
+}
+
 /* 右上角那枚辉光(两颗星,渐变从那支绿收到卡面色)。
    稿子把提供的 SVG 旋转 180° 放在右上:小星在上、大星在下。
    `z-index: -1` 落在卡片自己的背景之上、内容之下 —— 所以它压在底色上、

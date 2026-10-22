@@ -21,7 +21,7 @@ function lookup(dict: Dict, key: string): string | undefined {
 }
 
 // 席位一期：团队 Admin 不管理充值或订阅，额度不足应联系团队空间所有者。
-// F10 的 r506 冻结文案优先于第四轮措辞；名字不插值、单出口和语言完整性断言保留。
+// F10/F14 的 r506 冻结文案优先于第四轮措辞；名字不插值、单出口和语言完整性断言保留。
 const PRODUCT_ZH: Record<string, string> = {
   // S04 发送前·Open Design 智能体没登录
   'chat.amrBalanceGate.signedOutTitle': 'Open Design 尚未登录',
@@ -36,7 +36,7 @@ const PRODUCT_ZH: Record<string, string> = {
   'chat.upgrade.pausedTitle': '额度不足，任务已暂停',
   'chat.upgrade.pausedMessage': '当前额度不足，请充值或升级套餐后再试。',
   'chat.upgrade.pausedTeamTitle': '团队额度不足，任务已暂停',
-  'chat.upgrade.pausedTeamMessage': '当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。',
+  'chat.upgrade.pausedTeamMessage': '当前团队额度不足，请联系团队空间所有者充值或升级订阅。',
   // S24a / S24c
   'assistant.unfinishedLabel': '任务尚未完成',
   'assistant.unfinishedDetail': '本次任务仍有 {n} 项内容未完成。',

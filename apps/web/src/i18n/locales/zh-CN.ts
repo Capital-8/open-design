@@ -147,6 +147,8 @@ export const zhCN: Dict = {
     "OpenDesign Cloud 额度不足。充值后可继续运行当前任务。",
   "chat.amrError.authorizeCta": "授权并重试",
   "chat.amrError.rechargeCta": "充值",
+  "chat.amrConcurrencyCard.available": "可用并发",
+  "chat.amrConcurrencyCard.full": "已用满",
   "chat.amrConcurrencyGate.title": "可用并发不足",
   "chat.amrConcurrencyGate.message": "当前并发不足，请升级套餐后再试。",
   "chat.amrConcurrencyGate.teamTitle": "团队并发不足",
@@ -577,7 +579,7 @@ export const zhCN: Dict = {
   "settings.cloudCalloutButton": "登录 / 注册",
   "settings.modeApiMeta": "API 提供商",
   "settings.byokNoFileToolsNotice":
-    "BYOK 无法读写或修改项目文件；需要改代码时请使用本机 CLI。",
+    "BYOK 通过 OpenCode 读取、写入和编辑项目文件，需要已安装且可用的 OpenCode。",
   "settings.byokDraftNotice":
     "填写必填项后即可保存此提供商；当前配置将继续保持生效。",
   "settings.codeAgent": "代码代理",
@@ -1095,7 +1097,6 @@ export const zhCN: Dict = {
   "homeHero.loadingContext": "正在加载上下文…",
   "homeHero.noResults": "没有找到“{query}”的结果。",
   "homeHero.searchPrompt": "搜索文件、插件、技能、MCP 服务器和连接器。",
-  "homeHero.parameters": "{n} 个参数",
   "homeHero.details": "详情",
   "homeHero.toRun": "运行",
   "homeHero.forNewLine": "换行",
@@ -2462,7 +2463,7 @@ export const zhCN: Dict = {
   "chat.upgrade.pausedTitle": "额度不足，任务已暂停",
   "chat.upgrade.pausedMessage": "当前额度不足，请充值或升级套餐后再试。",
   "chat.upgrade.pausedTeamTitle": "团队额度不足，任务已暂停",
-  "chat.upgrade.pausedTeamMessage": "当前团队额度不足，请联系工作空间 Owner 充值或升级订阅。",
+  "chat.upgrade.pausedTeamMessage": "当前团队额度不足，请联系团队空间所有者充值或升级订阅。",
   "chat.openFile": "打开 {name}",
   "chat.copyPrompt": "复制提示词",
   "chat.copyErrorDiagnostic": "复制错误诊断信息",
@@ -6030,5 +6031,7 @@ export const zhCN: Dict = {
   'comment.unsentDiscardNotice': '有未发送的评论。再次点击将丢弃并切换。',
   'comment.anchorState.reanchored': '基于旧版本',
   'comment.anchorState.stale': '锚点可能已移动',
+  'comment.saveTargetMissing': '评论目标已不存在，请重新选择元素；草稿已保留。',
+  'comment.savePreviewNotReady': '预览正在刷新，草稿已保留，请在刷新完成后重试保存。',
   'comment.anchorState.lost': '锚点已丢失',
 };
