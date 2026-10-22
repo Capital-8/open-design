@@ -24,6 +24,10 @@ import type { AnalyticsContext } from '../analytics.js';
 import { readMetricsConsent, type readAppConfig, type writeAppConfig } from '../app-config.js';
 import { readCurrentAppVersionInfo, UNKNOWN_APP_VERSION, type AppVersionInfo } from '../app-version.js';
 import { getDaemonHealth } from '../services/daemon-health.js';
+import { createIdentityGatedQueue } from '../services/identity-gated-queue.js';
+
+const LAUNCH_METRIC_EVENTS = new Set(['client_launch_attempt', 'client_business_ready', 'client_launch_result']);
+const LAUNCH_EVENT_RETENTION_LIMIT = 16;
 import { readTelemetryEnvironment } from '../telemetry-environment.js';
 import { reportRunFeedbackFromDaemon } from '../langfuse-bridge.js';
 import { observePendingInstallerApplyAttempts } from '../migration/index.js';
@@ -141,6 +145,19 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
   const { dataDir } = deps;
   const analyticsService = createAnalyticsService({ dataDir });
   let cachedAppVersion: AppVersionInfo | null = null;
+  // Launch denominators must carry the same installation identity as their
+  // ready/result events. On a fresh install the renderer mints that identity
+  // after the launch attempt has already been reported, so retain launch
+  // events until it exists (or the user has explicitly opted out).
+  const launchEventQueue = createIdentityGatedQueue<Parameters<typeof analyticsService.captureSafety>[0]>({
+    limit: LAUNCH_EVENT_RETENTION_LIMIT,
+    resolveIdentity: async () => {
+      const appCfg = await deps.readAppConfig(dataDir);
+      if (typeof appCfg.installationId === 'string' && appCfg.installationId) return 'ready';
+      return appCfg.telemetry?.metrics === false ? 'none' : 'pending';
+    },
+    deliver: (capture) => analyticsService.captureSafety(capture),
+  });
 
   // PostHog runtime config.
   //
@@ -296,12 +313,18 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
       getDaemonHealth()?.setLaunchContext({ app_session_id: metric.app_session_id as string, launch_attempt_id: metric.launch_attempt_id as string });
     }
     const appVersion = await appVersionPromise;
-    await analyticsService.captureSafety({
+    const capture = {
       eventName,
       appVersion: appVersion?.version ?? UNKNOWN_APP_VERSION,
       properties: { ...(metric ?? properties), ...(incidentId ? { diagnostic_incident_id: incidentId } : {}) },
       ...(metric ? { insertId: metric.event_id as string } : typeof properties.event_id === 'string' && /^[a-zA-Z0-9_.:-]{1,128}$/.test(properties.event_id) ? { insertId: properties.event_id } : {}),
-    });
+    };
+    if (metric && LAUNCH_METRIC_EVENTS.has(eventName)) {
+      await launchEventQueue.submit(capture);
+    } else {
+      await launchEventQueue.flush();
+      await analyticsService.captureSafety(capture);
+    }
     res.json({ ok: true });
   });
 
@@ -325,7 +348,11 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
     } catch { /* Observability never gates daemon lifecycle. */ }
     finally { lifecycleScanRunning = false; }
   };
-  const lifecycleTimer = setInterval(() => { void scanUpdateLifecycle(); }, 10_000);
+  const lifecycleTimer = setInterval(() => {
+    void scanUpdateLifecycle();
+    // Replays launch events retained while a fresh install had no identity.
+    void launchEventQueue.flush();
+  }, 10_000);
   lifecycleTimer.unref();
   const appVersionPromise = (async () => {
     try {

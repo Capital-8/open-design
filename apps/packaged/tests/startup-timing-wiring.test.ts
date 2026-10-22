@@ -20,7 +20,7 @@ function evaluate(code: string, globals: Record<string, unknown>) {
 }
 
 describe("packaged launch timing wiring", () => {
-  it("retains daemon/web phase edges on the same tracker and arms reporting only after daemon identity exists", () => {
+  it("retains daemon/web phase edges and leaves launch delivery to the daemon-backed desktop reporter (OPEND-4220)", () => {
     const method = select(node => ts.isMethodDeclaration(node) && node.name.getText(ast) === "onPhase");
     const mark = vi.fn();
     const setReporter = vi.fn();
@@ -30,8 +30,9 @@ describe("packaged launch timing wiring", () => {
     }) as (phase: string) => void;
     for (const phase of ["daemon-spawning", "daemon-ready", "web-spawning", "web-ready"]) onPhase(phase);
     expect(mark.mock.calls.flat()).toEqual(["daemon_spawning", "daemon_ready", "web_spawning", "web_ready"]);
-    expect(setReporter).toHaveBeenCalledExactlyOnceWith(reportPackagedLaunch);
-    expect(setReporter.mock.invocationCallOrder[0]).toBeLessThan(mark.mock.invocationCallOrder[1]!);
+    // The direct packaged reporter would send client_launch_attempt before a
+    // fresh install has an installation identity, silently dropping it.
+    expect(setReporter).not.toHaveBeenCalled();
   });
 
   it("correlates an early failure and waits for bounded telemetry before the existing fatal exit", async () => {

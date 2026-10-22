@@ -391,7 +391,10 @@ async function main(): Promise<void> {
     // Both the "spawning" and "ready" edges are mapped so the step counter
     // advances the instant each long native wait clears.
     onPhase(phase) {
-      if (phase === "daemon-ready") packagedStartupTiming?.setReporter(reportPackagedLaunch);
+      // Launch events stay buffered on the tracker until desktop main arms the
+      // daemon-backed reporter, so attempt/ready/result share one delivery path
+      // and one installation identity (OPEND-4220). The direct packaged
+      // reporter is reserved for the fatal path below, where no daemon exists.
       packagedStartupTiming?.mark(phase === "daemon-spawning" ? "daemon_spawning"
         : phase === "daemon-ready" ? "daemon_ready" : phase === "web-spawning" ? "web_spawning" : "web_ready");
       const stage =

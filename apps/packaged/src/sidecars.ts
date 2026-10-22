@@ -20,6 +20,7 @@ import {
 import {
   getSidecarStatus,
   invokeSidecar,
+  signalFromSupervisorExitCode,
   spawnSidecar,
   stopSidecar,
   type SpawnedSidecar,
@@ -837,8 +838,11 @@ export function observeDaemonExit(
     if (exited) return;
     exited = true;
     if (!ready) return;
-    const reason = intentional ? 'clean-exit' : signal ? 'killed' : code === 0 ? 'clean-exit' : code !== null ? 'crash' : 'unknown';
-    const exit = { exit_code: code, signal, intentional, occurred_at: new Date().toISOString(), reason } as const;
+    // The observed child is the sidecar supervisor; it encodes a target killed
+    // by a signal it did not forward as 128 + N (see supervisorExitCode).
+    const targetSignal = signal ?? signalFromSupervisorExitCode(code);
+    const reason = intentional ? 'clean-exit' : targetSignal ? 'killed' : code === 0 ? 'clean-exit' : code !== null ? 'crash' : 'unknown';
+    const exit = { exit_code: code, signal: targetSignal, intentional, occurred_at: new Date().toISOString(), reason } as const;
     // Invoke synchronously so the reporter can persist before yielding to network I/O.
     try { delivery = report(exit).catch(() => undefined); } catch {}
   });
