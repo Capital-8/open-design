@@ -913,6 +913,53 @@ describe('Link request concurrency rejection preserves the original send', () =>
     expect(screen.queryByTestId('amr-concurrency-upgrade') !== null).toBe(role === 'owner');
   });
 
+  it.each([
+    { tier: 'max', upgrade: false },
+    { tier: 'go', upgrade: true },
+  ] as const)('RUN-014 $tier Owner uses the scoped funding plan when the display plan is missing', async ({ tier, upgrade }) => {
+    const context = callerContext('owner', null);
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    const pendingPreflights: Array<(response: Response) => void> = [];
+    const preflightRead = vi.fn(() => new Promise<Response>((resolve) => { pendingPreflights.push(resolve); }));
+    const preflight = (plan: 'go' | 'max') => ({ preflight: {
+      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      modelId: null, generatedAt: new Date().toISOString(), fundingCheck: 'available', balanceUsd: '10',
+      codingPlan: { workspaceId: context.workspaceId, eligible: true, tier: plan, windows: [] },
+    } });
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/billing/request-concurrency?')) return Promise.resolve(new Response(JSON.stringify({ requestConcurrencyHint: {
+        workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+        observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+      } })));
+      if (url.includes('/billing/preflight?')) return preflightRead();
+      return originalFetch(input, init);
+    }));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome: unknown;
+    await act(async () => { outcome = await chatPaneSpy.mock.calls.at(-1)![0].onSend('retained draft',
+      [{ path: 'brief.txt', name: 'brief.txt', kind: 'file' }], []); });
+    expect(outcome).toBe('restore-draft');
+    await waitFor(() => expect(preflightRead).toHaveBeenCalledTimes(2));
+    expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+    // A Max Owner must never see a transient Pricing CTA before tier proof.
+    expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+    // The second read is the fresh refusal-specific plan proof. An older
+    // funding read may finish later with an obsolete tier; it cannot replace it.
+    await act(async () => { pendingPreflights[1]!(new Response(JSON.stringify(preflight(tier)))); });
+    if (upgrade) {
+      await waitFor(() => expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeTruthy());
+    } else {
+      expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+    }
+    await act(async () => { pendingPreflights[0]!(new Response(JSON.stringify(preflight(tier === 'max' ? 'go' : 'max')))); });
+    expect(screen.queryByTestId('amr-concurrency-upgrade') !== null).toBe(upgrade);
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(saveMessage).not.toHaveBeenCalled();
+  });
+
   it('keeps a full-counter draft and files in the real composer, and sends only after one new manual action', async () => {
     realChatPane.enabled = true;
     const context = callerContext('owner', 'team_go');
@@ -1224,6 +1271,40 @@ describe('Link request concurrency rejection preserves the original send', () =>
     expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
     await clickSendWhenReady();
     await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(2));
+  });
+
+  it('RUN-014 Max Owner hides Pricing after Link refuses when the counter was unavailable', async () => {
+    const context = callerContext('owner', null);
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    const preflightRead = vi.fn(async () => new Response(JSON.stringify({ preflight: {
+      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      modelId: null, generatedAt: new Date().toISOString(), fundingCheck: 'available', balanceUsd: '10',
+      codingPlan: { workspaceId: context.workspaceId, eligible: true, tier: 'max', windows: [] },
+    } })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/billing/request-concurrency?')) return Promise.resolve(new Response('{}', { status: 503 }));
+      if (url.includes('/billing/preflight?')) return preflightRead();
+      return originalFetch(input, init);
+    }));
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
+    await act(async () => { await chatPaneSpy.mock.calls.at(-1)![0].onSend('real Link refusal draft',
+      [{ path: 'brief.txt', name: 'brief.txt', kind: 'file' }], []); });
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    expect(preflightRead).toHaveBeenCalledOnce();
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => { await options.handlers.onError(Object.assign(new Error('Link request concurrency full'), {
+      failureDetail: 'membership_concurrency_limit',
+    })); });
+    expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].rejectedComposerSend).toMatchObject({
+      text: 'real Link refusal draft', attachments: [{ path: 'brief.txt' }],
+    });
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
   });
   it.each([
     ['local', 'http://127.0.0.1:49195'],

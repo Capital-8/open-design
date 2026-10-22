@@ -191,6 +191,7 @@ import {
   amrBalanceDialogUpgradeIntent,
   amrBalanceUpgradeIntent,
   resolveAmrBalanceBranch,
+  resolveAmrConcurrencyPresentation,
   withAmrFundingPlan,
   type AmrBalanceBranch,
   type AmrBalanceBlockedDialogKind,
@@ -2928,8 +2929,9 @@ export function ProjectView({
   const brandEmptyTranscriptRetriesRef = useRef<Map<string, number>>(new Map());
   const [chatSeed, setChatSeed] = useState<{ id: string; value: string } | null>(null);
   const [concurrencyRejection, setConcurrencyRejection] = useState<{
-    conversationId: string; authorityKey: string; accountGeneration: number;
+    conversationId: string; authorityKey: string; accountGeneration: number; requestId: string;
     branch: AmrBalanceBranch; workspaceContext: WorkspaceCollabContext | null;
+    preflight: WorkspaceBillingPreflight | null;
     draft: RejectedComposerSend | null;
     initialHomeSend: boolean;
   } | null>(null);
@@ -3178,6 +3180,15 @@ export function ProjectView({
   );
   const amrBalanceBranchRef = useRef(amrBalanceBranch);
   amrBalanceBranchRef.current = amrBalanceBranch;
+  const concurrencyPresentation = concurrencyRejection
+    ? resolveAmrConcurrencyPresentation({
+        context: concurrencyRejection.workspaceContext,
+        billing: workspaceBillingSummaryForContext(
+          projectRunPreflightBillingResponse, concurrencyRejection.workspaceContext,
+        ),
+        preflight: concurrencyRejection.preflight,
+      })
+    : null;
   /**
    * 「找所有者充值」弹窗是从**卡上那颗按钮**点开的(而不是拦截时自动弹出的)。
    * 拦截时自动弹出的那一份记在 `amrBalanceGateBlock.dialog` 上,两者共用同一个
@@ -8974,6 +8985,18 @@ export function ProjectView({
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
         ? checkAmrFundingEvidence(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
         : Promise.resolve({ kind: 'unknown' as const, preflight: null });
+      const refreshConcurrencyPlanProof = (isCurrent: () => boolean) => {
+        const scope = amrBalanceGateScopeForWorkspaceContext(projectRunPreflightContext);
+        if (!scope) return;
+        // A recent positive funding cache may predate a plan change. Once Link
+        // refuses this send, only a fresh exact-member/model preflight may
+        // reveal a purchase action for this rejection.
+        void readFreshAmrFundingEvidence(scope, fundingModelId, isCurrent).then((evidence) => {
+          if (!isCurrent()) return;
+          setConcurrencyRejection((current) => current?.requestId === clientRequestId
+            ? { ...current, preflight: evidence.preflight } : current);
+        });
+      };
       if (amrGateApplies) {
         const restoreComposer = () => {
           if (meta?.composerOwnedDraft) amrGateBlockedRequestRef.current = clientRequestId;
@@ -8998,9 +9021,10 @@ export function ProjectView({
           amrGatePausedQueueConversationsRef.current.add(runConversationId);
           setConcurrencyRejection({
             conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
-            accountGeneration: sendAccountGeneration,
+            accountGeneration: sendAccountGeneration, requestId: clientRequestId,
             branch: amrBalanceBranchRef.current,
             workspaceContext: fundingDialogContextRef.current.workspaceContext,
+            preflight: null,
             initialHomeSend: meta?.initialHomeSend === true,
             draft: meta?.initialHomeSend ? {
               nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
@@ -9008,6 +9032,9 @@ export function ProjectView({
             } : null,
           });
           setConcurrencyDialogOpen(true);
+          // The Link counter settles the refusal immediately. Funding can
+          // identify the tier later, but must never unlock a newer send.
+          refreshConcurrencyPlanProof(fundingIdentityIsCurrent);
           // Consume a Home handoff only into its restored draft, never into an
           // automatic retry when a slot later becomes available.
           if (meta?.initialHomeSend) return true;
@@ -10411,9 +10438,10 @@ export function ProjectView({
                 && !(latestAssistantMsg.events ?? []).some((event) => event.kind !== 'status' && event.kind !== 'done_key');
               setConcurrencyRejection({
                 conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
-                accountGeneration: sendAccountGeneration,
+                accountGeneration: sendAccountGeneration, requestId: clientRequestId,
                 branch: amrBalanceBranchRef.current,
                 workspaceContext: fundingDialogContextRef.current.workspaceContext,
+                preflight: null,
                 initialHomeSend: meta?.initialHomeSend === true,
                 draft: (meta?.composerOwnedDraft || meta?.initialHomeSend) && unstarted ? {
                   nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
@@ -10421,6 +10449,7 @@ export function ProjectView({
                 } : null,
               });
               setConcurrencyDialogOpen(true);
+              refreshConcurrencyPlanProof(modelRequestIdentityIsCurrent);
               amrGatePausedQueueConversationsRef.current.add(runConversationId);
             }
           }
@@ -14836,12 +14865,13 @@ export function ProjectView({
       {onboardingEntryRef.current && hasPreviewableArtifact && !currentConversationStreaming ? (
         <FirstArtifactHint />
       ) : null}
-      {concurrencyDialogOpen && concurrencyRejection
+      {concurrencyDialogOpen && concurrencyRejection && concurrencyPresentation
         && concurrencyRejection.conversationId === activeConversationId
         && concurrencyRejection.authorityKey === projectRunAuthorityKey
         && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
         && config.mode === 'daemon' && config.agentId === 'amr' ? (
-        <AmrConcurrencyDialog branch={concurrencyRejection.branch}
+        <AmrConcurrencyDialog branch={{ ...concurrencyRejection.branch, tier: concurrencyPresentation.branch.tier }}
+          upgradeAllowed={concurrencyPresentation.upgradeAllowed && concurrencyRejection.branch.audience === 'owner'}
           workspaceContext={concurrencyRejection.workspaceContext}
           profile={workspaceQuotaStatus?.profile?.trim() || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null}
           consoleOrigin={workspaceQuotaStatus?.consoleOrigin}
