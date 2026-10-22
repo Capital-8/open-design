@@ -3406,6 +3406,10 @@ export function ProjectView({
   const streamingConversationIdRef = useRef<string | null>(null);
   const [queuedChatSends, setQueuedChatSends] = useState<QueuedChatSend[]>([]);
   const queuedChatSendsRef = useRef<QueuedChatSend[]>([]);
+  // A busy "Send now" first stops the live run, then the drain effect sends
+  // exactly the queue item the user selected. Keep that one-click intent
+  // distinct from the durable funding pause on every other queued item.
+  const explicitlyStartedQueuedSendIdRef = useRef<string | null>(null);
   const requireManualStartAfterFundingRefusal = useCallback((conversationId: string) => {
     const current = queuedChatSendsRef.current;
     if (!current.some((item) => item.conversationId === conversationId && !item.manualStartOnly)) return;
@@ -3666,19 +3670,24 @@ export function ProjectView({
   }) => {
     if (
       input.code !== AMR_INSUFFICIENT_BALANCE_CODE
-      || input.conversationId !== messagesConversationIdRef.current
       || input.authorityKey !== projectRunAuthorityKeyRef.current
       || input.accountGeneration !== currentWorkspaceAccountGeneration()
-      || !fundingDialogContextRef.current.isAmr
-      || (input.source === 'preflight' && input.modelId !== fundingDialogContextRef.current.modelId)
     ) return;
     const source = input.source ?? 'gateway';
-    // Only an actual gateway failure pauses pending sends. The independent
-    // read never cancels a run or changes task status.
+    // Only a real gateway failure pauses pending sends; an independent
+    // preflight read never cancels a run or changes task status. The run can
+    // fail after the user has switched conversations. Its pending sends still
+    // belong to the original conversation and must stay paused
+    // across reload; only the visible dialog depends on the active pane.
     if (source === 'gateway') {
       amrGatePausedQueueConversationsRef.current.add(input.conversationId);
       requireManualStartAfterFundingRefusal(input.conversationId);
     }
+    if (
+      input.conversationId !== messagesConversationIdRef.current
+      || !fundingDialogContextRef.current.isAmr
+      || (input.source === 'preflight' && input.modelId !== fundingDialogContextRef.current.modelId)
+    ) return;
     const key = `${input.accountGeneration}:${input.conversationId}:${input.runKey}`;
     if (shownFundingFailuresRef.current.has(key)) {
       if (source === 'gateway') setAmrBalanceGateBlock((previous) =>
@@ -11466,6 +11475,7 @@ export function ProjectView({
         supersededRunsRef.current.add(controller);
       }
       // handleStop releases the interrupted turn's comments back to 'open'.
+      explicitlyStartedQueuedSendIdRef.current = id;
       prioritizeQueuedChatSend(id);
       handleStop();
       return;
@@ -11512,26 +11522,33 @@ export function ProjectView({
     if (startingQueuedChatSendIdRef.current) return;
     if (!activeConversationId) return;
     if (messagesConversationIdRef.current !== activeConversationId) return;
-    // Queue paused by the balance gate: don't re-drain (and re-pop the
-    // dialog) on unrelated state churn while AMR is still the agent. The
-    // manual "run now" path below bypasses this deliberately, and switching
-    // agents makes the pause irrelevant.
-    if (
-      config.mode === 'daemon' &&
-      config.agentId === 'amr' &&
-      amrGatePausedQueueConversationsRef.current.has(activeConversationId)
-    ) {
-      return;
-    }
     const next = queuedChatSendsRef.current.find(
       (item) => item.conversationId === activeConversationId,
     );
     if (!next) return;
-    if (config.mode === 'daemon' && config.agentId === 'amr' && next.manualStartOnly) return;
+    const explicitlyStarted = explicitlyStartedQueuedSendIdRef.current === next.id;
+    // Queue paused by the balance gate: don't re-drain (and re-pop the
+    // dialog) on unrelated state churn while AMR is still the agent. A busy
+    // "Send now" authorizes only its selected item through this effect.
+    if (
+      config.mode === 'daemon' &&
+      config.agentId === 'amr' &&
+      amrGatePausedQueueConversationsRef.current.has(activeConversationId) &&
+      !explicitlyStarted
+    ) {
+      return;
+    }
+    if (
+      config.mode === 'daemon' && config.agentId === 'amr' &&
+      next.manualStartOnly && !explicitlyStarted
+    ) return;
     startingQueuedChatSendIdRef.current = next.id;
     armSlideNavForQueuedSend(next);
     void (async () => {
       const started = await startQueuedChatSend(next);
+      if (explicitlyStartedQueuedSendIdRef.current === next.id) {
+        explicitlyStartedQueuedSendIdRef.current = null;
+      }
       if (!started) {
         if (startingQueuedChatSendIdRef.current === next.id) {
           startingQueuedChatSendIdRef.current = null;
