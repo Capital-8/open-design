@@ -42,6 +42,8 @@ interface Props {
   balanceUsd: string | null;
   /** OpenDesign Cloud profile from the blocking snapshot; picks the console origin. */
   profile: string | null;
+  /** Origin from the same authenticated runtime status. */
+  consoleOrigin?: string | null;
   /** Which surface blocked the send — keys the amr_entry attribution. */
   entrySource: 'home_balance_gate_upgrade' | 'chat_balance_gate_upgrade';
   /**
@@ -119,6 +121,7 @@ export function AmrBalanceDialog({
   modelId,
   fundingScope,
   profile,
+  consoleOrigin,
   entrySource,
   upgradeIntent = 'pricing',
   workspaceContext: workspaceContextOverride,
@@ -164,10 +167,11 @@ export function AmrBalanceDialog({
   const upgradeUrl = workspaceContextLoading
     ? null
     : (upgradeIntent === 'auto_recharge'
-        ? workspaceAutoRechargeUrl(workspaceContext, { fallbackProfile: profile })
+        ? workspaceAutoRechargeUrl(workspaceContext, { fallbackProfile: profile, consoleOrigin })
         : null)
       ?? workspaceUpgradeUrl(workspaceContext, workspaceBilling, {
         fallbackProfile: profile,
+        consoleOrigin,
       });
   const resolvedRef = useRef(false);
   const resolveOnce = () => {

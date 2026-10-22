@@ -25,6 +25,7 @@ import {
   automaticStrategyTaskProfileForProjectMetadata,
   defaultScenarioPluginIdForProjectMetadata,
   type AmrWalletSnapshot,
+  type WorkspaceBillingPreflight,
   type ChatSessionMode,
   type ConnectorDetail,
   type CreateProjectExampleReference,
@@ -119,6 +120,7 @@ import {
   amrBalanceBlockedDialog,
   amrBalanceDialogUpgradeIntent,
   resolveAmrBalanceBranch,
+  withAmrFundingPlan,
 } from '../runtime/amr-balance-branch';
 import { installDeepSeekHarnessCompanion } from '../providers/agent-companion';
 import {
@@ -1556,10 +1558,12 @@ export function EntryShell({
       // even an optimistic project while its funds remain unconfirmed. This is
       // independent of the immediately expirable concurrency hint above.
       let cachedBlock: AmrWalletSnapshot | null = null;
+      let fundingPreflight: WorkspaceBillingPreflight | null = null;
       if (scope) {
         const evidence = await fundingEvidence!;
         if (!fundingIsCurrent()) return 'blocked' as const;
         if (evidence.kind === 'unknown' || !evidence.preflight) throw new Error(t('home.amrGateUnavailable'));
+        fundingPreflight = evidence.preflight;
         if (evidence.kind === 'insufficient') {
           cachedBlock = {
             status: 'available', profile: amrProfile ?? 'default', user: null,
@@ -1571,7 +1575,10 @@ export function EntryShell({
       if (cachedBlock) {
         const identity = homeFundingIdentityRef.current;
         const accountGeneration = currentWorkspaceAccountGeneration();
-        const branch = resolveAmrBalanceBranch({ context: homeFundingContext, billing: workspaceBilling });
+        const branch = withAmrFundingPlan(
+          resolveAmrBalanceBranch({ context: homeFundingContext, billing: workspaceBilling }),
+          homeFundingContext, fundingPreflight,
+        );
         const decision = await new Promise<'retry' | 'dismiss'>((resolve) => {
           let settled = false;
           const finish = (value: 'retry' | 'dismiss') => {

@@ -903,7 +903,8 @@ describe('Link request concurrency rejection preserves the original send', () =>
     } })));
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
       String(input).includes('/billing/request-concurrency?') ? counterRead() : originalFetch(input, init)));
-    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'local' } } } });
     await waitFor(() => expect(screen.getByTestId('normal-send')).toBeEnabled());
     let outcome: unknown;
     await act(async () => { outcome = await chatPaneSpy.mock.calls.at(-1)![0].onSend('exact full counter draft',
@@ -1079,6 +1080,65 @@ describe('Link request concurrency rejection preserves the original send', () =>
     expect(onRejected).toHaveBeenCalledOnce();
   });
 
+
+  it.each([
+    { role: 'owner', tier: 'max', expected: 'auto-recharge' },
+    { role: 'owner', tier: 'pro', expected: 'plan' },
+    { role: 'owner', tier: null, expected: 'plan' },
+    { role: 'admin', tier: 'max', expected: null },
+    { role: 'member', tier: 'max', expected: null },
+  ] as const)('F08 $role / $tier adopts the current funding plan without display metadata', async ({role,tier,expected}) => {
+    const context = callerContext(role, null);
+    workspaceScopeMocks.ambientContext = context;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/preflight?') ? Promise.resolve(new Response(JSON.stringify({preflight:{
+        schemaVersion:1, workspaceId:context.workspaceId, workspaceMemberId:context.workspaceMemberId,
+        modelId:null, generatedAt:new Date().toISOString(), balanceUsd:'0', fundingCheck:'insufficient',
+        modelCovered:true, funding:'gateway', codingPlan:{workspaceId:context.workspaceId,
+          generatedAt:new Date().toISOString(),eligible:tier!==null,tier,windows:[]},
+      }}))) : originalFetch(input, init)));
+    renderProjectView({ project:{...project(),pendingPrompt:null} as never, amrProfile:'local' });
+    await clickSendWhenReady();
+    if (role === 'owner') {
+      fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+      const url=new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+      expect(url.searchParams.get('billing')).toBe(expected);
+      expect(url.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    } else {
+      await screen.findByTestId('amr-balance-owner-dialog');
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+      expect(mockedWindowOpen).not.toHaveBeenCalled();
+    }
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+    expect(chatPaneSpy.mock.calls.at(-1)![0].queuedItems).toEqual([]);
+  });
+
+  it('a late old-account Max preflight cannot open a funding dialog or run', async () => {
+    const context=callerContext('owner',null);
+    workspaceScopeMocks.ambientContext=context;
+    const originalFetch=globalThis.fetch;
+    let finish!: (response: Response) => void;
+    const read=vi.fn(()=>new Promise<Response>(resolve=>{finish=resolve;}));
+    vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>
+      String(input).includes('/billing/preflight?')?read():originalFetch(input,init)));
+    renderProjectView({project:{...project(),pendingPrompt:null} as never,amrProfile:'local'});
+    await waitFor(()=>expect(screen.getByTestId('normal-send')).toBeEnabled());
+    let outcome:unknown;
+    act(()=>{outcome=chatPaneSpy.mock.calls.at(-1)![0].onSend('Original account draft',[],[]);});
+    await waitFor(()=>expect(read).toHaveBeenCalledOnce());
+    await act(async()=>{
+      advanceWorkspaceAccountGeneration('F08-different-account');
+      finish(new Response(JSON.stringify({preflight:{schemaVersion:1,
+        workspaceId:context.workspaceId,workspaceMemberId:context.workspaceMemberId,modelId:null,
+        generatedAt:new Date().toISOString(),balanceUsd:'0',fundingCheck:'insufficient',
+        codingPlan:{workspaceId:context.workspaceId,eligible:true,tier:'max',windows:[]}}})));
+    });
+    await expect(outcome).resolves.toBe('restore-draft');
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+    expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
+  });
+
   it('StrictMode funding rejection retracts the provisional turn without replacing existing output', async () => {
     const context = callerContext('owner', 'team_go');
     workspaceScopeMocks.ambientContext = context;
@@ -1142,7 +1202,8 @@ describe('Link request concurrency rejection preserves the original send', () =>
 
   it.each(['owner', 'admin', 'member'] as const)('%s sees a real request-limit dialog, retains text/files and retries only manually', async (role) => {
     workspaceScopeMocks.ambientContext = callerContext(role, 'team_pro');
-    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'local' } } } });
     await waitFor(() => expect((screen.getByTestId('normal-send') as HTMLButtonElement).disabled).toBe(false));
     const attachments = [{ name: 'brief.txt', path: 'brief.txt', kind: 'file' }];
     await act(async () => { await chatPaneSpy.mock.calls.at(-1)![0].onSend('keep exact draft', attachments, []); });
@@ -1187,6 +1248,15 @@ describe('Link request concurrency rejection preserves the original send', () =>
         code: 'AMR_INSUFFICIENT_BALANCE',
       }));
     });
+    if (profile === null) {
+      await screen.findByTestId('amr-balance-dialog');
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+      view.rerender(projectViewElement({ ...props, amrProfile: 'prod' }));
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+      expect(mockedWindowOpen).not.toHaveBeenCalled();
+      expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+      return;
+    }
     await screen.findByTestId('amr-balance-dialog-plans');
     // A later status/profile render cannot change the failure's billing link.
     view.rerender(projectViewElement({ ...props, amrProfile: profile === 'prod' ? 'local' : 'prod' }));

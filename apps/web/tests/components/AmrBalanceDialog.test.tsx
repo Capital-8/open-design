@@ -399,6 +399,41 @@ describe('AmrBalanceDialog', () => {
     expect(target.searchParams.get('billing')).toBe('plan');
   });
 
+
+  it.each([
+    {profile:'local',origin:'http://127.0.0.1:49195'},
+    {profile:'prod',origin:'https://open-design.ai'},
+    {profile:null,origin:null},
+  ])('Home uses authenticated runtime $profile rather than a default wallet profile', async ({profile,origin}) => {
+    const open=vi.spyOn(window,'open').mockImplementation(()=>null);
+    const context=workspaceContextFixture({workspaceId:'home-runtime-origin',workspaceMemberId:'home-runtime-owner',workspaceType:'team',role:'owner'});
+    context.permissions.canManageBilling=true;
+    context.permissions.canManageAutoRecharge=true;
+    vi.spyOn(globalThis,'fetch').mockImplementation(async input=>{
+      const url=String(input);
+      if(url.includes('/api/workspace/directory'))return new Response(JSON.stringify(workspaceDirectoryFixture([context])));
+      if(url.includes('/api/workspace/context'))return new Response(JSON.stringify({context}));
+      return new Response(JSON.stringify({summary:null}));
+    });
+    render(<HomeAmrBalanceGateDialogs
+      block={{reason:'insufficient',dialog:'upgrade',upgradeIntent:'auto_recharge',
+        snapshot:{status:'available',profile:'default',user:null,balanceUsd:'0',updatedAt:null,
+          fetchedAt:new Date().toISOString(),stale:false,source:'daemon_cache'},resolve:vi.fn()}}
+      runtimeProfile={profile} consoleOrigin="http://127.0.0.1:49195"
+      metricsConsent={false} installationId={null}/>);
+    await screen.findByTestId('amr-balance-dialog');
+    if(profile===null){
+      await waitFor(()=>expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull());
+      expect(open).not.toHaveBeenCalled();
+    }else{
+      fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
+      const target=new URL(String(open.mock.calls[0]![0]));
+      expect(target.origin).toBe(origin);
+      expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+      expect(target.searchParams.get('billing')).toBe('auto-recharge');
+    }
+  });
+
   it('Home actual wallet watch dismisses the block on exact funding recovery instead of authorizing an automatic submit', async () => {
     vi.useFakeTimers();
     vi.spyOn(window, 'open').mockImplementation(() => null);

@@ -30,6 +30,9 @@ export interface HomeAmrBalanceGateBlock {
 
 interface Props {
   block: HomeAmrBalanceGateBlock | null;
+  /** Explicit null waits for runtime identity instead of guessing production. */
+  runtimeProfile?: string | null;
+  consoleOrigin?: string | null;
   metricsConsent: boolean;
   installationId: string | null | undefined;
 }
@@ -40,7 +43,7 @@ interface Props {
  * Dismissing a cached hint keeps the Home draft; dismissing a sign-in block
  * rolls the optimistic hand-off back to Home.
  */
-export function HomeAmrBalanceGateDialogs({ block, metricsConsent, installationId }: Props) {
+export function HomeAmrBalanceGateDialogs({ block, runtimeProfile, consoleOrigin, metricsConsent, installationId }: Props) {
   if (!block) return null;
   if (block.dialog === 'ask_owner') {
     /*
@@ -57,7 +60,8 @@ export function HomeAmrBalanceGateDialogs({ block, metricsConsent, installationI
       modelId={block.modelId}
       fundingScope={block.fundingScope}
       balanceUsd={block.snapshot.balanceUsd}
-      profile={block.snapshot.profile}
+      profile={runtimeProfile !== undefined ? runtimeProfile : block.snapshot.profile}
+      consoleOrigin={consoleOrigin}
       entrySource="home_balance_gate_upgrade"
       upgradeIntent={block.upgradeIntent}
       metricsConsent={metricsConsent}

@@ -182,12 +182,13 @@ import {
   isAmrBalanceGateScope,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { checkAmrFundingFeedback } from '../runtime/amr-funding-feedback';
+import { checkAmrFundingEvidence } from '../runtime/amr-funding-feedback';
 import {
   amrBalanceBlockedDialog,
   amrBalanceDialogUpgradeIntent,
   amrBalanceUpgradeIntent,
   resolveAmrBalanceBranch,
+  withAmrFundingPlan,
   type AmrBalanceBranch,
   type AmrBalanceBlockedDialogKind,
 } from '../runtime/amr-balance-branch';
@@ -269,6 +270,7 @@ import type {
   InstalledPluginRecord,
   RunContextSelection,
   WorkspaceCollabContext,
+  WorkspaceBillingPreflight,
   WorkspaceContextItem,
 } from '@open-design/contracts';
 import type {
@@ -3618,6 +3620,7 @@ export function ProjectView({
     accountGeneration: number;
     source?: 'preflight' | 'gateway';
     modelId?: string | null;
+    preflight?: WorkspaceBillingPreflight | null;
   }) => {
     if (
       input.code !== AMR_INSUFFICIENT_BALANCE_CODE
@@ -3638,7 +3641,10 @@ export function ProjectView({
       return;
     }
     shownFundingFailuresRef.current.add(key);
-    const { branch, scope, workspaceContext, modelId, profile } = fundingDialogContextRef.current;
+    const { branch: displayBranch, scope, workspaceContext, modelId, profile } = fundingDialogContextRef.current;
+    const branch = source === 'preflight'
+      ? withAmrFundingPlan(displayBranch, workspaceContext, input.preflight)
+      : displayBranch;
     setAmrBalanceGateBlock({
       reason: 'insufficient',
       dialog: amrBalanceBlockedDialog(branch),
@@ -8976,8 +8982,8 @@ export function ProjectView({
         && fundingDialogContextRef.current.modelId === fundingModelId
         && fundingSelectionRef.current.generation === fundingSelectionGeneration;
       const fundingFeedback = config.mode === 'daemon' && assistantAgentId === 'amr'
-        ? checkAmrFundingFeedback(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
-        : Promise.resolve('unknown' as const);
+        ? checkAmrFundingEvidence(amrBalanceCardScope, fundingModelId, fundingIdentityIsCurrent)
+        : Promise.resolve({ kind: 'unknown' as const, preflight: null });
       /**
        * 把刚画出去的那一轮收回 —— 只有预检拒绝时才走这里。
        *
@@ -9133,7 +9139,7 @@ export function ProjectView({
             return acceptedDurableQueue(queueGateSend());
           }
           if (streamingConversationIdRef.current !== runConversationId) return false;
-          if (funding === 'insufficient' && gate.kind !== 'hard') {
+          if (funding.kind === 'insufficient' && gate.kind !== 'hard') {
             const accepted = meta?.composerOwnedDraft
               ? rejectBlockedSend()
               : acceptedDurableQueue(parkBlockedSend());
@@ -9143,6 +9149,7 @@ export function ProjectView({
               code: AMR_INSUFFICIENT_BALANCE_CODE, runKey: assistantId,
               conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
               accountGeneration: sendAccountGeneration, source: 'preflight', modelId: fundingModelId,
+              preflight: funding.preflight,
             });
             return accepted;
           }

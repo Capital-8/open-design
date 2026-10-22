@@ -215,3 +215,64 @@ describe('client RUN-003 parallel authoritative Home reads', () => {
     }
   });
 });
+
+describe('F08 same-send authoritative plan before display metadata', () => {
+  it.each([
+    { role: 'owner', tier: 'max', expected: 'auto-recharge' },
+    { role: 'owner', tier: 'pro', expected: 'plan' },
+    { role: 'owner', tier: null, expected: 'plan' },
+    { role: 'admin', tier: 'max', expected: null },
+    { role: 'member', tier: 'max', expected: null },
+  ] as const)('$role / $tier uses the current preflight while the display snapshot is pending', async ({ role, tier, expected }) => {
+    const ctx = { ...context('f08-current-'+role+'-'+tier), role, planId: null,
+      billingState: tier ? 'active' as const : 'free' as const,
+      permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }) };
+    const display = deferred<Response>();
+    let sent = false, backgroundReads = 0;
+    const open = vi.fn(); vi.stubGlobal('open', open);
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/workspace/directory')) return response(workspaceDirectoryFixture([ctx]));
+      if (url.endsWith('/api/workspace/context')) return response({ context: ctx });
+      if (url.includes('/billing/request-concurrency?')) return response({});
+      if (url.includes('/billing/preflight?')) {
+        if (!sent) backgroundReads++;
+        const result = preflight(ctx, sent ? 'insufficient' : 'available', sent ? '0' : '100');
+        return response({ preflight: { ...result, codingPlan: { ...result.codingPlan, tier, eligible: tier !== null } } });
+      }
+      if (url.includes('/api/workspace/billing?')) return display.promise;
+      if (url.endsWith('/api/workspace/projects/team')) return response({ projects: [] });
+      if (url.endsWith('/api/plugins')) return response({ plugins: [] });
+      if (url.endsWith('/api/mcp/servers')) return response({ servers: [] });
+      return response({ stale: true });
+    }) as typeof fetch;
+    const begin = vi.fn(() => ({ projectId: 'must-not-start', rollback: vi.fn() }));
+    const create = vi.fn(async () => true);
+    render(<I18nProvider initial="en"><EntryShellWithGateHost skills={[]} designTemplates={[]} designSystems={[]} projects={[]} templates={[]} promptTemplates={[]} defaultDesignSystemId={null} connectors={[]} connectorsLoading={false} config={{...config,agentCliEnv:{amr:{OPEN_DESIGN_AMR_PROFILE:'local'}}}} agents={[agent]} daemonLive onModeChange={vi.fn()} onAgentChange={vi.fn()} onAgentModelChange={vi.fn()} onApiProtocolChange={vi.fn()} onApiModelChange={vi.fn()} onConfigPersist={vi.fn()} onRefreshAgents={vi.fn(() => [agent])} onCreateProject={create} onBeginProjectCreation={begin} onCreatePluginShareProject={vi.fn()} onImportClaudeDesign={vi.fn()} onOpenProject={vi.fn()} onOpenLiveArtifact={vi.fn()} onDeleteProject={vi.fn()} onRenameProject={vi.fn()} onChangeDefaultDesignSystem={vi.fn()} onPersistComposioKey={vi.fn()} onOpenSettings={vi.fn()} onCompleteOnboarding={vi.fn()} /></I18nProvider>);
+    try {
+      await waitFor(() => expect(backgroundReads).toBeGreaterThan(0));
+      setHomeHeroPrompt('Keep the original fresh-plan draft');
+      await waitFor(() => expect(screen.getByTestId('home-hero-submit')).toBeEnabled());
+      sent = true;
+      fireEvent.click(screen.getByTestId('home-hero-submit'));
+      if (role === 'owner') {
+        await screen.findByTestId('amr-balance-dialog');
+        fireEvent.click(screen.getByTestId('amr-balance-dialog-plans'));
+        expect(open).toHaveBeenCalledOnce();
+        const url = new URL(String(open.mock.calls[0]![0]));
+        expect(url.searchParams.get('billing')).toBe(expected);
+        expect(url.searchParams.get('workspaceId')).toBe(ctx.workspaceId);
+      } else {
+        await screen.findByTestId('amr-balance-owner-dialog');
+        expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+        expect(open).not.toHaveBeenCalled();
+      }
+      expect(begin).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep the original fresh-plan draft');
+      // The real first failure had display metadata arrive105ms after the
+      // dialog. Control that dependency instead of sleeping for the duration.
+      await act(async () => display.resolve(response({ summary: null })));
+      expect(begin).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
+});
