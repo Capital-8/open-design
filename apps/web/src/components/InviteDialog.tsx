@@ -2,9 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties
 import { createPortal } from 'react-dom';
 import { type WorkspaceCollabContext, type WorkspaceInviteRole } from '@open-design/contracts';
 import { Button } from '@open-design/components';
-import { Icon } from './Icon';
-import { LanguageMenu } from './LanguageMenu';
-import { useI18n } from '../i18n';
+import { useI18n, LOCALES, LOCALE_LABEL, type Locale } from '../i18n';
 import { workspaceInviteErrorMessageKey } from '../collab/invite-error-copy';
 import { workspaceProjectHeaders } from '../collab/workspace-identity';
 import { useAnalytics } from '../analytics/provider';
@@ -35,7 +33,7 @@ const canonicalRole = (role: string): WorkspaceInviteRole => role === 'admin' ||
 /** The local form retains authoritative per-row results and never retries sent recipients. */
 export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAssignRoles = true, entryFrom = 'workspace_switcher', variant = 'dialog', onFinish }: Props) {
   const onboarding = variant === 'onboarding';
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const analytics = useAnalytics();
   const page = entryFrom === 'all_projects' ? 'all_projects' : 'home';
   const dimensions = workspaceAnalyticsDimensions(workspaceContext);
@@ -45,11 +43,38 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentCount, setSentCount] = useState(0);
-  const [partialCount, setPartialCount] = useState<number | null>(null);
+  const [partialCount, setPartialCount] = useState<{ sent: number; failed: number } | null>(null);
   const [batchSuccess, setBatchSuccess] = useState<number | null>(null);
   const [readyToEnter, setReadyToEnter] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+  const completionSent = useRef(false);
+  const finishCallback = useRef(onFinish);
+  finishCallback.current = onFinish;
   const finishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [openRoleIndex, setOpenRoleIndex] = useState<number | null>(null);
+  const [menuKeyboardFocus, setMenuKeyboardFocus] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPosition, setHelpPosition] = useState<CSSProperties>({});
+  const helpTrigger = useRef<HTMLButtonElement>(null);
+  const helpPanel = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (!helpOpen) return;
+    const place = () => {
+      const trigger = helpTrigger.current?.getBoundingClientRect();
+      const panel = helpPanel.current;
+      if (!trigger || !panel) return;
+      const center = trigger.left + trigger.width / 2;
+      const bounds = panel.getBoundingClientRect();
+      const left = Math.max(12, Math.min(center - bounds.width / 2, window.innerWidth - bounds.width - 12));
+      const above = trigger.top - bounds.height - 10;
+      setHelpPosition({ left, top: Math.max(8, above), '--tooltip-arrow-left': `${center - left}px` } as CSSProperties);
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [helpOpen]);
+  const [highlightedRole, setHighlightedRole] = useState<'member' | 'admin'>('member');
   const [menuPos, setMenuPos] = useState<CSSProperties>({});
   const triggers = useRef<Array<HTMLButtonElement | null>>([]);
   const menu = useRef<HTMLDivElement>(null);
@@ -65,8 +90,9 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     submittingRef.current = false;
     if (finishTimer.current) clearTimeout(finishTimer.current);
     finishTimer.current = null;
-    setBatchSuccess(null); setPartialCount(null); setReadyToEnter(false);
+    setBatchSuccess(null); setPartialCount(null); setReadyToEnter(false); completionSent.current = false;
     controller.current?.abort();
+    setHelpOpen(false);
     setRows([emptyRow()]); setError(null); setSentCount(0); setValidated(false); setSubmitting(false); setOpenRoleIndex(null);
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -84,18 +110,37 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     const position = () => {
       const rect = triggers.current[openRoleIndex]?.getBoundingClientRect();
       if (!rect) return;
-      const width = Math.min(300, window.innerWidth - 24);
+      const width = Math.min(onboarding ? 360 : 300, window.innerWidth - 24);
       const height = menu.current?.offsetHeight || 140;
       setMenuPos({ width, left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)),
-        top: rect.bottom + 6 + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - 6) : rect.bottom + 6 });
+        top: rect.bottom + (onboarding ? 8 : 6) + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - (onboarding ? 8 : 6)) : rect.bottom + (onboarding ? 8 : 6) });
     };
     position();
     const outside = (event: MouseEvent) => {
       if (!menu.current?.contains(event.target as Node) && !triggers.current[openRoleIndex]?.contains(event.target as Node)) setOpenRoleIndex(null);
     };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(position);
+    const trigger = triggers.current[openRoleIndex];
+    if (trigger) observer?.observe(trigger);
+    if (dialog.current) observer?.observe(dialog.current);
     window.addEventListener('resize', position); window.addEventListener('scroll', position, true); window.addEventListener('mousedown', outside);
-    return () => { window.removeEventListener('resize', position); window.removeEventListener('scroll', position, true); window.removeEventListener('mousedown', outside); };
-  }, [openRoleIndex]);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', position); window.removeEventListener('scroll', position, true); window.removeEventListener('mousedown', outside); };
+  }, [openRoleIndex, onboarding]);
+  useEffect(() => {
+    if (!open || !onboarding || !readyToEnter) return;
+    setCountdown(3);
+    dialog.current?.querySelector<HTMLHeadingElement>('h2')?.focus();
+    const timers = [
+      setTimeout(() => setCountdown(2), 1000),
+      setTimeout(() => setCountdown(1), 2000),
+      setTimeout(() => {
+        if (completionSent.current) return;
+        completionSent.current = true;
+        finishCallback.current?.(sentCount, 'sent');
+      }, 3000),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [open, onboarding, readyToEnter, sentCount]);
   if (!open) return null;
 
   function rowErrors(values: Row[], includeServerErrors = true) {
@@ -120,7 +165,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
   function click(element: 'submit' | 'close' | 'add_recipient_row' | 'remove_recipient_row' | 'role_select') {
     trackWorkspaceInviteClick(analytics.track, { page_name: page, area: 'workspace_invite_dialog', element, entry_from: entryFrom, ...dimensions });
   }
-  function close() { if (!onboarding && !submitting) { click('close'); onClose(); } }
+  function close() { if (!onboarding) { click('close'); requestVersion.current += 1; controller.current?.abort(); onClose(); } }
   async function submit() {
     setValidated(true);
     if (submittingRef.current || rowErrors(rows, false).some(Boolean)) return;
@@ -166,12 +211,12 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
       });
       result(succeeded.length, failed.length, failed.length ? 'invite_rejected' : undefined);
       if (!onboarding && transportFailures === requested.length) {
-        setRows(rows.map(row => ({ ...row, error: undefined }))); setError(t('workspaceInvite.submitFailed')); return;
+        setRows(rows.map(row => ({ ...row, error: undefined }))); setError(t('workspaceInvite.submitFailedPreserved')); return;
       }
       if (succeeded.length) {
         setSentCount(previous => previous + succeeded.length);
         if (!onboarding) window.dispatchEvent(new CustomEvent('od:workspace-invites-sent', { detail: {
-          count: succeeded.length, totalCount: sentCount + succeeded.length, workspaceId: requestContext.workspaceId, workspaceMemberId: requestContext.workspaceMemberId,
+          count: succeeded.length, totalCount: sentCount + succeeded.length, ...(failed.length ? { partial: true } : {}), workspaceId: requestContext.workspaceId, workspaceMemberId: requestContext.workspaceMemberId,
         } }));
       }
       if (onboarding && succeeded.length) {
@@ -190,14 +235,14 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
         return;
       }
       setRows(failed);
-      if (onboarding && succeeded.length) setPartialCount(sentCount + succeeded.length);
-      setError(onboarding ? succeeded.length || onlyRowConflicts ? null : t('workspaceInvite.submitFailed') : succeeded.length ? t('workspaceInvite.partialSummary').replace('{sent}', String(succeeded.length)).replace('{failed}', String(failed.length)) : onlyRowConflicts ? null : t('workspaceInvite.submitFailed'));
+      if (onboarding && succeeded.length) setPartialCount({ sent: sentCount + succeeded.length, failed: failed.length });
+      setError(onboarding ? succeeded.length || onlyRowConflicts ? null : t('workspaceInvite.submitFailedPreserved') : succeeded.length ? t('workspaceInvite.partialSummary').replace('{sent}', String(succeeded.length)).replace('{failed}', String(failed.length)) : onlyRowConflicts ? null : t('workspaceInvite.submitFailedPreserved'));
     } catch (caught) {
       if (version !== requestVersion.current) return;
       if (caught instanceof TypeError) result(0, requested.length, 'network_error');
       if (!onboarding && (networkFailure || caught instanceof TypeError)) {
-        setRows(rows.map(row => ({ ...row, error: undefined }))); setError(t('workspaceInvite.submitFailed'));
-      } else setError(t('workspaceInvite.submitFailed'));
+        setRows(rows.map(row => ({ ...row, error: undefined }))); setError(t('workspaceInvite.submitFailedPreserved'));
+      } else setError(t('workspaceInvite.submitFailedPreserved'));
     } finally { if (version === requestVersion.current && !finishTimer.current) { submittingRef.current = false; setSubmitting(false); } }
   }
 
@@ -206,7 +251,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     onKeyDown={event => {
       if (event.key === 'Escape') { event.stopPropagation(); if (openRoleIndex !== null) setOpenRoleIndex(null); else close(); }
       if (event.key === 'Tab') {
-        const focusable = dialog.current?.querySelectorAll<HTMLElement>(':is(button,input):not([disabled])');
+        const focusable = dialog.current?.querySelectorAll<HTMLElement>(':is(button,input,select):not([disabled])');
         const first = focusable?.[0]; const last = focusable?.[focusable.length - 1];
         if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current?.querySelector('h2'))) { event.preventDefault(); last?.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -214,16 +259,24 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     }}>
     {!onboarding ? <div className={styles.backdrop} onClick={close} /> : null}
     <section className={styles.panel} aria-busy={submitting}>
-      <header className={styles.heading}><h2 tabIndex={onboarding ? undefined : -1}>{t(onboarding ? 'workspaceInvite.onboardingTitle' : 'workspaceInvite.title')}</h2>
+      {readyToEnter ? <div className={styles.complete}>
+        <span className={styles.completeIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m5 12 4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+        <h2 tabIndex={-1}>{t('workspaceInvite.completeTitle')}</h2>
+        <p>{t('workspaceInvite.completeReceipt').replace('{count}', String(sentCount))}<br />{t('workspaceInvite.completeBody')}</p>
+        <Button className={styles.completeEnter} aria-describedby={`${id}-countdown`} onClick={() => { if (!completionSent.current) { completionSent.current = true; onFinish?.(sentCount, 'sent'); } }}>{t('workspaceInvite.enterWorkspace')}</Button>
+        <p className={styles.countdown} id={`${id}-countdown`}>{t('workspaceInvite.completeCountdown').split('{seconds}')[0]}<span>{countdown}</span>{t('workspaceInvite.completeCountdown').split('{seconds}')[1]}</p>
+      </div> : <><header className={styles.heading}><h2 tabIndex={onboarding ? undefined : -1}>{t(onboarding ? 'workspaceInvite.onboardingTitle' : 'workspaceInvite.title')}</h2>
         {!onboarding ? <>
-        <span className={styles.help}><Button className={styles.info} aria-label={t('workspaceInvite.helpLabel')} aria-describedby={`${id}-help`}><Icon name="info" size={16} /></Button>
-          <span className={styles.tooltip} id={`${id}-help`} role="tooltip">{t('workspaceInvite.teamPlanBody')}</span></span>
-        <Button className={styles.close} onClick={close} disabled={submitting} aria-label={t('workspaceInvite.cancel')}>✕</Button>
+        <span className={styles.help} onMouseEnter={() => setHelpOpen(true)} onMouseLeave={() => setHelpOpen(false)}>
+          <Button ref={helpTrigger} className={styles.info} aria-label={t('workspaceInvite.helpLabel')} aria-describedby={helpOpen ? `${id}-help` : undefined}
+            onFocus={() => setHelpOpen(true)} onBlur={() => setHelpOpen(false)} onClick={() => setHelpOpen(true)}><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 9v5" strokeLinecap="round" /><circle cx="10" cy="6.2" r=".7" fill="currentColor" stroke="none" /></svg></Button>
+          {helpOpen ? createPortal(<span ref={helpPanel} className={styles.tooltip} style={helpPosition} id={`${id}-help`} role="tooltip">{t('workspaceInvite.teamPlanBody')}</span>, document.body) : null}
+        </span>
+        <Button className={styles.close} onClick={close} aria-label={t('workspaceInvite.cancel')}>✕</Button>
         </> : null}
       </header>
       {onboarding ? <p className={styles.context}>{t('workspaceInvite.onboardingBody1')}<br />{t('workspaceInvite.onboardingBody2')}</p> : <p className={styles.context}>{workspaceContext?.workspaceName ?? workspaceContext?.teamName ?? ''}{workspaceContext?.memberCount === undefined ? null : <> · {t('workspaceInvite.memberCount').replace('{count}', String(workspaceContext.memberCount))}</>}</p>}
-      {!onboarding ? <p className={styles.context}>{t('workspaceInvite.teamPlanBody')}</p> : null}
-      {readyToEnter ? <p className={styles.summary} role="status">{t('workspaceInvite.sentCount').replace('{count}', String(sentCount))}</p> : <form onSubmit={event => { event.preventDefault(); void submit(); }} noValidate>
+      <form onSubmit={event => { event.preventDefault(); void submit(); }} noValidate>
         <div className={`${styles.labels} ${rows.length === 1 ? styles.single : ''}`}><span>{t(onboarding ? 'workspaceInvite.onboardingEmailLabel' : 'workspaceInvite.emailLabel')}</span><span>{t('workspaceInvite.roleLabel')}</span></div>
         <div className={styles.rows} data-invite-rows>
           {rows.map((row, index) => <div className={`${styles.row} ${rows.length === 1 ? styles.single : ''}`} key={index}>
@@ -231,34 +284,34 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
               disabled={submitting} aria-invalid={validated && !!errors[index]} aria-describedby={validated && errors[index] ? `${id}-error-${index}` : undefined}
               onChange={event => updateRow(index, { email: event.target.value })} onBlur={() => { if (row.email.trim()) setValidated(true); }} />
             {owner ? <Button ref={element => { triggers.current[index] = element; }} className={styles.role} disabled={submitting}
-              aria-label={t('workspaceInvite.roleLabel')} aria-haspopup="listbox" aria-expanded={openRoleIndex === index} aria-controls={`${id}-roles`}
-              onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpenRoleIndex(index); requestAnimationFrame(() => { const options = menu.current?.querySelectorAll<HTMLButtonElement>('button'); (event.key === 'ArrowUp' ? options?.[options.length - 1] : options?.[0])?.focus(); }); } }}
-              onClick={() => { click('role_select'); setOpenRoleIndex(current => current === index ? null : index); }}>
-              {roleText(row.role)}<Icon name="chevron-down" size={14} /></Button> : <span className={styles.fixedRole}>{roleText('member')}</span>}
+              aria-label={t('workspaceInvite.roleLabel')} data-menu-keyboard={!onboarding && openRoleIndex === index && menuKeyboardFocus ? true : undefined} aria-haspopup="listbox" aria-expanded={openRoleIndex === index} aria-controls={`${id}-roles`}
+              onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setMenuKeyboardFocus(true); setOpenRoleIndex(index); requestAnimationFrame(() => { const options = menu.current?.querySelectorAll<HTMLButtonElement>('button'); (event.key === 'ArrowUp' ? options?.[options.length - 1] : options?.[0])?.focus(); }); } }}
+              onClick={event => { setMenuKeyboardFocus(event.currentTarget.matches(':focus-visible')); setHighlightedRole(row.role === 'admin' ? 'admin' : 'member'); click('role_select'); setOpenRoleIndex(current => current === index ? null : index); }}>
+              {roleText(row.role)}{onboarding ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.9999 13.1714L16.9497 8.22168L18.3639 9.63589L11.9999 15.9999L5.63599 9.63589L7.0502 8.22168L11.9999 13.1714Z" /></svg> : <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>}</Button> : <span className={styles.fixedRole}>{roleText('member')}</span>}
             {rows.length > 1 ? <Button className={styles.remove} aria-label={t('workspaceInvite.removeRow')} disabled={submitting}
-              onClick={() => { click('remove_recipient_row'); setRows(previous => previous.filter((_, i) => i !== index)); setOpenRoleIndex(null); }}><Icon name="close" size={15} /></Button> : null}
+              onClick={() => { click('remove_recipient_row'); setRows(previous => previous.filter((_, i) => i !== index)); setOpenRoleIndex(null); }}>{'×'}</Button> : null}
             {validated && errors[index] ? <p className={styles.lineError} id={`${id}-error-${index}`} role="alert">{errors[index]}</p> : null}
           </div>)}
         </div>
-        <Button className={styles.add} disabled={submitting} onClick={() => { click('add_recipient_row'); setRows(previous => [...previous, emptyRow()]); }}><Icon name="plus" size={14} />{t('workspaceInvite.addMember')}</Button>
+        <Button className={styles.add} disabled={submitting} onClick={() => { click('add_recipient_row'); setRows(previous => [...previous, emptyRow()]); }}>{onboarding ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z" /></svg>{t('workspaceInvite.addMember')}</> : locale === 'en' ? t('workspaceInvite.addMember') : `＋ ${t('workspaceInvite.addMember')}`}</Button>
         {!onboarding && error ? <p className={styles.error} role="alert">{error}</p> : null}
-        {onboarding && partialCount !== null ? <p className={styles.summary} role="status">{t('workspaceInvite.onboardingPartialSummary').replace('{count}', String(partialCount))}</p> : null}
+        {onboarding && partialCount !== null ? <p className={styles.summary} role="alert">{t('workspaceInvite.onboardingPartialSummary').replace('{count}', String(partialCount.sent)).replace('{failed}', String(partialCount.failed))}</p> : null}
+        {onboarding && error ? <p className={styles.error} role="alert">{error}</p> : null}
         {!onboarding && sentCount > 0 && !error ? <p className={styles.error} role="status">{t('workspaceInvite.sentCount').replace('{count}', String(sentCount))}</p> : null}
         <footer className={styles.footer}>{!onboarding ? <Button className={styles.cancel} onClick={close} disabled={submitting}>{t('workspaceInvite.cancel')}</Button> : null}
           <Button type="submit" className={styles.submit} disabled={submitting}>{batchSuccess !== null ? batchSuccess === 0 ? t('workspaceInvite.sent') : t('workspaceInvite.batchSent').replace('{count}', String(batchSuccess)) : submitting ? t('workspaceInvite.sending') : t('workspaceInvite.confirm')}</Button></footer>
-        {onboarding && error ? <p className={styles.error} role="alert">{error}</p> : null}
-      </form>}
-      {onboarding ? <><Button className={readyToEnter ? styles.submit : styles.skip} disabled={!readyToEnter && submitting} onClick={() => onFinish?.(sentCount, readyToEnter ? 'sent' : 'skipped')}>{t(readyToEnter ? 'workspaceInvite.enterWorkspace' : 'workspaceInvite.skip')}</Button><footer className={styles.onboardingFooter}><LanguageMenu placement="up" align="start" /><span>© {new Date().getFullYear()} OpenDesign · {t('settings.onboardingCloudRights')}</span></footer></> : null}
+      </form></>}
+      {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => onFinish?.(sentCount, 'skipped')}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}><label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label><span>{`© ${new Date().getFullYear()} OpenDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
     </section>
     {onboarding ? <div className={styles.art} aria-hidden="true"><img src="/onboarding/registration-invite-art.png" alt="" /></div> : null}
-    {owner && openRoleIndex !== null ? createPortal(<div className={`${styles.menu} ${onboarding ? '' : styles.dialogMenu}`} ref={menu} style={menuPos} role="listbox" id={`${id}-roles`}
+    {owner && openRoleIndex !== null ? createPortal(<div className={`${styles.menu} ${onboarding ? styles.onboardingMenu : styles.dialogMenu}`} ref={menu} style={menuPos} role="listbox" id={`${id}-roles`}
       onKeyDown={event => {
         if (event.key === 'Escape' || event.key === 'Tab') { event.preventDefault(); event.stopPropagation(); setOpenRoleIndex(null); triggers.current[openRoleIndex]?.focus(); }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const buttons = Array.from(menu.current?.querySelectorAll('button') ?? []); const index = buttons.indexOf(document.activeElement as HTMLButtonElement); buttons[(index + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length]?.focus(); }
       }}>
-      {(['member', 'admin'] as const).map(role => <Button key={role} role="option" aria-selected={rows[openRoleIndex]?.role === role} className={styles.option}
+      {(['member', 'admin'] as const).map(role => <Button key={role} role="option" aria-selected={rows[openRoleIndex]?.role === role} data-highlighted={highlightedRole === role} onPointerMove={() => setHighlightedRole(role)} onFocus={event => { setHighlightedRole(role); setMenuKeyboardFocus(event.currentTarget.matches(':focus-visible')); }} className={styles.option}
         onClick={() => { updateRow(openRoleIndex, { role }); setOpenRoleIndex(null); triggers.current[openRoleIndex]?.focus(); }}>
-        <span>{roleText(role)}<small>{t(role === 'admin' ? 'workspaceInvite.adminDescription' : 'workspaceInvite.memberDescription')}</small></span>{rows[openRoleIndex]?.role === role ? <Icon name="check" size={14} /> : null}
+        <span>{onboarding ? <strong>{roleText(role)}</strong> : roleText(role)}<small>{t(role === 'admin' ? 'workspaceInvite.adminDescription' : 'workspaceInvite.memberDescription')}</small></span>{onboarding ? (rows[openRoleIndex]?.role === role ? <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.2 6.2 11.2 13 4.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg> : null) : <span aria-hidden="true" className={styles.check}>{rows[openRoleIndex]?.role === role ? '✓' : ''}</span>}
       </Button>)}
     </div>, document.body) : null}
   </div>;

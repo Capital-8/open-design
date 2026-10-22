@@ -94,6 +94,11 @@ export interface Dict {
   'workspaceInvite.onboardingBody2': string;
   'workspaceInvite.onboardingEmailLabel': string;
   'workspaceInvite.batchSent': string;
+  'workspaceInvite.completeReceipt': string;
+  'workspaceInvite.completeTitle': string;
+  'workspaceInvite.completeBody': string;
+  'workspaceInvite.completeCountdown': string;
+  'workspaceInvite.submitFailedPreserved': string;
   'workspaceInvite.enterWorkspace': string;
   'workspaceInvite.skip': string;
   'workspaceInvite.cancel': string;
@@ -2939,6 +2944,8 @@ export interface Dict {
   'chat.amrError.rechargeCta': string;
   'chat.amrConcurrencyGate.title': string;
   'chat.amrConcurrencyGate.message': string;
+  'chat.amrConcurrencyGate.teamTitle': string;
+  'chat.amrConcurrencyGate.teamMessage': string;
   'chat.amrConcurrencyGate.benefit1': string;
   'chat.amrConcurrencyGate.benefit2': string;
   'chat.amrConcurrencyGate.benefit3': string;

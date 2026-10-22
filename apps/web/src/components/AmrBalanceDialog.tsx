@@ -42,6 +42,8 @@ interface Props {
   balanceUsd: string | null;
   /** OpenDesign Cloud profile from the blocking snapshot; picks the console origin. */
   profile: string | null;
+  /** Origin captured with the same authenticated runtime profile, when available. */
+  consoleOrigin?: string | null;
   /** Which surface blocked the send — keys the amr_entry attribution. */
   entrySource: 'home_balance_gate_upgrade' | 'chat_balance_gate_upgrade';
   /**
@@ -119,6 +121,7 @@ export function AmrBalanceDialog({
   modelId,
   fundingScope,
   profile,
+  consoleOrigin,
   entrySource,
   upgradeIntent = 'pricing',
   workspaceContext: workspaceContextOverride,
@@ -164,10 +167,11 @@ export function AmrBalanceDialog({
   const upgradeUrl = workspaceContextLoading
     ? null
     : (upgradeIntent === 'auto_recharge'
-        ? workspaceAutoRechargeUrl(workspaceContext, { fallbackProfile: profile })
+        ? workspaceAutoRechargeUrl(workspaceContext, { fallbackProfile: profile, consoleOrigin })
         : null)
       ?? workspaceUpgradeUrl(workspaceContext, workspaceBilling, {
         fallbackProfile: profile,
+        consoleOrigin,
       });
   const resolvedRef = useRef(false);
   const resolveOnce = () => {
@@ -236,10 +240,10 @@ export function AmrBalanceDialog({
     );
   };
   const benefits = [
-    t('chat.amrBalanceGate.benefit1'),
-    t('chat.amrBalanceGate.benefit2'),
-    t('chat.amrBalanceGate.benefit3'),
-    t('chat.amrBalanceGate.benefit4'),
+    t(signedOut ? 'chat.amrBalanceGate.benefit1' : 'chat.amrConcurrencyGate.benefit1'),
+    t('chat.amrConcurrencyGate.benefit2'),
+    t(signedOut ? 'chat.amrBalanceGate.benefit3' : 'chat.amrConcurrencyGate.benefit3'),
+    t(signedOut ? 'chat.amrBalanceGate.benefit4' : 'chat.amrConcurrencyGate.benefit4'),
   ];
   const dialog = (
     <Dialog
@@ -247,7 +251,8 @@ export function AmrBalanceDialog({
       ariaLabel={signedOut ? t('chat.amrBalanceGate.signedOutTitle') : t('chat.amrBalanceGate.title')}
       onClose={onClose}
       closeOnEscape
-      className={styles.panel}
+      className={signedOut ? styles.panel : `${styles.panel} ${styles.frozenPanel}`}
+      backdropClassName={signedOut ? undefined : styles.frozenBackdrop}
       data-testid="amr-balance-dialog"
     >
       <button
@@ -297,7 +302,7 @@ export function AmrBalanceDialog({
       {/* Dismissal first in DOM so it lands on the left of the row and focus
           order matches the reading order; the CTA follows on the right. */}
       <div className={styles.actions}>
-        <Button variant="ghost" className={styles.later} onClick={onClose}>
+        <Button variant="ghost" className={signedOut ? styles.later : `${styles.later} ${styles.frozenLater}`} onClick={onClose}>
           {t('chat.amrBalanceGate.laterCta')}
         </Button>
         {signedOut ? (
@@ -318,7 +323,7 @@ export function AmrBalanceDialog({
         ) : upgradeUrl ? (
           <Button
             variant="primary"
-            className={styles.cta}
+            className={`${styles.cta} ${styles.frozenCta}`}
             onClick={openUpgrade}
             data-testid="amr-balance-dialog-plans"
           >

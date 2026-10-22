@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { VisuallyHidden } from '@open-design/components';
 import { Icon } from './Icon';
 import { useI18n } from '../i18n';
@@ -106,6 +107,15 @@ export function CloudSignInTip({ sharePrompt = false, className, onLoginSuccess,
   // component's own rendering/behavior below is unchanged.
   const { state, status, begin, cancel } = useCloudSignIn({ onLoginSuccess });
   const signing = state === 'signing';
+  const [compactEntry, setCompactEntry] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1100px)');
+    const update = () => setCompactEntry(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
 
   // The "sign-in page didn't open?" line is a fallback: it waits a few
   // seconds into the attempt (the browser usually opens on its own), unless
@@ -127,13 +137,13 @@ export function CloudSignInTip({ sharePrompt = false, className, onLoginSuccess,
   const pitch = (
     <div className="entry-local-mode-tip__pitch">
       <strong className="entry-local-mode-tip__title">
-        {t('entry.cloudCreditsTitle')}
+        <span className="entry-local-mode-tip__title-icon" aria-hidden><Icon name="sparkles" size={14} /></span>{t('entry.cloudCreditsTitle')}
       </strong>
       <p>{t('entry.cloudCreditsBody')}</p>
     </div>
   );
 
-  return (
+  const card = (
     <section
       role="button"
       tabIndex={signing ? -1 : 0}
@@ -161,8 +171,8 @@ export function CloudSignInTip({ sharePrompt = false, className, onLoginSuccess,
           className={`entry-local-mode-tip__login-badge${signing ? ' is-pending' : ''}`}
           role={signing ? 'status' : undefined}
         >
-          {signing || sharePrompt ? <Icon name={signing ? 'spinner' : 'log-in'} size={14} /> : null}
-          <span>{signing ? t('settings.amrSigningIn') : actionLabel ?? t(sharePrompt ? 'settings.amrLogin' : 'settings.amrSignIn')}</span>
+          <Icon name={signing ? 'spinner' : 'log-in'} size={14} />
+          <span>{signing ? t('settings.amrSigningIn') : actionLabel ?? t(sharePrompt ? 'settings.amrLogin' : 'entry.cloudCreditsCta')}</span>
         </span>
       </div>
       {signing ? (
@@ -202,4 +212,6 @@ export function CloudSignInTip({ sharePrompt = false, className, onLoginSuccess,
       ) : null}
     </section>
   );
+  // The compact source design keeps this entry reachable while the rail is hidden.
+  return compactEntry && !sharePrompt ? createPortal(card, document.body) : card;
 }

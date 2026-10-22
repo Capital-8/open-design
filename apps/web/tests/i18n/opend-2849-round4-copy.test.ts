@@ -20,6 +20,8 @@ function lookup(dict: Dict, key: string): string | undefined {
   return (dict as unknown as Record<string, string | undefined>)[key];
 }
 
+// 席位一期：团队 Admin 不管理充值或订阅，额度不足应联系工作空间 Owner。
+// 本次只同步该联系对象；原逐字、名字不插值、单出口和语言完整性断言保留。
 const PRODUCT_ZH: Record<string, string> = {
   // S04 发送前·Open Design 智能体没登录
   'chat.amrBalanceGate.signedOutTitle': 'Open Design 尚未登录',

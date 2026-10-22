@@ -212,7 +212,7 @@ describe('collab context routes', () => {
     expect(put.body).toEqual({ context: TEAM_CONTEXT_PARSED });
     expect((await api.req('/api/workspace/context', {
       headers: TEAM_HEADERS,
-    })).body).toEqual({ context: TEAM_CONTEXT_PARSED });
+    })).body).toEqual({ context: { ...TEAM_CONTEXT_PARSED, workspaceName: TEAM_DIRECTORY_ITEM.workspaceName, teamName: TEAM_DIRECTORY_ITEM.workspaceName } });
   });
 
   it('uses the settled read verifier for the pure context GET without changing its body', async () => {
@@ -244,6 +244,8 @@ describe('collab context routes', () => {
   it('does not let exact-context enrichment downgrade directory-verified Team authority', async () => {
     const verifiedTeamContext: WorkspaceCollabContext = {
       ...TEAM_CONTEXT_PARSED,
+      workspaceName: 'Directory Workspace',
+      memberCount: 12,
       role: 'admin',
       permissions: buildWorkspacePermissions({ role: 'admin', lifecycleState: 'active' }),
     };
@@ -278,6 +280,8 @@ describe('collab context routes', () => {
       role: 'admin',
       permissions: verifiedTeamContext.permissions,
       planId: 'team_pro',
+      workspaceName: 'Directory Workspace',
+      memberCount: 12,
       teamId: verifiedTeamContext.workspaceId,
     });
   });
@@ -305,7 +309,7 @@ describe('collab context routes', () => {
     expect(response.status).toBe(200);
     expect(observeWorkspace).toHaveBeenCalledWith(
       expect.anything(),
-      TEAM_CONTEXT_PARSED,
+      { ...TEAM_CONTEXT_PARSED, workspaceName: TEAM_DIRECTORY_ITEM.workspaceName, teamName: TEAM_DIRECTORY_ITEM.workspaceName },
       {
         workspace_type: 'team',
         workspace_lifecycle: 'active',

@@ -320,7 +320,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: open-design-release-beta
+  group: ${{ inputs.publish && 'open-design-release-beta' || format('open-design-release-beta-dogfood-{0}', github.ref) }}
   cancel-in-progress: false
 
 env:

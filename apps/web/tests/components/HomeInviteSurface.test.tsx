@@ -61,6 +61,14 @@ describe('home invitation entry', () => {
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByRole('status')).toBeNull();
   });
+  it('keeps partial success inline while retaining confirmed banner dismissal', () => {
+    render(view());
+    act(() => window.dispatchEvent(new CustomEvent(WORKSPACE_INVITES_SENT, { detail: { count: 1, totalCount: 1, partial: true, workspaceId: 'one', workspaceMemberId: 'member-one' } })));
+    expect(screen.queryByRole('region')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    act(() => window.dispatchEvent(new CustomEvent(WORKSPACE_INVITES_SENT, { detail: { count: 1, totalCount: 2, workspaceId: 'one', workspaceMemberId: 'member-one' } })));
+    expect(screen.getByRole('status').textContent).toBe('已向 2 位同事发送邀请');
+  });
   it('reports the cumulative confirmed successes after retrying failed rows', () => {
     render(view());
     act(() => window.dispatchEvent(new CustomEvent(WORKSPACE_INVITES_SENT, { detail: { count: 1, totalCount: 1, workspaceId: 'one', workspaceMemberId: 'member-one' } })));

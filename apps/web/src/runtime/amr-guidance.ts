@@ -223,8 +223,9 @@ export function amrPlansUrlForProfile(
 export function amrAutoRechargeUrlForProfile(
   profile: string | null | undefined,
   workspaceId?: string | null,
+  consoleOrigin?: string | null,
 ): string {
-  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_AUTO_RECHARGE_INTENT, workspaceId);
+  return amrConsoleUrlWithBillingIntent(profile, AMR_CONSOLE_AUTO_RECHARGE_INTENT, workspaceId, consoleOrigin);
 }
 
 function amrConsoleUrlWithBillingIntent(

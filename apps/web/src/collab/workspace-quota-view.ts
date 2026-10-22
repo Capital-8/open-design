@@ -53,11 +53,26 @@ export function workspaceQuotaView({ context, response, tier, balanceUsd }: {
     planKnown: Boolean(scopedTier?.trim()),
     loading: balance == null && !response?.workspaceBalance && !response?.workspaceSnapshot,
     balanceUsd: balance,
-    // The current v1 snapshot parser does not expose these
-    // optional fields. Account summary / personal Coding Plan are not substitutes.
-    // Keep unavailable until the daemon exposes the agreed workspace schema.
+    // Only the exact workspace/member snapshot may provide shared windows.
+    // Account summaries and personal Coding Plan are not substitutes.
     planStatus: null,
-    windows: null,
+    windows: snapshot?.designPlanWindows?.flatMap(window => {
+      // Keep unreadable shares unavailable; never turn missing quota into zero.
+      if ((window.kind !== '5h' && window.kind !== '7d')
+        || !/^(0|[1-9]\d*)$/.test(window.remainingCredits)
+        || !/^(0|[1-9]\d*)$/.test(window.limitCredits)) return [];
+      const remaining = BigInt(window.remainingCredits);
+      const limit = BigInt(window.limitCredits);
+      if (limit === 0n || remaining > limit) return [];
+      // Match the existing personal quota widget's whole-percent presentation.
+      // Compute the ratio before Number conversion: credit counts can be large.
+      const usedBasisPoints = Number(((limit - remaining) * 10_000n) / limit);
+      return [{
+        durationSeconds: window.kind === '5h' ? 18_000 : 604_800,
+        remainingPercent: 100 - Math.round(usedBasisPoints / 100),
+        resetsAt: window.resetsAt,
+      }];
+    }) ?? null,
     breakdown: null,
     modelRestriction: null,
   };
