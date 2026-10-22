@@ -258,6 +258,10 @@ function enrichVerifiedWorkspaceContext(
   const { teamId: _enrichedTeamId, ...enrichedMetadata } = enriched;
   return {
     ...enrichedMetadata,
+    // Directory display metadata belongs to the same freshly verified membership.
+    ...(verified.workspaceName ? { workspaceName: verified.workspaceName } : {}),
+    ...(verified.teamName ? { teamName: verified.teamName } : {}),
+    ...(verified.memberCount !== undefined ? { memberCount: verified.memberCount } : {}),
     workspaceId: verified.workspaceId,
     workspaceType: verified.workspaceType,
     workspaceMemberId: verified.workspaceMemberId,
