@@ -148,6 +148,35 @@ async function selectWorkspace(page: Page, space: Space) {
 
 function runPosts(calls: RunCall[]) { return calls.length; }
 
+async function persistedRunIds(dataDir: string) {
+  try {
+    const entries = await readdir(join(dataDir, 'runs'), { withFileTypes: true });
+    return entries.filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+async function assertNoUnsentHomeRun(page: Page, dataDir: string, initialRunIds: string[]) {
+  const runIds = await persistedRunIds(dataDir);
+  expect(runIds, 'A draft must not create a durable OD run before a manual send')
+    .toEqual(initialRunIds);
+  const queuedSends = await page.evaluate(() => {
+    const entries: Array<{ key: string; count: number }> = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith('od:chat-queued-sends:')) continue;
+      const parsed: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+      entries.push({ key, count: Array.isArray(parsed) ? parsed.length : -1 });
+    }
+    return entries;
+  });
+  expect(queuedSends.every(entry => entry.count === 0),
+    'A Home draft must not enter a durable project send queue').toBe(true);
+  return { runIds, queuedSends };
+}
+
 async function waitNoRunPost(page: Page, calls: RunCall[]) {
   // A real no-click window lets billing events, visibility and polling finish.
   const unexpected = await page.waitForEvent('request', {
@@ -165,7 +194,7 @@ async function assertRetained(page: Page, draft: string, attachment: string) {
 }
 
 async function terminalRun(runtime: ReturnType<typeof createToolsDevSuite>,
-  space: Space, runId: string) {
+  dataDir: string, space: Space, runId: string) {
   let value: Record<string, unknown> = {};
   await expect.poll(async () => {
     const response = await fetch(runtime.url.web('/api/runs/' + runId), {
@@ -175,8 +204,76 @@ async function terminalRun(runtime: ReturnType<typeof createToolsDevSuite>,
     value = await response.json() as Record<string, unknown>;
     return value.status;
   }, { timeout: 240_000, intervals: [500, 1000] }).toBe('succeeded');
-  expect(value.exitCode).toBe(0);
-  return { status: value.status, exitCode: value.exitCode };
+  expect(value).toMatchObject({ id: runId, status: 'succeeded', signal: null,
+    cancelRequested: false, cancelOrigin: null, error: null, errorCode: null,
+    failureCategory: null, endedWithUnfinishedWork: false });
+  expect([0, 130]).toContain(value.exitCode);
+  let acpEvidence: { eventsSha256: string; completedSteps: number;
+    completedMessages: number; retryDiagnostics: number; agentUsageCount: number;
+    agentErrorCount: number;
+    incompleteLifecycleCount: number; runtimeCloseSucceeded: boolean;
+    endSucceeded: boolean } | null = null;
+  if (value.exitCode === 130) {
+    // Vela can exit 130 after clean ACP completion. The original event stream
+    // must prove that completion; the independent AMR receipt still checks
+    // every successful canonical call and its original-space settlement.
+    expect(runId).toMatch(/^[0-9a-f-]{36}$/i);
+    const eventsPath = join(dataDir, 'runs', runId, 'events.jsonl');
+    await expect.poll(async () => {
+      try {
+        const lines = (await readFile(eventsPath, 'utf8')).trim().split('\n');
+        return (JSON.parse(lines.at(-1) ?? '{}') as { event?: string }).event ?? null;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw error;
+      }
+    }, { timeout: T.long, intervals: [100, 250, 500] }).toBe('end');
+    const bytes = await readFile(eventsPath);
+    const events = bytes.toString().trim().split('\n').map(line => JSON.parse(line) as {
+      event: string; data?: Record<string, unknown>;
+    });
+    const diagnostics = events.filter(event => event.event === 'agent'
+      && event.data?.type === 'diagnostic');
+    const completedSteps = diagnostics.filter(event => event.data?.name === 'model_step_lifecycle'
+      && event.data.phase === 'end' && event.data.status === 'completed').length;
+    const completedMessages = diagnostics.filter(event => event.data?.name === 'assistant_message_lifecycle'
+      && event.data.phase === 'end' && event.data.status === 'completed').length;
+    expect(completedSteps).toBeGreaterThan(0);
+    expect(completedMessages).toBeGreaterThan(0);
+    const agentUsageCount = events.filter(event => event.event === 'agent'
+      && event.data?.type === 'usage').length;
+    expect(agentUsageCount).toBeGreaterThan(0);
+    const agentErrorCount = events.filter(event => event.event === 'agent'
+      && event.data?.type === 'error').length;
+    const incompleteLifecycleCount = diagnostics.filter(event =>
+      ['model_step_lifecycle', 'assistant_message_lifecycle'].includes(
+      String(event.data?.name)) && event.data?.phase === 'end'
+      && event.data.status !== 'completed').length;
+    const runtimeCloseSucceeded = events.some(event => event.event === 'diagnostic'
+      && event.data?.type === 'runtime_close' && event.data.status === 'succeeded'
+      && event.data.exit_code === 130);
+    expect(agentErrorCount).toBe(0);
+    expect(incompleteLifecycleCount).toBe(0);
+    expect(runtimeCloseSucceeded).toBe(true);
+    const end = events.at(-1);
+    expect(end).toMatchObject({ event: 'end',
+      data: { status: 'succeeded', code: 130, signal: null, endedWithUnfinishedWork: false,
+        failureCategory: null } });
+    const endSucceeded = end?.event === 'end' && end.data?.status === 'succeeded'
+      && end.data.code === 130 && end.data.signal === null
+      && end.data.endedWithUnfinishedWork === false && end.data.failureCategory === null;
+    expect(endSucceeded).toBe(true);
+    acpEvidence = { eventsSha256: createHash('sha256').update(bytes).digest('hex'),
+      completedSteps, completedMessages,
+      retryDiagnostics: diagnostics.filter(event => event.data?.name === 'model_retry').length,
+      agentUsageCount,
+      agentErrorCount, incompleteLifecycleCount, runtimeCloseSucceeded, endSucceeded };
+  }
+  return { status: value.status, exitCode: value.exitCode, errorCode: value.errorCode,
+    signal: value.signal, cancelRequested: value.cancelRequested, cancelOrigin: value.cancelOrigin,
+    error: value.error, failureCategory: value.failureCategory,
+    endedWithUnfinishedWork: value.endedWithUnfinishedWork,
+    acpEvidence };
 }
 
 test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funded and manually sent', async ({ browser }) => {
@@ -297,6 +394,8 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     await page.locator('.entry-nav-rail__menu-backdrop').click({ position: { x: 2, y: 2 } });
     await save('RUN012-browser-A-identity.safe.json', { binding, context: (await browserAContext).context,
       selectedWorkspaceName: fixture.spaces.A.workspaceName });
+    const initialRunIds = await persistedRunIds(dataDir);
+    expect(initialRunIds, 'fresh RUN012 daemon data root must have no prior runs').toEqual([]);
     const input = page.getByTestId('home-hero-input');
     const send = page.getByTestId('home-hero-submit');
     const staged = page.getByTestId('home-hero-staged-files');
@@ -312,6 +411,7 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     await expect(page.getByTestId('amr-balance-dialog')).toBeVisible({ timeout: T.long });
     await assertRetained(page, draft, attachment);
     expect(runPosts(calls)).toBe(0);
+    await assertNoUnsentHomeRun(page, dataDir, initialRunIds);
     await page.screenshot({ path: join(output!, 'RUN012-A-initial-blocked.png') });
     await page.getByTestId('amr-balance-dialog').getByRole('button',
       { name: /暂不|稍后|not now|later/i }).click();
@@ -440,13 +540,16 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     await expect(page.getByTestId('amr-balance-dialog')).toBeVisible({ timeout: T.long });
     await assertRetained(page, draft, attachment);
     expect(runPosts(calls)).toBe(0);
+    await assertNoUnsentHomeRun(page, dataDir, initialRunIds);
     await save('RUN012-B-paid-A-still-blocked.safe.json', { binding, bPaid, afterB,
       aDraft: draft, aAttachment: attachment, runPosts: calls });
     await page.screenshot({ path: join(output!, 'RUN012-B-paid-A-still-blocked.png') });
     await page.getByTestId('amr-balance-dialog').getByRole('button',
       { name: /暂不|稍后|not now|later/i }).click();
 
+    const beforeAFunding = await assertNoUnsentHomeRun(page, dataDir, initialRunIds);
     const aReadyAt = new Date().toISOString();
+    await save('RUN012-A-before-funding-od-state.safe.json', { binding, beforeAFunding });
     await marker('RUN012-A-fund-ready.json', {
       workspaceId: fixture.spaces.A.workspaceId, bOperationId: checkout.operation!.operationId,
       aFundingCheck: 'insufficient', runPosts: 0,
@@ -469,12 +572,15 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     expect(Number(aFunded.bRechargeCountDelta)).toBe(0);
     expect((await preflight(runtime, fixture.spaces.A, fixture.runtime.modelId)).fundingCheck)
       .toBe('available');
+    const afterAFunding = await assertNoUnsentHomeRun(page, dataDir, initialRunIds);
     const noClickAt = new Date().toISOString();
     await page.evaluate(() => window.dispatchEvent(new Event('od:workspace-billing-refresh')));
     await waitNoRunPost(page, calls);
     await assertRetained(page, draft, attachment);
+    const afterNoClick = await assertNoUnsentHomeRun(page, dataDir, initialRunIds);
     await save('RUN012-A-funded-no-click.safe.json', { binding, noClickAt,
-      observedAt: new Date().toISOString(), aFunded, runPosts: calls });
+      observedAt: new Date().toISOString(), aFunded, afterAFunding, afterNoClick,
+      runPosts: calls });
     await page.screenshot({ path: join(output!, 'RUN012-A-funded-no-click.png') });
 
     const manualAt = new Date().toISOString();
@@ -516,7 +622,7 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
       content: draft, attachmentCount: 1,
       attachments: [{ path: attachmentPath, name: attachment, kind: 'file', order: 0 }],
     });
-    const terminal = await terminalRun(runtime, fixture.spaces.A, run.runId!);
+    const terminal = await terminalRun(runtime, dataDir, fixture.spaces.A, run.runId!);
     await marker('RUN012-A-manual-ready.json', { workspaceId: fixture.spaces.A.workspaceId,
       runId: run.runId, terminal, bOperationId: checkout.operation!.operationId });
     const verified = await receipt('RUN012-A-manual-verified.json', manualAt);
