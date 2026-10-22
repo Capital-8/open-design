@@ -7,14 +7,11 @@
 //
 //   非 Max · owner    卡 + 会员转化弹窗            卡和弹窗都跳 console 的套餐页
 //   非 Max · 非 owner 卡 + 新的「找所有者充值」弹窗  不外跳
-//   Max   · owner     卡 + **同一张**会员转化弹窗   卡和弹窗都跳 vela web 的自动充值
+//   Max   · owner     卡保留独立入口;RUN-004 弹窗没有购买快捷入口
 //   Max   · 非 owner  卡 + 新的「找所有者充值」弹窗  不外跳
 //
-// ⚠️ 第三格 2026-09-06 由 **T58** 定终态,推翻了这里原来那条「Max · owner
-// **不弹窗**」。依据是产品文档第四节第 3 行:那一格画的就是**和第一格同一张**
-// 会员转化弹窗,文案一字不差(此前记录里那句「未达到 $100.00/月的额度」是飞书
-// 导出时 AI 生成的图片 alt 描述,不是产品文案,以图为准)。两格唯一的差别是
-// 主按钮的落点:第一格 `billing=plan`,第三格 `billing=auto-recharge`。
+// RUN-004 / frozen product r271 cancels the dialog's automatic-recharge
+// shortcut, including Max. Separate card actions remain covered below.
 //
 // 另外两条守卫:
 //
@@ -621,8 +618,8 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
   });
 
   // T58:这一格现在**也出弹窗** —— 和第一格同一张会员转化弹窗,文案一字不差。
-  // 差别只在主按钮:第一格 `billing=plan`,这里 `billing=auto-recharge`。
-  it('Max · owner:卡 + 同一张会员转化弹窗,卡和弹窗都跳 vela web 的自动充值', async () => {
+  // RUN-004: Max has no higher plan and no funding-dialog purchase shortcut.
+  it('RUN-004 Max Owner keeps the card action and omits funding-dialog purchase shortcuts', async () => {
     await sendAs(callerContext('owner', 'team_max'), EMPTY_WALLET);
 
     await waitFor(() => expect(cardBalance()).toBe('0'));
@@ -634,13 +631,9 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     expect(mockedWindowOpen).toHaveBeenCalledTimes(1);
     expect(String(mockedWindowOpen.mock.calls[0]?.[0])).toContain('billing=auto-recharge');
 
-    // 命门:弹窗那颗主按钮走的是**自动充值**,不是套餐页 —— 他没有更高的套餐
-    // 可买,把他送去套餐页是让他买一个已经在用的东西。
-    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
-    expect(mockedWindowOpen).toHaveBeenCalledTimes(2);
-    const dialogUrl = String(mockedWindowOpen.mock.calls[1]?.[0]);
-    expect(dialogUrl).toContain('billing=auto-recharge');
-    expect(dialogUrl).not.toContain('billing=plan');
+    // The separate chat-card action remains; the frozen dialog has no shortcut.
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+    expect(mockedWindowOpen).toHaveBeenCalledTimes(1);
   });
 
   // 上面那条 Max·owner 是把 `planId` 直接写在 context 上的。**真实后端不会这样报。**
@@ -659,10 +652,10 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
   // (`vela billing workspace-snapshot` → `workspaceSnapshot.billing.planId`)。
   //
   // 于是这一格钉的是**生产形状**:context 不带 planId,套餐只从账单来。
-  // ProjectView 必须仍然认出这是 Max·owner,跳自动充值 —— 否则一个团队 Max
+  // ProjectView 必须仍然认出这是 Max·owner —— 否则一个团队 Max
   // 所有者会被送去 Pricing 页买他已经买过的东西,而上面那条测试照样是绿的。
   // Home 那条链路(EntryShell)本来就把投影后的账单传进去了,这里没传。
-  it('生产形状:context 不带 planId,团队 Max 所有者仍要跳自动充值', async () => {
+  it('production-shaped Max evidence suppresses the dialog shortcut while preserving the card', async () => {
     workspaceScopeMocks.billingResponse = {
       // 账号档是 max(个人梯子),**不是**团队命名空间,按投影规则不许给团队工作区当替身。
       summary: {
@@ -691,7 +684,7 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     await sendAs(callerContext('owner', null), EMPTY_WALLET);
 
     await waitFor(() => expect(cardBalance()).toBe('0'));
-    // T58:Max·owner 现在也出会员转化弹窗(和第一格同一张)。
+    // The Max funding notice remains visible, with no purchase shortcut.
     await waitFor(() => expect(screen.getByTestId('amr-balance-dialog')).toBeTruthy());
     expect(screen.queryByTestId('amr-balance-owner-dialog')).toBeNull();
 
@@ -702,14 +695,14 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     // 反向对照:确认他没有被送去买一个他已经在用的套餐。
     expect(url).not.toContain('open-design.ai/pricing');
 
-    // 弹窗那颗主按钮同样要认出这个生产形状(context 不带 planId)。
-    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
-    expect(String(mockedWindowOpen.mock.calls[1]?.[0])).toContain('billing=auto-recharge');
+    // Current funding evidence identifies Max even without context.planId.
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+    expect(mockedWindowOpen).toHaveBeenCalledTimes(1);
   });
 
   // 「Max」= 个人 Max 和团队 Max 都算(用户修正)。个人档走的是另一条链路
   // (个人工作区 + 账号档),但结论必须一样。
-  it('个人 Max · owner:同样出那张弹窗,同样跳自动充值', async () => {
+  it('RUN-004 personal Max Owner keeps the card action without a dialog shortcut', async () => {
     await sendAs(
       callerContext('owner', 'max', { workspaceType: 'personal' }),
       EMPTY_WALLET,
@@ -722,8 +715,8 @@ describe('余额不足:身份 × 订阅的四种分支', () => {
     fireEvent.click(screen.getByTestId('upgrade-card-click'));
     expect(String(mockedWindowOpen.mock.calls[0]?.[0])).toContain('billing=auto-recharge');
 
-    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
-    expect(String(mockedWindowOpen.mock.calls[1]?.[0])).toContain('billing=auto-recharge');
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+    expect(mockedWindowOpen).toHaveBeenCalledTimes(1);
   });
 
   it('Max · 非 owner:和非 Max 的成员同一条路', async () => {
@@ -1083,7 +1076,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
 
 
   it.each([
-    { role: 'owner', tier: 'max', expected: 'auto-recharge' },
+    { role: 'owner', tier: 'max', expected: null },
     { role: 'owner', tier: 'pro', expected: 'plan' },
     { role: 'owner', tier: null, expected: 'plan' },
     { role: 'admin', tier: 'max', expected: null },
@@ -1101,11 +1094,15 @@ describe('Link request concurrency rejection preserves the original send', () =>
       }}))) : originalFetch(input, init)));
     renderProjectView({ project:{...project(),pendingPrompt:null} as never, amrProfile:'local' });
     await clickSendWhenReady();
-    if (role === 'owner') {
+    if (role === 'owner' && expected) {
       fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
       const url=new URL(String(mockedWindowOpen.mock.calls[0]![0]));
       expect(url.searchParams.get('billing')).toBe(expected);
       expect(url.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    } else if (role === 'owner') {
+      await screen.findByTestId('amr-balance-dialog');
+      expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+      expect(mockedWindowOpen).not.toHaveBeenCalled();
     } else {
       await screen.findByTestId('amr-balance-owner-dialog');
       expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
