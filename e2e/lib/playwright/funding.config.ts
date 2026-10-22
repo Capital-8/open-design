@@ -19,7 +19,7 @@ export default defineConfig({
   testDir: fileURLToPath(new URL('../../ui', import.meta.url)),
   outputDir: reports('funding-results'),
   reporter,
-  testMatch: 'workspace-funding-sandbox.test.ts',
+  testMatch: process.env.OD_FUNDING_CASE === 'bill001' ? 'qa-bill001.private.test.ts' : 'workspace-funding-sandbox.test.ts',
   testIgnore: [],
   workers: 1,
   fullyParallel: false,

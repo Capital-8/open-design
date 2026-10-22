@@ -107,6 +107,9 @@ async function main() {
         args.push('--grep', selection === 'view021' ? 'VIEW-021 actual' : 'VIEW-021 continuation');
       } else if (selection === 'view020') {
         args[args.length - 1] = 'lib/playwright/notice.config.ts';
+      } else if (selection === 'bill001') {
+        // The explicit testMatch in funding.config.ts selects the disposable
+        // two-actor real-client billing witness for this owned sandbox run.
       } else if (selection) {
         const filters: Record<string, string> = { project: 'VIEW-015 project', home: 'VIEW-015 home', dp: 'VIEW-015 cash0', inflight: 'VIEW-015 existing A task' };
         if (!filters[selection]) throw new Error('OD_FUNDING_CASE must be project, home, dp, inflight, view020, view021, view021-after, or ws005');
