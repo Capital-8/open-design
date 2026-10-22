@@ -521,7 +521,7 @@ than starting from a blank page.
 ## Open follow-ups
 
 - Confirm that `OD_DATA_DIR` precedence applies to the memory storage root
-  (it should, per AGENTS.md FAQ, but the integration code has not been
+  (it should, per the [daemon data contract](../../docs/daemon-data.md), but the integration code has not been
   written yet).
 - Decide whether memory state is part of `od project export` /
   per-project portability flows, or strictly user-scoped.

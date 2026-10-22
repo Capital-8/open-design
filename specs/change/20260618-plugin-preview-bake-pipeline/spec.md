@@ -104,8 +104,9 @@ PRs.
     #4433, #4437, #4537 (closed as superseded); #4559, #4571 (open as of writing).
     These rotate — read "the current open bake PR(s)" rather than any fixed
     number.
-  - Release channel model and the no-squash release→main back-merge rule: root
-    [`AGENTS.md`](../../../AGENTS.md) → "Release channel model" and PR expectations.
+  - Release channel policy:
+    [`tools/release/README.md`](../../../tools/release/README.md#channel-policy-and-workflow-contracts).
+    PR expectations: [`CONTRIBUTING.md`](../../../CONTRIBUTING.md#commits--pull-requests).
   - Auto-update / channel identity: `tools/pack/AGENTS.md`.
 - **Access prerequisites:** R2 credentials
   (`CLOUDFLARE_R2_REPOSITORY_ASSETS_*` secrets) are needed to *run* the bake

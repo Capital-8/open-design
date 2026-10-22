@@ -458,8 +458,8 @@ Multiple marketplaces coexist — the user runs `od marketplace add <url>` to re
 | -------- | ------------------------------------------------ | ------------------ | ---------------------------------------------------------------------- |
 | 1        | `<projectCwd>/.open-design/plugins/<id>/`        | plugin bundle      | New; explicitly installed into the project and committed with user code |
 | 2        | `<projectCwd>/.claude/skills/<id>/`              | legacy `SKILL.md`  | Keeps the project-private skill path from [`skills-protocol.md`](skills-protocol.md) compatible |
-| 3        | Daemon-managed plugin location                   | plugin bundle      | read [daemon data contract](daemon-data.md) before documenting storage |
-| 4        | User-global skill location                       | legacy `SKILL.md`  | read [daemon data contract](daemon-data.md) before documenting storage |
+| 3        | Daemon-managed plugin location                   | plugin bundle      | Read the [daemon data contract](daemon-data.md) before documenting storage. |
+| 4        | User-global skill location                       | legacy `SKILL.md`  | Read the [daemon data contract](daemon-data.md) before documenting storage. |
 | 5        | `~/.claude/skills/<id>/`                         | legacy `SKILL.md`  | Compatibility scan for external Claude Code / skills tooling            |
 | 6        | repo root `skills/`, `design-systems/`, `craft/` | bundled resources  | Existing first-party resources, unchanged                              |
 
@@ -1244,7 +1244,7 @@ In practice this means:
 What this unlocks:
 
 - A user with **only Claude Code** (or any code agent) plus `npm i -g @open-design/cli` plus a running headless daemon can do the entire user journey: install plugin → create project → run → consume artifacts. No OD desktop required.
-- The OD desktop UI installs the same daemon and the same CLI; it just adds a window. Users who later install the desktop find the same projects, plugins, and history that the headless flow produced — there is no "headless project format" vs. "desktop project format". read [daemon data contract](daemon-data.md) before changing or documenting shared storage.
+- The OD desktop UI installs the same daemon and the same CLI; it just adds a window. Users who later install the desktop find the same projects, plugins, and history that the headless flow produced — there is no "headless project format" vs. "desktop project format". Read the [daemon data contract](daemon-data.md) before changing or documenting shared storage.
 - CI is a first-class citizen: a GitHub Action can `npm i -g @open-design/cli && od daemon start --headless && od plugin install … && od run start --project … --follow`. No display, no electron, no per-step UI scripting.
 - External products can embed OD by spawning a headless daemon and shelling out — `od` is the public surface, internals are free to evolve.
 
@@ -1330,7 +1330,7 @@ od run logs   <runId>                # historical tail; --since for incremental
 
 #### File system operations on a project (new)
 
-The daemon already owns project filesystems (or `metadata.baseDir` for imported folders). These commands are project-scoped — agents do not need to know where the project lives on disk. read [daemon data contract](daemon-data.md) before changing or documenting project storage.
+The daemon already owns project filesystems (or `metadata.baseDir` for imported folders). These commands are project-scoped — agents do not need to know where the project lives on disk. Read the [daemon data contract](daemon-data.md) before changing or documenting project storage.
 
 ```
 od files list   <projectId> [--path <subdir>] [--json]
@@ -1596,7 +1596,7 @@ What this proves:
 
 - The full marketplace -> plugin -> apply -> run -> artifact pipeline is reachable from a terminal in <10 lines.
 - The OD daemon does not need to render anything; it acts as a project + plugin + artifact server.
-- The same project, when later opened in the OD desktop UI, shows the full conversation history, files, and artifacts produced by the headless run. read [daemon data contract](daemon-data.md) before changing or documenting shared storage.
+- The same project, when later opened in the OD desktop UI, shows the full conversation history, files, and artifacts produced by the headless run. Read the [daemon data contract](daemon-data.md) before changing or documenting shared storage.
 
 ### 14.4 Analogy: Cursor vs `cursor-agent`, OD desktop vs `od` CLI
 
