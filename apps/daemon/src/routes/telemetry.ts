@@ -158,7 +158,10 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
   const launchEventQueue = createIdentityGatedQueue<Parameters<typeof analyticsService.captureSafety>[0]>({
     limit: LAUNCH_EVENT_RETENTION_LIMIT,
     resolveIdentity: async () => {
-      const appCfg = await deps.readAppConfig(dataDir);
+      // An unreadable config can never yield an id, so deliver immediately
+      // through captureSafety's fallback identity instead of holding.
+      let appCfg: Awaited<ReturnType<typeof deps.readAppConfig>>;
+      try { appCfg = await deps.readAppConfig(dataDir); } catch { return 'none'; }
       if (typeof appCfg.installationId === 'string' && appCfg.installationId) return 'ready';
       if (appCfg.telemetry?.metrics === false) return 'none';
       // Only a readable consent that is still on can produce an id later. An

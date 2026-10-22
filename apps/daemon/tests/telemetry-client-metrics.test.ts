@@ -179,3 +179,28 @@ it('does not create host fault incidents for clean exits or recovery attempts an
     expect(fault).not.toHaveBeenCalled();
   }, fault);
 });
+
+it('delivers stability metrics immediately when the app config cannot be read', async () => {
+  version.mockResolvedValue({ version: '2.0.0', channel: 'stable' });
+  const app = express();
+  const telemetry = registerTelemetryRoutes(app, {
+    dataDir: '/unused', readAppConfig: vi.fn(async () => { throw new Error('EACCES'); }) as never,
+    writeAppConfig: vi.fn() as never,
+  });
+  const server = app.listen(0, '127.0.0.1');
+  try {
+    if (!server.listening) await new Promise<void>(resolve => server.once('listening', resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    for (let i = 0; i < 3; i += 1) {
+      const response = await fetch(`${url}/api/observability/event`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ event: 'client_process_memory_sample', properties: { ...metric, event_id: `unreadable-${i}` } }),
+      });
+      expect(response.status).toBe(200);
+    }
+    expect(captureSafety).toHaveBeenCalledTimes(3);
+  } finally {
+    telemetry.disposeFatalHandlers();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
