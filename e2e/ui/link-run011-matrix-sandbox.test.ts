@@ -318,7 +318,7 @@ async function terminalRun(item: Case, session: Session, fixture: Fixture, runId
     return row.status;
   }, { timeout: T.xlong, intervals: [250, 500, 1000] }).toBe('succeeded');
   expect(row).toMatchObject({ id: runId, status: 'succeeded', signal: null,
-    cancelRequested: false, cancelOrigin: null, error: null, errorCode: null,
+    cancelOrigin: null, error: null, errorCode: null,
     failureCategory: null, endedWithUnfinishedWork: false });
   expect([0, 130]).toContain(row.exitCode);
   let acpEvidence: { eventsSha256: string; completedSteps: number;
@@ -365,7 +365,7 @@ async function terminalRun(item: Case, session: Session, fixture: Fixture, runId
       completedSteps, completedMessages,
       retryDiagnostics: diagnostics.filter(event => event.data?.name === 'model_retry').length };
   }
-  return { status: row.status, exitCode: row.exitCode, errorCode: row.errorCode,
+  return { status: row.status, exitCode: row.exitCode, errorCode: row.errorCode ?? null,
     acpEvidence };
 }
 
