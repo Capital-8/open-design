@@ -509,3 +509,51 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
     for (const session of sessions.reverse()) await stopSession(session);
   }
 });
+
+test('[P0] RUN011 isolated runtime probe reaches Link before six-page replay', async ({ browser }) => {
+  test.skip(process.env.OD_LINK_RUN011_PROBE !== '1', 'Only the explicit funded-space runtime probe may run');
+  test.setTimeout(360_000);
+  const { fixture, binding, save } = await prepare();
+  const session = await startSession(browser, fixture, 'owner', binding.attemptId);
+  try {
+    const item = session.cases.find(candidate => candidate.surface === 'home')!;
+    expect((await preflight(item, session, fixture)).fundingCheck).toBe('available');
+    const prompt = 'RUN011 isolated runtime probe ' + binding.attemptId;
+    await elements(item).input.fill(prompt);
+    const startedAt = Date.now();
+    const responsePromise = item.page.waitForResponse(response =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs',
+    { timeout: T.long });
+    await elements(item).send.click();
+    const response = await responsePromise;
+    const body = await response.json() as { runId?: unknown };
+    const runId = typeof body.runId === 'string' ? body.runId : null;
+    await save('RUN011-runtime-probe-start.safe.json', { binding, startedAt, runId,
+      responseStatus: response.status(), workspaceId: fixture.space.workspaceId,
+      modelId: fixture.runtime.modelId, runtimeBin: fixture.runtime.openCodeBin,
+      prompt, requests: item.requests });
+    expect(response.status()).toBe(202);
+    expect(runId).toMatch(/^[0-9a-f-]{36}$/i);
+    let run: Record<string, unknown> = {};
+    const deadline = Date.now() + 240_000;
+    do {
+      const result = await fetch(session.runtime.url.web('/api/runs/' + runId), { headers: {
+        'x-od-workspace-id': fixture.space.workspaceId,
+        'x-od-workspace-member-id': item.actor.memberId,
+        'x-od-workspace-role': item.role,
+      } });
+      expect(result.ok).toBe(true);
+      run = await result.json() as Record<string, unknown>;
+      if (['succeeded', 'failed', 'canceled'].includes(String(run.status))) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } while (Date.now() < deadline);
+    await save('RUN011-runtime-probe-terminal.safe.json', { binding, runId,
+      status: run.status, exitCode: run.exitCode, elapsedMs: Date.now() - startedAt,
+      requests: item.requests, runResponses: item.runResponses });
+    expect(run.status).toBe('succeeded');
+    expect(run.exitCode).toBe(0);
+    expect(runPosts(item)).toHaveLength(1);
+  } finally {
+    await stopSession(session);
+  }
+});
