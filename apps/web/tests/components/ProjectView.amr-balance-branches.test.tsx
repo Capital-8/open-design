@@ -1269,6 +1269,37 @@ describe('Link request concurrency rejection preserves the original send', () =>
     setRuntimeAmrConsoleOrigin(null);
   });
 
+  it('freezes the authenticated status profile and origin ahead of stale configuration', async () => {
+    const context = callerContext('owner', 'team_pro');
+    workspaceScopeMocks.ambientContext = context;
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49195');
+    const props = { project: { ...project(), pendingPrompt: null } as never,
+      config: { ...config, agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'prod' } } },
+      amrProfile: 'prod',
+      workspaceQuotaStatus: { profile: 'local', consoleOrigin: 'http://127.0.0.1:49196' } };
+    const view = renderProjectView(props);
+    await clickSendWhenReady();
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('status-funding-run');
+      await options.handlers.onError(Object.assign(new Error('actual Link insufficient funding'), {
+        code: 'AMR_INSUFFICIENT_BALANCE',
+      }));
+    });
+    await screen.findByTestId('amr-balance-dialog-plans');
+    setRuntimeAmrConsoleOrigin('http://127.0.0.1:49197');
+    view.rerender(projectViewElement({ ...props,
+      workspaceQuotaStatus: { profile: 'prod', consoleOrigin: 'https://open-design.ai' } }));
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-plans'));
+    const target = new URL(String(mockedWindowOpen.mock.calls[0]![0]));
+    expect(target.origin).toBe('http://127.0.0.1:49196');
+    expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+    expect(target.searchParams.get('billing')).toBe('plan');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+    setRuntimeAmrConsoleOrigin(null);
+  });
+
   it.each([
     ['local', 'http://localhost:5173'],
     ['test', 'https://open-design.powerformer.net'],

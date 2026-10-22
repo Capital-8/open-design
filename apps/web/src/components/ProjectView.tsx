@@ -2941,6 +2941,7 @@ export function ProjectView({
       upgradeIntent: 'pricing' | 'auto_recharge';
       snapshot: AmrWalletSnapshot | null;
       profile?: string | null;
+      consoleOrigin?: string | null;
       conversationId: string;
       /** Live gateway rejections do not wait for a wallet display read. */
       failureAuthorityKey?: string;
@@ -3573,7 +3574,8 @@ export function ProjectView({
   const shownFundingFailuresRef = useRef(new Set<string>());
   const fundingDialogContext = {
     isAmr: config.mode === 'daemon' && config.agentId === 'amr',
-    profile: amrProfile,
+    profile: workspaceQuotaStatus?.profile?.trim() || amrProfile,
+    consoleOrigin: workspaceQuotaStatus?.consoleOrigin,
     branch: amrBalanceBranch,
     scope: amrBalanceCardScope,
     workspaceContext: projectRunBillingAuthorityContext,
@@ -3641,7 +3643,7 @@ export function ProjectView({
       return;
     }
     shownFundingFailuresRef.current.add(key);
-    const { branch: displayBranch, scope, workspaceContext, modelId, profile } = fundingDialogContextRef.current;
+    const { branch: displayBranch, scope, workspaceContext, modelId, profile, consoleOrigin } = fundingDialogContextRef.current;
     const branch = source === 'preflight'
       ? withAmrFundingPlan(displayBranch, workspaceContext, input.preflight)
       : displayBranch;
@@ -3651,6 +3653,7 @@ export function ProjectView({
       upgradeIntent: amrBalanceDialogUpgradeIntent(branch),
       snapshot: null,
       profile,
+      consoleOrigin,
       modelId,
       fundingScope: scope,
       workspaceContext,
@@ -14604,6 +14607,7 @@ export function ProjectView({
           fundingScope={amrBalanceGateBlock.fundingScope}
           balanceUsd={amrBalanceGateBlock.snapshot?.balanceUsd ?? null}
           profile={amrBalanceGateBlock.snapshot?.profile ?? amrBalanceGateBlock.profile ?? null}
+          consoleOrigin={amrBalanceGateBlock.consoleOrigin}
           entrySource="chat_balance_gate_upgrade"
           upgradeIntent={amrBalanceGateBlock.upgradeIntent}
           // 弹窗和卡上那颗必须从**同一份**上下文算落点。默认那条(环境里选中
