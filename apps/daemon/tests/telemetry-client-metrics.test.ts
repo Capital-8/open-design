@@ -37,7 +37,7 @@ async function withRoutes(run: (url: string) => Promise<void>, onHostFault?: () 
   const app = express();
   const telemetry = registerTelemetryRoutes(app, {
     ...(onHostFault ? { onHostFault } : {}),
-    dataDir: dataDir ?? '/unused', readAppConfig: dataDir ? readAppConfig : vi.fn(async () => ({ telemetry: { metrics: true } })) as never, writeAppConfig: vi.fn() as never,
+    dataDir: dataDir ?? '/unused', readAppConfig: dataDir ? readAppConfig : vi.fn(async () => ({ telemetry: { metrics: true }, installationId: 'install-1' })) as never, writeAppConfig: vi.fn() as never,
   });
   const server = app.listen(0, '127.0.0.1');
   try {
