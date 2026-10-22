@@ -121,6 +121,7 @@ import {
   amrBalanceBlockedDialog,
   amrBalanceDialogUpgradeIntent,
   resolveAmrBalanceBranch,
+  resolveAmrConcurrencyPresentation,
   withAmrFundingPlan,
 } from '../runtime/amr-balance-branch';
 import { installDeepSeekHarnessCompanion } from '../providers/agent-companion';
@@ -779,9 +780,17 @@ export function EntryShell({
   const homeConcurrencyEpochRef = useRef(0);
   const [homeConcurrencyBlock, setHomeConcurrencyBlock] = useState<{
     identity: string | null;
-    branch: ReturnType<typeof resolveAmrBalanceBranch>;
+    attempt: number;
+    preflight: WorkspaceBillingPreflight | null;
     workspaceContext: ReturnType<typeof workspaceResourceReadContext>;
   } | null>(null);
+  const homeConcurrencyPresentation = homeConcurrencyBlock
+    ? resolveAmrConcurrencyPresentation({
+        context: homeConcurrencyBlock.workspaceContext,
+        billing: workspaceBillingSummaryForContext(workspaceBillingResponse, homeConcurrencyBlock.workspaceContext),
+        preflight: homeConcurrencyBlock.preflight,
+      })
+    : null;
   useEffect(() => {
     homeConcurrencyEpochRef.current++;
     return () => { homeConcurrencyEpochRef.current++; };
@@ -1527,7 +1536,7 @@ export function EntryShell({
         throw new Error(t('home.amrGateUnavailable'));
       }
       if (homeConcurrencyPendingRef.current) return 'blocked' as const;
-      const hintEpoch = homeConcurrencyEpochRef.current;
+      const hintEpoch = ++homeConcurrencyEpochRef.current;
       const hintIdentity = homeFundingIdentityRef.current;
       const hintAccountGeneration = currentWorkspaceAccountGeneration();
       homeConcurrencyPendingRef.current = true;
@@ -1549,9 +1558,16 @@ export function EntryShell({
         || hintAccountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
       if (hint?.status === 'full') {
         setHomeConcurrencyBlock({
-          identity: hintIdentity,
-          branch: resolveAmrBalanceBranch({ context: homeFundingContext, billing: workspaceBilling }),
+          identity: hintIdentity, attempt: hintEpoch, preflight: null,
           workspaceContext: homeFundingContext,
+        });
+        // The full hint never waits for funding. A late same-send read can
+        // explain the tier, but cannot send, reopen a dismissed dialog, or
+        // change a subsequent attempt's actions.
+        void fundingEvidence?.then((evidence) => {
+          if (!fundingIsCurrent()) return;
+          setHomeConcurrencyBlock((current) => current?.attempt === hintEpoch
+            ? { ...current, preflight: evidence.preflight } : current);
         });
         return 'blocked' as const;
       }
@@ -1992,8 +2008,9 @@ export function EntryShell({
 
   return (
     <div className={`entry-shell entry-shell--no-header${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
-      {homeConcurrencyBlock && homeConcurrencyBlock.identity === homeFundingIdentity ? (
-        <AmrConcurrencyDialog branch={homeConcurrencyBlock.branch}
+      {homeConcurrencyBlock && homeConcurrencyPresentation && homeConcurrencyBlock.identity === homeFundingIdentity ? (
+        <AmrConcurrencyDialog branch={homeConcurrencyPresentation.branch}
+          upgradeAllowed={homeConcurrencyPresentation.upgradeAllowed}
           workspaceContext={homeConcurrencyBlock.workspaceContext}
           profile={amrRegistrationStatus?.profile?.trim() || amrProfile}
           consoleOrigin={amrRegistrationStatus?.consoleOrigin}
