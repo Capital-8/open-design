@@ -101,7 +101,12 @@ test('[P0] F04 Go Owner concurrency rejection renders the approved Cloud offer a
   await expect(page.getByTestId('amr-concurrency-close')).toHaveCSS('font-size', '13.5px');
   // This offer is deliberately neutral even when app appearance uses a color.
   await page.locator('html').evaluate(element => element.style.setProperty('--accent', '#1A74FF'));
-  await expect(page.getByTestId('amr-concurrency-upgrade')).toHaveCSS('background-color', 'rgb(53, 53, 53)');
+  const upgradeButton = page.getByTestId('amr-concurrency-upgrade');
+  await expect(upgradeButton).toHaveCSS('background-color', 'rgb(53, 53, 53)');
+  await upgradeButton.hover();
+  await expect(upgradeButton).toHaveCSS('background-color', 'rgb(32, 32, 32)');
+  await page.mouse.move(0, 0);
+  await expect(upgradeButton).toHaveCSS('background-color', 'rgb(53, 53, 53)');
   await expect(dialog).toContainText('当前并发不足，请升级套餐后再试。');
   await expect(dialog.locator('li')).toHaveCount(4);
   await expect(dialog.locator('li')).toHaveText([
@@ -153,8 +158,14 @@ test('[P0] F04 Go Owner concurrency rejection renders the approved Cloud offer a
   await expect(page.getByTestId('chat-run-error-card')).toHaveCount(0);
   await expect.poll(async () => { const box = await ownerCard.boundingBox(); return [box?.width, box?.height]; })
     .toEqual([480, 118]);
+  const ownerCardButton = ownerCard.getByRole('button', { name: '升级' });
+  await expect(ownerCardButton).toHaveCSS('border-radius', '8px');
+  await expect(ownerCardButton).toHaveCSS('border-top-width', '1px');
+  await expect(ownerCardButton).toHaveCSS('border-top-color', 'rgb(0, 255, 8)');
+  await expect.poll(async () => { const box = await ownerCardButton.boundingBox(); return [box?.width, box?.height]; })
+    .toEqual([86, 44]);
   await testInfo.attach('f12-concurrency-card', { body: await ownerCard.screenshot(), contentType: 'image/png' });
-  await ownerCard.getByRole('button', { name: '升级' }).click();
+  await ownerCardButton.click();
   await expect(dialog).toBeVisible();
   await page.getByTestId('amr-concurrency-close').click();
   await expect(dialog).toHaveCount(0);
@@ -282,8 +293,14 @@ test('[P0] F06 member concurrency notice preserves the frozen spacing and button
   await expect(page.getByTestId('chat-run-error-card')).toHaveCount(0);
   await expect.poll(async () => { const box = await memberCard.boundingBox(); return [box?.width, box?.height]; })
     .toEqual([480, 118]);
+  const memberCardButton = memberCard.getByRole('button', { name: '升级' });
+  await expect(memberCardButton).toHaveCSS('border-radius', '8px');
+  await expect(memberCardButton).toHaveCSS('border-top-width', '1px');
+  await expect(memberCardButton).toHaveCSS('border-top-color', 'rgb(0, 255, 8)');
+  await expect.poll(async () => { const box = await memberCardButton.boundingBox(); return [box?.width, box?.height]; })
+    .toEqual([86, 44]);
   await testInfo.attach('f15-concurrency-card', { body: await memberCard.screenshot(), contentType: 'image/png' });
-  await memberCard.getByRole('button', { name: '升级' }).click();
+  await memberCardButton.click();
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('当前团队并发不足，请联系团队空间所有者升级订阅。');
   await acknowledge.click();
