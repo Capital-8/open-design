@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import type { Browser, Page } from '@playwright/test';
 
@@ -39,7 +39,8 @@ type Case = {
   projectId: string | null;
   requests: Array<{ at: string; method: string; path: string; workspaceId: string | null }>;
   runResponses: RunResponse[];
-  runBodies: Array<{ currentPrompt: string | null; attachmentNames: string[] }>;
+  runBodies: Array<{ currentPrompt: string | null; attachmentPaths: string[];
+    projectId: string | null; conversationId: string | null; userMessageId: string | null }>;
   draft: string;
   attachment: string;
 };
@@ -199,11 +200,15 @@ async function startSession(browser: Browser, fixture: Fixture, role: Role, atte
           method: request.method(), path, workspaceId: request.headers()['x-od-workspace-id'] ?? null });
         if (request.method() === 'POST' && path === '/api/runs') {
           const body = request.postDataJSON() as {
-            currentPrompt?: unknown; attachments?: Array<{ name?: unknown }>;
+            currentPrompt?: unknown; attachments?: unknown[];
+            projectId?: unknown; conversationId?: unknown; userMessageId?: unknown;
           };
           runBodies.push({ currentPrompt: typeof body.currentPrompt === 'string' ? body.currentPrompt : null,
-            attachmentNames: Array.isArray(body.attachments)
-              ? body.attachments.map(value => String(value.name ?? '')) : [] });
+            attachmentPaths: Array.isArray(body.attachments)
+              ? body.attachments.map(value => typeof value === 'string' ? value : '') : [],
+            projectId: typeof body.projectId === 'string' ? body.projectId : null,
+            conversationId: typeof body.conversationId === 'string' ? body.conversationId : null,
+            userMessageId: typeof body.userMessageId === 'string' ? body.userMessageId : null });
         }
       });
       page.on('response', response => {
@@ -415,14 +420,40 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
       await expect.poll(() => item.runResponses.length, { timeout: T.long }).toBe(1);
       expect(runPosts(item)).toHaveLength(1);
       expect(item.runBodies).toHaveLength(1);
-      expect(item.runBodies[0]?.currentPrompt).toContain(item.draft);
-      expect(item.runBodies[0]?.attachmentNames).toContain(item.attachment);
+      const sent = item.runBodies[0]!;
+      expect(sent.currentPrompt).toContain(item.draft);
+      expect(sent.attachmentPaths).toHaveLength(1);
+      const attachmentPath = sent.attachmentPaths[0]!;
+      expect(attachmentPath.length).toBeGreaterThan(0);
+      expect(attachmentPath).not.toMatch(/^(?:\/|\.\.?\/)/);
+      expect(basename(attachmentPath)).toBe(item.attachment);
+      expect(sent.projectId).toEqual(expect.any(String));
+      expect(sent.conversationId).toEqual(expect.any(String));
+      expect(sent.userMessageId).toEqual(expect.any(String));
       expect(runPosts(item)[0]?.workspaceId).toBe(fixture.space.workspaceId);
       for (const other of all.filter(other => other !== item && !completed.some(done =>
         done.role === other.role && done.surface === other.surface))) {
         expect(runPosts(other)).toHaveLength(0);
       }
       const session = sessions.find(candidate => candidate.role === item.role)!;
+      await expect.poll(async () => {
+        const url = session.runtime.url.web('/api/projects/' + encodeURIComponent(sent.projectId!)
+          + '/conversations/' + encodeURIComponent(sent.conversationId!) + '/messages');
+        const readback = await fetch(url, { headers: {
+          'x-od-workspace-id': fixture.space.workspaceId,
+          'x-od-workspace-member-id': item.actor.memberId,
+          'x-od-workspace-role': item.role,
+        } });
+        if (!readback.ok) return null;
+        const rows = await readback.json() as { messages?: Array<Record<string, unknown>> };
+        const message = rows.messages?.find(row => row.id === sent.userMessageId);
+        return message ? { projectId: sent.projectId, conversationId: sent.conversationId,
+          content: message.content, attachments: message.attachments } : null;
+      }, { timeout: T.long, intervals: [250, 500, 1000] }).toMatchObject({
+        projectId: sent.projectId, conversationId: sent.conversationId,
+        content: item.draft,
+        attachments: [{ path: attachmentPath, name: item.attachment, kind: 'file', order: 0 }],
+      });
       const terminal = await terminalRun(item, session, fixture, body.runId!);
       await marker('RUN011-' + caseKey(item) + '-manual-ready.json', {
         role: item.role, surface: item.surface, memberId: item.actor.memberId,
