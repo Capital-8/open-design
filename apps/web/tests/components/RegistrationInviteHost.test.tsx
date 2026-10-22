@@ -108,13 +108,30 @@ describe('strict registration invitation host', () => {
     await act(async () => { resolve(new Response(JSON.stringify({ results: [{ email: 'colleague@example.com', ok: true }] }), { status: 200 })); });
     expect(exit).not.toHaveBeenCalled(); expect(localStorage.getItem(registrationInviteCompletionKey(status)!)).toBeNull(); expect(localStorage.getItem('od.invitation-banner.dismissed:existing')).toBeNull();
   });
-  it('returns the confirmed sent count only after exit and hides the account banner', async () => {
+  it('allows manual entry before the countdown and hides the account banner', async () => {
     const exit = vi.fn(); mount({ exit }); await screen.findByText(title);
     vi.useFakeTimers(); vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ email: 'colleague@example.com', ok: true }] }), { status: 200 })));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'colleague@example.com' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '发送邀请' })); });
-    expect(exit).not.toHaveBeenCalled(); await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(exit).not.toHaveBeenCalled(); await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     expect(exit).not.toHaveBeenCalled(); await act(async () => { fireEvent.click(screen.getByRole('button', { name: '进入工作台' })); });
     expect(exit).toHaveBeenCalledWith(1, context, 'sent'); expect(localStorage.getItem('od.invitation-banner.dismissed:new-account')).toBe('1');
   });
+  it('counts down from three and automatically enters once after confirmed delivery', async () => {
+    const exit = vi.fn(); mount({ exit }); await screen.findByText(title);
+    vi.useFakeTimers(); vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ email: 'colleague@example.com', ok: true }] }), { status: 200 })));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'colleague@example.com' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '发送邀请' })); });
+    expect(screen.getByRole('heading', { name: '邀请已发送' })).toBeTruthy();
+    expect(screen.getByText((_text, element) => element?.tagName === 'P' && element.textContent === '3s 后自动进入')).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(screen.getByText((_text, element) => element?.tagName === 'P' && element.textContent === '2s 后自动进入')).toBeTruthy(); expect(exit).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(screen.getByText((_text, element) => element?.tagName === 'P' && element.textContent === '1s 后自动进入')).toBeTruthy(); expect(exit).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(exit).toHaveBeenCalledExactlyOnceWith(1, context, 'sent');
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(exit).toHaveBeenCalledTimes(1);
+  });
+
 });

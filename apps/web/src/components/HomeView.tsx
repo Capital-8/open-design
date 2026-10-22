@@ -3134,8 +3134,8 @@ export function HomeView({
           installationId={deepSeekV4FlashCampaignInstallationId}
         />
       )}
-      {variant === 'dock' ? null : inviteSurface}
       <HomeHero
+        inviteSurface={variant === 'dock' ? undefined : inviteSurface}
         variant={variant}
         collapseSignal={collapseSignal}
         workspaceContext={workspaceContext}

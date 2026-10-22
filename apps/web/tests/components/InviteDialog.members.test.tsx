@@ -114,6 +114,25 @@ describe('member-line invitation states', () => {
     email('one@example.com'); fireEvent.click(sendButton());
     const error = await screen.findByRole('alert'); expect(error.classList.contains('od-toast')).toBe(false);
   });
+  it('closes a pending request and ignores its late success response', async () => {
+    let resolve!: (value: Response) => void;
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise<Response>(done => { resolve = done; });
+    }));
+    const close = vi.fn(); const sent = vi.fn();
+    window.addEventListener('od:workspace-invites-sent', sent);
+    try {
+      render(<InviteDialog open workspaceContext={owner} onClose={close} />);
+      email('member@example.com'); fireEvent.click(sendButton());
+      fireEvent.click(screen.getAllByRole('button', { name: /取消|cancel/i })[0]!);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(signal?.aborted).toBe(true);
+      await act(async () => { resolve(response([{ email: 'member@example.com', ok: true }])); });
+      expect(sent).not.toHaveBeenCalled();
+    } finally { window.removeEventListener('od:workspace-invites-sent', sent); }
+  });
   it('disables every editable control while sending and retains all inputs on transport failure', async () => {
     let reject!: (reason: unknown) => void;
     vi.stubGlobal('fetch', vi.fn(() => new Promise((_resolve, fail) => { reject = fail; })));
