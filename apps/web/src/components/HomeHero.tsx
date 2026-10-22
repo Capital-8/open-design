@@ -137,6 +137,7 @@ export interface ExamplePromptInfo {
 }
 
 interface Props {
+  inviteSurface?: ReactNode;
   workspaceContext?: WorkspaceCollabContext | null;
   active?: boolean;
   // Arms the first-run guidance trail (prototype chip → first preset
@@ -354,6 +355,7 @@ const EMPTY_WORKSPACE_ITEMS: WorkspaceContextItem[] = [];
 export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   {
     workspaceContext = null,
+    inviteSurface,
     active = true,
     prompt,
     onPromptChange,
@@ -1560,6 +1562,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
         isDock && ((carouselActive && !composerFocused) || forcedCollapsed) ? 'true' : undefined
       }
     >
+      {isDock ? null : inviteSurface}
       {/* Hero header: one plain question. The animated pixel-scan wordmark that
           used to stand here is gone (per product) — the headline carries the
           moment instead, with no motion behind it. */}

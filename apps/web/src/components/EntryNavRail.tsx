@@ -2315,7 +2315,7 @@ export function EntryNavRail({
                 >
                   <div className={styles.workspaceMenuHead}>
                     <span>{t('workspaceSwitcher.title')}</span>
-                    <span className={styles.workspaceCount}>{visibleWorkspaceItems.length}/50</span>
+                    <span className={visibleWorkspaceItems.length >= 50 ? styles.workspaceCount : styles.workspaceCountHidden}>{visibleWorkspaceItems.length}/50</span>
                   </div>
                   <div
                     className="entry-nav-rail__workspace-list"
@@ -2352,7 +2352,7 @@ export function EntryNavRail({
                             className="entry-nav-rail__workspace-menu-name"
                             text={itemName}
                           />
-                          {active ? <Icon name="check" size={14} /> : null}
+                          {active ? <span className={styles.workspaceSelectedMark}><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z" /></svg></span> : null}
                         </button>
                       );
                     })}
