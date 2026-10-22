@@ -293,7 +293,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
             {validated && errors[index] ? <p className={styles.lineError} id={`${id}-error-${index}`} role="alert">{errors[index]}</p> : null}
           </div>)}
         </div>
-        <Button className={styles.add} disabled={submitting} onClick={() => { click('add_recipient_row'); setRows(previous => [...previous, emptyRow()]); }}>{onboarding ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z" /></svg>{t('workspaceInvite.addMember')}</> : `＋ ${t('workspaceInvite.addMember')}`}</Button>
+        <Button className={styles.add} disabled={submitting} onClick={() => { click('add_recipient_row'); setRows(previous => [...previous, emptyRow()]); }}>{onboarding ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z" /></svg>{t('workspaceInvite.addMember')}</> : locale === 'en' ? t('workspaceInvite.addMember') : `＋ ${t('workspaceInvite.addMember')}`}</Button>
         {!onboarding && error ? <p className={styles.error} role="alert">{error}</p> : null}
         {onboarding && partialCount !== null ? <p className={styles.summary} role="alert">{t('workspaceInvite.onboardingPartialSummary').replace('{count}', String(partialCount.sent)).replace('{failed}', String(partialCount.failed))}</p> : null}
         {onboarding && error ? <p className={styles.error} role="alert">{error}</p> : null}

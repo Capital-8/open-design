@@ -110,7 +110,7 @@
 
 /* The ordinary dialog uses the final console reference's compact actions. */
 .root:not(.onboarding) .submit { width:auto;min-width:80px;padding-inline:12px; }
-.root:not(.onboarding) .cancel { width:auto;min-width:64px;padding-inline:16px;color:#444; }
+.root:not(.onboarding) .cancel { width:auto;min-width:64px;padding-inline:12px;color:#444; }
 @media(max-width:480px) {
  .root:not(.onboarding) .labels { display:none; }
  .root:not(.onboarding) .footer .submit { flex:1; }
@@ -211,3 +211,5 @@
 .root:not(.onboarding) .role[data-menu-keyboard=true] { border-color:#999;filter:brightness(.92);outline:none;box-shadow:none; }
 
 .root:not(.onboarding) .remove:hover:not(:disabled) { background:#f2f2f2;color:#333; }
+
+.root:not(.onboarding) :is(.cancel,.submit) { line-height:19.6px; }
