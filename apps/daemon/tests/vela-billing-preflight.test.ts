@@ -189,6 +189,28 @@ describe('default CLI request-concurrency capability compatibility', () => {
   const parentHelp = 'Usage:\n  vela billing [command]\n\nAvailable Commands:\n  preflight Advisory preview\n';
   const configuredEnv = { VELA_PROFILE: 'local', AMR_HOME: '/isolated/amr' };
 
+  it('reads a current full Link counter within the send budget without launching the CLI', async () => {
+    runVelaCommandMock.mockClear();
+    readVelaRuntimeLinkContextMock.mockReturnValue({ profile: 'local', linkUrl: 'http://127.0.0.1:27481', runtimeKey: 'own-runtime' });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(full)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchVelaRequestConcurrency('ws', { configuredEnv })).toEqual(full);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(runVelaCommandMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the CLI when the selected runtime profile cannot be read', async () => {
+    readVelaRuntimeLinkContextMock.mockImplementationOnce(() => { throw new Error('profile changed during read'); });
+    runVelaCommandMock.mockResolvedValueOnce(JSON.stringify(full));
+
+    expect(await fetchVelaRequestConcurrency('ws', { configuredEnv })).toEqual(full);
+    expect(runVelaCommandMock).toHaveBeenCalledWith(
+      ['billing', 'request-concurrency', '--workspace-id', 'ws', '--format', 'json'],
+      expect.objectContaining({ timeoutMs: 450 }),
+    );
+  });
+
   function linkCapability(body: unknown = full, status = 200) {
     readVelaRuntimeLinkContextMock.mockReturnValue({ profile: 'local', linkUrl: 'http://127.0.0.1:27481', runtimeKey: 'own-runtime' });
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));

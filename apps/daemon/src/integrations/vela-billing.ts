@@ -59,6 +59,20 @@ export async function fetchVelaRequestConcurrency(
   workspaceId: string,
   options: FetchVelaBillingOptions = {},
 ): Promise<WorkspaceRequestConcurrencyHint | null> {
+  // A fresh send has a sub-second budget. The selected runtime key already
+  // authenticates this exact Link capability, so avoid CLI startup when it
+  // is available. Keep the CLI for injected runners and profiles whose
+  // runtime identity cannot be read by the daemon.
+  if (!options.run) {
+    let session: ReturnType<typeof readVelaRuntimeLinkContext> = null;
+    try {
+      session = readVelaRuntimeLinkContext(process.env, options.configuredEnv);
+    } catch {
+      // A profile edit during snapshot resolution must not fail the send.
+      // The CLI resolves the selected profile again below.
+    }
+    if (session) return fetchAuthenticatedRequestConcurrency(workspaceId, options, session);
+  }
   let stdout: string;
   try {
     stdout = await resolveVelaBillingRunner(options)([
@@ -96,9 +110,10 @@ function parseRequestConcurrency(stdout: string, workspaceId: string): Workspace
 async function fetchAuthenticatedRequestConcurrency(
   workspaceId: string,
   options: FetchVelaBillingOptions,
+  selectedSession?: NonNullable<ReturnType<typeof readVelaRuntimeLinkContext>>,
 ): Promise<WorkspaceRequestConcurrencyHint | null> {
   try {
-    const session = readVelaRuntimeLinkContext(process.env, options.configuredEnv);
+    const session = selectedSession ?? readVelaRuntimeLinkContext(process.env, options.configuredEnv);
     if (!session) return null;
     const response = await fetch(new URL('/billing/request-concurrency', session.linkUrl), {
       headers: { authorization: `Bearer ${session.runtimeKey}`, 'x-vela-workspace-id': workspaceId },

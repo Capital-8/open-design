@@ -114,6 +114,8 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     'x-od-workspace-role': role, 'x-od-workspace-lifecycle-state': 'active',
     'x-od-workspace-member-status': 'active' };
   const requests: Array<{ at: string; method: string; path: string; workspaceId: string | null }> = [];
+  const concurrencyResponses: Array<{ at: string; status: number; hintStatus: string | null; running: number | null; limit: number | null }> = [];
+  const concurrencyResponseReads: Promise<void>[] = [];
   const runResponses: Array<{ status: number; runId: string | null }> = [];
   const responseReads: Promise<void>[] = [];
   page.on('request', request => {
@@ -122,6 +124,16 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
       path, workspaceId: request.headers()['x-od-workspace-id'] ?? null });
   });
   page.on('response', response => {
+    if (new URL(response.url()).pathname === '/api/workspace/billing/request-concurrency') {
+      concurrencyResponseReads.push(response.json().then(body => {
+        const hint = body?.requestConcurrencyHint;
+        concurrencyResponses.push({ at: new Date().toISOString(), status: response.status(),
+          hintStatus: typeof hint?.status === 'string' ? hint.status : null,
+          running: Number.isSafeInteger(hint?.running) ? hint.running : null,
+          limit: Number.isSafeInteger(hint?.limit) ? hint.limit : null });
+      }).catch(() => { concurrencyResponses.push({ at: new Date().toISOString(), status: response.status(),
+        hintStatus: null, running: null, limit: null }); }));
+    }
     if (response.request().method() !== 'POST' || new URL(response.url()).pathname !== '/api/runs') return;
     responseReads.push(response.json().then(body => {
       runResponses.push({ status: response.status(), runId: typeof body?.runId === 'string' ? body.runId : null });
@@ -246,7 +258,7 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
       expect(refusal.rejectedLinkRequestId).toEqual(expect.any(String));
       expect(String(refusal.rejectedLinkRequestId).length).toBeGreaterThan(0);
     } else {
-      expect(refusal.admissionSource).toBe('preflight');
+      expect(refusal.admissionSource).toBe('hint');
       expect(refusal.hintStatus).toBe('full');
       expect(rejectedPosts).toBe(0);
       expect(refusal.runId).toBeNull();
@@ -308,7 +320,8 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     }
     await save('F04-manual.safe.json', { binding, manualClickAt, run, requests, verified });
   } finally {
-    await save('request-timeline.safe.json', { binding, requests });
+    await Promise.allSettled(concurrencyResponseReads);
+    await save('request-timeline.safe.json', { binding, requests, concurrencyResponses });
     await page.close().catch(() => undefined);
     await runtime.stopWeb(env);
     await info.attach('owned-runtime-stopped', { body: JSON.stringify(await runtime.status(env)), contentType: 'application/json' });
