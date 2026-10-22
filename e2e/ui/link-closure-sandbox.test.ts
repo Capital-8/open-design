@@ -245,6 +245,7 @@ test('[P0] RUN-011/012 Owner Home actual A/B funding never submits without anoth
       .toBe(fixture.spaces.A.workspaceId);
     await marker('A-manual-ready.json', { workspaceId: fixture.spaces.A.workspaceId, runId: created.runId });
     const verified = await receipt('A-manual-verified.json', fixture.spaces.A.workspaceId, manualClickAt);
+    if (verified.error) throw new Error(`A/B accounting receipt blocked: ${String(verified.error)}`);
     expect(verified.runId).toBe(created.runId);
     expect(verified.billingWorkspaceId).toBe(fixture.spaces.A.workspaceId);
     expect(Number(verified.targetSuccessfulUpstreamCount)).toBeGreaterThan(0);

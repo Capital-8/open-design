@@ -273,6 +273,7 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
     expect(postCount()).toBe(before + rejectedPosts + 1);
     await marker('F04-manual-ready.json', { projectId, runId: run.runId, challenge });
     const verified = await receipt('F04-manual-verified.json');
+    if (verified.error) throw new Error(`F04 accounting receipt blocked: ${String(verified.error)}`);
     expect(verified.runId).toBe(run.runId);
     expect(verified.billingWorkspaceId).toBe(space.workspaceId);
     expect(verified.fundingKind).toMatch(/^(coding_plan|wallet)$/);
