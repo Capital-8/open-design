@@ -129,6 +129,8 @@ export const ja: Dict = {
   'chat.amrError.rechargeCta': 'チャージ',
   "chat.amrConcurrencyGate.title": "同時リクエスト数の上限に達しました",
   "chat.amrConcurrencyGate.message": "同時実行枠がいっぱいです。プランをアップグレードしてから再試行してください。",
+  "chat.amrConcurrencyGate.teamTitle": "チームの同時実行数が上限に達しました",
+  "chat.amrConcurrencyGate.teamMessage": "チームの同時実行数が上限に達しました。チームワークスペースのオーナーにサブスクリプションのアップグレードを依頼してください。",
   "chat.amrConcurrencyGate.benefit1": "複雑な設定なしで最先端のモデルを選択",
   "chat.amrConcurrencyGate.benefit2": "メンバーを無料招待し、利用枠を共有",
   "chat.amrConcurrencyGate.benefit3": "マルチモーダルな画像とテキストを一か所で作成",

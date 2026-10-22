@@ -70,7 +70,8 @@
   color: var(--text);
 }
 
-.upgradeButton {
+.upgradeButton,
+.noticeButton {
   line-height: normal;
   color: var(--bg);
   background: var(--accent);
@@ -79,7 +80,8 @@
     0 8px 20px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
-.upgradeButton:hover:not(:disabled) {
+.upgradeButton:hover:not(:disabled),
+.noticeButton:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
   box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),

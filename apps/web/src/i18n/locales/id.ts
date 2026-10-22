@@ -129,6 +129,8 @@ export const id: Dict = {
   'chat.amrError.rechargeCta': 'Isi ulang',
   "chat.amrConcurrencyGate.title": "Batas permintaan bersamaan tercapai",
   "chat.amrConcurrencyGate.message": "Kapasitas bersamaan penuh. Tingkatkan paket lalu coba lagi.",
+  "chat.amrConcurrencyGate.teamTitle": "Batas konkurensi tim tercapai",
+  "chat.amrConcurrencyGate.teamMessage": "Tim telah mencapai batas konkurensi. Minta pemilik ruang kerja tim untuk meningkatkan langganan.",
   "chat.amrConcurrencyGate.benefit1": "Pilih model mutakhir tanpa pengaturan rumit",
   "chat.amrConcurrencyGate.benefit2": "Undang anggota gratis dan bagikan kuota",
   "chat.amrConcurrencyGate.benefit3": "Buat gambar dan teks multimodal di satu tempat",
