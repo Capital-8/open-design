@@ -964,6 +964,10 @@ import {
 } from './collab/workspace-resource-mutation.js';
 import {
   createAuthorizeProjectRequest,
+  createVerifiedProjectRequestAuthority,
+  projectToolActorMember,
+  projectToolActorPinIsCurrent,
+  pinProjectToolActor,
 } from './collab/project-request-authority.js';
 import { withLastKnownWorkspaceContext } from './collab/workspace-context.js';
 import {
@@ -1273,6 +1277,10 @@ import {
 import { openBrowser } from './browser/index.js';
 import { EmptyTranscriptError, synthesizeHandoffPrompt } from './design/index.js';
 import { readVelaControlApiContext } from './integrations/vela.js';
+import {
+  createMemberRemovalProjectReconciler,
+  createVelaMemberRemovalTransferSource,
+} from './collab/member-removal-transfer.js';
 import { initializeAmrEndpointBinding } from './integrations/amr-endpoint-binding.js';
 
 /**
@@ -3595,6 +3603,11 @@ export async function startServer({
     requestProjectOverride,
     requestRunOverride,
   } = createToolRequestAuth(toolTokenRegistry);
+  const toolRunWorkspaceActors = new Map<string, {
+    workspaceId: string;
+    workspaceMemberId: string;
+    directoryIdentity: string;
+  }>();
   // Wire the upload-destination bridge to this db so multer can route
   // file uploads into baseDir-rooted projects' actual folders.
   projectMetadataLookup = (id) => {
@@ -3865,6 +3878,10 @@ export async function startServer({
   const workspaceTypes = createWorkspaceTypeRegistry();
   const configuredAmrEnv = () =>
     agentCliEnvForAgent(readAppConfigSync(RUNTIME_DATA_DIR).agentCliEnv, 'amr');
+  const reconcileMemberRemovalProjects = createMemberRemovalProjectReconciler({
+    db,
+    source: createVelaMemberRemovalTransferSource({ configuredEnv: configuredAmrEnv }),
+  });
   const directoryRunActorProofs = new WeakMap();
   const workspaceExactAuthorityCache = createWorkspaceExactAuthorityCache({
     identity: () => velaWorkspaceDirectoryIdentity(
@@ -4076,6 +4093,15 @@ export async function startServer({
     return membership
       ? workspaceContextFromDirectoryItem(membership, configuredAmrEnv())
       : null;
+  };
+  const reconcileCurrentOwnerMemberRemovals = async (workspaceId: string): Promise<void> => {
+    if (process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() !== 'vela') return;
+    const context = await resolveAuthoritativeTeamWorkspaceContext(workspaceId, {
+      fresh: true,
+      backgroundFresh: true,
+    });
+    if (context?.role !== 'owner') return;
+    await reconcileMemberRemovalProjects(workspaceId, context.workspaceMemberId);
   };
   const teamResourceVersions = createTeamResourceVersionStore(RUNTIME_DATA_DIR);
   const teamProjectContentResourceId = (
@@ -4319,6 +4345,7 @@ export async function startServer({
       ? { fetchWorkspaceDirectory: fetchProjectCreationWorkspaceDirectory }
       : {}),
     configuredEnv: configuredAmrEnv,
+    allowStaticDevContext: process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() !== 'vela',
   });
   function persistWorkspaceProjectSyncState(
     projectId: string,
@@ -6986,6 +7013,10 @@ export async function startServer({
           // billing member projection even when no billing event accompanies
           // the roster mutation.
           workspaceBillingRuntime.reconnect(subscribedWorkspaceId);
+          if (event.memberChange === 'removed') {
+            void reconcileCurrentOwnerMemberRemovals(eventWorkspaceId).catch((error) =>
+              console.warn('[od] member removal project transfer refresh failed:', String(error)));
+          }
           break;
         case 'coding-plan-usage-changed':
           if (!event.workspaceId || !event.workspaceMemberId || !event.eventId) break;
@@ -7132,6 +7163,8 @@ export async function startServer({
         .catch(() => undefined);
       void reconcileWorkspaceProjectsFromRemote(subscribedWorkspaceId)
         .catch(() => undefined);
+      void reconcileCurrentOwnerMemberRemovals(subscribedWorkspaceId)
+        .catch((error) => console.warn('[od] member removal project transfer catch-up failed:', String(error)));
       void proactiveContentPull.catchUpPublishedHeads(subscribedWorkspaceId)
         .catch(() => undefined);
       void collabCloud?.pollOnce().catch(() => undefined);
@@ -8944,7 +8977,7 @@ export async function startServer({
     stageProjectDirsForDelete,
     validateLinkedDirs,
   };
-  const authorizeProjectRequest = createAuthorizeProjectRequest({
+  const localProjectRequestAuthority = createAuthorizeProjectRequest({
     db,
     getWorkspaceProject,
     getWorkspaceProjectByProjectId,
@@ -8955,6 +8988,23 @@ export async function startServer({
     isProjectReceivingContent: (projectId) => ownedContentSync?.isApplying(projectId) ?? false,
     sendApiError,
   });
+  const authorizeProjectRequest = process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
+    ? createVerifiedProjectRequestAuthority({
+        localAuthority: localProjectRequestAuthority,
+        getBinding: (projectId) => getWorkspaceProjectByProjectId(db, projectId),
+        verifyWorkspaceRequestAuthority,
+        isPersonalWorkspaceForAccount: async (workspaceId) => {
+          const directory = await fetchFreshMutationWorkspaceDirectory();
+          return directory.ok && directory.items.some((item) =>
+            item.workspaceId === workspaceId
+            && item.workspaceType === 'personal'
+            && item.memberStatus === 'active'
+            && item.lifecycleState === 'active');
+        },
+        reconcileMemberRemovalProjects,
+        sendApiError,
+      })
+    : localProjectRequestAuthority;
   // Legacy registrars still receive the historical bound mutation-gate shape,
   // but production delegates it to the same central authorizer as newer route
   // modules. This keeps placeholder stamps authoritative across Figma import,
@@ -8968,8 +9018,48 @@ export async function startServer({
     res,
     projectId,
     options,
+    runId,
   ) => {
     const binding = getWorkspaceProjectByProjectId(db, projectId);
+    const run = binding?.workspaceId ? design.runs.get(runId) : null;
+    if (binding?.workspaceId && (!run || run.projectId !== projectId)) {
+      sendApiError(res, 403, 'WORKSPACE_PROJECT_PERMISSION_DENIED', 'tool run does not belong to this project');
+      return null;
+    }
+    let actorMemberId = binding?.createdByWorkspaceMemberId ?? 'local-user';
+    if (binding?.workspaceId && process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
+      const directory = await fetchFreshMutationWorkspaceDirectory();
+      if (!directory.ok) {
+        sendApiError(res, 503, 'WORKSPACE_AUTHORITY_UNAVAILABLE', 'workspace membership could not be verified');
+        return null;
+      }
+      // The token's Run pins its launch account and member, independently of
+      // the persisted project creator. A later account switch cannot lend an
+      // old token the new account's standing.
+      const actorPin = toolRunWorkspaceActors.get(runId);
+      if (!projectToolActorPinIsCurrent({
+        pin: actorPin ?? null,
+        workspaceId: binding.workspaceId,
+        currentDirectoryIdentity: currentWorkspaceDirectoryIdentity(),
+        ...(run?.agentId === 'amr'
+          ? { amrPinnedMemberId: revokedWorkspaceRuns.pinnedMember(run) }
+          : {}),
+      })) {
+        sendApiError(res, 403, 'WORKSPACE_ACCESS_DENIED', 'tool run workspace actor is no longer valid');
+        return null;
+      }
+      const verifiedMemberId = projectToolActorMember({
+        workspaceId: binding.workspaceId,
+        pinnedMemberId: actorPin.workspaceMemberId,
+        requirePinnedMember: true,
+        directory: directory.items,
+      });
+      if (!verifiedMemberId) {
+        sendApiError(res, 403, 'WORKSPACE_ACCESS_DENIED', 'tool run workspace membership is no longer active');
+        return null;
+      }
+      actorMemberId = verifiedMemberId;
+    }
     const localRequest = {
       query: {},
       get(name) {
@@ -8977,7 +9067,7 @@ export async function startServer({
         if (normalized === 'x-od-workspace-id') return binding?.workspaceId ?? undefined;
         if (normalized === 'x-od-workspace-member-id') {
           return binding?.workspaceId
-            ? binding.createdByWorkspaceMemberId ?? 'local-user'
+            ? actorMemberId
             : undefined;
         }
         return undefined;
@@ -8988,8 +9078,7 @@ export async function startServer({
     return {
       workspace: {
         workspaceId: binding.workspaceId,
-        workspaceMemberId:
-          binding.createdByWorkspaceMemberId ?? 'local-user',
+        workspaceMemberId: actorMemberId,
       },
     };
   };
@@ -9316,7 +9405,11 @@ export async function startServer({
     isProjectUnmaterializedPlaceholder: (projectId) =>
       projectIsUnmaterializedSharedPlaceholder(projectId),
     fetchWorkspaceDirectory,
+    reconcileMemberRemovalProjects: process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
+      ? reconcileMemberRemovalProjects
+      : undefined,
     configuredEnv: configuredAmrEnv,
+    allowStaticDevWorkspaceContext: process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() !== 'vela',
     fetchProjectCreationWorkspaceDirectory,
     createWorkspaceOwnedDesignSystem: createWorkspaceOwnedDesignSystemForContext,
     pluginScope: {
@@ -9863,6 +9956,19 @@ export async function startServer({
     auth: authDeps,
     authorizeProjectRequest,
     authorizeProjectToolRequest,
+    resolveAccountScopedTeamExportMember: process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
+      ? async (workspaceId) => {
+          const identity = currentWorkspaceDirectoryIdentity();
+          const directory = await fetchFreshMutationWorkspaceDirectory();
+          if (!directory.ok || identity !== currentWorkspaceDirectoryIdentity()) return null;
+          const active = directory.items.filter((item) =>
+            item.workspaceId === workspaceId
+            && item.workspaceType === 'team'
+            && item.memberStatus === 'active'
+            && item.lifecycleState !== 'deleted');
+          return active.length === 1 ? active[0]!.workspaceMemberId : null;
+        }
+      : undefined,
     isApiTokenAuthorization,
     projectPreviewScopes,
   });
@@ -11946,6 +12052,30 @@ export async function startServer({
     }
     const inactivityTimeoutMs = resolveChatRunInactivityTimeoutMs(def.inactivityTimeoutMs);
     const toolTokenTtlMs = resolveChatToolTokenTtlMs(inactivityTimeoutMs);
+    let toolRunWorkspaceActor: {
+      workspaceId: string;
+      workspaceMemberId: string;
+      directoryIdentity: string;
+    } | null = null;
+    if (cwd && typeof projectId === 'string' && projectId
+      && process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
+      const boundWorkspaceId = getWorkspaceProjectByProjectId(db, projectId)?.workspaceId;
+      if (boundWorkspaceId) {
+        const directoryIdentity = currentWorkspaceDirectoryIdentity();
+        const directory = await fetchFreshMutationWorkspaceDirectory();
+        if (directory.ok) {
+          // The Run's frozen member came from project-start authorization.
+          // A different account appearing during startup cannot adopt it.
+          toolRunWorkspaceActor = pinProjectToolActor({
+            workspaceId: boundWorkspaceId,
+            runWorkspaceMemberId: run.workspaceScope?.workspaceMemberId,
+            directoryIdentityBefore: directoryIdentity,
+            directoryIdentityAfter: currentWorkspaceDirectoryIdentity(),
+            directory: directory.items,
+          });
+        }
+      }
+    }
     const toolTokenGrant = cwd && typeof projectId === 'string' && projectId
       ? toolTokenRegistry.mint({
           runId,
@@ -11956,11 +12086,15 @@ export async function startServer({
           ...(pluginGrantContext ?? {}),
         })
       : null;
+    if (toolTokenGrant && toolRunWorkspaceActor) {
+      toolRunWorkspaceActors.set(runId, toolRunWorkspaceActor);
+    }
     let toolTokenRevoked = false;
     const revokeToolToken = (reason) => {
       if (toolTokenRevoked || !toolTokenGrant) return;
       toolTokenRevoked = true;
       toolTokenRegistry.revokeToken(toolTokenGrant.token, reason);
+      toolRunWorkspaceActors.delete(runId);
     };
     // The async startup phase below (compose prompt, prepare prompt file,
     // probe models, …) has many awaits and no blanket try/finally; an

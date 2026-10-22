@@ -75,6 +75,16 @@ describe('authenticated workspace run actor', () => {
 });
 
 describe('revoked workspace host runs', () => {
+  it('exposes only the verified launch member to project-scoped tool checks', () => {
+    const active = run('tool-run');
+    const h = harness([active]);
+    h.coordinator.begin(active);
+    expect(h.coordinator.pinnedMember(active)).toBeNull();
+    expect(h.coordinator.pin(active, actor(), 'active-other')).toBe(true);
+    expect(h.coordinator.pinnedMember(active)).toBe('active-other');
+    expect(h.coordinator.pinnedMember(run('unrelated'))).toBeNull();
+  });
+
   it('cancels only the exact workspace and authenticated actor, never the creator or ambient selection', async () => {
     const matching = run('matching');
     const personal = run('personal', 'personal');

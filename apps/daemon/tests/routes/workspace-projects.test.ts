@@ -2642,6 +2642,97 @@ describe('workspace project routes', () => {
   });
 });
 
+describe('MEM-009 removed member private project', () => {
+  it('gives only the verified Owner list and direct-open access after a durable removal readback', async () => {
+    const workspaceId = 'mem009-team';
+    const projectId = 'mem009-old-private';
+    const ownerId = 'mem009-owner';
+    const removedId = 'mem009-removed';
+    const otherId = 'mem009-other';
+    const deps = workspaceProjectRouteDeps({
+      workspaceId,
+      projectId,
+      dbDeleteProject: vi.fn(),
+      removeProjectDir: vi.fn(),
+      workspaceRowOverrides: { visibility: 'personal', createdByWorkspaceMemberId: removedId },
+    }) as any;
+    const row = deps.projectStore.getWorkspaceProject(null, workspaceId, projectId);
+    let authorityAvailable = false;
+    const source = vi.fn(async () => {
+      if (!authorityAvailable) throw new Error('AMR temporarily unavailable');
+      return [{ workspaceId, removedMemberId: removedId, ownerMemberId: ownerId }];
+    });
+    deps.reconcileMemberRemovalProjects = async (scope: string, owner: string) => {
+      const facts = await source();
+      if (scope === workspaceId && owner === ownerId && row.createdByWorkspaceMemberId === facts[0]?.removedMemberId) {
+        row.createdByWorkspaceMemberId = ownerId;
+        row.transferredFromWorkspaceMemberId = removedId;
+        return 1;
+      }
+      return 0;
+    };
+    deps.verifyWorkspaceReadAuthority = async (req: express.Request) => {
+      const memberId = req.get('x-od-workspace-member-id');
+      return { ok: true, context: {
+        workspaceId,
+        workspaceType: 'team',
+        workspaceMemberId: memberId,
+        role: memberId === ownerId ? 'owner' : 'member',
+        memberStatus: memberId === removedId ? 'removed' : 'active',
+        lifecycleState: 'active',
+        permissions: { canShareProjects: false, canWriteSyncedFiles: false },
+      } };
+    };
+    const app = express();
+    app.use(express.json());
+    registerProjectRoutes(app, deps);
+    const routeServer = await listen(app);
+    const headers = (memberId: string) => ({
+      'x-od-workspace-id': workspaceId,
+      'x-od-workspace-member-id': memberId,
+      'x-od-workspace-type': 'team',
+    });
+    try {
+      const before = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects?view=all`, {
+        headers: headers(otherId),
+      });
+      expect((await before.json() as { projects: Array<{ id: string }> }).projects).toEqual([]);
+      expect(source).not.toHaveBeenCalled();
+
+      const outage = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects?view=all`, {
+        headers: headers(ownerId),
+      });
+      expect(outage.status).toBe(200);
+      expect((await outage.json() as { projects: Array<{ id: string }> }).projects).toEqual([]);
+      expect(row.createdByWorkspaceMemberId).toBe(removedId);
+      authorityAvailable = true;
+
+      const ownerList = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects?view=all`, {
+        headers: headers(ownerId),
+      });
+      expect(ownerList.status).toBe(200);
+      expect((await ownerList.json() as { projects: Array<{ id: string }> }).projects.map((project) => project.id))
+        .toContain(projectId);
+      expect(source).toHaveBeenCalledTimes(2);
+
+      const ownerOpen = await fetch(`${routeServer.url}/api/projects/${projectId}`, { headers: headers(ownerId) });
+      expect(ownerOpen.status).toBe(200);
+      for (const memberId of [otherId, removedId]) {
+        const list = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects?view=all`, {
+          headers: headers(memberId),
+        });
+        expect((await list.json() as { projects: Array<{ id: string }> }).projects).toEqual([]);
+        const open = await fetch(`${routeServer.url}/api/projects/${projectId}`, { headers: headers(memberId) });
+        expect(open.status).toBe(403);
+      }
+      const headerless = await fetch(`${routeServer.url}/api/projects/${projectId}`);
+      expect(headerless.status).toBe(403);
+    } finally {
+      await close(routeServer.server);
+    }
+  });
+});
+
 function workspaceProjectRouteDeps({
   workspaceId,
   projectId,
@@ -2813,7 +2904,7 @@ async function close(server: http.Server): Promise<void> {
 }
 
 describe('workspace project list authority cache boundary', () => {
-  it('reuses the bounded read witness while mutations still require fresh authority', async () => {
+  it('requires fresh Team membership for list reads and mutations', async () => {
     const workspaceId = 'project-list-read-workspace';
     const projectId = 'project-list-read-project';
     const memberId = 'project-list-read-member';
@@ -2869,7 +2960,7 @@ describe('workspace project list authority cache boundary', () => {
         );
         expect(response.status, await response.text()).toBe(200);
       }
-      expect(fetchDirectory).toHaveBeenCalledTimes(1);
+      expect(fetchDirectory).toHaveBeenCalledTimes(3);
 
       const mutation = await fetch(
         `${routeServer.url}/api/workspaces/${workspaceId}/projects/${projectId}/move`,
@@ -2880,7 +2971,66 @@ describe('workspace project list authority cache boundary', () => {
         },
       );
       expect(mutation.status).toBe(400);
-      expect(fetchDirectory).toHaveBeenCalledTimes(2);
+      expect(fetchDirectory).toHaveBeenCalledTimes(4);
+    } finally {
+      await close(routeServer.server);
+    }
+  });
+
+  it('rejects a removed member after a missed event, even while the Team display cache is warm', async () => {
+    const workspaceId = 'mem009-cache-team';
+    const projectId = 'mem009-cache-project';
+    const memberId = 'mem009-cache-member';
+    let removed = false;
+    const fetchDirectory = vi.fn(async (): Promise<WorkspaceDirectoryFetchResult> => ({
+      ok: true,
+      items: removed ? [] : [{
+        workspaceId,
+        workspaceName: 'Team',
+        workspaceType: 'team',
+        workspaceMemberId: memberId,
+        role: 'member',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+      }],
+    }));
+    const authority = createWorkspaceDirectoryAuthorityBroker({
+      fetchDirectory,
+      identityKey: () => 'mem009-cache-session',
+      ttlMs: 15_000,
+    });
+    const verifyWith = (fetchWorkspaceDirectory: () => Promise<WorkspaceDirectoryFetchResult>) =>
+      (req: express.Request) => verifyWorkspaceRequestContext({ req, fetchWorkspaceDirectory });
+    const deps = workspaceProjectRouteDeps({
+      workspaceId,
+      projectId,
+      dbDeleteProject: vi.fn(),
+      removeProjectDir: vi.fn(),
+      workspaceRowOverrides: {
+        workspaceVisibility: 'team',
+        createdByWorkspaceMemberId: memberId,
+      },
+    }) as any;
+    deps.verifyWorkspaceReadAuthority = verifyWith(authority.read);
+    deps.verifyWorkspaceRequestAuthority = verifyWith(authority.fresh);
+    const app = express();
+    app.use(express.json());
+    registerProjectRoutes(app, deps);
+    const routeServer = await listen(app);
+    const headers = {
+      'x-od-workspace-id': workspaceId,
+      'x-od-workspace-member-id': memberId,
+      'x-od-workspace-type': 'team',
+    };
+    try {
+      const before = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects`, { headers });
+      expect(before.status).toBe(200);
+      expect((await before.json() as { projects: Array<{ id: string }> }).projects.map((project) => project.id))
+        .toContain(projectId);
+      removed = true; // No invalidation signal reaches the daemon.
+      const after = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects`, { headers });
+      expect(after.status).toBe(403);
+      expect(fetchDirectory).toHaveBeenCalledTimes(3);
     } finally {
       await close(routeServer.server);
     }
@@ -2905,6 +3055,7 @@ describe('GET /api/projects/:id/workspace-scope route bootstrap', () => {
     directory?: () => Promise<WorkspaceDirectoryFetchResult>;
     resourceState?: string;
     unbound?: boolean;
+    verifyAuthority?: boolean;
   } = {}) {
     const deps = workspaceProjectRouteDeps({
       workspaceId,
@@ -2923,6 +3074,10 @@ describe('GET /api/projects/:id/workspace-scope route bootstrap', () => {
     deps.fetchWorkspaceDirectory =
       options.directory
       ?? (async () => ({ ok: true, items: [activeMembership] }));
+    if (options.verifyAuthority) {
+      deps.verifyWorkspaceRequestAuthority = (req: express.Request) =>
+        verifyWorkspaceRequestContext({ req, fetchWorkspaceDirectory: deps.fetchWorkspaceDirectory });
+    }
     deps.authorizeProjectRequest = vi.fn(async (
       req: express.Request,
       res: express.Response,
@@ -3020,6 +3175,25 @@ describe('GET /api/projects/:id/workspace-scope route bootstrap', () => {
         },
       );
       expect(wrong.status).toBe(403);
+    } finally {
+      await close(routeServer.server);
+    }
+  });
+
+  it('uses verified Team type for scope even when the header claims Personal', async () => {
+    const routeServer = await startBootstrapRoute({ verifyAuthority: true });
+    try {
+      const response = await fetch(`${routeServer.url}/api/projects/${projectId}/workspace-scope`, {
+        headers: {
+          'x-od-workspace-id': workspaceId,
+          'x-od-workspace-member-id': memberId,
+          'x-od-workspace-type': 'personal',
+        },
+      });
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        scope: { kind: 'team', workspaceId },
+      });
     } finally {
       await close(routeServer.server);
     }

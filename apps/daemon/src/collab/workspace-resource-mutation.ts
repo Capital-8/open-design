@@ -362,6 +362,7 @@ export type WorkspaceResourceAccessInput = {
   visibility?: string | null;
   resourceState?: string | null;
   createdByWorkspaceMemberId?: string | null;
+  transferredFromWorkspaceMemberId?: string | null;
   resourceHubResourceId?: string | null;
   syncState?: string | null;
 };

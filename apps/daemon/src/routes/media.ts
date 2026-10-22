@@ -690,7 +690,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
       const projectId = grant?.projectId ?? (typeof req.query.projectId === 'string' ? req.query.projectId : '');
       if (!projectId) return sendApiError(res, 400, 'BAD_REQUEST', 'projectId is required for the scoped cloud catalogue');
       if (grant) {
-        if (!await ctx.authorizeProjectToolRequest(res, projectId, { mode: 'read' })) return;
+        if (!await ctx.authorizeProjectToolRequest(res, projectId, { mode: 'read' }, grant.runId)) return;
       } else if (!await ctx.authorizeProjectRequest(req, res, projectId, { mode: 'read' })) return;
       try {
         const workspaceId = getWorkspaceProjectByProjectId(db, projectId)?.workspaceId?.trim() || undefined;
@@ -1085,7 +1085,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
   app.post(STOCK_SEARCH_TOOL_ENDPOINT, async (req, res) => {
     const grant = authorizeToolRequest(req, res, 'media:stock-search', { endpoint: STOCK_SEARCH_TOOL_ENDPOINT });
     if (!grant) return;
-    const authority = await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' });
+    const authority = await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' }, grant.runId);
     if (!authority) return;
     await handleStockSearch(req, res, grant.projectId, grant, authority.workspace?.workspaceId ?? null);
   });
@@ -1100,7 +1100,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     if (grant && grant.projectId !== req.params.id) return sendApiError(res, 403, 'FORBIDDEN', 'projectId is derived from the tool token');
     let authorizedWorkspaceId: string | null | undefined;
     if (grant) {
-      const authority = await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' });
+      const authority = await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' }, grant.runId);
       if (!authority) return;
       authorizedWorkspaceId = authority.workspace?.workspaceId ?? null;
     } else if (!await ctx.authorizeProjectRequest(req, res, req.params.id, { mode: 'write', capability: 'writeFiles' })) return;
@@ -1144,6 +1144,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         res,
         grant.projectId,
         { mode: 'write', capability: 'writeFiles' },
+        grant.runId,
       )) return;
       await handleHyperFramesScaffold(req, res, grant.projectId);
     } catch (err: any) {
@@ -1208,6 +1209,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         res,
         grant.projectId,
         { mode: 'write', capability: 'writeFiles' },
+        grant.runId,
       )) return;
       await handleGenerate(req, res, { projectId: grant.projectId, grant });
     } catch (err: any) {
@@ -1294,6 +1296,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         res,
         toolGrant.projectId,
         { mode: 'read' },
+        toolGrant.runId,
       )
     ) return;
 

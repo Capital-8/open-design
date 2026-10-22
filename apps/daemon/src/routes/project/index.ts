@@ -384,8 +384,12 @@ export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | '
   isProjectUnmaterializedPlaceholder?: (projectId: string) => boolean;
   /** Membership directory used by Workspace account and cloud boundaries. */
   fetchWorkspaceDirectory?: () => Promise<WorkspaceDirectoryFetchResult>;
+  /** Reconcile local private projects against AMR's durable removal facts. */
+  reconcileMemberRemovalProjects?: (workspaceId: string, ownerMemberId: string) => Promise<number>;
   /** Current settings-backed AMR environment for synthesized project contexts. */
   configuredEnv?: () => Record<string, string>;
+  /** Development's explicit static Workspace context has no AMR directory. */
+  allowStaticDevWorkspaceContext?: boolean;
   /** @deprecated Creation is local; retained for compatible route composition. */
   fetchProjectCreationWorkspaceDirectory?: () => Promise<WorkspaceDirectoryFetchResult>;
   /**
@@ -2223,6 +2227,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       ? ctx.projectCreatePreparationTimeoutMs
       : DEFAULT_PROJECT_CREATE_PREPARATION_TIMEOUT_MS;
   const projectTelemetry = ctx.telemetry;
+  const reconcileMemberRemovalProjects = ctx.reconcileMemberRemovalProjects;
   const { sendApiError, createSseResponse } = ctx.http;
   const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR } = ctx.paths;
   const { readAppConfig, writeAppConfig } = ctx.appConfig;
@@ -2260,6 +2265,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   };
   const verifyWorkspaceProjectReadAuthority =
     ctx.verifyWorkspaceReadAuthority ?? ctx.verifyWorkspaceRequestAuthority;
+  const verifyFreshWorkspaceProjectAuthority = ctx.verifyWorkspaceRequestAuthority;
   const authorizeProjectRequest =
     ctx.authorizeProjectRequest ??
     createAuthorizeProjectRequest({
@@ -2295,6 +2301,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       ? { fetchWorkspaceDirectory: ctx.fetchProjectCreationWorkspaceDirectory }
       : {}),
     ...(ctx.configuredEnv ? { configuredEnv: ctx.configuredEnv } : {}),
+    allowStaticDevContext: ctx.allowStaticDevWorkspaceContext === true,
   });
   const resolveCreatedProjectHome: CreatedProjectWorkspaceResolver = async (req) => {
     const home = await resolveCreatedProjectHomeWithLocalAttribution(req);
@@ -3438,13 +3445,28 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
 
   app.get('/api/workspaces/:workspaceId/projects', async (req, res) => {
     try {
-      const authoritativeCtx = await authoritativeWorkspaceProjectContext(
+      let authoritativeCtx = await authoritativeWorkspaceProjectContext(
         req,
         res,
         req.params.workspaceId,
         verifyWorkspaceProjectReadAuthority,
       );
       if (!authoritativeCtx) return;
+      if (
+        authoritativeCtx.workspaceType === 'team'
+        && verifyFreshWorkspaceProjectAuthority
+        && verifyWorkspaceProjectReadAuthority !== verifyFreshWorkspaceProjectAuthority
+      ) {
+        // The bounded display cache can outlive a missed removal event. Team
+        // project names and ownership still require live membership on reads.
+        authoritativeCtx = await authoritativeWorkspaceProjectContext(
+          req,
+          res,
+          req.params.workspaceId,
+          verifyFreshWorkspaceProjectAuthority,
+        );
+        if (!authoritativeCtx) return;
+      }
       const assertedCtx = workspaceProjectContextFromRequest(req);
       const ctx = assertedCtx && assertedCtx !== 'missing'
         ? {
@@ -3461,6 +3483,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         /** @type {import('@open-design/contracts').WorkspaceProjectsResponse} */
         const body = { projects: [] };
         return res.json(body);
+      }
+      if (ctx.workspaceType === 'team' && ctx.role === 'owner') {
+        // The realtime member event is only a hint. This readback closes a
+        // missed-event or daemon-restart gap before the Owner sees the list.
+        // An upstream outage must not hide projects the Owner already owns.
+        try {
+          await reconcileMemberRemovalProjects?.(ctx.workspaceId, ctx.workspaceMemberId);
+        } catch (error) {
+          console.warn('[od] member removal project transfer readback failed:', String(error));
+        }
       }
       const locations = await configuredProjectLocations();
       bindUnboundProjectsToPersonalWorkspace(ctx, locations);
@@ -3936,12 +3968,11 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // sequence of merely slow reads outlive the Web's optimistic route.
       const projectCreatePreparationDeadline =
         Date.now() + projectCreatePreparationTimeoutMs;
-      // Ordinary project creation is local. Capture any complete identity that
-      // the Web already has for local attribution, but do not turn Workspace
-      // directory availability into a Send dependency. Remote share/sync/move
-      // routes retain their authoritative checks.
+      // A complete Workspace attribution must still name a currently active
+      // member before we bind the new private project to that Workspace.
+      // Headerless/partial local creates remain unbound.
       const createWorkspace = {
-        context: localProjectWorkspaceAttribution(req),
+        context: await resolveCreatedProjectHome(req),
       };
       learnAssertedWorkspaceType(createWorkspace.context);
       const { id, name, projectLocationId, skillId, designSystemId, pendingPrompt, metadata, customInstructions, skipDiscoveryBrief } =
@@ -4463,6 +4494,25 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           }
           return;
         }
+        if (createWorkspace.context?.workspaceType === 'team'
+          && ctx.fetchProjectCreationWorkspaceDirectory) {
+          // Preparation may have copied files after the first admission read.
+          // Recheck immediately before the SQLite ownership write so an
+          // intervening removal cannot persist a new old-member binding.
+          const renewed = await resolveCreatedProjectHome(req);
+          if (
+            !renewed || renewed.workspaceId !== createWorkspace.context.workspaceId
+            || renewed.workspaceMemberId !== createWorkspace.context.workspaceMemberId
+          ) {
+            throw new CreatedProjectWorkspaceResolutionError({
+              ok: false,
+              status: 403,
+              code: 'WORKSPACE_PROJECT_PERMISSION_DENIED',
+              message: 'workspace membership changed during project creation',
+            });
+          }
+          createWorkspace.context = renewed;
+        }
         project = db.transaction(() => {
           let createdProject = insertProject(db, {
             id,
@@ -4571,6 +4621,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       };
       res.json(body);
     } catch (err: any) {
+      if (err instanceof CreatedProjectWorkspaceResolutionError) {
+        return sendApiError(
+          res,
+          err.status,
+          err.code,
+          err.message,
+          err.retryable ? { retryable: true } : {},
+        );
+      }
       if (err instanceof ProjectCreatePreparationTimeoutError) {
         return sendApiError(
           res,
@@ -5134,9 +5193,23 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
     const claimed = workspaceProjectContextFromRequest(req);
     const assertedType = headerValue(req, 'x-od-workspace-type');
-    const requestWorkspaceType = assertedType === 'team' || assertedType === 'personal'
+    let requestWorkspaceType: 'team' | 'personal' | null = assertedType === 'team' || assertedType === 'personal'
       ? assertedType
       : null;
+    if (binding?.workspaceId && ctx.verifyWorkspaceRequestAuthority) {
+      if (claimed && claimed !== 'missing') {
+        const verified = await authoritativeWorkspaceProjectContext(
+          req,
+          res,
+          binding.workspaceId,
+        );
+        if (!verified) return;
+        requestWorkspaceType = verified.workspaceType;
+      } else {
+        // An unscoped navigation has no verified request type to learn.
+        requestWorkspaceType = null;
+      }
+    }
     if (binding?.workspaceId && requestWorkspaceType) {
       workspaceTypes?.learn({
         workspaceId: binding.workspaceId,

@@ -92,6 +92,9 @@ export function createRevokedWorkspaceRunCancellation<TRun extends WorkspaceRun>
   };
   return {
     begin,
+    pinnedMember(run: TRun): string | null {
+      return bindings.get(run)?.workspaceMemberId ?? null;
+    },
     /** Returns false when setup must not spawn/restart this physical Run. */
     pin(run: TRun, actorKey: string | null, actualWorkspaceMemberId?: string | null): boolean {
       const binding = bindings.get(run);
