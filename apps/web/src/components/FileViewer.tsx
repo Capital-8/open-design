@@ -15462,7 +15462,6 @@ function HtmlViewer({
 
   async function sendBoardBatch() {
     if (!activeCommentTarget || !onSendBoardCommentAttachments) return;
-    if (activeCommentTarget.elementId.startsWith('cmt:') && !commentIdentityFrameReady) return;
     const existingComment = currentActiveComposerComment();
     const sendingUnchangedSavedComment = Boolean(
       existingComment
@@ -15473,8 +15472,10 @@ function HtmlViewer({
     if (existingComment && sendingUnchangedSavedComment) {
       setSendingBoardBatch(true);
       try {
+        const checked = await currentCommentSaveTarget(activeCommentTarget);
+        if (!checked) return;
         const result = await onSendBoardCommentAttachments(
-          commentsToAttachments([existingComment]),
+          commentsToAttachments([{ ...existingComment, ...withDeckSlideIndex(targetFromSnapshot(checked)) }]),
         );
         if (!commentSendCompleted(result, existingComment.id)) return;
         clearBoardComposer();
@@ -15488,9 +15489,11 @@ function HtmlViewer({
     if (nextNotes.length === 0 && boardImages.length === 0) return;
     setSendingBoardBatch(true);
     try {
+      const checked = await currentCommentSaveTarget(activeCommentTarget);
+      if (!checked) return;
       const existingAttachments = currentActiveComposerAttachments();
       const attachments = buildBoardCommentAttachments({
-        target: withDeckSlideIndex(targetFromSnapshot(activeCommentTarget)),
+        target: withDeckSlideIndex(targetFromSnapshot(checked)),
         notes: nextNotes,
         includeImageOnly: boardImages.length > 0,
         imageAttachmentCount: boardImages.length,

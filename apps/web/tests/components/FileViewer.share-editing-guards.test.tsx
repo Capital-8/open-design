@@ -9,12 +9,13 @@ import { CollabProvider, type CollabContextValue } from '../../src/collab/collab
 import type { PreviewComment } from '../../src/types';
 vi.mock('../../src/components/BoardComposerPopover', async importOriginal => {
   const original = await importOriginal<typeof import('../../src/components/BoardComposerPopover')>();
-  return { ...original, BoardComposerPopover: (props: { draft: string; onDraft: (value: string) => void; onSaveComment: () => void;
+  return { ...original, BoardComposerPopover: (props: { draft: string; onDraft: (value: string) => void; onSaveComment: () => void; onSendBatch: () => void;
     onAddDraft: () => void; onAttachImages: (files: File[]) => void; onRemoveImage: (index: number) => void }) => <div>
     <button data-testid="probe-queue" onClick={props.onAddDraft}>Queue</button>
     <button data-testid="probe-attach" onClick={() => props.onAttachImages([new File(['image'], 'new.png', { type: 'image/png' })])}>Attach</button>
     <button data-testid="probe-remove-image" onClick={() => props.onRemoveImage(0)}>Remove image</button>
     <input data-testid="probe-draft" value={props.draft} onChange={event => props.onDraft(event.target.value)} />
+    <button data-testid="probe-send" onClick={props.onSendBatch}>Send</button>
     <button data-testid="probe-save" onClick={props.onSaveComment}>Save</button>
   </div> };
 });
@@ -38,6 +39,7 @@ function setup(options: { history?: PreviewComment[]; currentPrepared?: boolean;
   const plan = new Promise<void>(resolve => { releasePlan = resolve; });
   const writes = vi.fn();
   const saveComment = vi.fn();
+  const sendComments = vi.fn().mockResolvedValue({ status: 'rejected', commentIds: [] });
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const path = new URL(url, 'http://localhost').pathname;
@@ -57,10 +59,10 @@ function setup(options: { history?: PreviewComment[]; currentPrepared?: boolean;
   });
   vi.stubGlobal('fetch', fetcher); vi.stubGlobal('crypto', webcrypto);
   vi.spyOn(window, 'confirm').mockReturnValue(true);
-  const tree = () => <CollabProvider value={collab}><FileViewer projectId={projectId} projectKind="prototype" liveHtml={options.srcdoc ? `${currentSource()}<script>localStorage.getItem("test")</script>` : undefined} filesRefreshKey={filesRefreshKey} file={{ name: 'index.html', path: 'index.html', type: 'file', kind: 'html', mime: 'text/html', size: 100, mtime }} previewComments={options.history?.map(comment => ({ ...comment, projectId }))} onSavePreviewComment={saveComment} /></CollabProvider>;
+  const tree = () => <CollabProvider value={collab}><FileViewer projectId={projectId} projectKind="prototype" liveHtml={options.srcdoc ? `${currentSource()}<script>localStorage.getItem("test")</script>` : undefined} filesRefreshKey={filesRefreshKey} file={{ name: 'index.html', path: 'index.html', type: 'file', kind: 'html', mime: 'text/html', size: 100, mtime }} previewComments={options.history?.map(comment => ({ ...comment, projectId }))} onSendBoardCommentAttachments={sendComments} onSavePreviewComment={saveComment} /></CollabProvider>;
   const view = render(tree());
   const saveB = () => { editedSource = prepared.replace('Target', 'Edited B'); mtime++; view.rerender(tree()); };
-  return { writes, saveComment, fetcher, saveB, refreshFiles: () => { filesRefreshKey++; saveB(); }, delayPlan: () => { delayedPlan = true; }, releasePlan };
+  return { writes, saveComment, sendComments, fetcher, saveB, refreshFiles: () => { filesRefreshKey++; saveB(); }, delayPlan: () => { delayedPlan = true; }, releasePlan };
 }
 async function acknowledge() {
   const frame = await screen.findByTestId('artifact-preview-frame') as HTMLIFrameElement;
@@ -261,4 +263,30 @@ it('retains the comment draft across an active URL-frame reload with unchanged c
   fireEvent.load(frame);
   await acknowledge();
   expect(screen.getByTestId('probe-draft')).toHaveValue('Draft survives reload');
+});
+
+it.each(['present', 'missing'] as const)('validates the live target before sending a draft to chat (%s)', async state => {
+  const route = setup({ currentPrepared: true });
+  await acknowledge();
+  fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+  const frame = await selectLegacy();
+  fireEvent.change(screen.getByTestId('probe-draft'), { target: { value: 'Keep draft' } });
+  vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation((data: unknown) => {
+    const request = data as { validateForSave?: boolean; requestId: string };
+    if (!request.validateForSave) return;
+    queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
+      data: state === 'missing' ? { type: 'od:comment-location-missing', requestId: request.requestId }
+        : { ...target, text: 'Current replacement', style: { color: 'blue' }, slideIndex: 3,
+          requestedSelector: target.selector, type: 'od:comment-active-target-update', requestId: request.requestId } })));
+  });
+  await act(async () => fireEvent.click(screen.getByTestId('probe-send')));
+  if (state === 'missing') {
+    expect(route.sendComments).not.toHaveBeenCalled();
+    expect(await screen.findByText(/comment target no longer exists/i)).toBeInTheDocument();
+  } else {
+    expect(route.sendComments).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(route.sendComments.mock.calls[0])).toContain('Current replacement');
+    expect(JSON.stringify(route.sendComments.mock.calls[0])).toContain('blue');
+  }
+  expect(screen.getByTestId('probe-draft')).toHaveValue('Keep draft');
 });

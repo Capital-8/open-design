@@ -62,3 +62,14 @@ it.each([{ color: 'blue', fontSize: '20px' }, undefined])('uses current style, i
       type: 'od:comment-active-target-update', requestId: request.requestId } }));
   expect(await result).toMatchObject({ style });
 });
+
+it.each([3, 0, undefined])('replaces the old slide index with the current value: %j', async slideIndex => {
+  const frame = document.createElement('iframe'); document.body.append(frame);
+  const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+  const result = validateCommentSaveTarget(frame, { ...target, slideIndex: 1 });
+  const request = post.mock.calls[0]![0] as { requestId: string };
+  window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
+    data: { ...target, slideIndex, requestedSelector: target.selector,
+      type: 'od:comment-active-target-update', requestId: request.requestId } }));
+  expect(await result).toMatchObject({ slideIndex });
+});
