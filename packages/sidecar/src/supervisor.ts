@@ -192,6 +192,16 @@ function observeTarget(): void {
     // Fallback if the signal is ignored (e.g. SIGPIPE) or cannot be raised.
     process.exitCode = 1;
     for (const forwarding of forwardingSignals) process.removeAllListeners(forwarding);
+    // Node installs its own handlers for some signals (SIGUSR1 starts the
+    // inspector, SIGPIPE is ignored), so a plain self-signal would not
+    // terminate. Adding and then removing a listener restores the default
+    // disposition, making the re-raised signal actually terminate.
+    try {
+      process.on(disposition.signal, () => {});
+      process.removeAllListeners(disposition.signal);
+    } catch {
+      // SIGKILL/SIGSTOP cannot have listeners; they terminate by default.
+    }
     try {
       process.kill(process.pid, disposition.signal);
     } catch {}

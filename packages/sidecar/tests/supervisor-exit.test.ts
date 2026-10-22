@@ -43,6 +43,8 @@ describe.skipIf(process.platform === "win32")("real supervisor exit reporting", 
     ["code:0", 0, null],
     ["signal:SIGKILL", null, "SIGKILL"],
     ["signal:SIGTERM", null, "SIGTERM"],
+    ["signal:SIGUSR1", null, "SIGUSR1"],
+    ["signal:SIGPIPE", null, "SIGPIPE"],
   ] as const)("target %s → supervisor code=%s signal=%s", async (mode, code, signal) => {
     const root = await mkdtemp(join(tmpdir(), "open-design-supervisor-exit-"));
     const stamp: SidecarStamp = {

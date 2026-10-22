@@ -9,6 +9,15 @@ if (ready != null) writeFileSync(ready, JSON.stringify({ pid: process.pid }));
 const [kind, value = ""] = mode.split(":");
 setTimeout(() => {
   if (kind === "code") process.exit(Number(value));
-  if (kind === "signal") process.kill(process.pid, value as NodeJS.Signals);
+  if (kind === "signal") {
+    // Reset Node's own SIGUSR1/SIGPIPE handling so the target really dies by
+    // the signal, like a non-Node target would.
+    const signal = value as NodeJS.Signals;
+    try {
+      process.on(signal, () => {});
+      process.removeAllListeners(signal);
+    } catch {}
+    process.kill(process.pid, signal);
+  }
 }, 50);
 setInterval(() => {}, 1_000);
