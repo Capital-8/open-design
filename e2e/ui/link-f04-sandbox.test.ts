@@ -233,8 +233,10 @@ test('[P0] F04/F06 actual Link-full notice preserves content until manual retry'
       expect(runResponses).toHaveLength(1);
       expect(runResponses[0]?.status).toBe(202);
       expect(runResponses[0]?.runId).toEqual(expect.any(String));
+      expect(runResponses[0]?.runId?.length).toBeGreaterThan(0);
       expect(refusal.runId).toBe(runResponses[0]?.runId);
       expect(refusal.rejectedLinkRequestId).toEqual(expect.any(String));
+      expect(String(refusal.rejectedLinkRequestId).length).toBeGreaterThan(0);
     } else {
       expect(refusal.admissionSource).toBe('preflight');
       expect(refusal.hintStatus).toBe('full');
