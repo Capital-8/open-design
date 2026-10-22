@@ -135,7 +135,7 @@ describe('workspace design plan window mapping', () => {
     ['keeps precision above Number.MAX_SAFE_INTEGER', '9007199254740993', '18014398509481986', 50],
   ])('calculates remaining percentage for %s', (_name, remainingCredits, limitCredits, expected) => {
     expect(view(snapshot({ designPlanWindows: [wireWindow({ remainingCredits, limitCredits })] })).windows)
-      .toEqual([{ durationSeconds: 18_000, remainingPercent: expected, resetsAt: null }]);
+      .toEqual([{ durationSeconds: 18_000, remainingPercent: expected, resetsAt: null, ...(remainingCredits === '0' ? { exhausted: true } : {}) }]);
   });
 
   it('does not change other view fields when the additive field is present', () => {

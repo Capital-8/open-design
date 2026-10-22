@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// VIEW-001/002/003/010-CLIENT/012/017/021; JSON E/A11 state content is authority.
+// VIEW-001/002/003/010-CLIENT/012/017/021; PRD §5.3 visibility, design E/A11 styling.
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceQuotaPopover } from '../../src/components/WorkspaceQuotaPopover';
@@ -14,7 +14,7 @@ function view(tier: WorkspaceQuotaTier, balanceUsd = '24', remainingPercent = 75
   return {
     tier, planKnown: true, loading: false, balanceUsd, planStatus: null,
     windows: tier === 'free' ? [] : (tier === 'go' ? [18_000, 604_800] : [604_800]).map(durationSeconds => ({
-      durationSeconds, remainingPercent, resetsAt,
+      durationSeconds, remainingPercent, resetsAt, ...(remainingPercent === 0 ? { exhausted: true as const } : {}),
     })),
     breakdown: null, modelRestriction: null,
   };
@@ -25,6 +25,38 @@ function panel(value: WorkspaceQuotaView, role: 'owner' | 'admin' | 'member' = '
 beforeEach(() => { vi.spyOn(window, 'open').mockReturnValue(null); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
+it('Free metered help names its supported model rather than the paid models', () => {
+  render(panel(view('free')));
+  expect(screen.getByRole('button', { name: 'Free 仅支持 DeepSeek V4.1 Flash' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /顶级模型/ })).toBeNull();
+});
+
+it('quota help clamps to the viewport and closes on Escape, scroll and pointer exit', () => {
+  render(panel(view('go')));
+  const trigger = screen.getByRole('button', { name: /性价比模型/ });
+  const tip = document.getElementById(trigger.getAttribute('aria-describedby')!)!;
+  const showPopover = vi.fn();
+  const hidePopover = vi.fn();
+  Object.assign(tip, { showPopover, hidePopover });
+  vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(window.innerWidth - 20, 100, 18, 18));
+  vi.spyOn(tip, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 320, 34));
+  fireEvent.pointerEnter(trigger);
+  expect(showPopover).toHaveBeenCalledTimes(1);
+  expect(tip.style.left).toBe(`${window.innerWidth - 332}px`);
+  expect(tip.style.top).toBe('63.5px');
+  expect(tip.style.getPropertyValue('--arrow-left')).toBe('310px');
+  fireEvent.keyDown(trigger, { key: 'Escape' });
+  expect(hidePopover).toHaveBeenCalledTimes(1);
+  fireEvent.scroll(window);
+  expect(hidePopover).toHaveBeenCalledTimes(2);
+  fireEvent.pointerLeave(trigger.parentElement!);
+  expect(hidePopover).toHaveBeenCalledTimes(3);
+  vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(12, 12, 18, 18));
+  fireEvent.focus(trigger);
+  expect(tip.dataset.below).toBe('true');
+  expect(tip.style.top).toBe('32.5px');
+});
+
 describe.each(['zh-CN', 'en'] as const)('K6 C-01 reset rows (U001/UI-002) — %s', locale => {
   function renderQuota(value: WorkspaceQuotaView) {
     render(<I18nProvider initial={locale}><WorkspaceQuotaPopover context={context} view={value} profile="local" /></I18nProvider>);
@@ -32,7 +64,7 @@ describe.each(['zh-CN', 'en'] as const)('K6 C-01 reset rows (U001/UI-002) — %s
   }
   function expectQuotaWithoutReset(value: WorkspaceQuotaView, percent: number, count: number) {
     const plan = renderQuota(value);
-    expect(plan.getAllByText(locale === 'en' ? `${percent}% left` : `剩余 ${percent}%`)).toHaveLength(count);
+    expect(plan.getAllByText(percent === 0 ? (locale === 'en' ? 'Used up' : '已用完') : locale === 'en' ? `${percent}% left` : `剩余 ${percent}%`)).toHaveLength(count);
     const bars = plan.getAllByRole('progressbar');
     expect(bars).toHaveLength(count);
     for (const bar of bars) expect(bar.getAttribute('aria-valuenow')).toBe(String(percent));
@@ -74,27 +106,27 @@ describe('C-01 state and role matrix (VIEW-001/002/021)', () => {
   for (const [id, tier, balance, percent] of cases) {
     it.each(['owner', 'admin', 'member'] as const)(`${id} ${tier}: %s sees the shared amount and its role action`, role => {
       render(panel(view(tier, balance, percent), role));
-      expect(screen.getByRole('region', { name: 'Design Plan 额度' })).toBeTruthy();
-      expect(screen.getByRole('region', { name: '按量额度' })).toBeTruthy();
-      expect(screen.getByText(`$${Number(balance).toFixed(2)}`)).toBeTruthy();
-      expect(screen.queryAllByRole('progressbar').length).toBe(tier === 'go' ? 2 : tier === 'free' ? 0 : 1);
-      if (tier === 'free') {
-        expect(screen.getByText('未订阅')).toBeTruthy();
-        expect(screen.getByText('订阅套餐后可用')).toBeTruthy();
-      }
-      else for (const bar of screen.getAllByRole('progressbar')) expect(bar.getAttribute('aria-valuenow')).toBe(String(percent));
-      const action = tier === 'max' ? '管理' : '升级';
+      expect(Boolean(screen.queryByRole('region', { name: 'Design Plan 额度' }))).toBe(tier !== 'free');
+      expect(Boolean(screen.queryByRole('region', { name: '按量额度' }))).toBe(Number(balance) !== 0);
+      expect(Boolean(screen.queryByText(`$${Number(balance).toFixed(2)}`))).toBe(Number(balance) !== 0);
+      expect(screen.queryAllByRole('progressbar').length).toBe(tier === 'free' ? 0 : tier === 'go' ? 2 : 1);
+      expect(screen.queryByText('未订阅')).toBeNull();
+      expect(screen.queryByText('订阅套餐后可用')).toBeNull();
+      for (const bar of screen.queryAllByRole('progressbar')) expect(bar.getAttribute('aria-valuenow')).toBe(String(percent));
+      const action = tier === 'max' ? '充值' : '升级';
       if (role === 'owner') {
         expect(screen.getByText('额度全员共用')).toBeTruthy();
         fireEvent.click(screen.getByRole('button', { name: action }));
-        expect(window.open).toHaveBeenLastCalledWith(quotaPopoverConsoleUrl('local', 'workspace-a', tier === 'max' ? 'console' : 'plans'), '_blank', 'noopener,noreferrer');
+        expect(window.open).toHaveBeenLastCalledWith(quotaPopoverConsoleUrl('local', 'workspace-a', tier === 'max' ? 'recharge' : 'plans'), '_blank', 'noopener,noreferrer');
       } else {
         expect(screen.getByText('升级或充值请联系 Owner')).toBeTruthy();
-        expect(screen.queryByRole('button', { name: /升级|管理/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /升级|充值/ })).toBeNull();
       }
       // VIEW-003: every role's arrow is a view link, never a recharge intent.
-      fireEvent.click(screen.getByRole('button', { name: '查看余额' }));
-      expect(window.open).toHaveBeenLastCalledWith(quotaPopoverConsoleUrl('local', 'workspace-a'), '_blank', 'noopener,noreferrer');
+      if (Number(balance) !== 0) {
+        fireEvent.click(screen.getByRole('button', { name: '查看余额' }));
+        expect(window.open).toHaveBeenLastCalledWith(quotaPopoverConsoleUrl('local', 'workspace-a'), '_blank', 'noopener,noreferrer');
+      }
     });
   }
 });
@@ -148,7 +180,8 @@ it('E03 missing breakdown/modelRestriction/windows stays unavailable, never fake
 });
 it('E09 displays server merged total without adding gift/recharge or expiring them (VIEW-021)', () => {
   render(panel({ ...view('free', '40.30'), breakdown: 'gift + recharge', modelRestriction: 'supported models' }));
-  expect(screen.getByRole('button', { name: 'supported models' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'supported models' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Free 仅支持 DeepSeek V4.1 Flash' })).toBeTruthy();
   expect(screen.queryByText(/gift \+ recharge|模型说明/)).toBeNull();
   expect(screen.queryByRole('button', { name: '刷新' })).toBeNull();
   expect(screen.getByText('$40.30')).toBeTruthy();
@@ -238,4 +271,34 @@ it('E04 owner action preserves locked-workspace recovery priority and falls back
     billingRecovery: { canEnterBillingRecovery: true, recoveryUrl: '  ' } }} view={view('pro')} profile="local" /></I18nProvider>);
   fireEvent.click(screen.getByRole('button', { name: '升级' }));
   expect(window.open).toHaveBeenLastCalledWith(quotaPopoverConsoleUrl('local', context.workspaceId, 'plans'), '_blank', 'noopener,noreferrer');
+});
+
+// Either Go window can exhaust the plan; unknown/debt must never promise funded fallback.
+describe.each(['go', 'plus', 'pro', 'max'] as const)('PRD §5.3 exhausted %s', tier => {
+  it.each(['24', '0', '0.00', '-1.25', null])('uses the server wallet %s without hiding debt or inventing fallback', balance => {
+    const value = { ...view(tier, '24', 75), balanceUsd: balance };
+    value.windows = value.windows!.map((window, index) => ({ ...window, remainingPercent: index === 0 ? 0 : 75, ...(index === 0 ? { exhausted: true as const } : {}) }));
+    render(panel(value));
+    expect(screen.getAllByText('已用完')).toHaveLength(1);
+    expect(Boolean(screen.queryByText('重置前将自动使用按量额度继续生成'))).toBe(balance === '24');
+    expect(Boolean(screen.queryByRole('region', { name: '按量额度' }))).toBe(balance == null || Number(balance) !== 0);
+    if (balance == null) expect(screen.getByText('—')).toBeTruthy();
+    if (balance === '-1.25') expect(screen.getByText('-$1.25')).toBeTruthy();
+  });
+});
+it('Go weekly exhaustion also enables funded metered fallback', () => {
+  const value = view('go');
+  value.windows = value.windows!.map(window => ({ ...window, remainingPercent: window.durationSeconds === 604_800 ? 0 : 75, ...(window.durationSeconds === 604_800 ? { exhausted: true as const } : {}) }));
+  render(panel(value));
+  expect(screen.getAllByText('已用完')).toHaveLength(1);
+  expect(screen.getByText('重置前将自动使用按量额度继续生成')).toBeTruthy();
+});
+
+it('rounded 0% with positive server credits never promises exhaustion or metered fallback', () => {
+  const value = view('go', '24', 1);
+  value.windows = value.windows!.map(window => ({ ...window, remainingPercent: 0 }));
+  render(panel(value));
+  expect(screen.getAllByText('剩余 0%')).toHaveLength(2);
+  expect(screen.queryByText('已用完')).toBeNull();
+  expect(screen.queryByText('重置前将自动使用按量额度继续生成')).toBeNull();
 });
