@@ -88,6 +88,8 @@ export function resolveVitestToolsDevEnv(
     // its matching transport here; app-server protocol coverage lives in the
     // daemon transport/parity suites, not in these fake-CLI smoke tests.
     OD_CODEX_TRANSPORT: 'exec-json',
+    // Smoke suites use isolated Next dist dirs; avoid slow webpack cold starts.
+    OD_WEB_DEV_BUNDLER: 'turbopack',
     ...env,
   };
 }
