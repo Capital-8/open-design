@@ -1,5 +1,6 @@
 .git
 .github
+deploy/Dockerfile.sandbox*
 **/node_modules
 **/dist
 **/.next
