@@ -40,8 +40,7 @@ it('E09 current workspace Free keeps its badge when account metadata says Max (V
   const panel = within(screen.getByTestId('entry-top-right-credits-panel'));
   expect(panel.getByRole('img', { name: 'free' })).toBeTruthy();
   expect(panel.queryByRole('img', { name: 'max' })).toBeNull();
-  expect(panel.queryByText('未订阅')).toBeNull();
-  expect(panel.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
+  expect(panel.getByText('未订阅')).toBeTruthy();
   expect(panel.getByText('$24.00')).toBeTruthy();
   expect(panel.getByRole('button', { name: '升级' })).toBeTruthy();
   expect(panel.queryByRole('button', { name: '管理' })).toBeNull();

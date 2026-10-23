@@ -47,7 +47,7 @@ export function LegacyWorkspaceQuotaPopover({ view, context, profile, consoleOri
   function help(kind: 'plan' | 'metered') {
     const label = kind === 'plan'
       ? view.modelRestriction ?? t('workspaceQuota.planHelp')
-      : t(view.tier === 'free' ? 'workspaceQuota.freeMeteredHelp' : 'workspaceQuota.meteredHelp');
+      : t('workspaceQuota.meteredHelp');
     return <span className={styles.help}>
       <button type="button" className={styles.helpTrigger} aria-label={label} aria-describedby={`workspace-quota-${kind}-tip`}>
         <RemixIcon name="information-line" size={16} />
@@ -92,15 +92,8 @@ export function LegacyWorkspaceQuotaPopover({ view, context, profile, consoleOri
           <section aria-label={t('workspaceQuota.designPlanAllowance')}>
             <div className={styles.sectionHead}><h3>{t('workspaceQuota.designPlanAllowance')}{help('plan')}</h3></div>
             {/* The Design Plan region is present even on Free. */}
-            {view.tier === 'free' ? <div className={`${quota.block} ${styles.planBlock}`}>
-              <div className={quota.row}>
-                <span className={quota.allowance}>{t('workspaceQuota.subscribeToUse')}</span>
-                <span>{t('billing.codingPlanRemainingPercent', { percent: 0 })}</span>
-              </div>
-              <div className={`${quota.track} ${styles.track}`} role="progressbar" aria-label={t('workspaceQuota.designPlanAllowance')}
-                aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}>
-                <span className={quota.fill} style={{ width: '0%' }} />
-              </div>
+            {view.tier === 'free' ? <div className={styles.placeholder}>
+              <span>{t('workspaceQuota.unsubscribed')}</span><small>{t('workspaceQuota.subscribeToUse')}</small>
             </div> : durations.map(duration => {
               const window = view.windows?.find(item => item.durationSeconds === duration);
               const percent = window?.remainingPercent;
