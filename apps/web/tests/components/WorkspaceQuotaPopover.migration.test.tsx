@@ -73,7 +73,9 @@ it('shows unavailable values after a successful scoped read without wallet or qu
 });
 it.each(['owner', 'admin', 'member'] as const)('%s keeps zero wallet while shared Free uses the HTML availability and zero bar', role => {
   const mounted = render(panel(response('legacy'), role));
-  expect(screen.getByText('未订阅')).toBeTruthy();
+  expect(screen.queryByText('未订阅')).toBeNull();
+  expect(screen.getByText('订阅套餐后可用')).toBeTruthy();
+  expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
   expect(screen.getByText('$0.00')).toBeTruthy();
   mounted.rerender(panel(response('shared'), role));
   expect(screen.getByRole('region', { name: 'Design Plan 额度' })).toBeTruthy();
@@ -84,7 +86,8 @@ it.each(['owner', 'admin', 'member'] as const)('%s keeps zero wallet while share
   expect(screen.getByText('$0.00')).toBeTruthy();
   if (role !== 'owner') expect(screen.queryByRole('button', { name: /^(升级|充值|管理)$/ })).toBeNull();
   mounted.rerender(panel(response('legacy'), role));
-  expect(screen.getByText('未订阅')).toBeTruthy();
+  expect(screen.queryByText('未订阅')).toBeNull();
+  expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
   expect(screen.getByText('$0.00')).toBeTruthy();
 });
 it('legacy Max keeps Manage/console; shared Max uses Recharge without leaking the previous mode', () => {

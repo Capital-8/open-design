@@ -129,13 +129,21 @@ describe('workspace design plan window mapping', () => {
     ['three quarters remaining', '75', '100', 75],
     ['one third remaining', '1', '3', 33],
     ['two thirds remaining', '2', '3', 67],
-    ['rounds 0.5 percent spent up', '199', '200', 99],
-    ['rounds 0.5 percent remaining down', '1', '200', 0],
+    ['rounds 99.5 percent remaining up', '199', '200', 100],
+    ['rounds 0.5 percent remaining up', '1', '200', 1],
     ['retains the specified 201-credit rounding', '1', '201', 0],
+    ['rounds 99.8 percent remaining up', '499', '500', 100],
+    ['rounds a very large exact half up without Number precision loss', '199000000000000000000', '200000000000000000000', 100],
     ['keeps precision above Number.MAX_SAFE_INTEGER', '9007199254740993', '18014398509481986', 50],
   ])('calculates remaining percentage for %s', (_name, remainingCredits, limitCredits, expected) => {
     expect(view(snapshot({ designPlanWindows: [wireWindow({ remainingCredits, limitCredits })] })).windows)
       .toEqual([{ durationSeconds: 18_000, remainingPercent: expected, resetsAt: null, ...(remainingCredits === '0' ? { exhausted: true } : {}) }]);
+  });
+
+  it('does not mark a positive remainder exhausted when it rounds to 0%', () => {
+    const window = view(snapshot({ designPlanWindows: [wireWindow({ remainingCredits: '1', limitCredits: '100000000000000000000' })] })).windows?.[0];
+    expect(window?.remainingPercent).toBe(0);
+    expect(window).not.toHaveProperty('exhausted');
   });
 
   it('does not change other view fields when the additive field is present', () => {

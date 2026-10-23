@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { runVelaCommandMock, readVelaControlApiContextMock, readVelaRuntimeLinkContextMock } = vi.hoisted(() => ({
@@ -444,6 +445,133 @@ describe('default CLI funding-check capability compatibility', () => {
     expect(await fetchVelaBillingFundingCheck('ws', 'model', { run, configuredEnv: { VELA_PROFILE: 'test' } })).toBeNull();
     expect(readVelaControlApiContextMock).toHaveBeenCalledExactlyOnceWith(process.env, { VELA_PROFILE: 'test' });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+});
+
+
+describe('direct authenticated send-time funding check', () => {
+  const configuredEnv = { VELA_PROFILE: 'local', AMR_HOME: '/isolated/amr' };
+  const session = { profile: 'local', apiUrl: 'http://127.0.0.1:27480', controlKey: 'own-control', user: null, configMtimeMs: null };
+  const funding = { ...preview, fundingCheck: 'available' };
+
+  it('starts the exact authenticated HTTP read without CLI startup or capability probes', async () => {
+    readVelaControlApiContextMock.mockReturnValue(session);
+    runVelaCommandMock.mockReset().mockResolvedValue(JSON.stringify(funding));
+    let finish!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = fetchVelaBillingFundingCheck('ws', 'model', { configuredEnv });
+    try {
+      expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+        new URL('http://127.0.0.1:27480/api/v1/workspaces/ws/billing/funding-check?modelId=model'),
+        expect.objectContaining({ headers: { authorization: 'Bearer own-control' }, signal: expect.any(AbortSignal) }),
+      );
+      expect(runVelaCommandMock).not.toHaveBeenCalled();
+      expect(readVelaControlApiContextMock).toHaveBeenCalledExactlyOnceWith(process.env, configuredEnv);
+    } finally {
+      finish?.(new Response(JSON.stringify(funding)));
+    }
+    expect(await result).toEqual(funding);
+  });
+
+  function directApi(body: unknown = funding, status = 200) {
+    readVelaControlApiContextMock.mockReturnValue(session);
+    runVelaCommandMock.mockReset();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('returns the same authoritative funding result as the CLI and keeps null-model scope exact', async () => {
+    const fetchMock = directApi({ ...funding, modelId: null });
+    const direct = await fetchVelaBillingFundingCheck('ws', null, { configuredEnv });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      new URL('http://127.0.0.1:27480/api/v1/workspaces/ws/billing/funding-check'),
+      expect.objectContaining({ headers: { authorization: 'Bearer own-control' } }),
+    );
+    const run = vi.fn(async () => JSON.stringify({ ...funding, modelId: null }));
+    expect(await fetchVelaBillingFundingCheck('ws', null, { run, configuredEnv })).toEqual(direct);
+    expect(runVelaCommandMock).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledExactlyOnceWith(['funding-check', '--workspace-id', 'ws', '--format', 'json']);
+  });
+
+  it.each([401, 403])('preserves direct authorization rejection %s without changing transport or scope', async (status) => {
+    const fetchMock = directApi({ error: 'forbidden' }, status);
+    await expect(fetchVelaBillingFundingCheck('ws', 'model', { configuredEnv })).rejects.toThrow(String(status));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(runVelaCommandMock).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 503])('keeps unavailable direct capability %s unknown without a second funding path', async (status) => {
+    const fetchMock = directApi({ error: 'unavailable' }, status);
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { configuredEnv })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(runVelaCommandMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { workspaceId: 'another' }, { modelId: 'another' }, { workspaceMemberId: '' },
+    { fundingCheck: undefined }, { codingPlan: { ...preview.codingPlan, workspaceId: 'another' } },
+  ])('rejects malformed or foreign direct funding evidence: %j', async (change) => {
+    directApi({ ...funding, ...change });
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { configuredEnv })).toBeNull();
+    expect(runVelaCommandMock).not.toHaveBeenCalled();
+  });
+
+  it.each([new TypeError('network'), new DOMException('deadline', 'TimeoutError')])('keeps direct transport failure unknown: %s', async (error) => {
+    const fetchMock = directApi();
+    fetchMock.mockRejectedValueOnce(error);
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { configuredEnv })).toBeNull();
+    expect(runVelaCommandMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'profile-edit'] as const)('retains the selected CLI when its control context is %s', async (reason) => {
+    if (reason === 'missing') readVelaControlApiContextMock.mockReturnValue(null);
+    else readVelaControlApiContextMock.mockImplementationOnce(() => { throw new Error('profile changed'); });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    runVelaCommandMock.mockReset().mockResolvedValue(JSON.stringify(funding));
+    expect(await fetchVelaBillingFundingCheck('ws', 'model', { configuredEnv })).toEqual(funding);
+    expect(runVelaCommandMock).toHaveBeenCalledExactlyOnceWith(
+      ['billing', 'funding-check', '--workspace-id', 'ws', '--format', 'json', '--model', 'model'],
+      expect.objectContaining({ configuredEnv: expect.objectContaining(configuredEnv), timeoutMs: BILLING_PREFLIGHT_TIMEOUT_MS }),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+
+  it('uses the same real loopback HTTP authority as the unsupported-CLI fallback without its probes', async () => {
+    const requests: Array<{ url: string | undefined; authorization: string | undefined }> = [];
+    const server = createServer((req, res) => {
+      requests.push({ url: req.url, authorization: req.headers.authorization });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(funding));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('fixture listener missing');
+      readVelaControlApiContextMock.mockReturnValue({ ...session, apiUrl: `http://127.0.0.1:${address.port}` });
+      runVelaCommandMock.mockReset();
+      const direct = await fetchVelaBillingFundingCheck('ws', 'model', { configuredEnv });
+      expect(runVelaCommandMock).not.toHaveBeenCalled();
+      const run = vi.fn()
+        .mockRejectedValueOnce(new Error('unknown flag: --workspace-id'))
+        .mockResolvedValueOnce('Usage:\n  vela billing [command]\n\nAvailable Commands:\n  preflight Advisory preview\n');
+      expect(await fetchVelaBillingFundingCheck('ws', 'model', { run, configuredEnv })).toEqual(direct);
+      expect(direct).toEqual(funding);
+      expect(run.mock.calls.map(([args]) => args)).toEqual([
+        ['funding-check', '--workspace-id', 'ws', '--format', 'json', '--model', 'model'],
+        ['funding-check', '--help'],
+      ]);
+      expect(requests).toEqual(Array(2).fill({
+        url: '/api/v1/workspaces/ws/billing/funding-check?modelId=model', authorization: 'Bearer own-control',
+      }));
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
 });

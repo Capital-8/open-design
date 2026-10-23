@@ -63,12 +63,12 @@ export function workspaceDesignPlanWindows(snapshot: unknown): WorkspaceQuotaVie
     if (remaining > limit) return null;
     seenKinds.add(kind);
 
-    const used = limit - remaining;
-    const basisPoints = Number((used * 10_000n) / limit);
-    const usedPercent = Math.min(100, Math.max(0, Math.round(basisPoints / 100)));
+    // Round the remaining ratio itself, matching the approved display rule.
+    // BigInt keeps the .5 tie exact even for credits above Number.MAX_SAFE_INTEGER.
+    const remainingPercent = Number((remaining * 100n + limit / 2n) / limit);
     windows.push({
       durationSeconds: kind === '5h' ? 18_000 : 604_800,
-      remainingPercent: 100 - usedPercent,
+      remainingPercent,
       ...(remaining === 0n ? { exhausted: true as const } : {}),
       resetsAt: typeof resetsAt === 'string' && resetsAt ? resetsAt : null,
     });

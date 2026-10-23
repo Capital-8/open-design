@@ -51,6 +51,18 @@ export async function fetchVelaBillingFundingCheck(
   modelId: string | null,
   options: FetchVelaBillingOptions = {},
 ): Promise<WorkspaceBillingPreflight | null> {
+  // This is the same authenticated capability used by the CLI. A Home send
+  // must check fresh funds, but need not start a process (or probe an older
+  // binary's command help) when the selected profile's control session exists.
+  if (!options.run) {
+    let session: ReturnType<typeof readVelaControlApiContext> = null;
+    try {
+      session = readVelaControlApiContext(process.env, options.configuredEnv);
+    } catch {
+      // A profile edit may race this read; let the selected CLI resolve it.
+    }
+    if (session) return fetchAuthenticatedFundingCheck(workspaceId, modelId, options, session);
+  }
   return fetchVelaFundingPreview('funding-check', workspaceId, modelId, options);
 }
 
@@ -187,9 +199,10 @@ async function fetchAuthenticatedFundingCheck(
   workspaceId: string,
   modelId: string | null,
   options: FetchVelaBillingOptions,
+  selectedSession?: NonNullable<ReturnType<typeof readVelaControlApiContext>>,
 ): Promise<WorkspaceBillingPreflight | null> {
   try {
-    const session = readVelaControlApiContext(process.env, options.configuredEnv);
+    const session = selectedSession ?? readVelaControlApiContext(process.env, options.configuredEnv);
     if (!session) return null;
     const url = new URL(
       `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/billing/funding-check`,
