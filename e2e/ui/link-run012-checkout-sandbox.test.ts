@@ -527,7 +527,7 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     const saveWithLink = consolePage.locator('input[name="enableStripePass"]');
     if (await saveWithLink.isVisible()) await saveWithLink.uncheck();
     await consolePage.screenshot({ path: join(output!, 'RUN012-B-stripe-test-checkout.png') });
-    await consolePage.getByRole('button', { name: /^Pay\b|^支付|^付款/i }).click();
+    await consolePage.getByTestId('hosted-payment-submit-button').click();
     const paidAt = new Date().toISOString();
     await marker('RUN012-B-payment-ready.json', {
       workspaceId: fixture.spaces.B.workspaceId,
