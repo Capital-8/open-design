@@ -508,19 +508,24 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
       clientOperationId: posted.clientOperationId, operationId: checkout.operation!.operationId,
       amountUsd: '10', checkoutUrlSha256: createHash('sha256').update(checkout.checkoutUrl!).digest('hex'),
     });
-    // Hosted Checkout can initially offer Link, Cash App and bank payments;
-    // select Card before waiting for the card form.
-    await consolePage.getByRole('button', { name: 'Pay with card' }).click({ timeout: T.medium });
-    await expect(consolePage.locator('input[name="cardNumber"]')).toBeVisible({ timeout: T.xlong });
+    // Stripe can reopen a Checkout session with Card already expanded.
+    const cardNumber = consolePage.locator('input[name="cardNumber"]');
+    if (!(await cardNumber.isVisible())) {
+      await consolePage.getByTestId('card-accordion-item')
+        .locator('.AccordionItemHeader--clickable').click({ timeout: T.medium });
+    }
+    await expect(cardNumber).toBeVisible({ timeout: T.xlong });
     const email = consolePage.locator('input[name="email"]');
     if (await email.isVisible()) await email.fill(fixture.actor.email);
-    await consolePage.locator('input[name="cardNumber"]').fill('4242424242424242');
+    await cardNumber.fill('4242424242424242');
     await consolePage.locator('input[name="cardExpiry"]').fill('1234');
     await consolePage.locator('input[name="cardCvc"]').fill('123');
     const billingName = consolePage.locator('input[name="billingName"]');
     if (await billingName.isVisible()) await billingName.fill(fixture.actor.name);
     const postalCode = consolePage.locator('input[name="billingPostalCode"]');
     if (await postalCode.isVisible()) await postalCode.fill('10001');
+    const saveWithLink = consolePage.locator('input[name="enableStripePass"]');
+    if (await saveWithLink.isVisible()) await saveWithLink.uncheck();
     await consolePage.screenshot({ path: join(output!, 'RUN012-B-stripe-test-checkout.png') });
     await consolePage.getByRole('button', { name: /^Pay\b|^支付|^付款/i }).click();
     const paidAt = new Date().toISOString();
