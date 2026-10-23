@@ -501,7 +501,6 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     expect(checkout.operation?.operationId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(new URL(checkout.checkoutUrl!).hostname).toBe('checkout.stripe.com');
     await consolePage.waitForURL('https://checkout.stripe.com/**', { timeout: T.long });
-    await expect(consolePage.locator('input[name="cardNumber"]')).toBeVisible({ timeout: T.xlong });
     const checkoutAt = new Date().toISOString();
     await save('RUN012-B-checkout.private.json', { binding, checkoutAt, posted, checkout });
     await marker('RUN012-B-checkout-ready.json', {
@@ -509,6 +508,10 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
       clientOperationId: posted.clientOperationId, operationId: checkout.operation!.operationId,
       amountUsd: '10', checkoutUrlSha256: createHash('sha256').update(checkout.checkoutUrl!).digest('hex'),
     });
+    // Hosted Checkout can initially offer Link, Cash App and bank payments;
+    // select Card before waiting for the card form.
+    await consolePage.getByText('Card', { exact: true }).click();
+    await expect(consolePage.locator('input[name="cardNumber"]')).toBeVisible({ timeout: T.xlong });
     const email = consolePage.locator('input[name="email"]');
     if (await email.isVisible()) await email.fill(fixture.actor.email);
     await consolePage.locator('input[name="cardNumber"]').fill('4242424242424242');
