@@ -510,7 +510,7 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     });
     // Hosted Checkout can initially offer Link, Cash App and bank payments;
     // select Card before waiting for the card form.
-    await consolePage.getByText('Card', { exact: true }).click();
+    await consolePage.getByRole('button', { name: 'Pay with card' }).click({ timeout: T.medium });
     await expect(consolePage.locator('input[name="cardNumber"]')).toBeVisible({ timeout: T.xlong });
     const email = consolePage.locator('input[name="email"]');
     if (await email.isVisible()) await email.fill(fixture.actor.email);
