@@ -6,6 +6,35 @@ import { amrRunModels, AmrModelLoadingCache } from '../../src/runtimes/amr-model
 
 const preset = [{ id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' }];
 
+describe('AmrModelLoadingCache.get', () => {
+  it('reuses a remote result that completes while another caller awaits its preset', async () => {
+    const cache = new AmrModelLoadingCache();
+    const remote = [{ id: 'kimi-k2', label: 'Kimi K2' }];
+    let releasePreset: (() => void) | undefined;
+    let releaseRemote: (() => void) | undefined;
+    let presetReads = 0;
+    const fetchRemote = vi.fn(() => new Promise<typeof remote>((resolve) => {
+      releaseRemote = () => resolve(remote);
+    }));
+    const fetchPreset = vi.fn(() => {
+      presetReads += 1;
+      return presetReads === 1
+        ? Promise.resolve(preset)
+        : new Promise<typeof preset>((resolve) => { releasePreset = () => resolve(preset); });
+    });
+
+    await expect(cache.get('workspace-a', { fetchPreset, fetchRemote })).resolves.toMatchObject({ source: 'preset' });
+    const waiting = cache.get('workspace-a', { fetchPreset, fetchRemote });
+    expect(releasePreset).toBeTypeOf('function');
+    releaseRemote?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    releasePreset?.();
+    await expect(waiting).resolves.toMatchObject({ source: 'remote', models: remote, refreshing: false });
+    expect(fetchRemote).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('AmrModelLoadingCache.getAuthoritative', () => {
   afterEach(() => { vi.useRealTimers(); });
 

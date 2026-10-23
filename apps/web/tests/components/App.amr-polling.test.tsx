@@ -19,6 +19,7 @@ import {
 import { fetchAmrModels, fetchVelaLoginStatus } from '../../src/providers/daemon';
 import { listProjects, listTemplates } from '../../src/state/projects';
 import * as workspaceContextModule from '../../src/collab/useWorkspaceContext';
+import * as workspaceEventsModule from '../../src/collab/workspace-events';
 import { resetWorkspaceContextCache, resetWorkspaceBillingCache } from '../../src/collab/useWorkspaceContext';
 import { workspaceContextFixture } from '../helpers/workspace-context';
 
@@ -55,13 +56,16 @@ vi.mock('../../src/components/EntryView', () => ({
     config,
     onOpenSettings,
   }: {
-    agents: Array<{ id: string; models?: Array<{ id: string }>; authStatus?: string }>;
+    agents: Array<{ id: string; models?: Array<{ id: string; enabled?: boolean }>; authStatus?: string }>;
     config: AppConfig;
     onOpenSettings: () => void;
   }) => (
     <>
       <div data-testid="amr-model">
         {agents.find((agent) => agent.id === 'amr')?.models?.[0]?.id ?? 'none'}
+      </div>
+      <div data-testid="amr-model-enabled">
+        {String(agents.find((agent) => agent.id === 'amr')?.models?.[0]?.enabled ?? false)}
       </div>
       <div data-testid="config-amr-model">
         {config.agentModels?.amr?.model ?? 'none'}
@@ -333,6 +337,115 @@ describe('App AMR polling', () => {
     await waitFor(() => expect(screen.getByTestId('amr-model').textContent).toBe('free-a-flash'));
     expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(a);
     expect(mockedFetchAmrModels).toHaveBeenCalledTimes(3);
+  });
+
+  it('refreshes the same workspace model catalog when its authoritative billing snapshot upgrades', async () => {
+    mockedLoadConfig.mockReturnValue({ ...baseConfig, mode: 'daemon', agentId: 'amr' });
+    let subscriptionChanged: workspaceEventsModule.WorkspaceInvalidationHandlers['billing-subscription-changed'];
+    vi.spyOn(workspaceEventsModule, 'useWorkspaceInvalidation').mockImplementation((handlers) => {
+      if (handlers['billing-subscription-changed']) subscriptionChanged = handlers['billing-subscription-changed'];
+      return { connected: false } as ReturnType<typeof workspaceEventsModule.useWorkspaceInvalidation>;
+    });
+    const selected = workspaceContextFixture({
+      workspaceId: 'paid-a', workspaceMemberId: 'member-a', planId: null,
+    });
+    let planId = 'free';
+    let balanceUsd = '0.00';
+    vi.spyOn(workspaceContextModule, 'useWorkspaceContext').mockImplementation(() => ({ context: selected, loading: false }));
+    vi.spyOn(workspaceContextModule, 'useWorkspaceBillingResponse').mockImplementation(() => ({
+      workspaceSnapshot: {
+        billingScopeVersion: 2,
+        workspaceId: selected.workspaceId,
+        workspaceMemberId: selected.workspaceMemberId,
+        billing: { billingState: 'active', planId },
+        wallet: { balanceUsd, expiresAt: null, updatedAt: null },
+      },
+    }) as ReturnType<typeof workspaceContextModule.useWorkspaceBillingResponse>);
+    mockedFetchAmrModels.mockReset()
+      .mockResolvedValueOnce({ source: 'remote', refreshing: false, models: [{ id: 'paid-model', label: 'Paid', enabled: false }] })
+      .mockResolvedValueOnce({ source: 'preset', refreshing: true, models: [{ id: 'seed', label: 'Seed' }] })
+      .mockResolvedValueOnce({ source: 'remote', refreshing: false, models: [{ id: 'paid-model', label: 'Paid', enabled: true }] })
+      .mockResolvedValueOnce({ source: 'preset', refreshing: false, remoteError: 'remote unavailable', models: [{ id: 'seed', label: 'Seed' }] })
+      .mockResolvedValueOnce(null);
+
+    const view = render(<App />);
+    await waitFor(() => expect(mockedFetchAmrModels).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('amr-model').textContent).toBe('paid-model');
+    expect(screen.getByTestId('amr-model-enabled').textContent).toBe('false');
+
+    vi.useFakeTimers();
+    balanceUsd = '5.00';
+    await act(async () => { view.rerender(<App />); });
+    await advanceTestClock(300);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(1);
+
+    planId = 'pro';
+    await act(async () => { view.rerender(<App />); });
+    await advanceTestClock(250);
+    expect(mockedFetchAmrModels).toHaveBeenCalledWith(selected, { refresh: true });
+    expect(screen.getByTestId('amr-model').textContent).toBe('paid-model');
+    expect(screen.getByTestId('amr-model-enabled').textContent).toBe('false');
+    await advanceTestClock(1_000);
+    expect(screen.getByTestId('amr-model-enabled').textContent).toBe('true');
+    balanceUsd = '10.00';
+    await act(async () => { view.rerender(<App />); });
+    await advanceTestClock(300);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(3);
+
+    // A new subscription revision may change access without changing planId.
+    // Duplicate transport frames for that revision must still cause one read.
+    await act(async () => {
+      subscriptionChanged?.({ type: 'billing-subscription-changed', workspaceId: selected.workspaceId, revision: 'billing-1' });
+      subscriptionChanged?.({ type: 'billing-subscription-changed', workspaceId: selected.workspaceId, revision: 'billing-1' });
+    });
+    await advanceTestClock(250);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(4);
+    expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(selected, { refresh: true });
+    expect(screen.getByTestId('amr-model').textContent).toBe('paid-model');
+    expect(screen.getByTestId('amr-model-enabled').textContent).toBe('true');
+    await advanceTestClock(3_000);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(4);
+
+    await act(async () => {
+      subscriptionChanged?.({ type: 'billing-subscription-changed', workspaceId: selected.workspaceId, revision: 'billing-2' });
+    });
+    await advanceTestClock(250);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(5);
+    expect(screen.getByTestId('amr-model').textContent).toBe('paid-model');
+    await advanceTestClock(3_000);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(5);
+  });
+
+  it('follows an existing remote catalog while it refreshes in the background', async () => {
+    vi.useFakeTimers();
+    mockedFetchAmrModels.mockReset()
+      .mockResolvedValueOnce({ source: 'remote', refreshing: true, models: [{ id: 'old-model', label: 'Old', enabled: false }] })
+      .mockResolvedValueOnce({ source: 'remote', refreshing: true, models: [{ id: 'old-model', label: 'Old', enabled: false }] })
+      .mockResolvedValueOnce({ source: 'remote', refreshing: false, models: [{ id: 'new-model', label: 'New', enabled: true }] });
+
+    render(<App />);
+    await advanceTestClock(0);
+    expect(screen.getByTestId('amr-model').textContent).toBe('old-model');
+    await advanceTestClock(1_000);
+    expect(screen.getByTestId('amr-model').textContent).toBe('old-model');
+    await advanceTestClock(1_000);
+    expect(screen.getByTestId('amr-model').textContent).toBe('new-model');
+    await advanceTestClock(3_000);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(3);
+  });
+
+  it('follows an empty preset while the remote catalog is still loading', async () => {
+    vi.useFakeTimers();
+    mockedFetchAmrModels.mockReset()
+      .mockResolvedValueOnce({ source: 'preset', refreshing: true, models: [] })
+      .mockResolvedValueOnce({ source: 'remote', refreshing: false, models: [{ id: 'new-model', label: 'New', enabled: true }] });
+
+    render(<App />);
+    await advanceTestClock(0);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(1);
+    await advanceTestClock(1_000);
+    expect(screen.getByTestId('amr-model').textContent).toBe('new-model');
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2);
   });
 
   it('does not borrow an unscoped agent catalog or a late prior-workspace catalog', async () => {
@@ -646,7 +759,7 @@ describe('App AMR polling', () => {
     expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2);
   });
 
-  it('stops polling after the preset retry budget is exhausted when remote never arrives', async () => {
+  it('bounds local catalog follow-up while a slow remote refresh never arrives', async () => {
     vi.useFakeTimers();
     mockedFetchAmrModels.mockReset();
     mockedFetchAmrModels.mockImplementation(async () => ({
@@ -666,6 +779,10 @@ describe('App AMR polling', () => {
 
     await advanceTestClock(1_500);
     expect(mockedFetchAmrModels).toHaveBeenCalledTimes(11);
+    await advanceTestClock(22_500);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(23);
+    await advanceTestClock(4_000);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(23);
   });
 
   it('does not merge stale AMR remote models over a rescan with new agent env', async () => {

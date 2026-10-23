@@ -1422,9 +1422,12 @@ export async function fetchAmrWalletSnapshot(options: { refresh?: boolean } = {}
   }
 }
 
-export async function fetchAmrModels(context?: WorkspaceCollabContext | null): Promise<AmrModelsResponse | null> {
+export async function fetchAmrModels(
+  context?: WorkspaceCollabContext | null,
+  options?: { refresh?: boolean },
+): Promise<AmrModelsResponse | null> {
   try {
-    const resp = await fetch('/api/amr/models', {
+    const resp = await fetch(options?.refresh ? '/api/amr/models?refresh=1' : '/api/amr/models', {
       cache: 'no-store',
       ...(context ? { headers: workspaceProjectHeaders(context) } : {}),
     });

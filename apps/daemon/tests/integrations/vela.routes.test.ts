@@ -3660,6 +3660,10 @@ describe('GET /api/amr/models explicit workspace authority', () => {
   it.each(['replacement', 'rotation'] as const)('preserves the catalog actor boundary through %s credential changes', async (mode) => {
     const dataDir = process.env.OD_DATA_DIR as string;
     const previous = await readAppConfig(dataDir);
+    const previousRollout = process.env.OD_NEXT_STRATEGY_ROLLOUT;
+    // This exercises the direct AMR model preflight. An inherited OD Next
+    // rollout would require its separate persisted task mapping first.
+    process.env.OD_NEXT_STRATEGY_ROLLOUT = 'off';
     seedLogin('local', { controlKey: 'actor-a-control', runtimeKey: 'actor-a-runtime', user: { id: 'actor-a', email: 'a@example.test' } });
     const binary = path.join(tmpHome, 'changing-actor-vela.mjs');
     const changed = path.join(tmpHome, 'changed');
@@ -3700,6 +3704,8 @@ if (args[0] === 'model') {
         expect(events).toContain('event: end');
       }
     } finally {
+      if (previousRollout === undefined) delete process.env.OD_NEXT_STRATEGY_ROLLOUT;
+      else process.env.OD_NEXT_STRATEGY_ROLLOUT = previousRollout;
       await writeAppConfig(dataDir, { ...previous });
     }
   });
@@ -3749,8 +3755,9 @@ console.log(JSON.stringify({ source, data: [
             headers: { 'x-od-workspace-id': workspaceId, 'x-od-workspace-member-id': `member-${workspaceId}` },
           });
           expect(response.status).toBe(200);
-          const catalog = await response.json() as { source: string; models: Array<{ id: string; enabled?: boolean }> };
+          const catalog = await response.json() as { source: string; refreshing: boolean; models: Array<{ id: string; enabled?: boolean }> };
           expect(catalog.source).toBe('remote');
+          expect(catalog.refreshing).toBe(false);
           expect(catalog.models.find((model) => model.id === 'deepseek-v4-pro')?.enabled).toBe(workspaceId === 'go-b');
         });
         if (workspaceId === 'go-b') beforeReturnReads = readFileSync(reads, 'utf8');
@@ -3764,6 +3771,24 @@ console.log(JSON.stringify({ source, data: [
       );
       expect(new Set(calls.map((call) => call.workspaceId))).toEqual(new Set(['free-a', 'go-b']));
       expect(calls.every((call) => JSON.stringify(call.argv) === JSON.stringify(['model', 'list', '--all', '--format', 'json']))).toBe(true);
+      const forced = await fetch(`http://127.0.0.1:${address.port}/api/amr/models?refresh=1`, {
+        headers: { 'x-od-workspace-id': 'free-a', 'x-od-workspace-member-id': 'member-free-a' },
+      });
+      expect(forced.status).toBe(200);
+      await vi.waitFor(async () => {
+        const response = await fetch(`http://127.0.0.1:${address.port}/api/amr/models`, {
+          headers: { 'x-od-workspace-id': 'free-a', 'x-od-workspace-member-id': 'member-free-a' },
+        });
+        const catalog = await response.json() as { source: string; refreshing: boolean };
+        expect(catalog.source).toBe('remote');
+        expect(catalog.refreshing).toBe(false);
+      });
+      const afterForced = parseReads(readFileSync(reads, 'utf8'));
+      expect(afterForced.filter((call) => call.workspaceId === 'free-a')).toHaveLength(calls.filter((call) => call.workspaceId === 'free-a').length + 1);
+      expect(afterForced.filter((call) => call.workspaceId === 'go-b')).toEqual(calls.filter((call) => call.workspaceId === 'go-b'));
+      expect(afterForced.at(-1)?.workspaceId).toBe('free-a');
+      const unscoped = await fetch(`http://127.0.0.1:${address.port}/api/amr/models?refresh=1`);
+      expect(unscoped.status).toBe(400);
     } finally {
       await lifecycle.close();
       await new Promise<void>((resolve) => scopedServer.close(() => resolve()));

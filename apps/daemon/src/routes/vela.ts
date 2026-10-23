@@ -1208,6 +1208,16 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
         workspaceId = authority.context.workspaceId;
       }
       const probe = await resolveAmrModelProbe(workspaceId);
+      if (req.query.refresh === '1') {
+        // A subscription transition can change enabled flags without changing
+        // the credential or workspace ID. Only a proven selected principal may
+        // invalidate its exact workspace catalog; other scopes stay warm.
+        if (!workspaceId) {
+          res.status(400).json({ error: 'WORKSPACE_SCOPE_REQUIRED' });
+          return;
+        }
+        amrModelLoadingCache.invalidate(probe.cacheKey);
+      }
       const response = await amrModelLoadingCache.get(probe.cacheKey, {
         fetchPreset: () => fetchVelaPresetModels(probe.launchPath, probe.env),
         fetchRemote: () => fetchVelaRemoteModelsWithRetry(probe.launchPath, probe.env),

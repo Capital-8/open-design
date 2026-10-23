@@ -154,6 +154,7 @@ import {
   resolveCurrentWorkspaceContextReadWitness,
   useWorkspaceBillingResponse,
   useWorkspaceContext,
+  workspaceBillingSnapshotForContext,
   workspaceBillingSummaryForContext,
   workspaceIdentityCacheKey,
   workspaceResourceReadContext,
@@ -1142,6 +1143,16 @@ function AppInner() {
   const [agentCatalog, setAgents] = useState<AgentInfo[]>([]);
   const amrModelsRef = useRef<AmrModelsResponse | null>(null);
   const amrModelContext = workspaceResourceReadContext(workspaceContextState);
+  const amrModelBillingContext = config.mode === 'daemon' && config.agentId === AMR_AGENT_ID
+    ? amrModelContext
+    : null;
+  const amrModelBilling = useWorkspaceBillingResponse({
+    context: amrModelBillingContext,
+    loading: workspaceContextLoading,
+  });
+  const amrModelSnapshot = workspaceBillingSnapshotForContext(amrModelBilling, amrModelBillingContext);
+  const authoritativeModelPlan = amrModelSnapshot?.billing.planId?.trim()
+    || (amrModelSnapshot?.billing.billingState === 'free' ? 'free' : null);
   const requireScopedAmrCatalog = workspaceContextState.failure !== 'unsupported' && (
     amrModelContext !== null
     || workspaceContextState.identityChangePending === true
@@ -1169,10 +1180,29 @@ function AppInner() {
     amrCatalogScopeRef.current.scoped,
   ), [agentCatalog, amrCatalogIdentity]);
   const amrPollGenerationRef = useRef(0);
+  const amrModelPlansByScopeRef = useRef(new Map<string, string>());
+  const forceAmrModelRefreshForRef = useRef<string | null>(null);
+  const amrModelSubscriptionRevisionsRef = useRef(new Map<string, string>());
+  const amrModelRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agentStreamRequestSeqRef = useRef(0);
   const agentStreamAbortRef = useRef<AbortController | null>(null);
   const agentFocusRefreshLastRunRef = useRef(Date.now());
   const [amrPollRestartToken, setAmrPollRestartToken] = useState(0);
+  const queueAmrModelRefresh = useCallback((identity: string) => {
+    if (amrModelRefreshTimerRef.current !== null) clearTimeout(amrModelRefreshTimerRef.current);
+    // A subscription invalidation and its following authoritative snapshot
+    // often land together. Coalesce them into one scoped CLI refresh.
+    amrModelRefreshTimerRef.current = setTimeout(() => {
+      amrModelRefreshTimerRef.current = null;
+      if (amrCatalogScopeRef.current.identity !== identity) return;
+      forceAmrModelRefreshForRef.current = identity;
+      amrPollGenerationRef.current += 1;
+      setAmrPollRestartToken((current) => current + 1);
+    }, 250);
+  }, []);
+  useEffect(() => () => {
+    if (amrModelRefreshTimerRef.current !== null) clearTimeout(amrModelRefreshTimerRef.current);
+  }, []);
   const [providerModelsCache, setProviderModelsCache] = useState<
     Record<string, ProviderModelOption[]>
   >({});
@@ -1377,6 +1407,14 @@ function AppInner() {
         invalidationWorkspaceContext,
         invalidationAccountGeneration,
       );
+    },
+    'billing-subscription-changed': (payload) => {
+      if (!amrModelBillingContext || payload.workspaceId !== amrModelBillingContext.workspaceId) return;
+      const revision = payload.revision?.trim();
+      if (!revision) return;
+      if (amrModelSubscriptionRevisionsRef.current.get(amrCatalogIdentity) === revision) return;
+      amrModelSubscriptionRevisionsRef.current.set(amrCatalogIdentity, revision);
+      queueAmrModelRefresh(amrCatalogIdentity);
     },
   }, {
     workspaceContext,
@@ -1658,6 +1696,16 @@ function AppInner() {
     amrPollGenerationRef.current += 1;
     setAmrPollRestartToken((current) => current + 1);
   }, []);
+
+  useEffect(() => {
+    if (!amrModelBillingContext || !authoritativeModelPlan || !requireScopedAmrCatalog) return;
+    const previous = amrModelPlansByScopeRef.current.get(amrCatalogIdentity);
+    amrModelPlansByScopeRef.current.set(amrCatalogIdentity, authoritativeModelPlan);
+    if (!previous || previous === authoritativeModelPlan) return;
+    // The same authorized workspace/member now has a different server-proved
+    // plan. Refresh only its catalog, never on ordinary money/quota revisions.
+    queueAmrModelRefresh(amrCatalogIdentity);
+  }, [amrCatalogIdentity, amrModelBillingContext, authoritativeModelPlan, queueAmrModelRefresh, requireScopedAmrCatalog]);
 
   // v2 schema removed the standalone `app_launch` event; the initial
   // page_view fires from each top-level page surface (home / projects /
@@ -2220,36 +2268,51 @@ function AppInner() {
     const pollGeneration = amrPollGenerationRef.current + 1;
     amrPollGenerationRef.current = pollGeneration;
     const pollDelayMs = 1_000;
-    const maxPresetPolls = 10;
-    let presetPolls = 0;
+    // Vela retries a slow remote list in the background; bounded local reads
+    // follow that single flight without spawning additional remote commands.
+    const maxRefreshPolls = 22;
+    let refreshPolls = 0;
+    const forceRefresh = forceAmrModelRefreshForRef.current === issuedIdentity;
+    if (forceRefresh) forceAmrModelRefreshForRef.current = null;
 
-    const applyAmrModels = async () => {
-      const result = amrModelContext ? await fetchAmrModels(amrModelContext) : await fetchAmrModels();
+    const applyAmrModels = async (refresh = false) => {
+      const options = refresh ? { refresh: true } : undefined;
+      let result;
+      if (amrModelContext) {
+        result = options
+          ? await fetchAmrModels(amrModelContext, options)
+          : await fetchAmrModels(amrModelContext);
+      } else {
+        result = await fetchAmrModels();
+      }
       if (
         cancelled ||
         amrPollGenerationRef.current !== pollGeneration ||
         amrCatalogScopeRef.current.identity !== issuedIdentity ||
-        !result ||
-        !Array.isArray(result.models) ||
-        result.models.length === 0
+        !result
       ) {
         return;
       }
-      amrModelsRef.current = result;
-      setAgents((current) => mergeAmrModelsIntoAgents(current, result, amrCatalogScopeRef.current.scoped));
-      const shouldPollPreset =
-        result.source === 'preset' &&
+      // A forced refresh first yields the generic preset while the scoped
+      // remote list runs. Keep the last-good selected-scope catalog visible.
+      if (Array.isArray(result.models) && result.models.length > 0
+        && !(result.source === 'preset' && amrModelsRef.current?.source === 'remote')) {
+        amrModelsRef.current = result;
+        setAgents((current) => mergeAmrModelsIntoAgents(current, result, amrCatalogScopeRef.current.scoped));
+      }
+      const shouldPollRefresh =
+        result.refreshing &&
         !result.remoteError &&
-        presetPolls < maxPresetPolls;
-      if (shouldPollPreset) {
-        presetPolls += 1;
+        refreshPolls < maxRefreshPolls;
+      if (shouldPollRefresh) {
+        refreshPolls += 1;
         timer = window.setTimeout(() => {
           void applyAmrModels();
-        }, pollDelayMs);
+        }, refreshPolls <= 10 ? pollDelayMs : 2_000);
       }
     };
 
-    void applyAmrModels();
+    void applyAmrModels(forceRefresh);
     return () => {
       cancelled = true;
       if (timer !== null) window.clearTimeout(timer);
