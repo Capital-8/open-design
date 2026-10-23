@@ -1439,14 +1439,10 @@ export function useWorkspaceBillingResponse(
           setState({ scopeKey, response: lastGood });
         } else if (clearOnFailure) {
           runtimeManagedRef.current = false;
-          setState({
-            scopeKey,
-            response: {
-              summary: null,
-              workspaceBalance: null,
-              workspaceSnapshot: null,
-            },
-          });
+          // Keep an initial failed read unresolved. A real 200 response with
+          // nullable fields is settled and must show unavailable values rather
+          // than sharing the failure skeleton indefinitely.
+          setState(null);
         }
         // A revoked read (403) fails closed and must not retry. Everything
         // else — including the packaged client's synthetic proxy 502s —

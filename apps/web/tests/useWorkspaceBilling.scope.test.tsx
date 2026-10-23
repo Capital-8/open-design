@@ -1499,8 +1499,8 @@ describe('useWorkspaceBilling explicit scope', () => {
     });
 
     expect(billingCalls).toEqual([
-      '/api/workspace/billing?scope=workspace&workspaceId=workspace-a',
-      '/api/workspace/billing?scope=workspace&workspaceId=workspace-b',
+      '/api/workspace/billing?scope=workspace&workspaceId=workspace-a&includePreflight=1',
+      '/api/workspace/billing?scope=workspace&workspaceId=workspace-b&includePreflight=1',
     ]);
     expect(runtimeHeaders).toHaveLength(2);
     expect(runtimeHeaders[0]!.clientId).not.toBe('');
@@ -1707,7 +1707,7 @@ describe('useWorkspaceBilling explicit scope', () => {
       expect(hook.result.current?.workspaceBalance?.balanceUsd).toBe('13.10'),
     );
     expect(billingCalls).toEqual([
-      '/api/workspace/billing?scope=workspace&workspaceId=workspace-a',
+      '/api/workspace/billing?scope=workspace&workspaceId=workspace-a&includePreflight=1',
     ]);
 
     const beforeForeign = billingCalls.length;
@@ -1882,7 +1882,7 @@ describe('useWorkspaceBilling explicit scope', () => {
     });
     expect(lastResolvedWorkspaceContext()?.workspaceId).toBe('workspace-b');
     expect(billingCalls).toEqual([
-      '/api/workspace/billing?scope=workspace&workspaceId=workspace-b',
+      '/api/workspace/billing?scope=workspace&workspaceId=workspace-b&includePreflight=1',
     ]);
   });
 
@@ -1961,7 +1961,7 @@ describe('useWorkspaceBilling explicit scope', () => {
       expect(hook.result.current?.workspaceBalance?.balanceUsd).toBe('13.10'),
     );
     expect(billingCalls).toEqual([
-      '/api/workspace/billing?scope=workspace&workspaceId=workspace-a',
+      '/api/workspace/billing?scope=workspace&workspaceId=workspace-a&includePreflight=1',
     ]);
 
     const beforeForeign = billingCalls.length;

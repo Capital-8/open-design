@@ -123,7 +123,9 @@ export function workspaceQuotaView({ context, response, tier, balanceUsd }: {
     tier: workspaceQuotaTier(scopedTier),
     sharedBilling,
     planKnown: Boolean(scopedTier?.trim()),
-    loading: balance == null && !response?.workspaceBalance && !response?.workspaceSnapshot,
+    // A settled scoped read may legitimately omit wallet/quota data. Render
+    // unavailable placeholders then; only an unresolved read uses the skeleton.
+    loading: response == null && balance == null,
     balanceUsd: balance,
     // Account summary / personal Coding Plan are not substitutes for workspace data.
     planStatus: null,

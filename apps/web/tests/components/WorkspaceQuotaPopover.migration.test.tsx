@@ -58,6 +58,19 @@ it('expired or revoked runtime cannot reactivate the shared card', () => {
   body.workspaceRuntime.hardExpiresAt = new Date(Date.now() - 1).toISOString();
   expect(state(body).sharedBilling).toBe(false);
 });
+it('shows unavailable values after a successful scoped read without wallet or quota data', () => {
+  const body = response('shared', 'plus');
+  body.workspaceBalance = null;
+  delete body.workspaceSnapshot;
+  const activeContext = { ...context, planId: 'plus', billingState: 'active' as const };
+  const view = state(body, activeContext);
+  expect(view.sharedBilling).toBe(true);
+  expect(view.loading).toBe(false);
+  render(<I18nProvider initial="zh-CN"><WorkspaceQuotaPopover context={activeContext} view={view} profile="local" /></I18nProvider>);
+  expect(screen.queryByTestId('workspace-quota-skeleton')).toBeNull();
+  expect(screen.getByText('暂未获取用量')).toBeTruthy();
+  expect(screen.queryByText('$0.00')).toBeNull();
+});
 it.each(['owner', 'admin', 'member'] as const)('%s keeps zero wallet while shared Free uses the HTML availability and zero bar', role => {
   const mounted = render(panel(response('legacy'), role));
   expect(screen.getByText('未订阅')).toBeTruthy();
