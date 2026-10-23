@@ -327,7 +327,10 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     await expect(notice).toHaveCount(0);
     const initialFunding = await preflight();
     expect(initialFunding.fundingCheck).toBe(gate === 'balance' ? 'insufficient' : 'available');
-    await marker('RUN003-ready.json', { projectId, draft, attachmentName });
+    // The independent AMR watcher reads this project's run inventory through
+    // the same workspace identity before and after the blocked click.
+    await marker('RUN003-ready.json', { projectId, draft, attachmentName,
+      clientWebUrl: runtime.url.web('/') });
     const gateReady = await receipt('RUN003-gate-ready.json');
     expect(gateReady.backgroundRunId).toBe(background.runId);
     expect(gateReady.backgroundStatus).toBe('running');
