@@ -77,6 +77,8 @@ export interface WorkspaceBillingRuntimeCoordinatorOptions {
   fetchProjection(key: WorkspaceBillingRuntimeKey): Promise<VelaWorkspaceBillingProjection>;
   scheduler?: WorkspaceBillingRuntimeScheduler;
   pollIntervalMs?: number;
+  /** Coalesce quota/wallet display invalidations; authoritative reads bypass it. */
+  displayEventRefreshIntervalMs?: number;
   realtimePollFloorMs?: number;
   retryDelaysMs?: readonly number[];
   onStateChange?: (state: WorkspaceBillingRuntimeState) => void;
@@ -140,6 +142,8 @@ interface RuntimeEntry {
   attempt: bigint;
   retryAttempt: number;
   retryTimer: ReturnType<typeof setTimeout> | null;
+  displayRefreshTimer: ReturnType<typeof setTimeout> | null;
+  lastDisplayRefreshAt: number | null;
   waiters: Array<() => void>;
 }
 
@@ -184,6 +188,7 @@ export class WorkspaceBillingRuntimeCoordinator {
   private readonly clients = new Map<string, ClientInterest>();
   private readonly scheduler: WorkspaceBillingRuntimeScheduler;
   private readonly pollIntervalMs: number;
+  private readonly displayEventRefreshIntervalMs: number;
   private readonly retryDelaysMs: readonly number[];
   private readonly interestLeaseMs: number;
   private readonly entryRetentionMs: number;
@@ -208,6 +213,7 @@ export class WorkspaceBillingRuntimeCoordinator {
   constructor(private readonly options: WorkspaceBillingRuntimeCoordinatorOptions) {
     this.scheduler = options.scheduler ?? defaultScheduler();
     this.pollIntervalMs = Math.max(1, options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS);
+    this.displayEventRefreshIntervalMs = Math.max(0, options.displayEventRefreshIntervalMs ?? 0);
     this.retryDelaysMs =
       options.retryDelaysMs?.map((delay) => Math.max(0, delay)) ??
       DEFAULT_RETRY_DELAYS_MS;
@@ -373,6 +379,7 @@ export class WorkspaceBillingRuntimeCoordinator {
       entry.queuedReason = null;
       entry.pending = false;
       entry.pendingReason = null;
+      this.clearDisplayRefreshTimer(entry);
       if (entry.retryTimer) this.scheduler.clearTimeout(entry.retryTimer);
       entry.retryTimer = null;
       entry.retryAt = null;
@@ -439,6 +446,14 @@ export class WorkspaceBillingRuntimeCoordinator {
     return this.result(entry);
   }
 
+  /** DP usage has its own event cursor, independent of money revision clocks. */
+  invalidateCodingPlanUsage(keyInput: WorkspaceBillingRuntimeKey): void {
+    if (this.disposed) return;
+    const entry = this.entries.get(runtimeKey(normalizeKey(keyInput)));
+    if (!entry || !this.hasActiveInterest(entry) || entry.status === 'access-revoked') return;
+    this.requestDisplayRefresh(entry, 'coding-plan-usage-changed');
+  }
+
   invalidate(invalidation: WorkspaceBillingRuntimeInvalidation): void {
     if (this.disposed) return;
     const workspaceId = invalidation.workspaceId?.trim() ?? '';
@@ -487,8 +502,12 @@ export class WorkspaceBillingRuntimeCoordinator {
           : revisionResult.epochChanged
             ? 'revision-epoch-change'
             : invalidation.reason ?? `${invalidation.domain}-invalidation`;
-      this.markStatus(entry, hasProjection(entry) ? 'stale' : 'loading', reason);
-      this.requestRefresh(entry, reason, true);
+      if (invalidation.domain === 'wallet') {
+        this.requestDisplayRefresh(entry, reason);
+      } else {
+        this.markStatus(entry, hasProjection(entry) ? 'stale' : 'loading', reason);
+        this.requestRefresh(entry, reason, true);
+      }
     }
   }
 
@@ -627,6 +646,7 @@ export class WorkspaceBillingRuntimeCoordinator {
     this.refreshQueueTimer = null;
     this.refreshQueue.length = 0;
     for (const entry of this.entries.values()) {
+      this.clearDisplayRefreshTimer(entry);
       if (entry.retryTimer) this.scheduler.clearTimeout(entry.retryTimer);
       entry.retryTimer = null;
       entry.queued = false;
@@ -718,6 +738,8 @@ export class WorkspaceBillingRuntimeCoordinator {
       attempt: 0n,
       retryAttempt: 0,
       retryTimer: null,
+      displayRefreshTimer: null,
+      lastDisplayRefreshAt: null,
       waiters: [],
     };
     this.entries.set(keyText, entry);
@@ -743,6 +765,7 @@ export class WorkspaceBillingRuntimeCoordinator {
 
   private quietIfUninterested(entry: RuntimeEntry): void {
     if (this.hasActiveInterest(entry)) return;
+    this.clearDisplayRefreshTimer(entry);
     if (entry.retryTimer) this.scheduler.clearTimeout(entry.retryTimer);
     entry.retryTimer = null;
     entry.retryAt = null;
@@ -826,6 +849,7 @@ export class WorkspaceBillingRuntimeCoordinator {
       const inactiveAt = entry.uninterestedAt ?? entry.observedAt ?? now;
       const overCapacity = this.entries.size >= this.maxEntries;
       if (!overCapacity && now - inactiveAt < this.entryRetentionMs) continue;
+      this.clearDisplayRefreshTimer(entry);
       if (entry.retryTimer) this.scheduler.clearTimeout(entry.retryTimer);
       this.entries.delete(key);
     }
@@ -865,6 +889,32 @@ export class WorkspaceBillingRuntimeCoordinator {
       acceptedGeneration: interest.generation.toString(),
       leaseExpiresAt: new Date(interest.expiresAt).toISOString(),
     };
+  }
+
+  private clearDisplayRefreshTimer(entry: RuntimeEntry): void {
+    if (entry.displayRefreshTimer) this.scheduler.clearTimeout(entry.displayRefreshTimer);
+    entry.displayRefreshTimer = null;
+  }
+
+  private requestDisplayRefresh(entry: RuntimeEntry, reason: string): void {
+    if (this.disposed || entry.status === 'access-revoked' || !this.hasActiveInterest(entry)) return;
+    if (entry.displayRefreshTimer) return;
+    const elapsed = entry.lastDisplayRefreshAt == null
+      ? Infinity
+      : this.scheduler.now() - entry.lastDisplayRefreshAt;
+    const delay = this.displayEventRefreshIntervalMs - elapsed;
+    if (delay > 0) {
+      // Fixed leading/trailing window: continuous events cannot postpone it.
+      entry.displayRefreshTimer = this.scheduler.setTimeout(() => {
+        entry.displayRefreshTimer = null;
+        this.requestDisplayRefresh(entry, 'display-event-catch-up');
+      }, delay);
+      entry.displayRefreshTimer.unref?.();
+      return;
+    }
+    entry.lastDisplayRefreshAt = this.scheduler.now();
+    this.markStatus(entry, hasProjection(entry) ? 'stale' : 'loading', reason);
+    this.requestRefresh(entry, reason, true);
   }
 
   private requestRefresh(entry: RuntimeEntry, reason: string, force: boolean): void {
@@ -937,6 +987,10 @@ export class WorkspaceBillingRuntimeCoordinator {
 
   private startRefresh(entry: RuntimeEntry, reason: string): void {
     if (this.disposed) return;
+    // Any immediate authoritative/purchase/reconnect read includes pending
+    // display changes, so it also satisfies the trailing display refresh.
+    this.clearDisplayRefreshTimer(entry);
+    if (entry.lastDisplayRefreshAt != null) entry.lastDisplayRefreshAt = this.scheduler.now();
     if (entry.retryTimer) {
       this.scheduler.clearTimeout(entry.retryTimer);
       entry.retryTimer = null;
@@ -1042,6 +1096,7 @@ export class WorkspaceBillingRuntimeCoordinator {
     this.removeQueuedEntry(entry);
     entry.pending = false;
     entry.pendingReason = null;
+    this.clearDisplayRefreshTimer(entry);
     if (entry.retryTimer) this.scheduler.clearTimeout(entry.retryTimer);
     entry.retryTimer = null;
     entry.retryAt = null;

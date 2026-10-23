@@ -6228,6 +6228,7 @@ export async function startServer({
     fetch: () => fetchVelaBillingSummary({ configuredEnv: configuredAmrEnv() }),
   });
   const workspaceBillingRuntime = createWorkspaceBillingRuntimeCoordinator({
+    displayEventRefreshIntervalMs: 5_000,
     fetchProjection: async ({ workspaceId }) => {
       try {
         // The Vela CLI sends only the Bearer credential plus workspace-id
@@ -7033,6 +7034,10 @@ export async function startServer({
           break;
         case 'coding-plan-usage-changed':
           if (!event.workspaceId || !event.workspaceMemberId || !event.eventId) break;
+          workspaceBillingRuntime.invalidateCodingPlanUsage({
+            workspaceId: event.workspaceId,
+            workspaceMemberId: event.workspaceMemberId,
+          });
           emitWorkspaceEvent(event.workspaceId, {
             type: 'coding-plan-usage-changed',
             workspaceId: event.workspaceId,

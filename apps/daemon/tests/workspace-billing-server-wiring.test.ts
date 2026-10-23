@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { register } from 'prom-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { WorkspaceBillingResponse } from '@open-design/contracts';
 
 type StartedServer = {
   url: string;
@@ -222,7 +223,7 @@ describe('server workspace billing runtime wiring', () => {
         res.writeHead(200, { 'content-type': 'text/event-stream' });
         res.write(`event: ready\ndata: ${JSON.stringify({
           workspaceId: PERSONAL.workspaceId,
-          capabilities: ['billing-revision-clocks-v1'],
+          capabilities: ['billing-revision-clocks-v1', 'coding-plan-usage-events-v1'],
         })}\n\n`);
         res.on('close', () => upstreamStreams.delete(res));
       } else {
@@ -239,7 +240,7 @@ describe('server workspace billing runtime wiring', () => {
     await writeFile(join(dataDir, 'app-config.json'), JSON.stringify({
       agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'test' } },
     }));
-    const putSnapshot = async (balanceUsd: string, counter: string) => writeFile(
+    const putSnapshot = async (balanceUsd: string, counter: string, remainingCredits = '100') => writeFile(
       snapshotFile,
       JSON.stringify({
         schemaVersion: 1,
@@ -248,6 +249,7 @@ describe('server workspace billing runtime wiring', () => {
         billingScopeVersion: 2,
         billing: { billingState: 'free', planId: null },
         wallet: { balanceUsd, expiresAt: null, updatedAt: '2026-10-21T00:00:00Z' },
+        designPlanWindows: [{ kind: '7d', windowStart: null, resetsAt: null, remainingCredits, limitCredits: '100' }],
         revisions: { billing: '1', wallet: counter },
         revisionClocks: {
           billing: { epoch: 'billing-fixed', counter: '1' },
@@ -298,7 +300,7 @@ describe('server workspace billing runtime wiring', () => {
     await start();
     expect(await read()).toMatchObject({ workspaceBalance: { balanceUsd: '100.00' } });
     const renderer = new AbortController();
-    const received: { type: string; revision?: string }[] = [];
+    const received: { type: string; revision?: string; eventId?: string }[] = [];
     const streamResponse = await fetch(
       `${daemon!.url}/api/workspace/events?workspaceId=${PERSONAL.workspaceId}&workspaceMemberId=${PERSONAL.workspaceMemberId}`,
       { signal: renderer.signal },
@@ -330,9 +332,36 @@ describe('server workspace billing runtime wiring', () => {
     })();
     try {
       await vi.waitFor(() => expect(connections).toBe(1));
+      expect(await read()).toMatchObject({
+        workspaceSnapshot: { designPlanWindows: [{ remainingCredits: '100' }] },
+      });
+      // DP usage changes without a wallet or subscription clock change. The
+      // real Hub -> server -> local SSE path must invalidate its snapshot too.
+      await putSnapshot('100.00', '1', '98');
+      for (const res of upstreamStreams) res.write(`event: workspace-event\ndata: ${JSON.stringify({
+        type: 'coding-plan-usage-changed', workspaceId: PERSONAL.workspaceId,
+        workspaceMemberId: PERSONAL.workspaceMemberId, eventId: '1',
+      })}\n\n`);
+      await vi.waitFor(() => expect(received.some((event) => event.eventId === '1')).toBe(true));
+      const quotaRead = await read() as WorkspaceBillingResponse;
+      expect(quotaRead).toMatchObject({
+        workspaceBalance: { balanceUsd: '100.00' },
+        workspaceSnapshot: {
+          designPlanWindows: [{ remainingCredits: '98' }],
+          revisionClocks: {
+            billing: { epoch: 'billing-fixed', counter: '1' },
+            wallet: { epoch: 'wallet-fixed', counter: '1' },
+          },
+        },
+      });
+      await vi.waitFor(() => expect(received.some((event) => event.revision === `runtime:${quotaRead.workspaceRuntime?.revision}`)).toBe(true));
+      const beforeWalletEvent = received.length;
       await putSnapshot('70.00', '2');
       send('2');
       await vi.waitFor(() => expect(received.some((e) => e.revision === '2')).toBe(true));
+      // The production display window is five seconds. Await its terminal SSE
+      // completion signal, rather than sleeping or repeatedly reading billing.
+      await vi.waitFor(() => expect(received.slice(beforeWalletEvent).some((event) => event.revision?.startsWith('runtime:'))).toBe(true), { timeout: 6_000 });
       expect(await read()).toMatchObject({ workspaceBalance: { balanceUsd: '70.00' } });
       const afterNewEventLog = await readFile(process.env.OD_TEST_VELA_LOG!, 'utf8');
       const snapshotReadsAfterNew = afterNewEventLog.split('billing workspace-snapshot').length - 1;
