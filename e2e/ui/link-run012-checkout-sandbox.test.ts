@@ -312,6 +312,7 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
   const runResponses: Array<{ status: number; runId: string | null }> = [];
   const bBillingRequests = new Map<Request, string>();
   const bBillingResponses: Array<{ requestedAt: string; completedAt: string; status: number }> = [];
+  const checkoutCapture: { current: { status: number; body: unknown } | null } = { current: null };
   try {
     await runtime.startWeb(env);
     await warmPlaywrightWebRuntime(runtime.url.web('/'));
@@ -333,6 +334,30 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     context = await browser.newContext({ viewport: { width: 1280, height: 800 }, recordVideo: {
       dir: output!,
     } });
+    await context.exposeBinding('__odRun012CheckoutCapture', (_source, result: unknown) => {
+      checkoutCapture.current = result as { status: number; body: unknown };
+    });
+    await context.addInitScript(({ amrWebOrigin }) => {
+      if (location.origin !== amrWebOrigin) return;
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = async (input, init) => {
+        const response = await nativeFetch(input, init);
+        const requestUrl = new URL(input instanceof Request ? input.url : String(input), location.href);
+        const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+        if (method === 'POST' && /\/billing\/commerce\/checkouts$/.test(requestUrl.pathname)) {
+          // Capture the real browser response before the console navigates to
+          // Stripe. CDP may discard its body after that cross-origin navigation.
+          const capture = (window as unknown as {
+            __odRun012CheckoutCapture?: (value: { status: number; body: unknown }) => Promise<void>;
+          }).__odRun012CheckoutCapture;
+          if (capture) {
+            const body = await response.clone().json().catch(() => null);
+            await capture({ status: response.status, body }).catch(() => {});
+          }
+        }
+        return response;
+      };
+    }, { amrWebOrigin: new URL(fixture.urls.web).origin });
     await context.route('**/*', route => {
       const url = new URL(route.request().url());
       const stripeHost = ['stripe.com', 'stripe.network', 'stripecdn.com'].some(domain =>
@@ -461,7 +486,9 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     const posted = response.request().postDataJSON() as {
       kind?: string; amountUsd?: string; clientOperationId?: string;
     };
-    const checkout = await response.json() as {
+    await expect.poll(() => checkoutCapture.current, { timeout: T.long }).not.toBeNull();
+    expect(checkoutCapture.current!.status).toBe(200);
+    const checkout = checkoutCapture.current!.body as {
       operation?: { operationId?: string; workspaceId?: string; kind?: string;
         target?: { amountUsd?: string }; paymentStatus?: string };
       checkoutUrl?: string;
