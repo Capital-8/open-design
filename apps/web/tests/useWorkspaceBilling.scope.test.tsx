@@ -747,6 +747,62 @@ describe('useWorkspaceBilling explicit scope', () => {
     expect(hook.result.current?.preflight).toMatchObject({ workspaceId: contextB.workspaceId, billingMode: 'legacy_team' });
   });
 
+  it('clears account-owned billing during identity confirmation and reads the new account without the consumption delay', async () => {
+    vi.useFakeTimers();
+    const contextA = teamContext('account-switch-a');
+    const contextB = teamContext('account-switch-b');
+    let switched = false;
+    let resolveDirectory!: (response: Response) => void;
+    const pendingDirectory = new Promise<Response>((resolve) => { resolveDirectory = resolve; });
+    let resolveOldPreflight!: (response: Response) => void;
+    const pendingOldPreflight = new Promise<Response>((resolve) => { resolveOldPreflight = resolve; });
+    const snapshots: { workspaceId: string; at: number }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const interest = billingInterestResponse(input, init);
+      if (interest) return interest;
+      const url = String(input);
+      if (url === '/api/workspace/directory') {
+        return switched ? pendingDirectory : workspaceDirectoryResponse(contextA);
+      }
+      if (url.startsWith('/api/workspace/context')) {
+        return new Response(JSON.stringify({ context: switched ? contextB : contextA }));
+      }
+      if (url.startsWith('/api/workspace/billing?')) {
+        const id = new URL(url, 'http://open-design.test').searchParams.get('workspaceId')!;
+        if (url.includes('includePreflight=1')) {
+          return id === contextA.workspaceId ? pendingOldPreflight : new Response('{}');
+        }
+        snapshots.push({ workspaceId: id, at: Date.now() });
+        return new Response(JSON.stringify(billingResponse(id, id === contextA.workspaceId ? '13.10' : '8.50')));
+      }
+      return new Response('{}');
+    }));
+    const hook = renderHook(() => useWorkspaceBillingResponse());
+    await vi.waitFor(() => expect(hook.result.current?.workspaceBalance?.balanceUsd).toBe('13.10'));
+    const previousReads = snapshots.filter((read) => read.workspaceId === contextA.workspaceId).length;
+    const switchedAt = Date.now();
+    await act(async () => {
+      switched = true;
+      notifyWorkspaceContextRefresh();
+      notifyWorkspaceBillingRefresh();
+    });
+    // The navigation shell may retain A's name, but its account-owned money
+    // cannot remain visible or launch a new old-scope read under B's login.
+    expect(hook.result.current).toBeNull();
+    expect(snapshots.filter((read) => read.workspaceId === contextA.workspaceId)).toHaveLength(previousReads);
+    await act(async () => resolveDirectory(workspaceDirectoryResponse(contextB)));
+    await vi.waitFor(() => expect(hook.result.current?.workspaceBalance?.balanceUsd).toBe('8.50'));
+    expect(snapshots.find((read) => read.workspaceId === contextB.workspaceId)!.at - switchedAt).toBeLessThan(5_000);
+    await act(async () => resolveOldPreflight(new Response(JSON.stringify({
+      ...billingResponse(contextA.workspaceId, '999'),
+      preflight: { schemaVersion: 1, workspaceId: contextA.workspaceId,
+        workspaceMemberId: contextA.workspaceMemberId, generatedAt: new Date().toISOString(),
+        billingMode: 'shared', codingPlan: { windows: [] } },
+    }))));
+    expect(hook.result.current?.workspaceBalance?.workspaceId).toBe(contextB.workspaceId);
+    expect(hook.result.current?.workspaceBalance?.balanceUsd).toBe('8.50');
+  });
+
   it('keeps idle advisory evidence fresh with one shared visible 30s poll and stops it while hidden or unmounted', async () => {
     vi.useFakeTimers();
     const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');

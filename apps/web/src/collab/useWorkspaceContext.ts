@@ -1402,16 +1402,19 @@ export function useWorkspaceBillingResponse(
 ): WorkspaceBillingResponse | null {
   const ambient = useWorkspaceContext();
   const context = explicitScope ? explicitScope.context : ambient.context;
-  const contextLoading = explicitScope
+  // The shell retains its last label while a new account is confirmed. Money
+  // must wait for that confirmation even when a caller supplies a pinned scope.
+  const selectedContextLoading = explicitScope
     ? explicitScope.loading === true
     : ambient.loading;
+  const contextLoading = selectedContextLoading || ambient.identityChangePending === true;
   const workspaceId = context?.workspaceId?.trim() ?? '';
   const workspaceMemberId = context?.workspaceMemberId?.trim() ?? '';
   const hasExactWorkspaceScope = Boolean(context && workspaceId && workspaceMemberId);
   const billingScopeKey =
     contextLoading || !hasExactWorkspaceScope
       ? null
-      : `workspace-billing:workspace:${workspaceId}:member:${workspaceMemberId}`;
+      : `workspace-billing:account:${ambient.accountGeneration}:workspace:${workspaceId}:member:${workspaceMemberId}`;
   const billingUrl =
     billingScopeKey
       ? `/api/workspace/billing?scope=workspace&workspaceId=${encodeURIComponent(workspaceId)}`
@@ -1475,7 +1478,10 @@ export function useWorkspaceBillingResponse(
     force = false,
     invalidationToken?: string,
   ) => {
-    if (!billingScopeKey || !billingRequestKey || !billingUrl) {
+    if (
+      workspaceContextIdentityChangePending
+      || !billingScopeKey || !billingRequestKey || !billingUrl
+    ) {
       if (clearOnFailure && mountedRef.current) setState(null);
       return;
     }
@@ -1564,7 +1570,7 @@ export function useWorkspaceBillingResponse(
   // This advisory read confirms the new-card migration gate. It never owns
   // display money, plan, runtime or DP windows, and cannot delay their fast read.
   const loadBillingPreflight = useCallback(async (token: string) => {
-    if (!billingRequestKey || !billingScopeKey || !billingUrl) return;
+    if (workspaceContextIdentityChangePending || !billingRequestKey || !billingScopeKey || !billingUrl) return;
     const key = billingRequestKey;
     const scopeKey = billingScopeKey;
     const readEpoch = workspaceBillingReadEpoch(key);
