@@ -335,7 +335,9 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     } });
     await context.route('**/*', route => {
       const url = new URL(route.request().url());
-      return ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+      const stripeHost = ['stripe.com', 'stripe.network', 'stripecdn.com'].some(domain =>
+        url.hostname === domain || url.hostname.endsWith('.' + domain));
+      return ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || stripeHost
         ? route.continue() : route.abort();
     });
     await context.addCookies([{ ...fixture.actor.consoleCookie, url: fixture.urls.web,
@@ -441,16 +443,9 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
       activeB: fixture.spaces.B.workspaceId, aPreflight: 'insufficient' });
     await consolePage.screenshot({ path: join(output!, 'RUN012-B-console-entry.png') });
 
-    // Only the external Stripe page is controlled; B's console and checkout
-    // POST remain the real product. A click on the controlled page authorizes
-    // the sandbox owner's webhook for this exact B operation.
-    let paymentPageOpened = false;
-    await consolePage.route('https://checkout.stripe.com/**', async route => {
-      paymentPageOpened = true;
-      await route.fulfill({ status: 200, contentType: 'text/html',
-        body: '<!doctype html><title>Controlled Stripe checkout</title>'
-          + '<button id="controlled-pay">Complete controlled payment</button>' });
-    });
+    // B's console, checkout POST, hosted Stripe test-mode payment and signed
+    // webhook all stay real. The webhook consumer re-reads the same Stripe
+    // Checkout Session and PaymentIntent before it can grant B's credits.
     await consolePage.getByTestId('seats-console-page')
       .getByRole('button', { name: /^(充值|Recharge|Top up)$/i }).click();
     await expect(consolePage.getByTestId('recharge-preset-10')).toBeVisible();
@@ -479,7 +474,7 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
     expect(checkout.operation?.operationId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(new URL(checkout.checkoutUrl!).hostname).toBe('checkout.stripe.com');
     await consolePage.waitForURL('https://checkout.stripe.com/**', { timeout: T.long });
-    expect(paymentPageOpened).toBe(true);
+    await expect(consolePage.locator('input[name="cardNumber"]')).toBeVisible({ timeout: T.xlong });
     const checkoutAt = new Date().toISOString();
     await save('RUN012-B-checkout.private.json', { binding, checkoutAt, posted, checkout });
     await marker('RUN012-B-checkout-ready.json', {
@@ -487,12 +482,22 @@ test('[P0] RUN012 browser B checkout never funds or resubmits A until A is funde
       clientOperationId: posted.clientOperationId, operationId: checkout.operation!.operationId,
       amountUsd: '10', checkoutUrlSha256: createHash('sha256').update(checkout.checkoutUrl!).digest('hex'),
     });
-    await consolePage.locator('#controlled-pay').click();
+    const email = consolePage.locator('input[name="email"]');
+    if (await email.isVisible()) await email.fill(fixture.actor.email);
+    await consolePage.locator('input[name="cardNumber"]').fill('4242424242424242');
+    await consolePage.locator('input[name="cardExpiry"]').fill('1234');
+    await consolePage.locator('input[name="cardCvc"]').fill('123');
+    const billingName = consolePage.locator('input[name="billingName"]');
+    if (await billingName.isVisible()) await billingName.fill(fixture.actor.name);
+    const postalCode = consolePage.locator('input[name="billingPostalCode"]');
+    if (await postalCode.isVisible()) await postalCode.fill('10001');
+    await consolePage.screenshot({ path: join(output!, 'RUN012-B-stripe-test-checkout.png') });
+    await consolePage.getByRole('button', { name: /^Pay\b|^支付|^付款/i }).click();
     const paidAt = new Date().toISOString();
     await marker('RUN012-B-payment-ready.json', {
       workspaceId: fixture.spaces.B.workspaceId,
       clientOperationId: posted.clientOperationId, operationId: checkout.operation!.operationId,
-      amountUsd: '10', controlledPaymentClickedAt: paidAt,
+      amountUsd: '10', testCardSubmittedAt: paidAt,
     });
     const bPaid = await receipt('RUN012-B-paid.json', paidAt);
     expect(bPaid).toMatchObject({
