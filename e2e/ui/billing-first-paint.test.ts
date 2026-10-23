@@ -13,7 +13,7 @@ import { T } from '@/timeouts';
 
 test.use({ trace: 'on', viewport: { width: 1280, height: 900 } });
 
-test('[P1] real daemon shows scoped quota before delayed upstream preflight and isolates a late preview across workspace switching', async ({ page }, info) => {
+test('[P1] real daemon renders scoped quota early and refreshes models after subscription upgrade', async ({ page }, info) => {
   test.setTimeout(T.xlong * 6);
   const namespace = `billing-paint-${randomUUID().slice(0, 8)}`;
   const root = join(e2eWorkspaceRoot(), '.tmp', 'e2e', namespace);
@@ -30,12 +30,15 @@ test('[P1] real daemon shows scoped quota before delayed upstream preflight and 
   const env = { AMR_HOME: join(scratch, '.amr'), VELA_BIN: fixture.velaBin, OPEN_DESIGN_AMR_PROFILE: 'local', VELA_API_URL: fixture.apiUrl,
     VELA_LINK_URL: fixture.apiUrl, VELA_CONTROL_KEY: 'fake-control-key', VELA_RUNTIME_KEY: 'fake-runtime-key',
     OD_WORKSPACE_CONTEXT_SOURCE: 'vela', OD_COLLAB_TRANSPORT: 'off', OD_RESOURCE_TRANSPORT: 'off', OD_TEAM_PROJECTS_TRANSPORT: 'off' };
-  const timeline: Array<{ type: string; at: number; url: string; status?: number }> = [];
+  const timeline: Array<{ type: string; at: number; url: string; status?: number; workspaceId?: string; workspaceMemberId?: string }> = [];
+  const modelResponses: Array<{ url: string; workspaceId?: string; workspaceMemberId?: string; body: unknown }> = [];
   const billingResponses: Array<{ url: string; body: unknown }> = [];
   page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/amr/models') timeline.push({ type: 'model-request', at: Date.now(), url: request.url(), workspaceId: request.headers()['x-od-workspace-id'] ?? '', workspaceMemberId: request.headers()['x-od-workspace-member-id'] ?? '' });
     if (request.url().includes('/api/workspace/billing?') || new URL(request.url()).pathname === '/api/workspace/context') timeline.push({ type: 'request', at: Date.now(), url: request.url() });
   });
   page.on('response', async (response) => {
+    if (new URL(response.url()).pathname === '/api/amr/models') { modelResponses.push({ url: response.url(), workspaceId: response.request().headers()['x-od-workspace-id'] ?? '', workspaceMemberId: response.request().headers()['x-od-workspace-member-id'] ?? '', body: await response.json().catch(() => null) }); return; }
     if (new URL(response.url()).pathname === '/api/workspace/context') { timeline.push({ type: 'response', at: Date.now(), url: response.url(), status: response.status() }); return; }
     if (!response.url().includes('/api/workspace/billing?')) return;
     timeline.push({ type: 'response', at: Date.now(), url: response.url(), status: response.status() });
@@ -78,14 +81,17 @@ test('[P1] real daemon shows scoped quota before delayed upstream preflight and 
     // uses one controlled 5s boundary to prove real event-to-card wiring.
     await page.clock.install();
     await page.clock.pauseAt(new Date(Date.now() + 1_000));
-    const beforeEvent = timeline.filter((row) => row.type === 'request' && !row.url.includes('includePreflight')).length;
+    const forcedModelReads = () => timeline.filter((row) => row.type === 'model-request' && new URL(row.url).searchParams.get('refresh') === '1').length;
+    const beforeConsumptionModels = forcedModelReads();
+    const beforeEvent = timeline.filter((row) => row.type === 'request' && row.url.includes('/api/workspace/billing?') && !row.url.includes('includePreflight')).length;
     await expect.poll(() => fixture.requests.some((row) => row.path === '/api/v1/collab/events')).toBe(true);
     for (let index = 0; index < 100; index++) fixture.updateA();
     await page.clock.runFor(4_999);
-    expect(timeline.filter((row) => row.type === 'request' && !row.url.includes('includePreflight')).length - beforeEvent).toBeLessThanOrEqual(1);
+    expect(timeline.filter((row) => row.type === 'request' && row.url.includes('/api/workspace/billing?') && !row.url.includes('includePreflight')).length - beforeEvent).toBeLessThanOrEqual(1);
     await page.clock.runFor(1);
     await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '70');
     await expect(panel).toContainText('$17.25');
+    expect(forcedModelReads(), 'quota consumption does not force the model catalog').toBe(beforeConsumptionModels);
     const switchedAt = await page.evaluate(() => Date.now());
     await page.mouse.move(10, 400);
     await ensureRailOpen(page);
@@ -103,10 +109,40 @@ test('[P1] real daemon shows scoped quota before delayed upstream preflight and 
     await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '45');
     await page.clock.resume();
     await info.attach('late-preview-keeps-current-scope', { body: await page.screenshot(), contentType: 'image/png' });
+    await page.mouse.move(10, 400);
+    const modelChip = page.getByTestId('inline-model-switcher-chip');
+    await expect(modelChip).toBeVisible();
+    await expect.poll(() => modelResponses.some((row) => {
+      const body = row.body as { source?: string; models?: Array<{ id: string; enabled?: boolean }> } | null;
+      return row.workspaceId === BILLING_SPACES[1].workspaceId && body?.source === 'remote'
+        && body.models?.some((model) => model.id === 'fixture-pro-model' && model.enabled === false);
+    }), { timeout: T.long }).toBe(true);
+    await modelChip.click();
+    const proModel = page.getByTestId('inline-model-switcher-compact-model-fixture-pro-model');
+    await expect(proModel).toBeVisible();
+    await expect(proModel).toHaveAttribute('aria-disabled', 'true');
+    await info.attach('pro-model-locked-before-upgrade', { body: await page.screenshot(), contentType: 'image/png' });
+    await page.keyboard.press('Escape');
+    const forcedCatalog = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/amr/models'
+      && new URL(response.url()).searchParams.get('refresh') === '1'
+      && response.request().headers()['x-od-workspace-id'] === BILLING_SPACES[1].workspaceId, { timeout: T.long });
+    fixture.upgradeB();
+    const forcedResponse = await forcedCatalog;
+    expect(forcedResponse.status()).toBe(200);
+    expect(forcedResponse.request().headers()['x-od-workspace-member-id']).toBe(BILLING_SPACES[1].workspaceMemberId);
+    await expect.poll(() => modelResponses.some((row) => {
+      const body = row.body as { source?: string; models?: Array<{ id: string; enabled?: boolean }> } | null;
+      return row.workspaceId === BILLING_SPACES[1].workspaceId && row.workspaceMemberId === BILLING_SPACES[1].workspaceMemberId
+        && body?.source === 'remote' && body.models?.some((model) => model.id === 'fixture-pro-model' && model.enabled === true);
+    }), { timeout: T.long }).toBe(true);
+    await modelChip.click();
+    await expect(proModel).toBeVisible();
+    await expect(proModel).not.toHaveAttribute('aria-disabled', 'true');
+    await info.attach('pro-model-enabled-after-upgrade', { body: await page.screenshot(), contentType: 'image/png' });
     passed = true;
   } finally {
     fixture.releasePreview();
-    await info.attach('request-timeline', { body: JSON.stringify({ timeline, billingResponses, upstreamRequests: fixture.requests }, null, 2), contentType: 'application/json' });
+    await info.attach('request-timeline', { body: JSON.stringify({ timeline, billingResponses, modelResponses, upstreamRequests: fixture.requests, subscriptionEvents: fixture.subscriptionEvents }, null, 2), contentType: 'application/json' });
     if (!page.isClosed()) { await info.attach('final-browser', { body: await page.screenshot(), contentType: 'image/png' }); await page.close(); }
     try { await runtime.stopWeb(); } finally { await fixture.close(); }
     if (passed) await rm(root, { recursive: true, force: true });
