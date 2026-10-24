@@ -514,12 +514,35 @@ describe('bootstrapFirstOpenTeamProjectRoute', () => {
     })).resolves.toEqual({ kind: 'unavailable' });
   });
 
-  it('never starts the Team lane for a Personal context', async () => {
+  it('bootstraps an explicitly shared Personal project under its exact member', async () => {
+    const personalContext = { ...CONTEXT_A, workspaceType: 'personal' as const, teamId: undefined };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/collab/bootstrap')) {
+        return new Response(JSON.stringify({ ok: true, awaitingFirstMaterialization: true }), { status: 202 });
+      }
+      if (url.endsWith('/workspace-scope')) {
+        return new Response(JSON.stringify({ scope: {
+          kind: 'personal', projectId: PROJECT_ID, workspaceId: personalContext.workspaceId,
+          visibility: 'team', context: { ...SCOPE_CONTEXT_A, workspaceType: 'personal', teamId: undefined },
+        } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ project: PROJECT_A }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(bootstrapFirstOpenTeamProjectRoute(PROJECT_ID, {
+      accountGeneration: 4,
+      exactContext: personalContext,
+    })).resolves.toMatchObject({ kind: 'found', scope: { kind: 'personal', visibility: 'team' } });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not bootstrap a removed Personal member', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     await expect(bootstrapFirstOpenTeamProjectRoute(PROJECT_ID, {
       accountGeneration: 4,
-      exactContext: { ...CONTEXT_A, workspaceType: 'personal', teamId: undefined },
+      exactContext: { ...CONTEXT_A, workspaceType: 'personal', teamId: undefined, memberStatus: 'removed' },
     })).resolves.toEqual({ kind: 'not-found' });
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -48,7 +48,7 @@ import {
 } from './EntryNavRail';
 import { moveWorkspaceProject } from '../state/projects';
 import {
-  workspaceContextHasTeamIdentity,
+  workspaceContextHasWorkspaceIdentity,
   type WorkspaceCollabContext,
   type WorkspaceProjectSummary,
 } from '@open-design/contracts';
@@ -412,18 +412,11 @@ export function RecentProjectsStrip({
     }, requestId ? { requestId } : undefined);
   }
   const selfMemberId = workspaceContext?.workspaceMemberId ?? null;
-  // `canShareProjects` alone is a ROLE permission ("could this member share IF
-  // a team existed"), not a "does a team exist" signal — a purely personal
-  // workspace's owner still gets `canShareProjects: true`. Without also
-  // requiring `workspaceContextHasTeamIdentity`, this stayed true for a
-  // personal-only workspace and the move-to-team menu item rendered a button
-  // the daemon can only ever 403 (recvqfZsR901YQ "无法共享方案了" /
-  // recvqgif6Xa7Wb "隐藏非 Team workspace 分享到团队的入口") — the exact class
-  // of bug `workspaceContextHasTeamIdentity`'s own doc comment warns about:
-  // "Deriving it twice is how a UI grows a button that can only ever fail."
+  // Project sharing needs an exact Workspace/member identity and permission;
+  // the resource plane now accepts Personal workspaces as well as Team.
   const collaborationAvailable =
     collaborationEnabled ??
-    (workspaceContextHasTeamIdentity(workspaceContext) &&
+    (workspaceContextHasWorkspaceIdentity(workspaceContext) &&
       workspaceContext?.permissions.canShareProjects === true);
   const canAccessInviteFlow = canAccessWorkspaceInviteFlow(workspaceContext);
   const inviteTarget = resolveWorkspaceInviteTarget(workspaceContext);
@@ -439,11 +432,9 @@ export function RecentProjectsStrip({
   // The 全部项目 page (drafts space) splits its one catalog into three tabs; the
   // team space and the home rail have no such split.
   const showCollectionTabs = space === 'drafts';
-  // 团队项目 is a team-workspace tab only (OPEND-3285): a personal workspace
-  // has no shared catalog to show, so the tab would only ever open an empty
-  // state. Keyed on the workspace kind, not on `canShareProjects` (a role bit
-  // a personal owner also carries).
-  const teamCollectionAvailable = workspaceContext?.workspaceType === 'team';
+  // Every verified workspace may now have projects explicitly shared to its
+  // members; a private project still belongs only in the personal collection.
+  const teamCollectionAvailable = workspaceContextHasWorkspaceIdentity(workspaceContext);
   const collectionOptions = teamCollectionAvailable
     ? COLLECTION_OPTIONS
     : COLLECTION_OPTIONS.filter((option) => option.id !== 'teamProjects');

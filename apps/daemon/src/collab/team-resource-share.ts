@@ -70,6 +70,9 @@ export interface TeamResourceRequestScope {
 export function teamResourceRequestScopeFromContext(
   context: WorkspaceCollabContext,
 ): TeamResourceRequestScope | null {
+  // Project sharing is now available in Personal workspaces, but plugins,
+  // skills and design systems retain their existing Team-only boundary.
+  if (context.workspaceType !== 'team') return null;
   const principal = contextToResourceHubPrincipal(context);
   if (!principal || context.memberStatus !== 'active') return null;
   return {

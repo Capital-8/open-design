@@ -7338,6 +7338,7 @@ function HtmlViewer({
     workspaceContext: observedWorkspaceContext,
     workspaceContextLoading,
     projectResourceAuthority,
+    projectVisibility,
   } = useProjectCollabContext();
   const observedSourceAuthorizationScopeKey = fileViewerSourceAuthorizationScopeKey(
     workspaceContextLoading,
@@ -7370,6 +7371,10 @@ function HtmlViewer({
     };
   }
   const workspaceContext = stableWorkspaceContextRef.current.value;
+  const workspaceScopedSharedAssets = Boolean(
+    workspaceContext
+    && (workspaceContext.workspaceType === 'team' || projectVisibility === 'team'),
+  );
   const sourceAuthorizationScopeKey = stableWorkspaceContextRef.current.key;
   const projectResourceReadBlocked =
     sourceAuthorizationScopeKey === null;
@@ -10387,12 +10392,12 @@ function HtmlViewer({
   );
   // Browser-owned iframe subresource requests cannot attach Workspace headers,
   // and URL resolution does not inherit the query string from the document's
-  // scoped raw URL. Hold the Team preview until every confirmed relative asset
+  // scoped raw URL. Hold a shared-project preview until every confirmed relative asset
   // has been rewritten to its own scoped raw URL; otherwise the first srcDoc
   // paint can leak an unscoped font/image request before the async rewrite
   // finishes.
   const scopedRelativeAssetRefs =
-    workspaceContext?.workspaceType === 'team' && relativeProjectAssetRefs;
+    workspaceScopedSharedAssets && relativeProjectAssetRefs;
   const livePreviewSource = scopedRelativeAssetRefs && inlinedSource === null
     ? null
     : (inlinedSource ?? deckVisualSource);
@@ -11188,16 +11193,16 @@ function HtmlViewer({
     setInlinedSource(null);
     if (useUrlLoadPreview) return;
     if (!assetInliningSource) return;
-    // Personal-project srcDoc previews already have a stable raw-file base,
+    // Private-project srcDoc previews already have a stable raw-file base,
     // so Chromium can resolve ordinary relative assets itself. Re-fetching
     // and inlining every stylesheet/script here replaces an already-visible
-    // document after asynchronous file discovery settles. Team previews are
+    // document after asynchronous file discovery settles. Shared previews are
     // different: iframe subresource requests cannot carry workspace auth, so
     // they still require per-asset materialization. Personal root-relative
     // refs also keep this pass because they first need project-file-list
     // normalization before the stable base can resolve them correctly.
     const requiresAssetMaterialization =
-      workspaceContext?.workspaceType === 'team' || projectRootAssetRefs;
+      workspaceScopedSharedAssets || projectRootAssetRefs;
     if (!requiresAssetMaterialization) return;
     // Root-relative project asset refs need the confirmed file list before
     // they can be normalized; wait for it rather than inlining a half-fixed
@@ -11211,6 +11216,7 @@ function HtmlViewer({
       file.name,
       projectFilePathSet,
       workspaceContext,
+      workspaceScopedSharedAssets,
     ).then((next) => {
       if (!cancelled) setInlinedSource(next);
     });
@@ -11228,6 +11234,7 @@ function HtmlViewer({
     scopedRelativeAssetRefs,
     projectFilePathSet,
     workspaceContext,
+    workspaceScopedSharedAssets,
   ]);
 
   const srcDocBaseSeedHref = effectiveScopedSrcDocPreviewBase?.href
@@ -19288,6 +19295,7 @@ async function inlineRelativeAssets(
   fileName: string,
   projectFilePaths: ReadonlySet<string> | null = null,
   workspaceContext?: WorkspaceCollabContext | null,
+  workspaceScopedSharedAssets = workspaceContext?.workspaceType === 'team',
 ): Promise<string> {
   const toRawUrl = (projectPath: string) =>
     projectRawUrl(projectId, projectPath, workspaceContext);
@@ -19349,7 +19357,7 @@ async function inlineRelativeAssets(
     (next, { from, to }) => next.replace(from, () => to),
     normalized,
   );
-  return workspaceContext?.workspaceType === 'team' && projectFilePaths
+  return workspaceScopedSharedAssets && projectFilePaths
     ? rewriteProjectAssetRefsToRawUrls(inlined, fileName, projectFilePaths, toRawUrl)
     : inlined;
 }

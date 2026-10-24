@@ -16,6 +16,7 @@ import {
   buildWorkspacePermissions,
   buildWorkspaceSeatSummary,
   workspaceContextHasTeamIdentity,
+  workspaceContextHasWorkspaceIdentity,
 } from '@open-design/contracts';
 import { coalescedGet, forceCoalescedGet } from '../lib/coalesced-get';
 import { BackoffController, type BackoffOptions } from '../lib/backoff';
@@ -2188,17 +2189,17 @@ export interface TeamProjectsState {
   projects: TeamProject[];
   loading: boolean;
   error?: 'unavailable';
-  /** Re-fetch the team-shared project list (e.g. after a member pulls one). */
+  /** Re-fetch the Workspace-shared project list (e.g. after a member pulls one). */
   reload: () => void;
 }
 
 /**
- * Team-wide shared-project discovery for the "全部项目" view
+ * Workspace-shared project discovery for the "全部项目" view
  * (`GET /api/workspace/projects/team`, resource-hub data behind the daemon).
  * A member's own `/api/projects` list is only their LOCAL projects; the projects
- * the owner shared to the team live on the hub until pulled, and this read
- * surfaces them so a member can discover + open them. Empty off-team or when the
- * hub is not configured — the daemon degrades to `{ projects: [] }` there.
+ * another member shared to the Workspace live on the hub until pulled, and
+ * this read surfaces them so members can discover and open them. The daemon
+ * returns an empty catalog when the hub is not configured.
  */
 // Poll cadence for the team-shared list. Match the foreground collab cadence so
 // a teammate sees a newly shared project within a few seconds, while focus and
@@ -2336,9 +2337,7 @@ export function useTeamProjects(): TeamProjectsState {
       // `fetchTeamProjectsCatalog` owns the endpoint, the coalescing key, and
       // the array guarantee — see team-projects-catalog.ts for why those three
       // must not be split across call sites again.
-      // A Personal workspace has an authoritative empty team catalog. Do not
-      // treat its lack of a Team identity as an outage or cache a failed read.
-      const projects = workspaceContextHasTeamIdentity(read.context)
+      const projects = workspaceContextHasWorkspaceIdentity(read.context)
         ? await fetchTeamProjectsCatalog({
             context: read.context,
             force,

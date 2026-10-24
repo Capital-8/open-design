@@ -899,7 +899,6 @@ export async function hydrateReadyTeamProject(
   const initialContext = deps.getWorkspaceContext();
   if (
     !initialContext ||
-    initialContext.workspaceType !== 'team' ||
     initialContext.workspaceId !== workspaceId ||
     initialContext.memberStatus !== 'active' ||
     initialContext.lifecycleState !== 'active'
@@ -910,7 +909,7 @@ export async function hydrateReadyTeamProject(
     const context = deps.getWorkspaceContext();
     return Boolean(
       context &&
-      context.workspaceType === 'team' &&
+      context.workspaceType === initialContext.workspaceType &&
       context.workspaceId === initialContext.workspaceId &&
       context.workspaceMemberId === initialContext.workspaceMemberId &&
       context.memberStatus === 'active' &&
@@ -5233,12 +5232,11 @@ function AppInner() {
         });
         return;
       }
-      // A verified Team identity can bootstrap independently of the shell's
+      // A verified Workspace identity can bootstrap independently of the shell's
       // project list, so begin local authority + background content work now.
       const firstOpenTeamContext = exactOpenContext ?? deepLinkContext;
       if (
-        firstOpenTeamContext?.workspaceType === 'team'
-        && firstOpenTeamContext.memberStatus === 'active'
+        firstOpenTeamContext?.memberStatus === 'active'
         && firstOpenTeamContext.lifecycleState === 'active'
       ) {
         const progressive = await bootstrapFirstOpenTeamProjectRoute(projectId, {

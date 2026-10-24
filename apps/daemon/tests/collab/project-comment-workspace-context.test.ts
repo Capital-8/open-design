@@ -3,9 +3,9 @@ import { resolveLocalProjectCommentWorkspaceContext } from '../../src/collab/pro
 import { resolveOptionalLocalWorkspaceRequestAuthority } from '../../src/collab/workspace-resource-mutation.js';
 
 const binding = { workspaceId: 'workspace-a', visibility: 'team', resourceState: 'active', createdByWorkspaceMemberId: 'creator' };
-function local(workspaceId?: string, memberId?: string) {
+function local(workspaceId?: string, memberId?: string, workspaceType?: 'personal' | 'team') {
   return resolveOptionalLocalWorkspaceRequestAuthority({
-    get: (name: string) => ({ 'x-od-workspace-id': workspaceId, 'x-od-workspace-member-id': memberId }[name]),
+    get: (name: string) => ({ 'x-od-workspace-id': workspaceId, 'x-od-workspace-member-id': memberId, 'x-od-workspace-type': workspaceType }[name]),
   });
 }
 
@@ -26,8 +26,15 @@ describe('MEM-5276CF5002 local comment caller identity', () => {
   it('attributes a team mirror to the actual caller without adopting project creation', () => {
     expect(resolveLocalProjectCommentWorkspaceContext({
       binding: { ...binding, createdByWorkspaceMemberId: null }, revoked: false,
-      local: local('workspace-a', 'member-b'),
+      local: local('workspace-a', 'member-b', 'team'),
     })).toMatchObject({ ok: true, context: { workspaceId: 'workspace-a', workspaceMemberId: 'member-b', workspaceType: 'team' } });
+  });
+
+  it('keeps a shared Personal project in its actual workspace type', () => {
+    expect(resolveLocalProjectCommentWorkspaceContext({
+      binding: { ...binding, createdByWorkspaceMemberId: null }, revoked: false,
+      local: local('workspace-a', 'member-b', 'personal'),
+    })).toMatchObject({ ok: true, context: { workspaceId: 'workspace-a', workspaceMemberId: 'member-b', workspaceType: 'personal' } });
   });
 
   it('denies cross-space and private-project identities', () => {

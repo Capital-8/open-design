@@ -508,12 +508,10 @@ export function isWorkspaceLifecycleReadable(state: WorkspaceLifecycleState): bo
 /**
  * Whether a context can address the workspace resource hub.
  *
- * The hub keys every resource by a TEAM workspace: `teamId` is populated only
- * for `workspaceType === 'team'` (see the field's doc above), so a personal or
- * signed-out session has no id to push, snapshot, or redact under. Everything
- * built on the hub USED to be team-only by construction. That is still true of
- * team project SHARING, which needs teammates to share with — but no longer of
- * public single-file links: see {@link workspaceContextHasWorkspaceIdentity}.
+ * Use this narrower predicate for resource types that remain Team-only, such
+ * as team-owned plugins and design systems. Project sharing and public file
+ * links use {@link workspaceContextHasWorkspaceIdentity}: an active Personal
+ * workspace may have invited members and share projects with them.
  *
  * This is the ONE predicate both sides must agree on: the daemon refuses hub
  * writes when it is false, and the web UI must not render a hub-backed entry
@@ -540,10 +538,9 @@ export function workspaceContextHasTeamIdentity(
  * for a hub write is an id to publish under and a member id to own the result
  * with; the workspace TYPE is not part of it.
  *
- * Use this for surfaces that only need somewhere to put a resource — the public
- * single-file link is the one today. Use {@link workspaceContextHasTeamIdentity}
- * where the feature genuinely needs a TEAM, such as sharing a project with
- * teammates.
+ * Use this for project sharing and public single-file links. Use
+ * {@link workspaceContextHasTeamIdentity} for features still restricted to
+ * Team workspaces.
  *
  * Same rule as its sibling: the daemon refuses the write when this is false and
  * the web UI must not render the entry point when it is false. Deriving it twice

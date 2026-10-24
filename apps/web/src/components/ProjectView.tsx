@@ -556,6 +556,7 @@ function conversationForkPoint(
 export async function listConversationsWithRetry(
   projectId: string,
   workspaceContext?: WorkspaceCollabContext | null,
+  sharedProject = false,
 ): Promise<Conversation[]> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= CONVERSATION_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
@@ -573,7 +574,8 @@ export async function listConversationsWithRetry(
       if (
         !(err instanceof ProjectConversationsHttpError)
         || err.status !== 404
-        || workspaceContext?.workspaceType !== 'team'
+        || !workspaceContext
+        || (workspaceContext.workspaceType !== 'team' && !sharedProject)
       ) {
         throw err;
       }
@@ -2349,6 +2351,8 @@ export function ProjectView({
   }
   const projectRunWorkspaceContext =
     canonicalProjectRunWorkspaceContextRef.current.context;
+  const sharedProjectScope = projectWorkspaceScopeState.scope?.kind !== 'unbound'
+    && projectWorkspaceScopeState.scope?.visibility === 'team';
   const projectResourceAuthority: ProjectResourceAuthority =
     projectWorkspaceScopeState.failure === 'forbidden'
     || projectWorkspaceScopeState.failure === 'unsupported'
@@ -2686,6 +2690,7 @@ export function ProjectView({
       workspaceContext: projectRunWorkspaceContext,
       workspaceContextLoading: projectWorkspaceScopeState.loading,
       projectResourceAuthority,
+      projectVisibility: sharedProjectScope ? 'team' : 'personal',
       onLostAnchors: handleLostAnchors,
     }),
     [
@@ -2693,6 +2698,7 @@ export function ProjectView({
       projectRunWorkspaceContext,
       projectWorkspaceScopeState.loading,
       projectResourceAuthority,
+      sharedProjectScope,
       handleLostAnchors,
     ],
   );
@@ -3998,6 +4004,7 @@ export function ProjectView({
         const list = await listConversationsWithRetry(
           project.id,
           requestWorkspaceContext,
+          sharedProjectScope,
         );
         if (cancelled) return;
         conversationsLoadedProjectIdRef.current = project.id;
@@ -4037,7 +4044,8 @@ export function ProjectView({
         const materializationRecovery =
           err instanceof ProjectConversationsHttpError
           && err.status === 404
-          && requestWorkspaceContext?.workspaceType === 'team'
+          && requestWorkspaceContext
+          && (requestWorkspaceContext?.workspaceType === 'team' || sharedProjectScope)
             ? {
                 projectId: project.id,
                 authorityKey: projectRunAuthorityKey,
@@ -4075,6 +4083,7 @@ export function ProjectView({
     project.id,
     projectReadsHeld,
     projectRunAuthorityKey,
+    sharedProjectScope,
   ]);
 
   const recoverMaterializedConversations = useCallback(async (

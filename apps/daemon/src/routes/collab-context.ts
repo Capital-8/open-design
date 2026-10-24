@@ -718,19 +718,13 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
           req,
           fetchWorkspaceDirectory,
           configuredEnv: configuredEnv(),
-          requireTeam: true,
+          requireTeam: false,
         });
     if (!verified.ok) {
       return res.status(verified.status).json({
         error: verified.code,
         message: verified.message,
         ...(verified.retryable ? { retryable: true } : {}),
-      });
-    }
-    if (verified.context.workspaceType !== 'team') {
-      return res.status(403).json({
-        error: 'WORKSPACE_ACCESS_DENIED',
-        message: 'the requested workspace is not available to this member',
       });
     }
     let projects: TeamProject[];
@@ -761,17 +755,9 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
           req,
           fetchWorkspaceDirectory,
           configuredEnv: configuredEnv(),
-          requireTeam: true,
+          requireTeam: false,
         });
     if (!verified.ok) return sendWorkspaceVerificationFailure(res, verified);
-    if (verified.context.workspaceType !== 'team') {
-      return sendWorkspaceVerificationFailure(res, {
-        ok: false,
-        status: 403,
-        code: 'WORKSPACE_ACCESS_DENIED',
-        message: 'the requested workspace is not available to this member',
-      });
-    }
     try {
       const members = await listMembers(verified.context);
       const body: CollabCloudMembersResponse = { members };

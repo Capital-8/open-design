@@ -955,4 +955,37 @@ describe('MEM-009 Vela-bound project data plane', () => {
     expect(await authorize(request({}), response(), 'project-a', { mode: 'read' })).toBe(false);
     expect(sendApiError).toHaveBeenLastCalledWith(expect.anything(), 400, 'WORKSPACE_CONTEXT_REQUIRED', expect.any(String));
   });
+
+  it('keeps an unattributed legacy Personal draft private to its verified workspace Owner', async () => {
+    const row = {
+      workspaceId: 'workspace-a', visibility: 'personal', resourceState: 'active',
+      createdByWorkspaceMemberId: null,
+    };
+    const sendApiError = vi.fn();
+    const localAuthority = vi.fn(async () => true);
+    let role: 'owner' | 'member' = 'member';
+    const isPersonalWorkspaceForAccount = vi.fn(async () => false);
+    const authorize = createVerifiedProjectRequestAuthority({
+      localAuthority,
+      getBinding: () => row,
+      verifyWorkspaceRequestAuthority: async () => ({
+        ok: true,
+        context: context({ workspaceType: 'personal', role }),
+      }),
+      isPersonalWorkspaceForAccount,
+      reconcileMemberRemovalProjects: async () => 0,
+      sendApiError,
+    });
+    const claimed = request({ workspaceId: 'workspace-a', memberId: 'member-a' });
+    expect(await authorize(claimed, response(), 'legacy-draft', { mode: 'read' })).toBe(false);
+    expect(await authorize(claimed, response(), 'legacy-draft', { mode: 'write', capability: 'writeFiles' })).toBe(false);
+    expect(localAuthority).not.toHaveBeenCalled();
+    expect(sendApiError).toHaveBeenLastCalledWith(expect.anything(), 403, 'WORKSPACE_PROJECT_PERMISSION_DENIED', expect.any(String));
+
+    role = 'owner';
+    expect(await authorize(claimed, response(), 'legacy-draft', { mode: 'read' })).toBe(true);
+    expect(localAuthority).toHaveBeenCalledTimes(1);
+    expect(await authorize(request({}), response(), 'legacy-draft', { mode: 'read' })).toBe(false);
+    expect(isPersonalWorkspaceForAccount).toHaveBeenCalledWith('workspace-a', null);
+  });
 });

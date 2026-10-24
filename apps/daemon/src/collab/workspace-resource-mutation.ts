@@ -523,6 +523,13 @@ function workspaceResourceMutationAllowed(
   capability: WorkspaceResourceMutationCapability,
 ): boolean {
   if (!row) return false;
+  if (
+    resourceType === 'project'
+    && row.visibility === 'personal'
+    && row.createdByWorkspaceMemberId == null
+    && ctx.workspaceType === 'personal'
+    && ctx.role !== 'owner'
+  ) return false;
   const access = workspaceResourceAccess(row, ctx);
   const strictPersonalCreator =
     row.visibility === 'personal'
@@ -875,6 +882,13 @@ export async function enforceVerifiedWorkspaceResourceRead(
   if (
     !row
     || context.memberStatus !== 'active'
+    || (
+      resourceType === 'project'
+      && row.visibility === 'personal'
+      && row.createdByWorkspaceMemberId == null
+      && context.workspaceType === 'personal'
+      && context.role !== 'owner'
+    )
     || (
       strictPersonalCreator
       && row.createdByWorkspaceMemberId !== context.workspaceMemberId

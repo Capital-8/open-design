@@ -52,13 +52,8 @@ export function resolveLocalProjectCommentWorkspaceContext(input: {
       message: 'workspace project access is not allowed',
     };
   }
-  const { teamId: _previousTeamId, ...context } = local.context;
   return {
     ok: true,
-    context: {
-      ...context,
-      workspaceType: binding.visibility === 'team' ? 'team' : 'personal',
-      ...(binding.visibility === 'team' ? { teamId: binding.workspaceId } : {}),
-    },
+    context: local.context,
   };
 }

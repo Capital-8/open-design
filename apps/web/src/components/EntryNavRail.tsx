@@ -56,7 +56,7 @@ import {
   type WorkspaceDirectoryItem,
   type WorkspaceDirectoryResponse,
   type WorkspaceProjectSummary,
-  workspaceContextHasTeamIdentity,
+  workspaceContextHasWorkspaceIdentity,
 } from '@open-design/contracts';
 import {
   fetchVelaLoginStatus,
@@ -441,10 +441,10 @@ function RailRecentSection({
   const collectionPage: TrackingProjectCollectionPage =
     analyticsPage === 'drafts' || analyticsPage === 'all_projects' ? analyticsPage : 'home';
   // The same gates the project cards apply (RecentProjectsStrip): a move needs
-  // a team plane to move into AND the right to share, and only the member's
-  // own projects can be changed at all.
+  // an exact Workspace identity and the right to share. Only the member's
+  // own private projects can be moved into the shared collection.
   const moveToTeamAvailable =
-    workspaceContextHasTeamIdentity(workspaceContext)
+    workspaceContextHasWorkspaceIdentity(workspaceContext)
     && workspaceContext?.permissions.canShareProjects === true;
   const isSharedProject: SharedProjectPredicate = isShared ?? (() => false);
   const ownedBySelf = (projectId: string) => projectOwnedBySelf({

@@ -31,7 +31,7 @@ export function createVerifiedProjectRequestAuthority(deps: {
   localAuthority: AuthorizeProjectRequest;
   getBinding: (projectId: string) => WorkspaceResourceAccessInput | null | undefined;
   verifyWorkspaceRequestAuthority: VerifyWorkspaceRequestAuthority;
-  isPersonalWorkspaceForAccount: (workspaceId: string) => Promise<boolean>;
+  isPersonalWorkspaceForAccount: (workspaceId: string, creatorMemberId: string | null) => Promise<boolean>;
   reconcileMemberRemovalProjects: (workspaceId: string, ownerMemberId: string) => Promise<unknown>;
   sendApiError: (res: Response, status: number, code: string, message: string) => unknown;
 }): AuthorizeProjectRequest {
@@ -49,7 +49,10 @@ export function createVerifiedProjectRequestAuthority(deps: {
     if (!claimed) {
       // A headerless Personal project retains its local path only with a
       // fresh positive account-directory witness; Team and outages fail closed.
-      if (await deps.isPersonalWorkspaceForAccount(binding.workspaceId)) {
+      if (await deps.isPersonalWorkspaceForAccount(
+        binding.workspaceId,
+        binding.createdByWorkspaceMemberId ?? null,
+      )) {
         return deps.localAuthority(req, res, projectId, options);
       }
       deps.sendApiError(res, 400, 'WORKSPACE_CONTEXT_REQUIRED', 'an exact workspace identity is required');
@@ -75,8 +78,16 @@ export function createVerifiedProjectRequestAuthority(deps: {
       return false;
     }
     if (
+      binding.visibility === 'personal'
+      && binding.createdByWorkspaceMemberId == null
+      && verified.context.workspaceType === 'personal'
+      && verified.context.role !== 'owner'
+    ) {
+      deps.sendApiError(res, 403, 'WORKSPACE_PROJECT_PERMISSION_DENIED', 'legacy private project access is not allowed');
+      return false;
+    }
+    if (
       options.mode === 'read'
-      && verified.context.workspaceType === 'team'
       && binding.visibility === 'personal'
       && binding.createdByWorkspaceMemberId !== claimed.workspaceMemberId
       && verified.context.role === 'owner'

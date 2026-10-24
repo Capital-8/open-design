@@ -971,8 +971,6 @@ import {
 import { withLastKnownWorkspaceContext } from './collab/workspace-context.js';
 import {
   createWorkspaceTypeRegistry,
-  impossibleTeamShareRows,
-  projectCollabScope,
 } from './collab/team-share-scope.js';
 
 import {
@@ -3883,11 +3881,9 @@ export async function startServer({
       console.warn('[od] failed to recover authorized team mirror promotion:', error);
     },
   });
-  // What this daemon has learned about each workspace's type, memoized from
-  // exact directory/context reads it already performs. It is the
-  // second witness behind the team-share invariant: a team share may only be
-  // recorded in — and a project-scoped collab call may only be pinned to — a
-  // workspace that can actually host a team plane. See collab/team-share-scope.ts.
+  // What this daemon has learned about each workspace's type from exact
+  // directory/context reads. This is a presentation hint for project scope;
+  // project sharing itself is available in either workspace type.
   const workspaceTypes = createWorkspaceTypeRegistry();
   const configuredAmrEnv = () =>
     agentCliEnvForAgent(readAppConfigSync(RUNTIME_DATA_DIR).agentCliEnv, 'amr');
@@ -4099,7 +4095,6 @@ export async function startServer({
     const membership = directory.items.find(
       (item) =>
         item.workspaceId === requestedWorkspaceId
-        && item.workspaceType === 'team'
         && item.memberStatus === 'active'
         && item.lifecycleState === 'active',
     );
@@ -4554,56 +4549,12 @@ export async function startServer({
       { metadataRefreshPending: Boolean(share.metadataRefreshPending) },
     );
   }
-  /**
-   * Heal `workspace_projects` rows that already violate the team-share
-   * invariant: `visibility: 'team'` pinned to a PERSONAL workspace (see
-   * collab/team-share-scope.ts). Older builds let a share taken while the client
-   * sat on its personal workspace persist such a row, and the code guards alone
-   * leave an affected user permanently stuck — the row 403s every collab call it
-   * scopes and nothing ever rewrites it.
-   *
-   * Reconciliation at startup rather than a schema migration: the contradiction
-   * is only decidable against the workspace DIRECTORY (which ids are teams),
-   * which is a signed-in network fact a migration cannot see. Demotion is
-   * therefore evidence-gated — a workspace the directory does not name is left
-   * exactly as-is, and `visibility: 'personal'` rows are never candidates.
-   *
-   * A demoted row goes back to a local draft rather than being re-pointed at
-   * some team: which team was intended is not recoverable, and the user can
-   * simply re-share from the team workspace, which now writes a valid row. This
-   * touches local state only — no hub resource is deleted — and deliberately
-   * leaves `cloudTombstonedAt` null, so a copy that genuinely exists in the team
-   * catalog keeps showing up instead of being suppressed as "unshared here".
-   */
-  const reconcileImpossibleTeamShares = async (): Promise<number> => {
-    await listWorkspaceDirectory();
-    const broken = impossibleTeamShareRows(listTeamWorkspaceProjectShares(db), workspaceTypes);
-    for (const row of broken) {
-      console.warn(
-        `[od] healing project ${row.projectId}: its team share pointed at personal workspace ` +
-          `${row.workspaceId}, which has no team plane. Re-share it from a team workspace.`,
-      );
-      updateWorkspaceProject(db, row.workspaceId, row.projectId, {
-        visibility: 'personal',
-        resourceHubResourceId: null,
-        cloudTombstonedAt: null,
-        syncState: 'local_only',
-        // A startup heal of a row that was never valid; nobody changed the
-        // project — see SYNC_KEEPS_UPDATED_AT.
-        updatedAt: SYNC_KEEPS_UPDATED_AT,
-      });
-    }
-    return broken.length;
-  };
-  void reconcileImpossibleTeamShares().catch((error) => {
-    console.warn('[od] team-share scope reconciliation failed:', error);
-  });
   // Spec 9.2 one-time backfill: claim every pre-existing user design system
   // whose metadata.json already names a workspace into the generic
   // `workspace_resources` table too. Idempotent (see
   // `backfillDesignSystemWorkspaceResources`'s own doc comment), so running
   // it unconditionally on every startup is deliberate, same as
-  // `reconcileImpossibleTeamShares` just above.
+  // other startup backfills.
   void backfillDesignSystemWorkspaceResources(db, USER_DESIGN_SYSTEMS_DIR).catch((error) => {
     console.warn('[od] design-system workspace-resource backfill failed:', error);
   });
@@ -4835,7 +4786,6 @@ export async function startServer({
   ): TeamProjectsDisplayScope | null => {
     if (
       !context
-      || context.workspaceType !== 'team'
       || context.memberStatus !== 'active'
       || context.lifecycleState === 'deleted'
     ) {
@@ -5284,7 +5234,7 @@ export async function startServer({
     isProjectShared: async (projectId, context) => {
       const projectContext =
         context ?? await resolveBoundProjectWorkspaceContext(projectId);
-      if (!projectContext || projectContext.workspaceType !== 'team') return false;
+      if (!projectContext || projectContext.memberStatus !== 'active') return false;
       return Boolean(
         await resolveSharedProjectOwner(projectId, {
           workspaceId: projectContext.workspaceId,
@@ -5494,7 +5444,6 @@ export async function startServer({
       (item) =>
         item.workspaceId === scope.workspaceId
         && item.workspaceMemberId === scope.viewerMemberId
-        && item.workspaceType === 'team'
         && item.memberStatus === 'active'
         && item.lifecycleState === 'active'
         && item.workspaceId === scope.resourceTeamId,
@@ -9012,13 +8961,16 @@ export async function startServer({
         localAuthority: localProjectRequestAuthority,
         getBinding: (projectId) => getWorkspaceProjectByProjectId(db, projectId),
         verifyWorkspaceRequestAuthority,
-        isPersonalWorkspaceForAccount: async (workspaceId) => {
+        isPersonalWorkspaceForAccount: async (workspaceId, creatorMemberId) => {
           const directory = await fetchFreshMutationWorkspaceDirectory();
           return directory.ok && directory.items.some((item) =>
             item.workspaceId === workspaceId
             && item.workspaceType === 'personal'
             && item.memberStatus === 'active'
-            && item.lifecycleState === 'active');
+            && item.lifecycleState === 'active'
+            && (creatorMemberId
+              ? item.workspaceMemberId === creatorMemberId
+              : item.role === 'owner'));
         },
         reconcileMemberRemovalProjects,
         sendApiError,
@@ -9520,9 +9472,7 @@ export async function startServer({
         { workspaceId: principal.teamId, workspaceMemberId: principal.memberId },
       ),
     } } : {}),
-    // Second witness for the team-share invariant: refuse a team share aimed at
-    // a workspace the directory says is personal, even if the caller's headers
-    // claim otherwise. See collab/team-share-scope.ts.
+    // Carry known workspace types into project-scope presentation.
     workspaceTypes,
     // Collab-cloud comment seams (no-op off-team / when unconfigured): stamp the
     // server-authoritative author, gate status/delete on the caller vs the
@@ -9540,7 +9490,7 @@ export async function startServer({
     resolveReadWorkspaceContext: resolveProjectCommentReadWorkspaceContext,
     resolveFreshWorkspaceContext: resolveFreshProjectCommentWorkspaceContext,
     resolveProjectOwnerMemberId: async (projectId, context) => {
-      if (!context || context.workspaceType !== 'team') return null;
+      if (!context || context.memberStatus !== 'active') return null;
       return resolveSharedProjectOwner(projectId, {
         workspaceId: context.workspaceId,
         workspaceMemberId: context.workspaceMemberId,
@@ -9554,7 +9504,7 @@ export async function startServer({
       publications: publicFilePublicationStore,
     })),
     isSharedProject: async (projectId, context) => {
-      if (!context || context.workspaceType !== 'team') return false;
+      if (!context || context.memberStatus !== 'active') return false;
       return Boolean(
         await resolveSharedProjectOwner(projectId, {
           workspaceId: context.workspaceId,
@@ -9982,7 +9932,6 @@ export async function startServer({
           if (!directory.ok || identity !== currentWorkspaceDirectoryIdentity()) return null;
           const active = directory.items.filter((item) =>
             item.workspaceId === workspaceId
-            && item.workspaceType === 'team'
             && item.memberStatus === 'active'
             && item.lifecycleState !== 'deleted');
           return active.length === 1 ? active[0]!.workspaceMemberId : null;

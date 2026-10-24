@@ -564,8 +564,7 @@ export async function bootstrapFirstOpenTeamProjectRoute(
 ): Promise<FirstOpenTeamProjectBootstrapResult> {
   const { exactContext } = options;
   if (
-    exactContext.workspaceType !== 'team'
-    || exactContext.memberStatus !== 'active'
+    exactContext.memberStatus !== 'active'
     || exactContext.lifecycleState !== 'active'
   ) {
     return { kind: 'not-found' };
@@ -605,8 +604,9 @@ export async function bootstrapFirstOpenTeamProjectRoute(
   if (bootstrap.kind === 'forbidden') return { kind: 'unavailable' };
   if (bootstrap.kind !== 'found') return bootstrap;
   if (
-    bootstrap.scope.kind !== 'team'
-    || bootstrap.scope.context?.workspaceType !== 'team'
+    bootstrap.scope.kind === 'unbound'
+    || bootstrap.scope.visibility !== 'team'
+    || bootstrap.scope.context?.workspaceType !== exactContext.workspaceType
     // Same question, same answer as the re-confirmation above: does this local
     // binding belong to the exact principal that authorized the bootstrap? The
     // daemon's scope placeholder role is not evidence about that, and letting it

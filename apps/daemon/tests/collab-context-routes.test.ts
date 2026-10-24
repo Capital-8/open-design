@@ -1896,6 +1896,26 @@ describe('POST /api/workspace/invite/continue', () => {
 });
 
 describe('GET /api/workspace/members', () => {
+  it('reads members and shared projects for a directory-verified Personal workspace', async () => {
+    const personal = {
+      workspaceId: 'personal-shared', workspaceName: 'Personal shared',
+      workspaceType: 'personal' as const, workspaceMemberId: 'member-a',
+      role: 'member' as const, memberStatus: 'active' as const,
+      lifecycleState: 'active' as const,
+    };
+    const listMembers = vi.fn(async () => [{ memberId: 'member-a', displayName: 'A', role: 'member' as const }]);
+    const listTeamProjects = vi.fn(async () => []);
+    const api = await startContextServer({
+      fetchWorkspaceDirectory: async () => ({ ok: true, items: [personal] }),
+      listMembers,
+      listTeamProjects,
+    });
+    const headers = { 'x-od-workspace-id': personal.workspaceId, 'x-od-workspace-member-id': personal.workspaceMemberId };
+    expect((await api.req('/api/workspace/members', { headers })).status).toBe(200);
+    expect((await api.req('/api/workspace/projects/team', { headers })).status).toBe(200);
+    expect(listMembers).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: personal.workspaceId, workspaceType: 'personal' }));
+    expect(listTeamProjects).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: personal.workspaceId, workspaceType: 'personal' }));
+  });
   it('passes the directory-verified Workspace context to the member service', async () => {
     const contexts: unknown[] = [];
     const api = await startContextServer({
