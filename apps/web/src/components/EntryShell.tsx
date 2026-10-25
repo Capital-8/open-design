@@ -131,7 +131,7 @@ import {
   retryUnavailableAmrBalanceGate,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, confirmHomeAmrFundingAvailable, currentAmrFundingFeedbackGeneration, invalidateAmrFundingFeedback, readFreshAmrFundingEvidence, recentHomeAmrFundingInsufficiency } from '../runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, currentAmrFundingFeedbackGeneration, invalidateAmrFundingFeedback, readFreshAmrFundingEvidence, recentHomeAmrFundingInsufficiency } from '../runtime/amr-funding-feedback';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { HomeInviteSurface, HomeInviteTrigger } from './HomeInviteSurface';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
@@ -1626,7 +1626,6 @@ export function EntryShell({
       const showFundingBlock = async (
         snapshot: AmrWalletSnapshot,
         preflight: WorkspaceBillingPreflight | null,
-        sendEvidence?: Promise<{ kind: 'available' | 'insufficient' | 'unknown'; preflight: WorkspaceBillingPreflight | null }>,
       ): Promise<boolean> => {
         const identity = homeFundingIdentityRef.current;
         const accountGeneration = currentWorkspaceAccountGeneration();
@@ -1653,21 +1652,9 @@ export function EntryShell({
               if (identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) finish('dismiss');
             });
           };
-          if (sendEvidence) {
-            void sendEvidence.then((evidence) => {
-              if (!fundingIsCurrent()) return finish('dismiss');
-              // Recovery updates the next click's cache. It cannot release
-              // a draft already parked behind this visible dialog.
-              if (evidence.kind === 'available' && evidence.preflight && scope) {
-                confirmHomeAmrFundingAvailable(scope, amrModelId ?? null, evidence.preflight);
-              } else {
-                refreshForNextSend();
-              }
-            });
-          } else {
-            // The fresh send-time read already proved insufficient.
-            refreshForNextSend();
-          }
+          // The fresh send-time read proved insufficiency. Any later recovery
+          // updates the next click's cache but never submits this parked draft.
+          refreshForNextSend();
         });
         onAmrBalanceGateBlockChange(null);
         if (!isSubmitCurrent() || decision === 'dismiss' || identity !== homeFundingIdentityRef.current
@@ -1714,20 +1701,14 @@ export function EntryShell({
         });
         return 'blocked' as const;
       }
-      const recentInsufficiency = recentHomeAmrFundingInsufficiency(scope, amrModelId ?? null);
-      const confirmedBlock = recentInsufficiency
-        ? cachedHomeAmrFundingBlock(scope, amrModelId ?? null) : null;
-      if (confirmedBlock && recentInsufficiency && scope && fundingEvidence) {
-        // The Link hint has already ruled out full before a balance reason
-        // becomes visible. A later funding recovery cannot send this draft.
-        if (!await showFundingBlock(confirmedBlock, recentInsufficiency, fundingEvidence)) return 'blocked' as const;
-      }
       // Unknown is not proof of an available slot. Preserve the existing real
       // Link request path and named-rejection fallback rather than inventing a
       // client quota or blocking legitimate old CLI deployments.
       // client VIEW-015/RUN-003: a current scoped Home draft must not create
       // even an optimistic project while its funds remain unconfirmed. This is
-      // independent of the immediately expirable concurrency hint above.
+      // independent of the immediately expirable concurrency hint above. A
+      // recent insufficiency hint cannot block a new explicit click until this
+      // click's fresh read confirms it; funding may have recovered meanwhile.
       let cachedBlock: AmrWalletSnapshot | null = null;
       let fundingPreflight: WorkspaceBillingPreflight | null = null;
       if (scope) {

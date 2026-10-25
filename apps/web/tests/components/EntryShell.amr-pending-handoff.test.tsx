@@ -537,6 +537,7 @@ describe('Home memory funding gate', () => {
     };
     return { ...h,
       fundingReads: () => reads,
+      setServerVerdict: (value: 'available' | 'insufficient') => { serverVerdict = value; },
       confirm: (fundingCheck: string) => {
         if (fundingCheck === 'available' || fundingCheck === 'insufficient') serverVerdict = fundingCheck;
         confirmResponse(jsonResponse({ preflight: { ...homeFunding(context, serverVerdict), fundingCheck } }));
@@ -766,6 +767,58 @@ describe('Home memory funding gate', () => {
     expect(h.rollback).not.toHaveBeenCalled();
     expect(h.onCreateProject).not.toHaveBeenCalled();
     expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this draft on Home.');
+  });
+
+  it('RUN-004 sends on the first explicit retry when fresh funding recovered after a recent block', async () => {
+    const h = await primeHomeFunding();
+    await submitHome('Retry this draft after funding returns.');
+    await screen.findByTestId('amr-balance-dialog');
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-dismiss'));
+    await waitFor(() => expect(screen.queryByTestId('amr-balance-dialog')).toBeNull());
+    // The wallet changed, but no background read has refreshed the old 5s
+    // insufficiency hint. This click must use its own fresh preflight.
+    h.setServerVerdict('available');
+    await submitHome('Retry this draft after funding returns.');
+    await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+    expect(h.onBeginProjectCreation).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+  });
+
+  it('RUN-004 keeps the draft blocked when the explicit retry is still unfunded', async () => {
+    const h = await primeHomeFunding();
+    await submitHome('Keep this unfunded retry draft.');
+    await screen.findByTestId('amr-balance-dialog');
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-dismiss'));
+    await waitFor(() => expect(screen.queryByTestId('amr-balance-dialog')).toBeNull());
+    await submitHome('Keep this unfunded retry draft.');
+    await screen.findByTestId('amr-balance-dialog');
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this unfunded retry draft.');
+  });
+
+  it('RUN-004 keeps real Link-full priority over a recovered funding read', async () => {
+    const h = await primeHomeFunding();
+    await submitHome('Keep this full-slot retry draft.');
+    await screen.findByTestId('amr-balance-dialog');
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-dismiss'));
+    await waitFor(() => expect(screen.queryByTestId('amr-balance-dialog')).toBeNull());
+    h.setServerVerdict('available');
+    const context = personalContext();
+    const original = globalThis.fetch;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/billing/request-concurrency?')
+        ? Promise.resolve(jsonResponse({ requestConcurrencyHint: {
+            workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+            status: 'full', running: 30, limit: 30, observedAt: new Date().toISOString(),
+          } }))
+        : original(input, init));
+    await submitHome('Keep this full-slot retry draft.');
+    await screen.findByTestId('amr-concurrency-dialog');
+    expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this full-slot retry draft.');
   });
 
   it('updates available funding without submitting until the user sends again', async () => {
