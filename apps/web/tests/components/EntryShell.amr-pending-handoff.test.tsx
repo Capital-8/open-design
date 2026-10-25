@@ -48,8 +48,8 @@ vi.mock('../../src/collab/workspace-events', async (importOriginal) => {
 });
 
 vi.mock('../../src/components/AmrBalanceDialog', () => ({
-  AmrBalanceDialog: ({ onClose, onResolved }: { onClose: () => void; onResolved: () => void }) => (
-    <div data-testid="amr-balance-dialog">
+  AmrBalanceDialog: ({ balanceUsd, onClose, onResolved }: { balanceUsd: string; onClose: () => void; onResolved: () => void }) => (
+    <div data-testid="amr-balance-dialog" data-balance-usd={balanceUsd}>
       <button type="button" data-testid="amr-balance-dialog-dismiss" onClick={onClose}>
         later
       </button>
@@ -422,6 +422,42 @@ describe('OPEND-2614 · funded Home handoff precedes the remaining AMR sign-in g
     await submitHome('Keep this draft through both decisions.');
     await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
     expect(freshReads).toBeGreaterThanOrEqual(2);
+  });
+
+  it('RUN-003 uses the current fresh shortfall when it beats a pending hint and an older negative', async () => {
+    const h = harness('amr');
+    await screen.findByTestId('home-hero-input');
+    const context = personalContext();
+    const previous = globalThis.fetch;
+    let releaseHint!: (response: Response) => void;
+    let currentSend = false;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/billing/request-concurrency?')) {
+        return new Promise<Response>((resolve) => { releaseHint = resolve; });
+      }
+      if (url.includes('/billing/preflight?')) {
+        return Promise.resolve(jsonResponse({ preflight: {
+          ...homeFunding(context, 'insufficient'), balanceUsd: currentSend ? '-3' : '0',
+        } }));
+      }
+      return previous(input, init);
+    }) as typeof fetch;
+    invalidateAmrFundingFeedback();
+    await checkAmrFundingFeedback(context, 'default');
+    expect(recentHomeAmrFundingInsufficiency(context, 'default')).not.toBeNull();
+    currentSend = true;
+    await submitHome('Use this click\'s exact shortfall.');
+    const dialog = await screen.findByTestId('amr-balance-dialog');
+    expect(dialog).toHaveAttribute('data-balance-usd', '-3');
+    await act(async () => releaseHint(jsonResponse({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status: 'full', running: 10, limit: 10,
+    } })));
+    expect(screen.getByTestId('amr-balance-dialog')).toHaveAttribute('data-balance-usd', '-3');
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
   });
 
   it('allow: begin → gate → create, and the create reuses the optimistic id with the gate witness', async () => {

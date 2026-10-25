@@ -131,7 +131,7 @@ import {
   retryUnavailableAmrBalanceGate,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, currentAmrFundingFeedbackGeneration, invalidateAmrFundingFeedback, readFreshAmrFundingEvidence, recentHomeAmrFundingInsufficiency } from '../runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, confirmHomeAmrFundingAvailable, currentAmrFundingFeedbackGeneration, invalidateAmrFundingFeedback, noteHomeAmrFundingBlockPresented, readFreshAmrFundingEvidence, recentHomeAmrFundingInsufficiency, retireHomeAmrFundingBlock, takeHomeAmrFundingFastBlock } from '../runtime/amr-funding-feedback';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { HomeInviteSurface, HomeInviteTrigger } from './HomeInviteSurface';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
@@ -1626,6 +1626,7 @@ export function EntryShell({
       const showFundingBlock = async (
         snapshot: AmrWalletSnapshot,
         preflight: WorkspaceBillingPreflight | null,
+        sendEvidence?: Promise<{ kind: 'available' | 'insufficient' | 'unknown'; preflight: WorkspaceBillingPreflight | null }>,
       ): Promise<boolean> => {
         const identity = homeFundingIdentityRef.current;
         const accountGeneration = currentWorkspaceAccountGeneration();
@@ -1642,6 +1643,7 @@ export function EntryShell({
             resolve(value);
           };
           cancelHomeFundingDialogRef.current = () => finish('dismiss');
+          noteHomeAmrFundingBlockPresented(scope, amrModelId ?? null);
           onAmrBalanceGateBlockChange({
             reason: 'insufficient', dialog: amrBalanceBlockedDialog(branch),
             upgradeIntent: amrBalanceDialogUpgradeIntent(branch), snapshot: { ...snapshot, profile: amrProfile ?? snapshot.profile },
@@ -1652,9 +1654,20 @@ export function EntryShell({
               if (identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) finish('dismiss');
             });
           };
-          // The fresh send-time read proved insufficiency. Any later recovery
-          // updates the next click's cache but never submits this parked draft.
-          refreshForNextSend();
+          if (sendEvidence) {
+            void sendEvidence.then((evidence) => {
+              if (!fundingIsCurrent()) return finish('dismiss');
+              // The pending same-click recovery updates the next attempt's
+              // cache; it never submits a dialog that was already dismissed.
+              if (evidence.kind === 'available' && evidence.preflight && scope) {
+                confirmHomeAmrFundingAvailable(scope, amrModelId ?? null, evidence.preflight);
+              } else {
+                refreshForNextSend();
+              }
+            });
+          } else {
+            refreshForNextSend();
+          }
         });
         onAmrBalanceGateBlockChange(null);
         if (!isSubmitCurrent() || decision === 'dismiss' || identity !== homeFundingIdentityRef.current
@@ -1711,6 +1724,14 @@ export function EntryShell({
         });
         return 'blocked' as const;
       }
+      const fastBlock = firstDecision.source === 'hint'
+        ? takeHomeAmrFundingFastBlock(scope, amrModelId ?? null) : null;
+      if (fastBlock && fundingEvidence) {
+        // Link has ruled out full for this click. A remembered, exact-member
+        // shortfall may paint once while fresh funds are still being checked.
+        // The next explicit click cannot replay this old negative.
+        if (!await showFundingBlock(fastBlock.snapshot, fastBlock.preflight, fundingEvidence)) return 'blocked' as const;
+      }
       // Unknown is not proof of an available slot. Preserve the existing real
       // Link request path and named-rejection fallback rather than inventing a
       // client quota or blocking legitimate old CLI deployments.
@@ -1732,6 +1753,8 @@ export function EntryShell({
             balanceUsd: evidence.preflight.balanceUsd, updatedAt: evidence.preflight.generatedAt,
             fetchedAt: new Date().toISOString(), stale: false, source: 'daemon_cache',
           };
+        } else {
+          retireHomeAmrFundingBlock(scope, amrModelId ?? null, evidence.preflight);
         }
       }
       if (cachedBlock) {
