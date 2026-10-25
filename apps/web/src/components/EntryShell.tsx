@@ -131,7 +131,7 @@ import {
   retryUnavailableAmrBalanceGate,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback, readFreshAmrFundingEvidence } from '../runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, confirmHomeAmrFundingAvailable, currentAmrFundingFeedbackGeneration, invalidateAmrFundingFeedback, readFreshAmrFundingEvidence, recentHomeAmrFundingInsufficiency } from '../runtime/amr-funding-feedback';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { HomeInviteSurface, HomeInviteTrigger } from './HomeInviteSurface';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
@@ -775,6 +775,48 @@ export function EntryShell({
     ? JSON.stringify([currentWorkspaceAccountGeneration(), homeFundingScope, homeFundingModelId]) : null;
   const homeFundingIdentityRef = useRef(homeFundingIdentity);
   homeFundingIdentityRef.current = homeFundingIdentity;
+  const homeFundingWarmRef = useRef<{
+    identity: string; running: boolean; dirty: boolean; walletRevision: string | null;
+  } | null>(null);
+  const homeFundingBalanceRef = useRef<{ identity: string; balance: number } | null>(null);
+  const homeFundingAliveRef = useRef(true);
+  useEffect(() => {
+    homeFundingAliveRef.current = true;
+    return () => {
+      homeFundingAliveRef.current = false;
+      homeFundingWarmRef.current = null;
+    };
+  }, []);
+  const warmHomeFunding = (walletRevision: string | null = null) => {
+    if (!homeFundingIdentity || !homeFundingScope) return;
+    const identity = homeFundingIdentity;
+    const current = homeFundingWarmRef.current;
+    if (current?.identity === identity && current.running) {
+      // A wallet SSE and its billing projection carry the same opaque Vela
+      // revision. Only that exact pair shares a read; a distinct/legacy event
+      // still schedules a second authoritative preflight.
+      if (!walletRevision || current.walletRevision !== walletRevision) current.dirty = true;
+      return;
+    }
+    const state = { identity, running: true, dirty: false, walletRevision };
+    homeFundingWarmRef.current = state;
+    const read = () => {
+      if (!homeFundingAliveRef.current || homeFundingIdentityRef.current !== identity) return;
+      invalidateAmrFundingFeedback();
+      void checkAmrFundingFeedback(homeFundingScope, homeFundingModelId,
+        () => homeFundingAliveRef.current && homeFundingIdentityRef.current === identity)
+        .finally(() => {
+          if (homeFundingWarmRef.current !== state) return;
+          if (state.dirty) {
+            state.dirty = false;
+            read();
+          } else {
+            state.running = false;
+          }
+        });
+    };
+    read();
+  };
   const cancelHomeFundingDialogRef = useRef<(() => void) | null>(null);
   const homeConcurrencyPendingRef = useRef(false);
   const homeConcurrencyEpochRef = useRef(0);
@@ -799,11 +841,23 @@ export function EntryShell({
     if (!homeFundingIdentity) return;
     // Warm for display/recovery only. Home sends still require their own
     // uncached evidence before handing the draft to project creation.
-    void checkAmrFundingFeedback(homeFundingScope, homeFundingModelId);
+    void checkAmrFundingFeedback(homeFundingScope, homeFundingModelId,
+      () => homeFundingAliveRef.current && homeFundingIdentityRef.current === homeFundingIdentity);
+    const refresh = () => {
+      if (cachedHomeAmrFundingBlock(homeFundingScope, homeFundingModelId)) warmHomeFunding();
+      else invalidateAmrFundingFeedback();
+    };
     const invalidate = () => invalidateAmrFundingFeedback();
-    window.addEventListener(WORKSPACE_BILLING_REFRESH_EVENT, invalidate);
+    const invalidateOnVisible = () => {
+      if (document.visibilityState === 'visible') invalidateAmrFundingFeedback();
+    };
+    window.addEventListener(WORKSPACE_BILLING_REFRESH_EVENT, refresh);
+    window.addEventListener('focus', invalidate);
+    document.addEventListener('visibilitychange', invalidateOnVisible);
     return () => {
-      window.removeEventListener(WORKSPACE_BILLING_REFRESH_EVENT, invalidate);
+      window.removeEventListener(WORKSPACE_BILLING_REFRESH_EVENT, refresh);
+      window.removeEventListener('focus', invalidate);
+      document.removeEventListener('visibilitychange', invalidateOnVisible);
       cancelHomeFundingDialogRef.current?.();
     };
     // The identity contains all scope/model fields; object allocation must not
@@ -811,16 +865,28 @@ export function EntryShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [homeFundingIdentity]);
   useEffect(() => {
-    // Reuse successful scoped billing publications (SSE, focus or fallback).
-    // Only an existing Home block needs this extra model-specific recovery read.
-    if (!homeFundingIdentity || !homeFundingScope || !workspaceBillingResponse ||
-      workspaceBillingBalanceUsd(workspaceBillingResponse, homeFundingContext) == null ||
-      !cachedHomeAmrFundingBlock(homeFundingScope, homeFundingModelId)) return;
-    let active = true;
-    invalidateAmrFundingFeedback();
-    void checkAmrFundingFeedback(homeFundingScope, homeFundingModelId,
-      () => active && homeFundingIdentityRef.current === homeFundingIdentity);
-    return () => { active = false; };
+    // Billing publications may arrive after Home mounted with available funds.
+    // A zero-wallet projection asks for a model-specific preflight; it never
+    // decides insufficiency itself (the plan window may still cover the run).
+    const balance = workspaceBillingResponse
+      ? workspaceBillingBalanceUsd(workspaceBillingResponse, homeFundingContext) : null;
+    if (!homeFundingIdentity || balance == null || !Number.isFinite(Number(balance))) return;
+    const previous = homeFundingBalanceRef.current;
+    const numericBalance = Number(balance);
+    homeFundingBalanceRef.current = { identity: homeFundingIdentity, balance: numericBalance };
+    // Initial Home warm handles its first snapshot. A changed wallet projection
+    // rechecks the exact model, without treating wallet zero as insufficiency.
+    // The matching consumption SSE may already have started this read. Its
+    // following wallet projection is the same publication, not a second reason
+    // to invalidate a freshly confirmed shortfall between two reads.
+    if (previous?.identity === homeFundingIdentity && previous.balance !== numericBalance) {
+      const walletRevision = workspaceBillingResponse?.workspaceSnapshot?.revisions.wallet ?? null;
+      const sameConfirmedZero = numericBalance <= 0 && walletRevision
+        && homeFundingWarmRef.current?.identity === homeFundingIdentity
+        && homeFundingWarmRef.current.walletRevision === walletRevision
+        && recentHomeAmrFundingInsufficiency(homeFundingScope, homeFundingModelId);
+      if (!sameConfirmedZero) warmHomeFunding(walletRevision);
+    }
     // Billing response identity changes only when the shared hook publishes a
     // new read. Unrelated composer renders must not schedule recovery requests.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1057,10 +1123,24 @@ export function EntryShell({
     workspaceContext?.workspaceType,
   ]);
   const invalidateHomeFunding = (event: Parameters<typeof shouldRefreshWorkspaceBilling>[0]) => {
-    if (shouldRefreshWorkspaceBilling(event, homeFundingContext)) invalidateAmrFundingFeedback();
+    if (!shouldRefreshWorkspaceBilling(event, homeFundingContext)) return;
+    if (event.type === 'wallet-balance-changed' || event.type === 'coding-plan-usage-changed') {
+      const warm = homeFundingWarmRef.current;
+      if (event.type === 'wallet-balance-changed' && event.revision
+        && warm?.identity === homeFundingIdentity && warm.walletRevision === event.revision
+        && recentHomeAmrFundingInsufficiency(homeFundingScope, homeFundingModelId)) {
+        // The same revision was already confirmed insufficient, even if its
+        // SSE arrived after the billing-triggered read completed.
+        return;
+      }
+      warmHomeFunding(event.type === 'wallet-balance-changed' ? event.revision ?? null : null);
+    } else {
+      invalidateAmrFundingFeedback();
+    }
   };
   useWorkspaceInvalidation({
-    // Reuse the billing stream to expire hints, without adding funding reads.
+    // Consumption may exhaust a wallet after Home mounted with available funds.
+    // A model-specific warm read provides the exact reason for the next click.
     'billing-changed': invalidateHomeFunding,
     'billing-subscription-changed': invalidateHomeFunding,
     'wallet-balance-changed': invalidateHomeFunding,
@@ -1543,14 +1623,77 @@ export function EntryShell({
       const fundingIsCurrent = () => isSubmitCurrent() && hintEpoch === homeConcurrencyEpochRef.current
         && hintIdentity === homeFundingIdentityRef.current
         && hintAccountGeneration === currentWorkspaceAccountGeneration();
+      const showFundingBlock = async (
+        snapshot: AmrWalletSnapshot,
+        preflight: WorkspaceBillingPreflight | null,
+        sendEvidence?: Promise<{ kind: 'available' | 'insufficient' | 'unknown'; preflight: WorkspaceBillingPreflight | null }>,
+      ): Promise<boolean> => {
+        const identity = homeFundingIdentityRef.current;
+        const accountGeneration = currentWorkspaceAccountGeneration();
+        const branch = withAmrFundingPlan(
+          resolveAmrBalanceBranch({ context: homeFundingContext, billing: workspaceBilling }),
+          homeFundingContext, preflight,
+        );
+        const decision = await new Promise<'retry' | 'dismiss'>((resolve) => {
+          let settled = false;
+          const finish = (value: 'retry' | 'dismiss') => {
+            if (settled) return;
+            settled = true;
+            cancelHomeFundingDialogRef.current = null;
+            resolve(value);
+          };
+          cancelHomeFundingDialogRef.current = () => finish('dismiss');
+          onAmrBalanceGateBlockChange({
+            reason: 'insufficient', dialog: amrBalanceBlockedDialog(branch),
+            upgradeIntent: amrBalanceDialogUpgradeIntent(branch), snapshot: { ...snapshot, profile: amrProfile ?? snapshot.profile },
+            modelId: amrModelId, fundingScope: scope, resolve: finish,
+          });
+          const refreshForNextSend = () => {
+            void checkAmrFundingFeedback(scope, amrModelId ?? null, fundingIsCurrent).then(() => {
+              if (identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) finish('dismiss');
+            });
+          };
+          if (sendEvidence) {
+            void sendEvidence.then((evidence) => {
+              if (!fundingIsCurrent()) return finish('dismiss');
+              // Recovery updates the next click's cache. It cannot release
+              // a draft already parked behind this visible dialog.
+              if (evidence.kind === 'available' && evidence.preflight && scope) {
+                confirmHomeAmrFundingAvailable(scope, amrModelId ?? null, evidence.preflight);
+              } else {
+                refreshForNextSend();
+              }
+            });
+          } else {
+            // The fresh send-time read already proved insufficient.
+            refreshForNextSend();
+          }
+        });
+        onAmrBalanceGateBlockChange(null);
+        if (!isSubmitCurrent() || decision === 'dismiss' || identity !== homeFundingIdentityRef.current
+          || accountGeneration !== currentWorkspaceAccountGeneration()) return false;
+        invalidateAmrFundingFeedback();
+        return true;
+      };
       // Both reads are side-effect free. Start fresh funds proof
       // now, but never wait for it when the counter already proves full.
       // Consume late failures even if an identity change or full counter exits.
       const fundingEvidence = scope
-        ? readFreshAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent)
-          .catch(() => ({ kind: 'unknown' as const, preflight: null }))
+        ? (async () => {
+          // Focus, the wallet SSE and its billing publication can supersede
+          // successive reads during one explicit Send. Retry only those
+          // invalidated reads, with a hard bound and no stale authorization.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const generation = currentAmrFundingFeedbackGeneration();
+            const evidence = await readFreshAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent);
+            if (!fundingIsCurrent()) return { kind: 'unknown' as const, preflight: null };
+            if (generation === currentAmrFundingFeedbackGeneration()) return evidence;
+          }
+          return { kind: 'unknown' as const, preflight: null };
+        })().catch(() => ({ kind: 'unknown' as const, preflight: null }))
         : null;
-      const hint = await readAmrRequestConcurrency(scope);
+      const hintRequest = readAmrRequestConcurrency(scope);
+      const hint = await hintRequest;
       homeConcurrencyPendingRef.current = false;
       // A workspace, model, identity, route change or unmount while reading must
       // never dispatch the earlier payload under the new principal.
@@ -1570,6 +1713,14 @@ export function EntryShell({
             ? { ...current, preflight: evidence.preflight } : current);
         });
         return 'blocked' as const;
+      }
+      const recentInsufficiency = recentHomeAmrFundingInsufficiency(scope, amrModelId ?? null);
+      const confirmedBlock = recentInsufficiency
+        ? cachedHomeAmrFundingBlock(scope, amrModelId ?? null) : null;
+      if (confirmedBlock && recentInsufficiency && scope && fundingEvidence) {
+        // The Link hint has already ruled out full before a balance reason
+        // becomes visible. A later funding recovery cannot send this draft.
+        if (!await showFundingBlock(confirmedBlock, recentInsufficiency, fundingEvidence)) return 'blocked' as const;
       }
       // Unknown is not proof of an available slot. Preserve the existing real
       // Link request path and named-rejection fallback rather than inventing a
@@ -1593,35 +1744,7 @@ export function EntryShell({
         }
       }
       if (cachedBlock) {
-        const identity = homeFundingIdentityRef.current;
-        const accountGeneration = currentWorkspaceAccountGeneration();
-        const branch = withAmrFundingPlan(
-          resolveAmrBalanceBranch({ context: homeFundingContext, billing: workspaceBilling }),
-          homeFundingContext, fundingPreflight,
-        );
-        const decision = await new Promise<'retry' | 'dismiss'>((resolve) => {
-          let settled = false;
-          const finish = (value: 'retry' | 'dismiss') => {
-            if (settled) return;
-            settled = true;
-            cancelHomeFundingDialogRef.current = null;
-            resolve(value);
-          };
-          cancelHomeFundingDialogRef.current = () => finish('dismiss');
-          onAmrBalanceGateBlockChange({
-            reason: 'insufficient', dialog: amrBalanceBlockedDialog(branch),
-            upgradeIntent: amrBalanceDialogUpgradeIntent(branch), snapshot: { ...cachedBlock, profile: amrProfile ?? cachedBlock.profile },
-            modelId: amrModelId, fundingScope: scope, resolve: finish,
-          });
-          // Refresh the hint for the user's next send. Background confirmation
-          // must not dismiss this dialog or submit the parked draft.
-          void checkAmrFundingFeedback(scope, amrModelId ?? null).then(() => {
-            if (identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) finish('dismiss');
-          });
-        });
-        onAmrBalanceGateBlockChange(null);
-        if (!isSubmitCurrent() || decision === 'dismiss' || identity !== homeFundingIdentityRef.current || accountGeneration !== currentWorkspaceAccountGeneration()) return 'blocked' as const;
-        invalidateAmrFundingFeedback();
+        if (!await showFundingBlock(cachedBlock, fundingPreflight!)) return 'blocked' as const;
       }
     }
     // A scoped AMR Home send reaches this point only after fresh funds proof;

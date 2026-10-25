@@ -29,7 +29,7 @@ import type {
 } from '../../src/components/EntryShell';
 import { I18nProvider } from '../../src/i18n';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
-import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback, recentHomeAmrFundingInsufficiency } from '../../src/runtime/amr-funding-feedback';
 import { useWorkspaceInvalidation } from '../../src/collab/workspace-events';
 import { advanceWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 import type { AgentInfo, AppConfig } from '../../src/types';
@@ -586,6 +586,148 @@ describe('Home memory funding gate', () => {
     } finally { now.mockRestore(); }
   });
 
+  it('warms the exact model after an available Home becomes insufficient through consumption', async () => {
+    const h = harness('amr');
+    await waitForWalletInMemory();
+    const context = personalContext();
+    await waitFor(() => expect(vi.mocked(globalThis.fetch).mock.calls.some(([input]) =>
+      String(input).includes('/api/workspace/billing/preflight?'))).toBe(true));
+    expect(cachedHomeAmrFundingBlock(context, 'default')).toBeNull();
+    const original = globalThis.fetch;
+    let modelReads = 0;
+    globalThis.fetch = vi.fn((input, init) => {
+      if (String(input).includes('/api/workspace/billing/preflight?')) {
+        modelReads++;
+        return Promise.resolve(jsonResponse({ preflight: homeFunding(context, 'insufficient') }));
+      }
+      return original(input, init);
+    }) as typeof fetch;
+    const handlers = [...vi.mocked(useWorkspaceInvalidation).mock.calls].reverse().find(
+      ([registered]) => registered['team-project-content-ready'],
+    )![0];
+    const event = { type: 'wallet-balance-changed', workspaceId: context.workspaceId,
+      workspaceMemberId: context.workspaceMemberId, revision: '3', eventId: 'consumed' };
+    await act(async () => { handlers['wallet-balance-changed']!(event as never); });
+    await waitFor(() => expect(cachedHomeAmrFundingBlock(context, 'default')).not.toBeNull());
+    expect(modelReads).toBe(1);
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    await submitHome('Hold this draft after consumption.');
+    await screen.findByTestId('amr-balance-dialog');
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+  });
+
+  it.each(['sse-first', 'billing-first', 'billing-after-proof', 'distinct-revision'] as const)(
+    'coalesces %s consumption with its zero-wallet billing publication without clearing the confirmed reason', async (order) => {
+    const context = personalContext();
+    const baseFetch = globalThis.fetch;
+    let balance = '20.00';
+    globalThis.fetch = vi.fn((input, init) => {
+      if (String(input).includes('/api/workspace/billing?')) {
+        billingReads++;
+        return Promise.resolve(jsonResponse({ summary: null, workspaceBalance: {
+          workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+          balanceUsd: balance, billingScopeVersion: 2, expiresAt: null,
+          updatedAt: new Date().toISOString(),
+        }, workspaceSnapshot: {
+          schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+          billingScopeVersion: 2, billing: { billingState: 'active', planId: 'personal_pro' },
+          wallet: { balanceUsd: balance, expiresAt: null, updatedAt: new Date().toISOString() },
+          revisions: { billing: 'billing-unchanged', wallet: balance === '0.00' ? 'exhausted' : 'before' },
+        } }));
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+    const h = harness('amr');
+    await waitForWalletInMemory();
+    await checkAmrFundingFeedback(context, 'default');
+    expect(cachedHomeAmrFundingBlock(context, 'default')).toBeNull();
+    balance = '0.00';
+    const original = globalThis.fetch;
+    const releaseWarm: Array<(response: Response) => void> = [];
+    let modelReads = 0;
+    globalThis.fetch = vi.fn((input, init) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/api/workspace/billing/preflight' && url.searchParams.get('modelId') === 'default') {
+        modelReads++;
+        return new Promise<Response>(resolve => { releaseWarm.push(resolve); });
+      }
+      return original(input, init);
+    }) as typeof fetch;
+    const entry = [...vi.mocked(useWorkspaceInvalidation).mock.calls].reverse().find(
+      ([registered]) => registered['team-project-content-ready'],
+    )![0];
+    const event = { type: 'wallet-balance-changed', workspaceId: context.workspaceId,
+      workspaceMemberId: context.workspaceMemberId,
+      revision: order === 'distinct-revision' ? 'newer-wallet-change' : 'exhausted', eventId: 'exhausted' };
+    const beforeBilling = billingReads;
+    const publishBilling = async () => {
+      // The billing hook publishes the matching wallet projection while the
+      // exact-model warm is in flight. The two arrival orders share one proof.
+      const now = vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 1_000);
+      try {
+        await act(async () => window.dispatchEvent(new Event('pageshow')));
+        await waitFor(() => expect(billingReads).toBeGreaterThan(beforeBilling));
+      } finally { now.mockRestore(); }
+    };
+    const publishSse = async () => {
+      await act(async () => { entry['wallet-balance-changed']!(event as never); });
+    };
+    if (order === 'sse-first') {
+      await publishSse();
+      await waitFor(() => expect(modelReads).toBe(1));
+      await publishBilling();
+    } else {
+      await publishBilling();
+      await waitFor(() => expect(modelReads).toBe(1));
+      if (order === 'billing-after-proof') {
+        await act(async () => releaseWarm[0]!(jsonResponse({ preflight: homeFunding(context, 'insufficient') })));
+        await waitFor(() => expect(recentHomeAmrFundingInsufficiency(context, 'default')).not.toBeNull());
+      }
+      await publishSse();
+    }
+    if (order !== 'billing-after-proof') {
+      await act(async () => releaseWarm[0]!(jsonResponse({ preflight: homeFunding(context, 'insufficient') })));
+    }
+    if (order === 'distinct-revision') {
+      await waitFor(() => expect(modelReads).toBe(2));
+      // A genuinely newer producer revision must be re-read, not coalesced
+      // with the balance publication's earlier proof.
+      await act(async () => releaseWarm[1]!(jsonResponse({ preflight: homeFunding(context, 'insufficient') })));
+    }
+    await waitFor(() => expect(recentHomeAmrFundingInsufficiency(context, 'default')).not.toBeNull());
+    expect(modelReads).toBe(order === 'distinct-revision' ? 2 : 1);
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+  });
+
+  it('re-reads within one manual Send after two successive invalidations without using either old proof', async () => {
+    const h = harness('amr');
+    await waitForWalletInMemory();
+    const context = personalContext();
+    const original = globalThis.fetch;
+    const releases: Array<(response: Response) => void> = [];
+    let reads = 0;
+    globalThis.fetch = vi.fn((input, init) => {
+      if (String(input).includes('/api/workspace/billing/preflight?')) {
+        reads++;
+        if (reads <= 2) return new Promise<Response>(resolve => { releases.push(resolve); });
+        return Promise.resolve(jsonResponse({ preflight: homeFunding(context, 'available') }));
+      }
+      return original(input, init);
+    }) as typeof fetch;
+    await submitHome('Send only from this click.');
+    await waitFor(() => expect(releases).toHaveLength(1));
+    await act(async () => window.dispatchEvent(new Event('focus')));
+    await act(async () => releases[0]!(jsonResponse({ preflight: homeFunding(context, 'available') })));
+    await waitFor(() => expect(releases).toHaveLength(2));
+    await act(async () => window.dispatchEvent(new Event('focus')));
+    await act(async () => releases[1]!(jsonResponse({ preflight: homeFunding(context, 'available') })));
+    await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+    expect(reads).toBe(3);
+    expect(h.calls).toEqual(['begin', 'gate', 'create']);
+  });
+
   it('keeps #8240 on Home while current funds are loading, then shows actual insufficiency', async () => {
     const context = personalContext();
     memoryPreflight = {
@@ -704,7 +846,7 @@ describe('Home memory funding gate', () => {
   });
 
   it.each(['billing-changed', 'billing-subscription-changed', 'wallet-balance-changed', 'coding-plan-usage-changed'] as const)(
-    '%s retains confirmed insufficiency without fetching or submitting', async (type) => {
+    '%s retains confirmed insufficiency without submitting', async (type) => {
       const h = await primeHomeFunding();
       const context = personalContext();
       const handlers = [...vi.mocked(useWorkspaceInvalidation).mock.calls].reverse().find(
@@ -730,7 +872,14 @@ describe('Home memory funding gate', () => {
         for (let i = 0; i < 8; i++) invalidate(event as never);
       });
       expect(cachedHomeAmrFundingBlock(context, 'default')).not.toBeNull();
-      expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(readCount);
+      if (type === 'wallet-balance-changed' || type === 'coding-plan-usage-changed') {
+        await waitFor(() => expect(vi.mocked(globalThis.fetch).mock.calls.length).toBeGreaterThan(readCount));
+        // A burst coalesces model-specific preflight rather than starting a
+        // request per event. It can refresh the reason, never the draft.
+        expect(vi.mocked(globalThis.fetch).mock.calls.length).toBeLessThanOrEqual(readCount + 2);
+      } else {
+        expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(readCount);
+      }
       expect(h.onCreateProject).not.toHaveBeenCalled();
     },
   );

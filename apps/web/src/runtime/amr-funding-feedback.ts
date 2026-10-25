@@ -7,13 +7,20 @@ interface FundingEvidence { kind: FundingFeedback; preflight: WorkspaceBillingPr
 const pending = new Map<string, { generation: number; promise: Promise<FundingEvidence> }>();
 let positive: { key: string; expiresAt: number; preflight: WorkspaceBillingPreflight } | null = null;
 const homeBlocks = new Map<string, AmrWalletSnapshot>();
+const recentHomeInsufficiency = new Map<string, { preflight: WorkspaceBillingPreflight; observedAt: number }>();
 let blockAccountGeneration = currentWorkspaceAccountGeneration();
 let cacheGeneration = 0;
+
+/** Distinguish a superseded send-time read from an ordinary unavailable read. */
+export function currentAmrFundingFeedbackGeneration(): number {
+  return cacheGeneration;
+}
 
 function fundingKey(scope: AmrBalanceGateScope, modelId: string | null): string {
   const accountGeneration = currentWorkspaceAccountGeneration();
   if (blockAccountGeneration !== accountGeneration) {
     homeBlocks.clear();
+    recentHomeInsufficiency.clear();
     blockAccountGeneration = accountGeneration;
   }
   return JSON.stringify([accountGeneration, scope.workspaceType, scope.workspaceId, scope.workspaceMemberId, modelId]);
@@ -33,10 +40,43 @@ export function cachedHomeAmrFundingBlock(
   return homeBlocks.get(key) ?? memorySnapshot;
 }
 
+/** Only a very recent, exact-principal server verdict may paint the Home
+ * block before the send-time read finishes. It never authorizes a send. */
+export function recentHomeAmrFundingInsufficiency(
+  scope: AmrBalanceGateScope | undefined,
+  modelId: string | null,
+): WorkspaceBillingPreflight | null {
+  if (!scope) return null;
+  const key = fundingKey(scope, modelId);
+  const recent = recentHomeInsufficiency.get(key);
+  if (!recent || positive?.key === key && positive.expiresAt > Date.now()) return null;
+  const age = Date.now() - Date.parse(recent.preflight.generatedAt);
+  return Date.now() - recent.observedAt <= 5_000 && Number.isFinite(age) && age >= -5_000 && age <= 5_000
+    ? recent.preflight : null;
+}
+
+/** A validated send-time recovery retires the old Home block. This is only a
+ * display cache update; the send still follows its own fresh proof and Link. */
+export function confirmHomeAmrFundingAvailable(
+  scope: AmrBalanceGateScope,
+  modelId: string | null,
+  preflight: WorkspaceBillingPreflight,
+): void {
+  const age = Date.now() - Date.parse(preflight.generatedAt);
+  if (preflight.schemaVersion !== 1 || preflight.workspaceId !== scope.workspaceId
+    || preflight.workspaceMemberId !== scope.workspaceMemberId || preflight.modelId !== modelId
+    || preflight.fundingCheck !== 'available' || !Number.isFinite(age) || age < -5_000 || age > 30_000) return;
+  const key = fundingKey(scope, modelId);
+  homeBlocks.delete(key);
+  recentHomeInsufficiency.delete(key);
+  positive = { key, expiresAt: Date.now() + 5_000, preflight };
+}
+
 /** Invalidate reusable positives and in-flight reads, never a confirmed block. */
 export function invalidateAmrFundingFeedback(): void {
   cacheGeneration++;
   positive = null;
+  recentHomeInsufficiency.clear();
 }
 
 /** One uncached, exact-member/model funding observation. Home uses this
@@ -50,6 +90,7 @@ export async function readFreshAmrFundingEvidence(
   const unknown = { kind: 'unknown' as const, preflight: null };
   if (!isCurrent()) return unknown;
   const generation = currentWorkspaceAccountGeneration();
+  const requestGeneration = cacheGeneration;
   try {
     const query = new URLSearchParams({ workspaceId: scope.workspaceId });
     if (modelId) query.set('modelId', modelId);
@@ -59,7 +100,8 @@ export async function readFreshAmrFundingEvidence(
     if (!response.ok) return unknown;
     const { preflight } = await response.json() as WorkspaceBillingPreflightResponse;
     const age = Date.now() - Date.parse(preflight?.generatedAt);
-    if (!isCurrent() || generation !== currentWorkspaceAccountGeneration() || !preflight
+    if (!isCurrent() || generation !== currentWorkspaceAccountGeneration()
+      || requestGeneration !== cacheGeneration || !preflight
       || preflight.schemaVersion !== 1 || preflight.workspaceId !== scope.workspaceId
       || preflight.workspaceMemberId !== scope.workspaceMemberId || preflight.modelId !== modelId
       || !Number.isFinite(age) || age < -5_000 || age > 30_000) return unknown;
@@ -101,12 +143,14 @@ export function checkAmrFundingEvidence(
       if (!preflight) return unknown;
       if (preflight.fundingCheck === 'available') {
         homeBlocks.delete(key);
+        recentHomeInsufficiency.delete(key);
         positive = { key, expiresAt: Date.now() + 5_000, preflight };
         return evidence;
       }
       if (preflight.fundingCheck === 'insufficient') {
         const balance = preflight.balanceUsd?.trim();
         if (balance && Number.isFinite(Number(balance)) && Number(balance) <= 0) {
+          recentHomeInsufficiency.set(key, { preflight, observedAt: Date.now() });
           homeBlocks.set(key, {
             status: 'available', profile: 'default', user: null, balanceUsd: balance,
             updatedAt: preflight.generatedAt, fetchedAt: new Date().toISOString(),

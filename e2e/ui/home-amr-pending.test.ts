@@ -182,6 +182,139 @@ test.beforeEach(async ({ page }) => {
   await installHandoffProbe(page);
 });
 
+test('[P0] a confirmed same-member Home shortfall shows the block while send-time proof is slow', async ({ page }) => {
+  await wireSignedInAmrHome(page, { accountBalanceUsd: '0.00' });
+  const { workspaceId, workspaceMemberId } = AMR_PERSONAL_WORKSPACE_CONTEXT;
+  const fresh = deferred();
+  let sending = false;
+  let verdict: 'insufficient' | 'available' = 'insufficient';
+  let projectPosts = 0;
+  await page.route('**/api/workspace/billing/request-concurrency?**', route => route.fulfill({ json: {
+    requestConcurrencyHint: { workspaceId, workspaceMemberId, status: 'available', running: 0, limit: 10,
+      observedAt: new Date().toISOString() },
+  } }));
+  await page.route('**/api/workspace/billing/preflight?**', async route => {
+    if (sending) await fresh.promise;
+    await route.fulfill({ json: { preflight: {
+      schemaVersion: 1, workspaceId, workspaceMemberId,
+      modelId: new URL(route.request().url()).searchParams.get('modelId'),
+      generatedAt: new Date().toISOString(), balanceUsd: verdict === 'available' ? '20' : '0', fundingCheck: verdict,
+    } } });
+  });
+  await page.route('**/api/projects', route => {
+    if (route.request().method() === 'POST') { projectPosts++; return route.abort(); }
+    return route.fallback();
+  });
+  const warmed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspace/billing/preflight'
+    && new URL(response.url()).searchParams.get('modelId') === 'glm-5');
+  try {
+    await gotoEntryHome(page);
+    await (await warmed).finished();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    sending = true;
+    const prompt = 'Keep this draft until I retry after funding recovers.';
+    const input = page.getByTestId('home-hero-input');
+    await input.fill(prompt);
+    await page.evaluate(() => {
+      const timing: { start: number | null; visible: number | null } = (window as typeof window & {
+        __run003BlockTiming?: { start: number | null; visible: number | null };
+      })
+        .__run003BlockTiming = { start: null, visible: null };
+      const sample = () => {
+        if (timing.start === null || timing.visible !== null) return;
+        const dialog = document.querySelector<HTMLElement>('[data-testid="amr-balance-dialog"]');
+        if (dialog?.getClientRects().length && getComputedStyle(dialog).visibility === 'visible'
+          && Number(getComputedStyle(dialog).opacity) > 0) {
+          timing.visible = performance.now();
+          return;
+        }
+        if (performance.now() - timing.start < 2_000) requestAnimationFrame(sample);
+      };
+      document.addEventListener('pointerdown', (event) => {
+        if ((event.target as Element | null)?.closest('[data-testid="home-hero-submit"]')) {
+          timing.start = performance.now();
+          requestAnimationFrame(sample);
+        }
+      }, { capture: true, once: true });
+    });
+    await page.getByTestId('home-hero-submit').click();
+    const dialog = page.getByTestId('amr-balance-dialog');
+    await expect(dialog).toBeVisible({ timeout: 1_000 });
+    await page.waitForFunction(() => (window as typeof window & {
+      __run003BlockTiming?: { visible: number | null };
+    }).__run003BlockTiming?.visible !== null);
+    const timing = await page.evaluate(() => (window as typeof window & {
+      __run003BlockTiming?: { start: number | null; visible: number | null };
+    }).__run003BlockTiming);
+    expect(timing?.start).not.toBeNull();
+    expect(timing?.visible).not.toBeNull();
+    expect((timing!.visible as number) - (timing!.start as number)).toBeLessThanOrEqual(500);
+    expect(projectPosts).toBe(0);
+    verdict = 'available';
+    fresh.resolve();
+    await expect(dialog).toBeVisible();
+    expect(projectPosts, 'a late recharge cannot send without a new click').toBe(0);
+    await dialog.getByRole('button', { name: /not now|later|暂不|稍后/i }).click();
+    await expect(page.getByTestId('home-hero-input')).toContainText(prompt);
+    expect(projectPosts).toBe(0);
+    await page.getByTestId('home-hero-submit').click();
+    await expect.poll(() => projectPosts).toBe(1);
+  } finally {
+    fresh.resolve();
+  }
+});
+
+test('[P0] a full Link counter takes over a remembered Home shortfall without sending the draft', async ({ page }) => {
+  await wireSignedInAmrHome(page, { accountBalanceUsd: '0.00' });
+  const { workspaceId, workspaceMemberId } = AMR_PERSONAL_WORKSPACE_CONTEXT;
+  const fresh = deferred();
+  const hint = deferred();
+  let sending = false;
+  let projectPosts = 0;
+  await page.route('**/api/workspace/billing/request-concurrency?**', async route => {
+    if (sending) await hint.promise;
+    await route.fulfill({ json: {
+      requestConcurrencyHint: { workspaceId, workspaceMemberId, status: 'full', running: 10, limit: 10,
+        observedAt: new Date().toISOString() },
+    } });
+  });
+  await page.route('**/api/workspace/billing/preflight?**', async route => {
+    if (sending) await fresh.promise;
+    await route.fulfill({ json: { preflight: {
+      schemaVersion: 1, workspaceId, workspaceMemberId,
+      modelId: new URL(route.request().url()).searchParams.get('modelId'),
+      generatedAt: new Date().toISOString(), balanceUsd: '0', fundingCheck: 'insufficient',
+    } } });
+  });
+  await page.route('**/api/projects', route => {
+    if (route.request().method() === 'POST') { projectPosts++; return route.abort(); }
+    return route.fallback();
+  });
+  const warmed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspace/billing/preflight'
+    && new URL(response.url()).searchParams.get('modelId') === 'glm-5');
+  try {
+    await gotoEntryHome(page);
+    await (await warmed).finished();
+    sending = true;
+    const prompt = 'Keep this draft while Link is full.';
+    await sendFromHome(page, prompt);
+    await expect(page.getByTestId('amr-balance-dialog')).toBeHidden();
+    await page.waitForTimeout(220);
+    await expect(page.getByTestId('amr-balance-dialog')).toBeHidden();
+    hint.resolve();
+    await expect(page.getByTestId('amr-concurrency-dialog')).toBeVisible({ timeout: T.medium });
+    await expect(page.getByTestId('amr-balance-dialog')).toBeHidden();
+    expect(projectPosts).toBe(0);
+    fresh.resolve();
+    await page.getByTestId('amr-concurrency-close').click();
+    await expect(page.getByTestId('home-hero-input')).toContainText(prompt);
+    expect(projectPosts).toBe(0);
+  } finally {
+    hint.resolve();
+    fresh.resolve();
+  }
+});
+
 test('[P0] AMR Home confirms fresh funding before creating without waiting for display billing', async ({ page }) => {
   await wireSignedInAmrHome(page);
   const funding = deferred();
@@ -354,10 +487,12 @@ test('[P0] funding confirmation only updates the cache and billing events expire
   let sendReads = 0;
   const warmed = page.waitForResponse((response) => response.url().includes('/api/workspace/billing/preflight?') && new URL(response.url()).searchParams.get('modelId') === 'glm-5' && response.ok());
   await page.route('**/api/workspace/billing/preflight?**', async (route) => {
-    hintReads++;
-    const confirming = sending && ++sendReads > 1;
-    if (confirming) await confirmation.promise;
     const url = new URL(route.request().url());
+    expect(url.searchParams.get('workspaceId')).toBe(workspaceId);
+    const modelSpecific = url.searchParams.get('modelId') === 'glm-5';
+    if (modelSpecific) hintReads++;
+    const confirming = sending && modelSpecific && ++sendReads > 1;
+    if (confirming) await confirmation.promise;
     await route.fulfill({ json: { preflight: {
       schemaVersion: 1, workspaceId: url.searchParams.get('workspaceId'),
       workspaceMemberId: AMR_PERSONAL_WORKSPACE_CONTEXT.workspaceMemberId,
@@ -387,20 +522,23 @@ test('[P0] funding confirmation only updates the cache and billing events expire
     expect(create.requested()).toBe(false);
     await testInfo.attach('home-available-confirmation-stays-blocked', { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
 
-    // The existing SSE billing subscriber reads the projection after the event;
-    // the Home hint subscriber only expires memory, with no extra funding read.
+    // The matching wallet events now coalesce an exact-model warm preflight.
+    // They may refresh the reason, but cannot release this parked draft.
     const billingRefreshed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/workspace/billing');
     billingEvent.resolve();
     await (await billingRefreshed).finished();
-    expect(hintReads).toBe(warmReads + 2);
+    await expect.poll(() => hintReads).toBeGreaterThan(warmReads + 2);
+    expect(hintReads).toBeLessThanOrEqual(warmReads + 4);
+    const afterEventReads = hintReads;
     await expect(dialog).toBeVisible();
+    expect(create.requested()).toBe(false);
     await dialog.getByRole('button', { name: /not now|later|暂不|稍后/i }).click();
     await expect(page.getByTestId('home-hero-input')).toHaveText(prompt);
     // Every explicit send rechecks fresh funding, even after a positive hint.
     const rechecked = page.waitForResponse((response) => response.url().includes('/api/workspace/billing/preflight?'));
     await sendFromHome(page, prompt);
     await (await rechecked).finished();
-    expect(hintReads).toBe(warmReads + 3);
+    expect(hintReads).toBe(afterEventReads + 1);
     await expect.poll(() => create.requested(), { timeout: T.medium }).toBe(true);
   } finally {
     confirmation.resolve();

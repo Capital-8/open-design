@@ -1087,8 +1087,8 @@ function AppInner() {
   const settingsDraftConfigRef = useRef<AppConfig | null>(null);
   const completionFeedbackGestureConsumedRef = useRef(false);
   useEffect(() => {
-    if (completionFeedbackGestureConsumedRef.current) return undefined;
     const notifications = config.notifications ?? DEFAULT_NOTIFICATIONS;
+    if (completionFeedbackGestureConsumedRef.current && !notifications.soundEnabled) return undefined;
     if (!notifications.soundEnabled && !notifications.desktopEnabled) return undefined;
     return armCompletionFeedbackOnFirstGesture(notifications, ({ desktopPermission }) => {
       completionFeedbackGestureConsumedRef.current = true;
@@ -1111,7 +1111,7 @@ function AppInner() {
         saveConfig(next);
         return next;
       });
-    });
+    }, completionFeedbackGestureConsumedRef.current);
   }, [config.notifications?.desktopEnabled, config.notifications?.soundEnabled]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [amrArtifactUpgradeHomeMockConfig] = useState<AmrArtifactUpgradeHomeOffer | null>(
