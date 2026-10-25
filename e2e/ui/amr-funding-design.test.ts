@@ -17,6 +17,10 @@ import { T } from "@/timeouts";
 const cases = [
   { id: "F07", tier: "pro", role: "owner", failure: "funding" },
   { id: "F10", tier: "pro", role: "member", failure: "funding" },
+  { id: "RUN-004-Free-Owner", tier: "free", role: "owner", failure: "funding" },
+  { id: "RUN-004-Go-Owner", tier: "go", role: "owner", failure: "funding" },
+  { id: "RUN-004-Max-Owner", tier: "max", role: "owner", failure: "funding" },
+  { id: "RUN-004-Admin", tier: "pro", role: "admin", failure: "funding" },
   { id: "SignedOut-control", tier: "pro", role: "owner", failure: "signedout" },
 ];
 for (const scenario of cases)
@@ -355,11 +359,15 @@ for (const scenario of cases)
             ],
             { timeout: T.short },
           );
-        await expect
-          .soft(page.getByTestId("amr-balance-dialog-plans"))
-          .toHaveCSS("background-color", "rgb(53, 53, 53)", {
-            timeout: T.short,
-          });
+        if (scenario.tier === "max") {
+          await expect.soft(page.getByTestId("amr-balance-dialog-plans")).toHaveCount(0);
+        } else {
+          await expect
+            .soft(page.getByTestId("amr-balance-dialog-plans"))
+            .toHaveCSS("background-color", "rgb(53, 53, 53)", {
+              timeout: T.short,
+            });
+        }
       } else {
         await expect
           .soft(modal.locator("p"))
@@ -374,6 +382,7 @@ for (const scenario of cases)
           });
       }
       expect(runs.bodies).toHaveLength(0);
+      await expect(modal.getByText(/自动充值|Auto.?recharge/i)).toHaveCount(0);
       await page.keyboard.press("Tab");
       await expect(modal.getByRole("button").first()).toBeFocused();
       await expect(modal.getByRole("button").first()).toHaveCSS(
@@ -390,6 +399,7 @@ for (const scenario of cases)
       );
       await page.keyboard.press("Escape");
       await expect(modal).toHaveCount(0);
+      await expect(input).toHaveText(scenario.id + " original draft");
       await testInfo.attach("scenario", {
         body: JSON.stringify({
           scenario,
