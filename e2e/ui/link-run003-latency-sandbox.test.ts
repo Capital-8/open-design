@@ -32,6 +32,7 @@ const fixturePath = process.env.OD_LINK_RUN003_FIXTURE;
 const output = process.env.OD_LINK_RUN003_EVIDENCE;
 const gate = process.env.OD_LINK_RUN003_GATE as Gate;
 const surface = process.env.OD_LINK_RUN003_SURFACE as Surface;
+const manualOnly = process.env.OD_LINK_RUN003_MANUAL_ONLY === '1';
 const NOTICE_SELECTOR = {
   balance: '[data-testid="amr-balance-dialog"]',
   concurrency: '[data-testid="amr-concurrency-dialog"]',
@@ -371,6 +372,41 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     };
     await assertRetained();
     await expect(notice).toHaveCount(0);
+    if (manualOnly) {
+      // Resume only the manual-retry subpath after an independently observed
+      // blocked/recovered cell. Do not re-execute its already proven click.
+      await expect.poll(async () => (await preflight()).fundingCheck,
+        { timeout: T.xlong, intervals: [250, 500, 1000] }).toBe('available');
+      await page.evaluate(() => window.dispatchEvent(new Event('od:workspace-billing-refresh')));
+      const automatic = await page.waitForEvent('request', { predicate: request =>
+        request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs',
+      timeout: 5000 }).catch(() => null);
+      expect(automatic).toBeNull();
+      expect(postCount()).toBe(0);
+      await assertRetained();
+      const responseReady = page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/api/runs', { timeout: T.long });
+      await send.click();
+      const response = await responseReady;
+      expect(response.status()).toBe(202);
+      const body = await response.json() as { runId?: string };
+      expect(body.runId).toMatch(/^[0-9a-f-]{36}$/i);
+      expect(postCount()).toBe(1);
+      expect(runBodies).toHaveLength(1);
+      const sent = runBodies[0]!;
+      expect(sent.currentPrompt).toContain(draft);
+      expect(sent.attachmentPaths).toHaveLength(1);
+      expect(basename(sent.attachmentPaths[0]!)).toBe(attachmentName);
+      expect(sent.projectId).toEqual(expect.any(String));
+      if (surface === 'project') expect(sent.projectId).toBe(projectId);
+      expect(requests.filter(item => item.method === 'POST' && item.path === '/api/runs')[0]?.workspaceId)
+        .toBe(space.workspaceId);
+      const terminal = await terminalRun(body.runId!, ['succeeded', 'failed', 'canceled']);
+      expect(terminal.status).toBe('succeeded');
+      await save('RUN003-manual-only-complete.safe.json', { binding, noAutomaticSend: true,
+        manualRunId: body.runId, manualTerminal: terminal, sent, requests, runResponses });
+      return;
+    }
     // For the balance cell, the independent controller depletes this owned
     // workspace only after the real background call is admitted and held.
     // Wait for the resulting production preflight, not a fixed startup delay.
