@@ -575,6 +575,7 @@ async function handleTeamProjectsCommand(input: {
   emit: (event: HubEvent) => void;
 }): Promise<string> {
   const [, command, projectId] = input.args;
+  const workspaceMemberId = memberIdForWorkspace(input.identity, input.workspaceId);
   if (command === '--help') return 'team-projects list get ensure-private visibility register-resource upsert remove\n';
   if (command === 'list' || command == null) {
     return jsonLine({
@@ -586,13 +587,13 @@ async function handleTeamProjectsCommand(input: {
   }
   if (command === 'ensure-private' && projectId) {
     const previous = input.projects.get(projectId);
-    if (previous && previous.ownerMemberId !== input.identity.memberId) throw new Error('team_project_not_found');
+    if (previous && previous.ownerMemberId !== workspaceMemberId) throw new Error('team_project_not_found');
     if (previous) return jsonLine(recordForIdentity(previous, input.identity));
     const now = new Date().toISOString();
     const record: TeamProjectRecord = {
       id: `catalog-${projectId}`, workspaceId: input.workspaceId, projectId,
       resourceId: `server-root-${projectId}`, visibility: 'private',
-      ownerMemberId: input.identity.memberId, displayName: null, syncState: 'pending_upload',
+      ownerMemberId: workspaceMemberId, displayName: null, syncState: 'pending_upload',
       lastSyncedVersionId: null, metadata: null, createdAt: now, updatedAt: now,
       access: { canView: true, canComment: true, canEdit: true, frozen: false },
     };
@@ -601,7 +602,7 @@ async function handleTeamProjectsCommand(input: {
   }
   if ((command === 'visibility' || command === 'register-resource') && projectId) {
     const project = input.projects.get(projectId);
-    if (!project || project.ownerMemberId !== input.identity.memberId) throw new Error('team_project_not_found');
+    if (!project || project.ownerMemberId !== workspaceMemberId) throw new Error('team_project_not_found');
     if (command === 'register-resource') return jsonLine({ ok: true });
     const visibility = input.args[3];
     if (visibility !== 'private' && visibility !== 'team') throw new Error('invalid visibility');
@@ -611,7 +612,7 @@ async function handleTeamProjectsCommand(input: {
   }
   if (command === 'get' && projectId) {
     const project = input.projects.get(projectId);
-    if (!project || (project.visibility === 'private' && project.ownerMemberId !== input.identity.memberId)) throw new Error('team_project_not_found');
+    if (!project || (project.visibility === 'private' && project.ownerMemberId !== workspaceMemberId)) throw new Error('team_project_not_found');
     return jsonLine(recordForIdentity(project, input.identity));
   }
   if (command === 'pull' && projectId) {
@@ -647,7 +648,7 @@ async function handleTeamProjectsCommand(input: {
       schemaVersion: 1,
       workspaceId: input.workspaceId,
       resourceTeamId: input.workspaceId,
-      viewerMemberId: input.identity.memberId,
+      viewerMemberId: workspaceMemberId,
       ownerMemberId: project.ownerMemberId,
       projectId,
       resourceId: project.resourceId,
@@ -672,7 +673,7 @@ async function handleTeamProjectsCommand(input: {
       projectId,
       resourceId,
       visibility: previous?.visibility ?? 'team',
-      ownerMemberId: previous?.ownerMemberId ?? input.identity.memberId,
+      ownerMemberId: previous?.ownerMemberId ?? workspaceMemberId,
       displayName: flag(input.args, '--display-name') ?? previous?.displayName ?? null,
       syncState: flag(input.args, '--sync-state') ?? previous?.syncState ?? 'synced',
       lastSyncedVersionId:
@@ -683,7 +684,7 @@ async function handleTeamProjectsCommand(input: {
       access: {
         canView: true,
         canComment: true,
-        canEdit: input.identity.role === 'owner',
+        canEdit: previous?.ownerMemberId === workspaceMemberId || (!previous && input.identity.role === 'owner'),
         frozen: false,
       },
     };
@@ -712,17 +713,18 @@ async function admitRootCommentFiles(
   previous: TeamProjectRecord | undefined,
   metadata: Record<string, unknown> | null,
 ): Promise<Record<string, unknown> | null> {
+  const workspaceMemberId = memberIdForWorkspace(input.identity, input.workspaceId);
   if (!metadata) return previous?.metadata ?? null;
   const old = previous?.metadata?._commentFiles as CommentFileState | undefined;
   if (metadata._commentFiles === undefined) {
     return old ? { ...metadata, _commentFiles: old } : metadata;
   }
   const mutation = metadata._commentFiles as CommentFileMutation;
-  if (!previous || previous.workspaceId !== input.workspaceId || previous.ownerMemberId !== input.identity.memberId
+  if (!previous || previous.workspaceId !== input.workspaceId || previous.ownerMemberId !== workspaceMemberId
     || !mutation || mutation.schemaVersion !== 1 || !Array.isArray(mutation.files)
     || mutation.baseRevision !== (old?.revision ?? 0)) throw new Error('comment_file_mutation_rejected');
   const resource = input.resources.get(workspaceResourceKey(input.workspaceId, mutation.resourceId));
-  if (!resource || resource.projectId !== previous.projectId || resource.ownerMemberId !== input.identity.memberId
+  if (!resource || resource.projectId !== previous.projectId || resource.ownerMemberId !== workspaceMemberId
     || resource.resourceId !== previous.resourceId || mutation.versionId !== `v${resource.version}`) {
     throw new Error('comment_file_receipt_rejected');
   }
@@ -801,7 +803,7 @@ async function handleResourceCommand(input: {
       projectId,
       resourceId,
       kind,
-      ownerMemberId: previous?.ownerMemberId ?? input.identity.memberId,
+      ownerMemberId: previous?.ownerMemberId ?? memberIdForWorkspace(input.identity, input.workspaceId),
       metadata,
       snapshotDir,
       version,
@@ -1094,7 +1096,7 @@ function recordForIdentity(
     ...project,
     access: {
       ...project.access,
-      canEdit: project.ownerMemberId === identity.memberId,
+      canEdit: project.ownerMemberId === memberIdForWorkspace(identity, project.workspaceId),
     },
   };
 }
@@ -1130,6 +1132,12 @@ function addedWorkspaceDirectoryItem(workspace: {
 
 function personalWorkspaceId(memberId: string): string {
   return `personal-${memberId}`;
+}
+
+function memberIdForWorkspace(identity: ClientIdentity, workspaceId: string): string {
+  return workspaceId === personalWorkspaceId(identity.memberId)
+    ? `personal-member-${identity.memberId}`
+    : identity.memberId;
 }
 
 function workspaceMemberKey(workspaceId: string, memberId: string): string {
