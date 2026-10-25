@@ -315,9 +315,18 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     expect(browserContext.context).toMatchObject({ workspaceId: space.workspaceId,
       workspaceMemberId: actor.memberId, role: 'owner' });
     const assertBrowserSelection = async () => {
+      if (surface === 'project') {
+        // The project editor has no entry rail or workspace switcher. Its
+        // workspace identity is the live /api/workspace/context response above;
+        // also require the actual project opened in the editor.
+        await expect(page.getByRole('button', { name: 'RUN003 existing project' }))
+          .toBeVisible({ timeout: T.long });
+        return;
+      }
       const rail = page.getByTestId('entry-rail-collapse');
       if (await rail.getAttribute('aria-expanded') !== 'true') await rail.click();
       const switcher = page.getByTestId('workspace-switcher');
+      await expect(switcher).toBeVisible({ timeout: T.long });
       await switcher.click();
       const selected = page.getByTestId('workspace-switcher-list').getByRole('menuitem')
         .filter({ hasText: space.workspaceName });
