@@ -1,27 +1,7 @@
 // @vitest-environment jsdom
-//
-// 红测 · **首页**在余额耗尽档的身份 × 订阅四格(规格 `run-error-catalog.md`
-// §6.V,第三格由 2026-09-06 的 **T58** 定终态)。
-//
-// 项目页那四格由 `ProjectView.amr-balance-branches.test.tsx` 钉着。首页是**另一条
-// 链路**:判定在 `EntryShell.handlePluginLoopSubmit` 里,身份和套餐取自这一刻的
-// 工作区上下文与账单投影,而且首页**没有那张升级卡兜底** —— 弹窗错了,屏幕上就
-// 什么都不剩。两条路各自都能单独走错,所以各自都要有覆盖。
-//
-//   非 Max · owner    会员转化弹窗   主按钮跳 console 套餐页(`billing=plan`)
-//   非 Max · 非 owner 「找所有者充值」 不外跳
-//   Max   · owner     **同一张**会员转化弹窗,主按钮跳自动充值(`billing=auto-recharge`)
-//   Max   · 非 owner  「找所有者充值」 不外跳
-//
-// ⚠️ T58 推翻了第三格原来的「不弹窗」。首页此前靠 `?? 'upgrade'` 把那个 `null`
-// 兜回升级弹窗 —— 于是 Max 所有者在首页拿到的是**转化弹窗 + 套餐页链接**,被送去
-// 买一个他已经在用的套餐。依据是产品文档第四节第 3 行:那一格画的就是和第一格同
-// 一张弹窗、文案一字不差(记录里那句「未达到 $100.00/月的额度」是飞书导出时 AI
-// 生成的图片 alt 描述,不是产品文案,以图为准),差别只在主按钮的落点。
-//
-// ⚠️ 命门是**反向对照**:只测第三格的话,把 `amrBalanceUpgradeIntent` 改成无条件
-// 返回 `auto_recharge`、或者把弹窗对所有身份都放出来,四格全会绿。所以第一格的
-// `billing=plan` 和成员那两格的「不外跳」在这里是必测项,不是陪衬。
+// RUN-004 / frozen product r271: Home funding rejection preserves its draft.
+// Free/non-Max Owners may upgrade; Max has no purchase shortcut; other roles
+// contact the Owner. The corresponding Project path has separate coverage.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
@@ -283,8 +263,7 @@ describe('T58 · 首页余额耗尽的身份 × 订阅四格', () => {
     resetTeamProjectsCache();
   });
 
-  // 这一格是 T58 改的那一格。
-  it('Max · owner:出会员转化弹窗,主按钮跳自动充值', async () => {
+  it('RUN-004 Max Owner keeps the funding dialog without purchase shortcuts', async () => {
     stubFetch(workspace('owner', 'personal'), accountBilling('max'));
     const onCreateProject = vi.fn(async () => true);
     renderHome(onCreateProject);
@@ -298,18 +277,14 @@ describe('T58 · 首页余额耗尽的身份 × 订阅四格', () => {
     // 拦住了:项目不建。
     expect(onCreateProject).not.toHaveBeenCalled();
 
-    fireEvent.click(await screen.findByTestId('amr-balance-dialog-plans'));
-    expect(openSpy).toHaveBeenCalledTimes(1);
-    const url = String(openSpy.mock.calls[0]?.[0]);
-    // 命门:Max 所有者没有更高的套餐可买,充值才是解法。
-    expect(url).toContain('billing=auto-recharge');
-    expect(url).not.toContain('billing=plan');
+    expect(screen.queryByTestId('amr-balance-dialog-plans')).toBeNull();
+    expect(openSpy).not.toHaveBeenCalled();
   });
 
   // 反向对照。这一格**没有变**:同一张弹窗,但主按钮仍然落在套餐页。
   // 少了它,把 intent 改成无条件 `auto_recharge` 也会让上面那条绿。
-  it('非 Max · owner:同一张会员转化弹窗,主按钮仍跳 console 套餐页', async () => {
-    stubFetch(workspace('owner', 'personal'), accountBilling('pro'));
+  it.each(['free', 'go', 'plus', 'pro'])('RUN-004 %s Owner retains the plan upgrade entrance', async (tier) => {
+    stubFetch(workspace('owner', 'personal'), accountBilling(tier));
     const onCreateProject = vi.fn(async () => true);
     renderHome(onCreateProject);
 
