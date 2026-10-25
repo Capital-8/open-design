@@ -17,7 +17,7 @@ type Fixture = {
   urls: { api: string; link: string; web: string };
   runtime: { velaBin: string; openCodeBin: string; modelId: string };
   space: { workspaceId: string; workspaceName: string; tier: string; limit: number; actor: Actor };
-  background: { runId: string; workspaceId: string };
+  background: { workspaceId: string };
 };
 type RunResponse = { status: number; runId: string | null };
 
@@ -57,7 +57,7 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
   if (fixture.tuple.odSha !== odSha || !fixture.tuple.amrSha || !fixture.alias || !space?.workspaceId
     || !space.workspaceName?.trim()
     || !space.actor?.controlKey || !space.actor.runtimeKey || !space.actor.memberId
-    || !model?.modelId || !model.velaBin || !model.openCodeBin || !background?.runId
+    || !model?.modelId || !model.velaBin || !model.openCodeBin || !background
     || background.workspaceId !== space.workspaceId || space.limit < 2) {
     throw new Error('Incomplete fixed RUN003 tuple, current workspace, model or same-space background run');
   }
@@ -73,9 +73,10 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
   await mkdir(markers, { recursive: true, mode: 0o700 });
   await chmod(markers, 0o700);
   if ((await readdir(markers)).length !== 0) throw new Error('Fresh empty marker directory required');
-  const binding = { protocol: 'od-link-run003-v1', alias: fixture.alias, attemptId: randomUUID(),
-    fixtureSha256, odSha, amrSha: fixture.tuple.amrSha, workspaceId: space.workspaceId,
-    tier: space.tier, modelId: model.modelId, gate, surface, backgroundRunId: background.runId };
+  const attemptId = randomUUID();
+  let binding!: { protocol: string; alias: string; attemptId: string; fixtureSha256: string;
+    odSha: string; amrSha: string; workspaceId: string; tier: string; modelId: string;
+    gate: Gate; surface: Surface; backgroundRunId: string };
   const save = (name: string, value: unknown) =>
     writeFile(join(output, name), JSON.stringify(value, null, 2), { mode: 0o600 });
   const marker = async (name: string, value: Record<string, unknown>) => {
@@ -236,10 +237,10 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
       ? route.continue() : route.abort();
   });
   const postCount = () => requests.filter(item => item.method === 'POST' && item.path === '/api/runs').length;
-  const projectId = 'run003-' + binding.attemptId;
+  const projectId = 'run003-' + attemptId;
   const artifactName = 'existing-output.html';
   const artifact = '<!doctype html><html><body><h1>Existing RUN003 output survives</h1></body></html>';
-  const draft = 'RUN003 retained draft ' + binding.attemptId;
+  const draft = 'RUN003 retained draft ' + attemptId;
   const attachmentName = 'run003-brief.txt';
   let started = false;
   try {
@@ -247,6 +248,42 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     await runtime.startWeb(env);
     await warmPlaywrightWebRuntime(runtime.url.web('/'));
     await warmPlaywrightDaemonRuntime(runtime.url.daemon('/api/health'));
+    // This same suite owns the daemon. Create the background task only after
+    // it is ready, then bind its actual persisted runId to every observer
+    // marker. A pre-supplied runId cannot exist in this fresh daemon.
+    const backgroundProjectId = 'run003-background-' + attemptId;
+    const backgroundProjectResponse = await fetch(runtime.url.web('/api/projects'), {
+      method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ id: backgroundProjectId, name: 'RUN003 background task',
+        skipDiscoveryBrief: true }),
+    });
+    expect(backgroundProjectResponse.ok, await backgroundProjectResponse.clone().text()).toBe(true);
+    const backgroundProject = await backgroundProjectResponse.json() as { conversationId?: string };
+    expect(backgroundProject.conversationId).toMatch(/^[0-9a-f-]{36}$/i);
+    const holdId = `od-concurrency-${attemptId}-${surface}-0`;
+    const backgroundPrompt = `QA:${JSON.stringify({ id: holdId, tokens: 1, hold: true })}`;
+    const backgroundResponse = await fetch(runtime.url.web('/api/runs'), {
+      method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: backgroundProjectId,
+        conversationId: backgroundProject.conversationId, agentId: 'amr',
+        assistantMessageId: randomUUID(), clientRequestId: randomUUID(),
+        message: backgroundPrompt, currentPrompt: backgroundPrompt,
+        skillId: null, designSystemId: null, model: 'default', reasoning: 'default' }),
+    });
+    expect(backgroundResponse.status, await backgroundResponse.clone().text()).toBe(202);
+    const backgroundCreated = await backgroundResponse.json() as { runId?: string };
+    expect(backgroundCreated.runId).toMatch(/^[0-9a-f-]{36}$/i);
+    const backgroundRunId = backgroundCreated.runId!;
+    await expect.poll(async () => {
+      const response = await fetch(runtime.url.web('/api/runs/' + backgroundRunId), { headers });
+      expect(response.ok).toBe(true);
+      return (await response.json() as { status?: string }).status;
+    }, { timeout: T.long, intervals: [250, 500, 1000] }).toBe('running');
+    binding = { protocol: 'od-link-run003-v1', alias: fixture.alias, attemptId,
+      fixtureSha256, odSha, amrSha: fixture.tuple.amrSha, workspaceId: space.workspaceId,
+      tier: space.tier, modelId: model.modelId, gate, surface, backgroundRunId };
+    await save('RUN003-background-created.safe.json', { binding, backgroundProjectId,
+      clientWebUrl: runtime.url.web('/'), status: 'running', holdId });
     const contextResponse = await fetch(runtime.url.web('/api/workspace/context'), { headers });
     expect(contextResponse.status).toBe(200);
     const context = await contextResponse.json();
@@ -325,14 +362,18 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     };
     await assertRetained();
     await expect(notice).toHaveCount(0);
-    const initialFunding = await preflight();
-    expect(initialFunding.fundingCheck).toBe(gate === 'balance' ? 'insufficient' : 'available');
+    // For the balance cell, the independent controller depletes this owned
+    // workspace only after the real background call is admitted and held.
+    // Wait for the resulting production preflight, not a fixed startup delay.
+    await expect.poll(async () => (await preflight()).fundingCheck,
+      { timeout: T.xlong, intervals: [250, 500, 1000] })
+      .toBe(gate === 'balance' ? 'insufficient' : 'available');
     // The independent AMR watcher reads this project's run inventory through
     // the same workspace identity before and after the blocked click.
     await marker('RUN003-ready.json', { projectId, draft, attachmentName,
       clientWebUrl: runtime.url.web('/') });
     const gateReady = await receipt('RUN003-gate-ready.json');
-    expect(gateReady.backgroundRunId).toBe(background.runId);
+    expect(gateReady.backgroundRunId).toBe(binding.backgroundRunId);
     expect(gateReady.backgroundStatus).toBe('running');
     expect(gateReady.fundingCheck).toBe(gate === 'balance' ? 'insufficient' : 'available');
     expect(Number(gateReady.limit)).toBe(space.limit);
@@ -413,7 +454,7 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
       environment, blockedPosts, requests, gateReady });
     await marker('RUN003-blocked.json', { projectId, paint, elapsedMs, blockedPosts });
     const blocked = await receipt('RUN003-blocked-verified.json');
-    expect(blocked.backgroundRunId).toBe(background.runId);
+    expect(blocked.backgroundRunId).toBe(binding.backgroundRunId);
     expect(blocked.backgroundStatus).toBe('running');
     expect(Number(blocked.newProviderCalls)).toBe(0);
     expect(Number(blocked.newRunCount)).toBe(0);
@@ -430,7 +471,7 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     expect(await page.evaluate(() => navigator.onLine)).toBe(false);
     await marker('RUN003-offline-ready.json', { projectId, blockedRunId: null });
     const recovered = await receipt('RUN003-recovered.json');
-    expect(recovered.backgroundRunId).toBe(background.runId);
+    expect(recovered.backgroundRunId).toBe(binding.backgroundRunId);
     expect(recovered.backgroundStatus).toBe('running');
     expect(recovered.fundingCheck).toBe('available');
     if (gate === 'concurrency') {
@@ -463,7 +504,7 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     await assertBrowserSelection();
     await marker('RUN003-manual-prepare.json', { projectId, draft, attachmentName });
     const ledgerReady = await receipt('RUN003-manual-ledger-ready.json');
-    expect(ledgerReady.backgroundRunId).toBe(background.runId);
+    expect(ledgerReady.backgroundRunId).toBe(binding.backgroundRunId);
     expect(ledgerReady.backgroundStatus).toBe('running');
     expect(ledgerReady.workspaceId).toBe(space.workspaceId);
     const responseReady = page.waitForResponse(response => response.request().method() === 'POST'
@@ -473,7 +514,7 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     expect(response.status()).toBe(202);
     const body = await response.json() as { runId?: string };
     expect(body.runId).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(body.runId).not.toBe(background.runId);
+    expect(body.runId).not.toBe(binding.backgroundRunId);
     expect(postCount()).toBe(before + blockedPosts + 1);
     await expect.poll(() => runResponses.length, { timeout: T.long }).toBe(1);
     expect(runResponses).toEqual([{ status: 202, runId: body.runId }]);
@@ -509,12 +550,12 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     await marker('RUN003-manual-ready.json', { projectId, runId: body.runId,
       status: response.status(), terminal: { status: manualTerminal.status,
         exitCode: manualTerminal.exitCode, acpEvidence: manualTerminal.acpEvidence },
-      backgroundRunId: background.runId });
+      backgroundRunId: binding.backgroundRunId });
     const manual = await receipt('RUN003-manual-verified.json');
     expect(manual.runId).toBe(body.runId);
     expect(manual.billingWorkspaceId).toBe(space.workspaceId);
     expect(manual.runTerminalStatus).toBe('succeeded');
-    expect(manual.backgroundRunId).toBe(background.runId);
+    expect(manual.backgroundRunId).toBe(binding.backgroundRunId);
     expect(manual.backgroundStatus).toBe('running');
     expect(Number(manual.targetSuccessfulUpstreamCount)).toBeGreaterThan(0);
     expect(Number(manual.unsettledSuccessfulCallCount)).toBe(0);
