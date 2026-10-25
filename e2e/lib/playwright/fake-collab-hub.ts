@@ -135,6 +135,12 @@ export async function startFakeCollabHub(options: {
   const subscribers = new Set<Subscriber>();
   const blockedEventMembers = new Set<string>();
   const removedMembers = new Set<string>();
+  const memberRemovals: Array<{
+    workspaceId: string;
+    removedMemberId: string;
+    ownerMemberId: string;
+    removedAt: string;
+  }> = [];
   const memberRoles = new Map(
     options.clients.map((client) => [client.memberId, client.role]),
   );
@@ -246,6 +252,14 @@ export async function startFakeCollabHub(options: {
           ],
         });
       }
+      if (url.pathname === `/api/v1/workspaces/${encodeURIComponent(options.workspaceId)}/member-removals`
+        && request.method === 'GET') {
+        if (!identity || removedMembers.has(identity.memberId)
+          || (memberRoles.get(identity.memberId) ?? identity.role) !== 'owner') {
+          return json(response, 403, { error: 'workspace_access_denied' });
+        }
+        return json(response, 200, { removals: memberRemovals });
+      }
       if (url.pathname === '/api/v1/collab/events' && request.method === 'GET') {
         if (!identity) return json(response, 401, { error: 'unauthorized' });
         if (blockedEventMembers.has(identity.memberId)) {
@@ -271,6 +285,7 @@ export async function startFakeCollabHub(options: {
         response.write(
           `event: ready\ndata: ${JSON.stringify({
             workspaceId,
+            workspaceMemberId: memberIdForWorkspace(identity, workspaceId),
             capabilities: options.strictAuthorityEvents
               ? [
                   'authoritative-project-presence-v1',
@@ -307,7 +322,7 @@ export async function startFakeCollabHub(options: {
       }
       if (url.pathname === '/__e2e/command' && request.method === 'POST') {
         if (!identity) return json(response, 401, { error: 'unauthorized' });
-        if (removedMembers.has(identity.memberId)) {
+        if (removedMembers.has(identity.memberId) && workspaceId === options.workspaceId) {
           return json(response, 403, { error: 'workspace_membership_removed' });
         }
         const body = await readJsonBody(request) as { args?: unknown; stdin?: unknown };
@@ -400,11 +415,42 @@ export async function startFakeCollabHub(options: {
       [...subscribers].filter((subscriber) => subscriber.memberId === memberId).length,
     emitEvent: emit,
     removeMember: (memberId) => {
+      if (removedMembers.has(memberId)) return;
+      const owner = options.clients.find((client) =>
+        client.memberId !== memberId && !removedMembers.has(client.memberId)
+        && (memberRoles.get(client.memberId) ?? client.role) === 'owner');
+      if (!owner) throw new Error('fake collaboration owner unavailable for member removal');
       removedMembers.add(memberId);
+      memberRemovals.push({
+        workspaceId: options.workspaceId,
+        removedMemberId: memberId,
+        ownerMemberId: owner.memberId,
+        removedAt: new Date().toISOString(),
+      });
+      for (const project of projects.values()) {
+        if (project.workspaceId !== options.workspaceId || project.ownerMemberId !== memberId) continue;
+        project.ownerMemberId = owner.memberId;
+        project.updatedAt = new Date().toISOString();
+        emit({ type: 'team-projects-changed', workspaceId: options.workspaceId, projectId: project.projectId });
+      }
+      for (const resource of resources.values()) {
+        if (resource.workspaceId === options.workspaceId && resource.ownerMemberId === memberId) {
+          resource.ownerMemberId = owner.memberId;
+        }
+      }
       for (const roster of presence.values()) {
         for (const [clientId, entry] of roster) {
           if (entry.memberId === memberId) roster.delete(clientId);
         }
+      }
+      for (const subscriber of [...subscribers]) {
+        if (subscriber.workspaceId !== options.workspaceId || subscriber.memberId !== memberId) continue;
+        subscriber.response.write(`event: access-revoked\ndata: ${JSON.stringify({
+          reason: 'member-removed',
+          workspaceId: options.workspaceId,
+          workspaceMemberId: memberId,
+        })}\n\n`);
+        closeSubscriber(subscriber);
       }
       emit({ type: 'workspace-context-changed', workspaceId: options.workspaceId });
     },
@@ -1153,6 +1199,7 @@ function personalWorkspaceDirectoryItem(identity: ClientIdentity) {
     workspaceId: personalWorkspaceId(identity.memberId),
     workspaceName: `${identity.name} workspace`,
     workspaceType: 'personal',
+    isDefault: true,
     workspaceMemberId: `personal-member-${identity.memberId}`,
     role: 'owner',
     memberStatus: 'active',
