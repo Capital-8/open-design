@@ -329,8 +329,10 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
       const switcher = page.getByTestId('workspace-switcher');
       await expect(switcher).toBeVisible({ timeout: T.long });
       await switcher.click();
-      const selected = page.getByTestId('workspace-switcher-list').getByRole('menuitem')
-        .filter({ hasText: space.workspaceName });
+      // The personal workspace may be named "<team name>'s workspace". Match
+      // the selected row's accessible name exactly, not as a substring.
+      const selected = page.getByTestId('workspace-switcher-list')
+        .getByRole('menuitem', { name: space.workspaceName, exact: true });
       await expect(selected).toHaveCount(1);
       await expect(selected).toHaveAttribute('aria-current', 'true');
       await expect(switcher).toContainText(space.workspaceName);
