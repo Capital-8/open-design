@@ -484,11 +484,15 @@ test('[P0] RUN003 real browser first-visible notice, task isolation and manual r
     expect(recovered.backgroundStatus).toBe('running');
     expect(recovered.fundingCheck).toBe('available');
     if (gate === 'concurrency') {
-      expect(Number(recovered.running)).toBe(space.limit - 1);
-      expect((gateReady.heldRequestIds as string[])).toContain(recovered.releasedRequestId);
+      const released = recovered.releasedRequestIds as string[];
+      // One OD task starts auxiliary and primary model requests concurrently.
+      // The Link limit is per request, so restore enough slots for both.
+      expect(released).toHaveLength(2);
+      expect(Number(recovered.running)).toBe(space.limit - released.length);
+      for (const id of released) expect(gateReady.heldRequestIds as string[]).toContain(id);
       expect((recovered.remainingHeldRequestIds as string[]).slice().sort()).toEqual(
         (gateReady.heldRequestIds as string[])
-          .filter(id => id !== recovered.releasedRequestId).sort());
+          .filter(id => !released.includes(id)).sort());
     }
     expect(postCount()).toBe(before + blockedPosts);
     await page.context().setOffline(false);
