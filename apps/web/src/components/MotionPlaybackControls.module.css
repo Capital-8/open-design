@@ -1,0 +1,35 @@
+.player {
+  container-type: inline-size;
+  position: absolute;
+  z-index: 5;
+  inset: auto 0 0;
+  box-sizing: border-box;
+  height: 96px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 11px;
+  outline-offset: -2px;
+}
+.timelineRow { display: flex; align-items: center; gap: 10px; height: 21px; }
+.time { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timeline { flex: 1; min-width: 40px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.timeline:disabled { cursor: default; opacity: .45; }
+.toolbar { display: flex; align-items: center; gap: 4px; height: 32px; margin-top: 4px; }
+.icon { width: 28px; height: 28px; min-width: 28px; padding: 0; border-radius: 6px; }
+.timeEntry { display: flex; align-items: center; gap: 4px; margin-left: 5px; color: var(--text-muted); }
+.timeEntry input { box-sizing: border-box; width: 71px; height: 26px; padding: 3px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.frames { margin-left: 8px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 10px; }
+.spacer { flex: 1; }
+.annotate { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.footer { display: flex; align-items: center; height: 14px; margin-top: 3px; }
+.status { flex: 1; min-width: 0; color: var(--text-muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) { .player { padding-inline: 9px; } }
+@container (max-width: 430px) {
+  .mute, .timeEntry > span, .annotate > span { display: none; }
+  .timeEntry { margin-left: 0; }
+  .timeEntry input { width: 62px; }
+  .annotate { width: 28px; min-width: 28px; padding: 0; gap: 0; }
+  .toolbar { gap: 3px; }
+}

@@ -6,6 +6,7 @@ import type {
   PreviewCommentMember,
   PreviewCommentSelectionKind,
 } from '../types';
+import type { PreviewCommentMotionAnchor } from '@open-design/contracts';
 
 /** Portable comment-anchor inputs shared with the share-page implementation. */
 export interface PreviewCommentSnapshot {
@@ -22,6 +23,7 @@ export interface PreviewCommentSnapshot {
   memberCount?: number;
   podMembers?: PreviewCommentMember[];
   slideIndex?: number;
+  motion?: PreviewCommentMotionAnchor;
 }
 
 export interface CommentAnchorResolution {

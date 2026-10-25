@@ -7,6 +7,7 @@ import { useT } from '../i18n';
 import type { PreviewVisualMarkKind } from '../types';
 import { requestPreviewSnapshot } from '../runtime/exports';
 import { isImeComposing } from '../utils/imeComposing';
+import type { PreviewCommentMotionAnchor } from '@open-design/contracts';
 
 interface Point { x: number; y: number }
 interface Stroke { points: Point[] }
@@ -57,6 +58,7 @@ export interface AnnotationEventDetail {
   target?: CaptureTarget | null;
   /** Images the user attached in the markup composer to combine with the mark. */
   extraFiles?: File[];
+  motion?: PreviewCommentMotionAnchor;
   ack?: (result: { ok: boolean; message?: string }) => void;
 }
 
@@ -74,6 +76,8 @@ interface Props {
   sendDisabledReason?: string;
   onToolbarClick?: (element: DrawToolbarElement, submitAction?: AnnotationAction) => void;
   toolbarHost?: HTMLElement | null;
+  motion?: PreviewCommentMotionAnchor;
+  requireSnapshot?: boolean;
 }
 
 // Left-to-right order of the three submit buttons. Send is last so it sits
@@ -139,6 +143,8 @@ export function PreviewDrawOverlay({
   sendDisabledReason,
   onToolbarClick,
   toolbarHost,
+  motion,
+  requireSnapshot = false,
 }: Props) {
   const t = useT();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -988,7 +994,7 @@ export function PreviewDrawOverlay({
         if (blob) {
           const ts = new Date().toISOString().replace(/[:.]/g, '-');
           file = new File([blob], `drawing-${ts}.png`, { type: 'image/png' });
-        } else if (!note.trim() && extraFiles.length === 0) {
+        } else if (requireSnapshot || (!note.trim() && extraFiles.length === 0)) {
           // The snapshot pipeline is best-effort — the srcDoc foreignObject
           // rasterizer legitimately fails on real-world artifacts (issue
           // #4064), and retrying replays the same failure. Only block when
@@ -997,7 +1003,7 @@ export function PreviewDrawOverlay({
           // user's intent, so those fall through and send without the shot.
           setCaptureWarning({
             action,
-            message: captureViewport && !hasInk && !hasBox && !hasTarget
+            message: requireSnapshot ? t('motion.captureFailed') : captureViewport && !hasInk && !hasBox && !hasTarget
               ? t('chat.annotationPreviewMissing')
               : t('chat.annotationPreviewMissingInk'),
           });
@@ -1005,7 +1011,7 @@ export function PreviewDrawOverlay({
         }
       }
       const sentWithoutScreenshot = shouldCapture && !file;
-      const kind = markKind();
+      const kind = markKind() ?? (motion ? 'click' : undefined);
       const result = await new Promise<{ ok: boolean; message?: string }>((resolve) => {
         let settled = false;
         const finish = (next: { ok: boolean; message?: string }) => {
@@ -1022,8 +1028,9 @@ export function PreviewDrawOverlay({
           action,
           filePath: captureTarget?.filePath || filePath,
           markKind: kind,
-          bounds: kind ? annotationBounds() : undefined,
+          bounds: kind ? annotationBounds() ?? (motion ? { x: 0, y: 0, width: 1, height: 1 } : undefined) : undefined,
           target: captureTarget,
+          ...(motion ? { motion } : {}),
           extraFiles: extraFiles.length ? extraFiles : undefined,
           ack: finish,
         };
@@ -1047,6 +1054,8 @@ export function PreviewDrawOverlay({
       setNote('');
       setExtraFiles([]);
       setPreviewIndex(null);
+    } catch {
+      setCaptureWarning({ action, message: t(requireSnapshot ? 'motion.captureFailed' : 'chat.annotationFailed') });
     } finally {
       setPendingAction(null);
     }

@@ -15,6 +15,57 @@ export interface PreviewCommentPosition {
   height: number;
 }
 
+/** A reference moment in editable Motion source, not an edit-range constraint. */
+export interface PreviewCommentMotionAnchor {
+  timeSeconds: number;
+  durationSeconds: number;
+  fps?: number;
+  sourceFingerprint: string;
+}
+
+/** Pure wire parser shared by comment persistence, relay and chat admission. */
+export function parsePreviewCommentMotionAnchor(value: unknown): PreviewCommentMotionAnchor | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const anchor = value as Record<string, unknown>;
+  const { timeSeconds, durationSeconds, fps, sourceFingerprint } = anchor;
+  if (typeof timeSeconds !== 'number' || !Number.isFinite(timeSeconds) || timeSeconds < 0
+    || typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds) || durationSeconds <= 0
+    || timeSeconds > durationSeconds
+    || (fps !== undefined && (typeof fps !== 'number' || !Number.isFinite(fps) || fps <= 0 || fps > 240))
+    || typeof sourceFingerprint !== 'string' || !sourceFingerprint.trim() || sourceFingerprint.length > 256) return null;
+  return { timeSeconds, durationSeconds, ...(fps === undefined ? {} : { fps }), sourceFingerprint };
+}
+
+/** Motion screenshots use the normal project-relative image attachment channel. */
+export function isPreviewCommentImagePath(value: unknown): value is string {
+  if (typeof value !== 'string' || !value || value !== value.trim() || value.length > 4096
+    || /[\\\u0000-\u001f?#:]/.test(value) || value.startsWith('/')
+    || /%(?:2e|2f|5c)/i.test(value) || value.split('/').some(part => !part || part === '.' || part === '..')) return false;
+  return /\.(?:png|jpe?g|webp|gif|avif)$/i.test(value);
+}
+
+/** Reject invalid time evidence before chat/run admission can start a model. */
+export function assertMotionCommentAttachments(value: unknown): void {
+  if (!Array.isArray(value)) return;
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || !Object.prototype.hasOwnProperty.call(item, 'motion')) continue;
+    const record = item as Record<string, unknown>;
+    if (record.motion === undefined) continue;
+    if (!parsePreviewCommentMotionAnchor(record.motion)) throw new Error('Invalid Motion reference time');
+    if (typeof record.filePath !== 'string' || !record.filePath.trim()
+      || typeof record.elementId !== 'string' || !record.elementId.trim()
+      || (record.selectionKind !== 'visual' && (typeof record.selector !== 'string' || !record.selector.trim()))) {
+      throw new Error('Motion feedback requires a file and a concrete target');
+    }
+    const images = Array.isArray(record.imageAttachments) ? record.imageAttachments : [];
+    const hasImage = images.some(image => image && typeof image === 'object'
+      && isPreviewCommentImagePath((image as Record<string, unknown>).path));
+    if (!hasImage && !(record.selectionKind === 'visual' && isPreviewCommentImagePath(record.screenshotPath))) {
+      throw new Error('Motion feedback requires a project image screenshot');
+    }
+  }
+}
+
 export interface PreviewAnnotationStyle {
   color?: string;
   backgroundColor?: string;
@@ -103,6 +154,7 @@ export interface PreviewCommentTarget {
   podMembers?: PreviewCommentMember[];
   /** Zero-based deck slide index when the comment was placed. */
   slideIndex?: number;
+  motion?: PreviewCommentMotionAnchor;
   /**
    * Team collaboration: content version this anchor was captured against. Persisted as
    * {@link PreviewComment.anchoredVersion}; drives the drift ladder's
@@ -157,6 +209,7 @@ export interface PreviewComment {
   podMembers?: PreviewCommentMember[];
   /** Zero-based deck slide index when the comment was placed. */
   slideIndex?: number;
+  motion?: PreviewCommentMotionAnchor;
   note: string;
   attachments?: PreviewCommentAttachment[];
   status: PreviewCommentStatus;

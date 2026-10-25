@@ -26,6 +26,8 @@ import {
   stripDoneMarkers,
   stripNextStepMarkers,
   asPreviewCommentAnchorState,
+  isPreviewCommentImagePath,
+  parsePreviewCommentMotionAnchor,
 } from '@open-design/contracts';
 import { parseCommentFileState } from './collab/comment-file-facts.js';
 import { migrateCollabSyncSnapshots } from './collab/sync-snapshot-store.js';
@@ -550,6 +552,12 @@ function migrate(db: SqliteDb): void {
   // Multiple comments per element: edit by explicit id; creating another note
   // on the same element inserts a new row.
   migratePreviewCommentsAllowMultiplePerElement(db);
+  // Add after both legacy rebuilds: their explicit column lists must not drop
+  // the optional time evidence when an older database is upgraded.
+  const previewCommentMotionCols = db.prepare('PRAGMA table_info(preview_comments)').all() as DbRow[];
+  if (!previewCommentMotionCols.some((column: DbRow) => column.name === 'motion_json')) {
+    db.exec('ALTER TABLE preview_comments ADD COLUMN motion_json TEXT');
+  }
   // Stable canvas pin numbering + persisted sidebar order (recvq5BVsolIxi).
   // Added after the multi-per-element rebuild so a legacy table rebuild can
   // never drop them (same reasoning as the anchor columns above).
@@ -3805,7 +3813,7 @@ export function listPreviewComments(
               text, position_json AS positionJson, html_hint AS htmlHint,
               selection_kind AS selectionKind, member_count AS memberCount,
               pod_members_json AS podMembersJson, style_json AS styleJson,
-              attachments_json AS attachmentsJson,
+              attachments_json AS attachmentsJson, motion_json AS motionJson,
               slide_index AS slideIndex,
               anchor_state AS anchorState, anchored_version AS anchoredVersion,
               author_member_id AS authorMemberId, last_good_position_json AS lastGoodPositionJson,
@@ -3836,7 +3844,7 @@ export function listProjectPreviewComments(db: SqliteDb, projectId: string) {
               text, position_json AS positionJson, html_hint AS htmlHint,
               selection_kind AS selectionKind, member_count AS memberCount,
               pod_members_json AS podMembersJson, style_json AS styleJson,
-              attachments_json AS attachmentsJson,
+              attachments_json AS attachmentsJson, motion_json AS motionJson,
               slide_index AS slideIndex,
               anchor_state AS anchorState, anchored_version AS anchoredVersion,
               author_member_id AS authorMemberId, last_good_position_json AS lastGoodPositionJson,
@@ -3876,6 +3884,9 @@ export function upsertPreviewComment(
   const note = typeof input?.note === 'string' ? input.note.trim() : '';
   const attachmentsProvided = Object.prototype.hasOwnProperty.call(input ?? {}, 'attachments');
   const incomingAttachments = normalizePreviewCommentAttachments(input?.attachments);
+  const motionProvided = target.motion !== undefined;
+  const incomingMotion = motionProvided ? parsePreviewCommentMotionAnchor(target.motion) : null;
+  if (motionProvided && !incomingMotion) throw new Error('Invalid Motion reference time');
   const filePath = cleanRequiredString(target.filePath, 'filePath');
   const elementId = cleanRequiredString(target.elementId, 'elementId');
   const selector = cleanRequiredString(target.selector, 'selector');
@@ -3912,7 +3923,7 @@ export function upsertPreviewComment(
   const existing = requestedId
     ? db
         .prepare(
-          `SELECT id, created_at AS createdAt, attachments_json AS attachmentsJson
+          `SELECT id, created_at AS createdAt, attachments_json AS attachmentsJson, motion_json AS motionJson
              FROM preview_comments
             WHERE id = ? AND project_id = ? AND conversation_id = ?`,
         )
@@ -3920,8 +3931,23 @@ export function upsertPreviewComment(
     : undefined;
   const id = existing?.id ?? requestedId ?? randomCommentId();
   const createdAt = existing?.createdAt ?? now;
-  const existingAttachments = normalizePreviewCommentAttachments(parseJsonOrUndef(existing?.attachmentsJson));
-  const attachments = attachmentsProvided ? incomingAttachments : existingAttachments;
+  const storedAttachmentRows = parseJsonOrUndef(existing?.attachmentsJson);
+  const existingAttachments = normalizePreviewCommentAttachments(storedAttachmentRows);
+  const existingMotion = parsePreviewCommentMotionAnchor(parseJsonOrUndef(existing?.motionJson));
+  if (existingMotion && incomingMotion && JSON.stringify(existingMotion) !== JSON.stringify(incomingMotion)) {
+    throw new Error('A saved Motion reference cannot be retargeted; create a new comment');
+  }
+  const motion = existingMotion ?? incomingMotion;
+  // Time evidence is immutable. Editing the note can add reference images,
+  // but cannot remove the screenshot that established the original moment.
+  const preservedAttachments: PreviewCommentAttachment[] = Array.isArray(storedAttachmentRows)
+    ? storedAttachmentRows : existingAttachments;
+  const attachments = existingMotion
+    ? [...preservedAttachments, ...incomingAttachments.filter(item => !preservedAttachments.some(saved => saved.path === item.path))].slice(0, 20)
+    : attachmentsProvided ? incomingAttachments : existingAttachments;
+  if (motion && !attachments.some(item => isPreviewCommentImagePath(item.path))) {
+    throw new Error('Motion feedback requires a project image screenshot');
+  }
   // A comment must carry either a note or at least one image attachment.
   if (!note && attachments.length === 0) throw new Error('comment note required');
   // pin_seq / pin_seq_confirmed / sort_key are assigned exactly once, on the
@@ -3959,9 +3985,9 @@ export function upsertPreviewComment(
     `INSERT INTO preview_comments
        (id, project_id, conversation_id, file_path, source_file_id, element_id, selector, label,
         text, position_json, html_hint, selection_kind, member_count, pod_members_json,
-        style_json, attachments_json, slide_index, slide_key, note, status, created_at, updated_at,
+        style_json, attachments_json, motion_json, slide_index, slide_key, note, status, created_at, updated_at,
         anchored_version, author_member_id, author_kind, author_display_name, pin_seq, pin_seq_confirmed, sort_key)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        selector = excluded.selector,
        label = excluded.label,
@@ -3973,6 +3999,7 @@ export function upsertPreviewComment(
        pod_members_json = excluded.pod_members_json,
        style_json = excluded.style_json,
        attachments_json = excluded.attachments_json,
+       motion_json = excluded.motion_json,
        slide_index = excluded.slide_index,
        note = excluded.note,
        status = 'open',
@@ -3998,6 +4025,7 @@ export function upsertPreviewComment(
     selectionKind === 'pod' ? JSON.stringify(podMembers) : null,
     style ? JSON.stringify(style) : null,
     attachments.length > 0 ? JSON.stringify(attachments) : null,
+    motion ? JSON.stringify(motion) : null,
     slideIndex,
     slideKey,
     note,
@@ -4589,6 +4617,7 @@ export function mergeSyncedPreviewComment(
   const existing = db
     .prepare(`SELECT created_at AS createdAt, updated_at AS updatedAt, file_path AS filePath,
                      label, author_key AS authorKey,
+                     motion_json AS motionJson, attachments_json AS attachmentsJson,
                      author_kind AS authorKind, author_member_id AS authorMemberId,
                      author_app_user_id AS authorAppUserId,
                      source_file_id AS sourceFileId,
@@ -4601,6 +4630,21 @@ export function mergeSyncedPreviewComment(
   }
   const createdAt = syncedCommentCreationTime(comment.createdAt, existing?.createdAt);
   const label = syncedCommentLabel(comment.label, existing?.label, comment.elementId);
+  const incomingMotion = comment.motion === undefined ? null : parsePreviewCommentMotionAnchor(comment.motion);
+  if (comment.motion !== undefined && !incomingMotion) throw new Error('Invalid Motion reference time');
+  const existingMotion = parsePreviewCommentMotionAnchor(parseJsonOrUndef(existing?.motionJson));
+  if (existingMotion && incomingMotion && JSON.stringify(existingMotion) !== JSON.stringify(incomingMotion)) {
+    throw new Error('A saved Motion reference cannot be retargeted; create a new comment');
+  }
+  const motion = incomingMotion ?? existingMotion;
+  const legacyMotionEcho = existingMotion && comment.motion === undefined;
+  const storedMotionAttachments = parseJsonOrUndef(existing?.attachmentsJson);
+  const motionAttachments: PreviewCommentAttachment[] | null = legacyMotionEcho
+    ? Array.isArray(storedMotionAttachments) ? storedMotionAttachments : null
+    : attachments;
+  if (motion && !motionAttachments?.some(item => isPreviewCommentImagePath(item.path))) {
+    throw new Error('Motion feedback requires a project image screenshot');
+  }
   if (existing) {
     const creationTimeChanged = repairSyncedCommentCreationTime(db, projectId, comment, existing);
     // Keeps the existing conversation and repairs only correlated creation metadata; refreshes mutable
@@ -4650,7 +4694,7 @@ export function mergeSyncedPreviewComment(
       `UPDATE preview_comments SET
          selector = ?, label = ?, text = ?, position_json = ?, html_hint = ?,
          selection_kind = ?, member_count = ?, pod_members_json = ?, style_json = ?,
-         attachments_json = ?, slide_index = ?, slide_key = ?, note = ?, status = ?,
+         attachments_json = ?, motion_json = ?, slide_index = ?, slide_key = ?, note = ?, status = ?,
          anchor_state = ?, anchored_version = ?, last_good_position_json = ?,
          author_member_id = CASE WHEN ? THEN ? ELSE author_member_id END,
          author_kind = CASE WHEN ? THEN ? ELSE author_kind END,
@@ -4671,7 +4715,8 @@ export function mergeSyncedPreviewComment(
       memberCount,
       podMembers ? JSON.stringify(podMembers) : null,
       comment.style ? JSON.stringify(comment.style) : null,
-      attachments ? JSON.stringify(attachments) : null,
+      motionAttachments ? JSON.stringify(motionAttachments) : null,
+      motion ? JSON.stringify(motion) : null,
       slideIndex,
       slideKey,
       typeof comment.note === 'string' ? comment.note : '',
@@ -4723,11 +4768,11 @@ export function mergeSyncedPreviewComment(
       `INSERT INTO preview_comments
          (id, project_id, conversation_id, file_path, source_file_id, element_id, selector, label,
           text, position_json, html_hint, selection_kind, member_count, pod_members_json,
-          style_json, attachments_json, slide_index, slide_key, note, status, created_at, updated_at,
+          style_json, attachments_json, motion_json, slide_index, slide_key, note, status, created_at, updated_at,
           anchor_state, anchored_version, author_member_id, author_kind, author_app_user_id,
           author_display_name, author_key, last_good_position_json, pin_seq, pin_seq_confirmed, sort_key,
           cloud_revision_seq, cloud_revision_stream)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       comment.id,
@@ -4745,7 +4790,8 @@ export function mergeSyncedPreviewComment(
       memberCount,
       podMembers ? JSON.stringify(podMembers) : null,
       comment.style ? JSON.stringify(comment.style) : null,
-      attachments ? JSON.stringify(attachments) : null,
+      motionAttachments ? JSON.stringify(motionAttachments) : null,
+      motion ? JSON.stringify(motion) : null,
       slideIndex,
       slideKey,
       typeof comment.note === 'string' ? comment.note : '',
@@ -4801,7 +4847,7 @@ export function getPreviewComment(
               text, position_json AS positionJson, html_hint AS htmlHint,
               selection_kind AS selectionKind, member_count AS memberCount,
               pod_members_json AS podMembersJson, style_json AS styleJson,
-              attachments_json AS attachmentsJson,
+              attachments_json AS attachmentsJson, motion_json AS motionJson,
               slide_index AS slideIndex,
               anchor_state AS anchorState, anchored_version AS anchoredVersion,
               author_member_id AS authorMemberId, last_good_position_json AS lastGoodPositionJson,
@@ -4826,7 +4872,7 @@ export function getProjectPreviewComment(db: SqliteDb, projectId: string, id: st
               text, position_json AS positionJson, html_hint AS htmlHint,
               selection_kind AS selectionKind, member_count AS memberCount,
               pod_members_json AS podMembersJson, style_json AS styleJson,
-              attachments_json AS attachmentsJson,
+              attachments_json AS attachmentsJson, motion_json AS motionJson,
               slide_index AS slideIndex,
               anchor_state AS anchorState, anchored_version AS anchoredVersion,
               author_member_id AS authorMemberId, last_good_position_json AS lastGoodPositionJson,
@@ -4892,6 +4938,7 @@ function normalizePreviewComment(row: DbRow): PreviewComment {
     slideIndex: Number.isFinite(row.slideIndex) ? row.slideIndex : undefined,
     note: row.note,
     attachments: normalizePreviewCommentAttachments(parseJsonOrUndef(row.attachmentsJson)),
+    motion: parsePreviewCommentMotionAnchor(parseJsonOrUndef(row.motionJson)) ?? undefined,
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

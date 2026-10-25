@@ -7,6 +7,7 @@ import {
   defaultScenarioPluginIdForProjectMetadata,
   InstalledPluginRecordSchema,
   RUN_RESULT_PACKAGE_SCHEMA,
+  assertMotionCommentAttachments,
   type AppliedPluginSnapshot,
   type ArtifactManifest,
   type ByokChatProviderConfig,
@@ -1395,6 +1396,11 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       return sendApiError(res, 503, 'UPSTREAM_UNAVAILABLE', 'daemon is shutting down');
     }
     const requestBody = toJsonRecord(req.body);
+    try {
+      assertMotionCommentAttachments(requestBody.commentAttachments);
+    } catch (error) {
+      return sendApiError(res, 400, 'BAD_REQUEST', error instanceof Error ? error.message : 'Invalid Motion feedback');
+    }
     const requestAnalyticsContext = readAnalyticsContext(req);
     const mediaExecution = parseMediaExecutionPolicyInput(requestBody.mediaExecution);
     if (!mediaExecution.ok) {

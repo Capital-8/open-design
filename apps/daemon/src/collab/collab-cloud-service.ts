@@ -308,6 +308,7 @@ export function previewCommentToCloud(
 		cloud.memberCount = comment.memberCount;
 	if (comment.podMembers !== undefined) cloud.podMembers = comment.podMembers;
 	if (comment.slideIndex !== undefined) cloud.slideIndex = comment.slideIndex;
+	if (comment.motion !== undefined) cloud.motion = comment.motion;
 	if (comment.attachments !== undefined)
 		cloud.attachments = comment.attachments;
 	if (comment.anchorState !== undefined)

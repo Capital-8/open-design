@@ -5,6 +5,43 @@ export const MOTION_PLAYER_MARKER = 'data-od-motion-source-player';
 export const MOTION_PREVIEW_REQUEST = 'od:motion-preview-request';
 export const MOTION_PREVIEW_ACTIVITY = 'od:motion-preview-activity';
 export const MOTION_PREVIEW_PROBE = 'od:motion-preview-probe';
+export const MOTION_PREVIEW_CONNECT = 'od:motion-preview-connect';
+export const MOTION_PREVIEW_COMMAND = 'od:motion-preview-command';
+export const MOTION_PREVIEW_STATE = 'od:motion-preview-state';
+
+/** Confirmed state of the editable Motion clock, in authored seconds. */
+export interface MotionPlayerState {
+  playing: boolean;
+  active: boolean;
+  time: number;
+  duration: number;
+  muted: boolean;
+  /** User preference; `muted` also includes temporary host audio suppression. */
+  userMuted?: boolean;
+  locked: boolean;
+  fps?: number;
+}
+
+export type MotionPlayerControl =
+  | { action: 'play' | 'pause' | 'replay' }
+  | { action: 'seek'; time: number }
+  | { action: 'mute' | 'lock'; value: boolean };
+
+export interface MotionPlayerRestore {
+  time: number;
+  locked: boolean;
+  muted: boolean;
+}
+
+export interface MotionPreviewStateMessage {
+  type: typeof MOTION_PREVIEW_STATE;
+  clientId: string;
+  instance: string;
+  requestId: string | null;
+  state: MotionPlayerState | null;
+  restored?: boolean;
+  error?: string;
+}
 
 // One clock contract for editable video playback and frame rendering. Check the
 // authored timeline BEFORE HyperFrames can pad it or reset its playback speed.
@@ -54,7 +91,7 @@ function createMotionAudioSync(audio) {
 // Shared by URL previews, srcdoc previews and the persisted editable source.
 // The renderer installs its flag before author scripts; it never sees chrome,
 // layout scaling, poster seeking, or wall-clock playback from this runtime.
-const PLAYER = `<script data-od-motion-source-player="8">
+const PLAYER = `<script data-od-motion-source-player="11">
 ${MOTION_TIMELINE_CHECK_SCRIPT}
 (function () {
 ${MOTION_AUDIO_SYNC_RUNTIME}
@@ -74,17 +111,61 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
     var hosted = window.__odMotionPreview === true || new URL(location.href).searchParams.get('odMotionPreview') === '1';
     var thumbnail = window.__odMotionThumbnail === true || new URL(location.href).searchParams.get('odMotionThumbnail') === '1';
     var instance = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    var hostMuted = false;
+    var hostMuted = false, locked = false, clientId = null, connectRequest = null, connectRestore = null, readyPlayer = null, playerError = null, stateSentAt = -Infinity;
     var active = !hosted, playing = false, wantsPlay = true, pageActive = true, updateTimer = null;
     var applyPlayback = function () {};
+    function sendState(requestId, error, restored) {
+      if (!clientId) return;
+      window.parent.postMessage({type:'${MOTION_PREVIEW_STATE}', clientId:clientId, instance:instance, requestId:requestId || null, state:readyPlayer ? readyPlayer.state() : null, error:error || playerError || undefined, restored:restored}, '*');
+    }
+    function restorePlayer() {
+      if (!connectRestore || !readyPlayer) return undefined;
+      var before = readyPlayer.state();
+      if (connectRestore.time > before.duration) return false;
+      readyPlayer.pause(); readyPlayer.setLocked(false);
+      readyPlayer.seek(connectRestore.time); readyPlayer.setMuted(connectRestore.muted); readyPlayer.setLocked(connectRestore.locked);
+      var after = readyPlayer.state();
+      return !after.playing && Math.abs(after.time-connectRestore.time) <= .001 && after.locked === connectRestore.locked;
+    }
     function requestActivity() { window.parent.postMessage({type:'${MOTION_PREVIEW_REQUEST}', id:instance, width:width, height:height}, '*'); }
     function onActivity(event) {
       var data = event.data;
       if (!hosted || event.source !== window.parent || !data) return;
+      if (data.type === '${MOTION_PREVIEW_CONNECT}') {
+        if (typeof data.clientId !== 'string' || !data.clientId || data.clientId.length > 160 || typeof data.requestId !== 'string') return;
+        clientId = data.clientId; connectRequest = data.requestId;
+        connectRestore = null;
+        if (data.restore !== undefined) {
+          var restore = data.restore;
+          if (!restore || typeof restore.time !== 'number' || !Number.isFinite(restore.time) || restore.time < 0 || typeof restore.locked !== 'boolean' || typeof restore.muted !== 'boolean') {
+            sendState(connectRequest, 'Invalid Motion restoration.', false); return;
+          }
+          connectRestore = {time:restore.time, locked:restore.locked, muted:restore.muted};
+        }
+        if (readyPlayer || playerError) {
+          var restored = restorePlayer();
+          sendState(connectRequest, restored === false ? 'Motion restoration failed.' : undefined, restored);
+        }
+        return;
+      }
+      if (data.type === '${MOTION_PREVIEW_COMMAND}') {
+        if (!readyPlayer || data.clientId !== clientId || data.instance !== instance || typeof data.requestId !== 'string' || !data.requestId) return;
+        var control = data.control, error = null;
+        if (!control || typeof control.action !== 'string') error = 'Invalid Motion control.';
+        else if (locked && (control.action === 'play' || control.action === 'seek' || control.action === 'replay')) error = 'Motion preview is locked for annotation.';
+        else if (control.action === 'pause') readyPlayer.pause();
+        else if (control.action === 'play') readyPlayer.play();
+        else if (control.action === 'replay') readyPlayer.replay();
+        else if (control.action === 'seek' && typeof control.time === 'number' && Number.isFinite(control.time)) readyPlayer.seek(control.time);
+        else if (control.action === 'mute' && typeof control.value === 'boolean') readyPlayer.setMuted(control.value);
+        else if (control.action === 'lock' && typeof control.value === 'boolean') readyPlayer.setLocked(control.value);
+        else error = 'Invalid Motion control.';
+        sendState(data.requestId, error); return;
+      }
       if (data.type === '${MOTION_PREVIEW_PROBE}') { requestActivity(); return; }
       if (data.type !== '${MOTION_PREVIEW_ACTIVITY}' || typeof data.active !== 'boolean' || (data.active && data.id !== instance)) return;
       hostMuted = data.muted === true;
-      active = data.active; applyPlayback();
+      active = data.active; applyPlayback(); sendState(null);
     }
     window.addEventListener('message', onActivity);
     var tracks = Array.prototype.map.call(document.querySelectorAll('audio[src]'), function (audio) {
@@ -131,13 +212,15 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
       var tl = window.__timelines && window.__timelines[root.dataset.compositionId];
       if (!tl || typeof tl.seek !== 'function' || typeof tl.play !== 'function' || !(tl.duration() > 0)) {
         if (Date.now()-started < 15000) { setTimeout(connect, 100); return; }
-        notice('动效未就绪，请检查时间轴或依赖文件'); return;
+        playerError = 'Motion timeline is not ready.'; notice('动效未就绪，请检查时间轴或依赖文件'); sendState(connectRequest); return;
       }
       var timingError = window.__odValidateMotionTimeline(root, tl);
-      if (timingError) { tl.pause(); notice(timingError); return; }
+      if (timingError) { tl.pause(); playerError = timingError; notice(timingError); sendState(connectRequest); return; }
       var duration = tl.duration(), applied = false;
+      var fpsValue = Number(root.getAttribute('data-fps'));
+      var fps = Number.isFinite(fpsValue) && fpsValue > 0 && fpsValue <= 240 ? fpsValue : undefined;
       applyPlayback = function () {
-        var nextPlaying = active && pageActive && wantsPlay;
+        var nextPlaying = active && pageActive && wantsPlay && !locked;
         if (applied && nextPlaying === playing) { syncAudio(tl.time(), playing, false); return; }
         applied = true;
         clearTimeout(updateTimer); updateTimer = null;
@@ -146,28 +229,36 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
           if (tl.time() >= duration) tl.seek(0, false);
           tl.play(); syncAudio(tl.time(), true, true); update();
         } else { tl.pause(); syncAudio(tl.time(), false, false); }
+        sendState(null);
       };
-      function play() { wantsPlay = true; applyPlayback(); }
+      function play() { if (locked) return; wantsPlay = true; applyPlayback(); }
       function pause() { wantsPlay = false; applyPlayback(); }
-      function seek(time) { pause(); tl.seek(Math.max(0, Math.min(duration, Number(time))), false); syncAudio(tl.time(), false, true); }
-      function replay() { seek(0); play(); }
+      function seek(time) { if (locked || typeof time !== 'number' || !Number.isFinite(time)) return; pause(); tl.seek(Math.max(0, Math.min(duration, time)), false); syncAudio(tl.time(), false, true); sendState(null); }
+      function replay() { if (locked) return; seek(0); play(); }
       window.__odMotionPlayer = {
         play: play, pause: pause, seek: seek, replay: replay,
-        setMuted: function (value) { muted = thumbnail || !!value; syncAudio(tl.time(), playing, false); },
-        state: function () { return { playing: playing, active: active, time: tl.time(), duration: duration, muted: muted || hostMuted,
+        setMuted: function (value) { muted = thumbnail || !!value; syncAudio(tl.time(), playing, false); sendState(null); },
+        setLocked: function (value) { locked = !!value; if (locked) wantsPlay = false; applyPlayback(); sendState(null); },
+        state: function () { return { playing: playing, active: active, time: tl.time(), duration: duration, muted: muted || hostMuted, userMuted: muted, locked: locked, fps: fps,
           audio: tracks.map(function (track) { return { paused: track.audio.paused, time: track.audio.currentTime, muted: track.audio.muted, volume: track.audio.volume, blocked: track.blocked }; }) }; }
       };
+      readyPlayer = window.__odMotionPlayer;
       root.addEventListener('click', function () {
+        if (locked) return;
         var blocked = tracks.some(function (track) { return track.blocked; });
         if (blocked) { tracks.forEach(function (track) { track.blocked = false; }); notice(''); if (playing) syncAudio(tl.time(), true, true); else play(); }
         else if (playing) pause(); else play();
       });
-      tl.seek(0, false); applyPlayback();
+      tl.seek(0, false);
+      var restored = restorePlayer();
+      applyPlayback();
+      sendState(connectRequest, restored === false ? 'Motion restoration failed.' : undefined, restored);
       function update() {
         if (!stage.isConnected) { active = false; applyPlayback(); return; }
         if (!active || !pageActive || !playing) return;
         if (playing && tl.time() >= duration) { tl.seek(0, false); tl.play(); syncAudio(0, true, true); }
         syncAudio(tl.time(), playing && !tl.paused(), false);
+        if (performance.now() - stateSentAt >= 100) { stateSentAt = performance.now(); sendState(null); }
         updateTimer = setTimeout(update, 33);
       }
     }
@@ -198,7 +289,7 @@ export function injectMotionSourcePlayer(html: string): string {
   const existing = findRealTagOffset(html, /<script\b[^>]*\bdata-od-motion-source-player\b/i);
   if (existing >= 0) {
     const script = /^<script\b[^>]*>[\s\S]*?<\/script\s*>/i.exec(html.slice(existing));
-    if (!script || /data-od-motion-source-player="8"/.test(script[0])) return html;
+    if (!script || /data-od-motion-source-player="11"/.test(script[0])) return html;
     return html.slice(0, existing) + PLAYER + html.slice(existing + script[0].length);
   }
   const end = findRealTagOffset(html, HTML_TAG_PATTERNS.bodyClose);

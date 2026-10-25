@@ -508,6 +508,20 @@ function comment(patch: Partial<PreviewComment>): PreviewComment {
   };
 }
 
+it('preserves a Motion reference and its original target through saved and drawn feedback', () => {
+  const motion = { timeSeconds: 2.5, durationSeconds: 8, fps: 30, sourceFingerprint: 'source:1' };
+  const saved = comment({ motion, attachments: [{ path: 'uploads/frame.png', name: 'frame.png' }] });
+  const moved = { ...targetFromSnapshot({ ...saved }), position: { x: 500, y: 300, width: 10, height: 10 } };
+  const snapshot = liveSnapshotForComment(saved, new Map([[saved.elementId, moved]]));
+  expect(snapshot?.position).toEqual(saved.position);
+  expect(snapshot?.motion).toEqual(motion);
+  const attached = commentsToAttachments([saved]);
+  expect(attached[0]?.motion).toEqual(motion);
+  expect(messageContentWithCommentAttachments('Change the color', attached)).toContain('motionReferenceTime: 2.5s / 8s');
+  expect(buildVisualAnnotationAttachment({ order: 1, markKind: 'stroke', note: 'This title',
+    screenshotPath: 'uploads/frame.png', bounds: saved.position, motion }).motion).toEqual(motion);
+});
+
 describe('resolveCommentAnchor drift ladder', () => {
   function snap(patch: Partial<PreviewCommentSnapshot> & { elementId: string }): PreviewCommentSnapshot {
     return {

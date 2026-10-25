@@ -6,6 +6,9 @@ import {
   type OdNextPromptBundleHeadV2,
   type OdNextPromptBundleRecipeIdentityV2,
   serializeOdNextPromptBundleV2,
+  assertMotionCommentAttachments,
+  parsePreviewCommentMotionAnchor,
+  type PreviewCommentMotionAnchor,
 } from '@open-design/contracts';
 import { renderResearchCommandContract } from '../prompts/research-contract.js';
 import {
@@ -66,6 +69,7 @@ type CommentAttachmentInput = {
   htmlHint?: InputValue;
   style?: InputValue;
   source?: InputValue;
+  motion?: PreviewCommentMotionAnchor | InputValue;
 };
 
 export function composeLiveInstructionPrompt({
@@ -499,10 +503,12 @@ export function describeStablePromptCache({
 
 export function normalizeCommentAttachments(input: readonly CommentAttachmentInput[] | null | undefined) {
   if (!Array.isArray(input)) return [];
+  assertMotionCommentAttachments(input);
   return input
     .map((raw, index) => {
       if (!raw || typeof raw !== 'object') return null;
       const record = raw;
+      const motion = record.motion === undefined ? undefined : parsePreviewCommentMotionAnchor(record.motion) ?? undefined;
       const filePath = cleanString(record.filePath);
       const elementId = cleanString(record.elementId);
       const selector = cleanString(record.selector);
@@ -570,6 +576,7 @@ export function normalizeCommentAttachments(input: readonly CommentAttachmentInp
         imageAttachments: imageAttachments.length > 0 ? imageAttachments : undefined,
         commentContext,
         source: record.source === 'board-batch' ? 'board-batch' : 'saved-comment',
+        ...(motion ? { motion } : {}),
       };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
@@ -631,6 +638,12 @@ export function renderCommentAttachmentHint(
         const memberStyle = formatAnnotationStyle(member.style);
         if (memberStyle) lines.push(`member.${memberIndex + 1}.computedStyle: ${memberStyle}`);
       });
+    }
+    if (item.motion) {
+      lines.push(`motionReferenceTime: ${item.motion.timeSeconds}s / ${item.motion.durationSeconds}s`,
+        ...(item.motion.fps ? [`motionFrame: ${Math.round(item.motion.timeSeconds * item.motion.fps)} at ${item.motion.fps}fps`] : []),
+        `motionSourceFingerprint: ${item.motion.sourceFingerprint}`,
+        'The time and screenshot identify the reference moment. They do not restrict the requested change to one frame; follow the user\'s intended time range.');
     }
     const imageAttachments = normalizePreviewCommentImageAttachments(item.imageAttachments);
     if (imageAttachments.length > 0) {

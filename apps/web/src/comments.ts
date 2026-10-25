@@ -11,6 +11,7 @@ import type {
   PreviewCommentTarget,
   PreviewVisualMarkKind,
 } from './types';
+import type { PreviewCommentMotionAnchor } from '@open-design/contracts';
 import { overlayBoundsFromSnapshot, resolveCommentAnchor } from './comments/anchor';
 import type { CommentAnchorResolution, PreviewCommentSnapshot } from './comments/anchor';
 
@@ -39,6 +40,7 @@ export interface VisualAnnotationAttachmentInput {
   note: string;
   bounds: { x: number; y: number; width: number; height: number };
   target?: VisualAnnotationTarget | null;
+  motion?: PreviewCommentMotionAnchor;
 }
 
 export function isInternalCommentTargetName(value: string | undefined | null): boolean {
@@ -84,6 +86,7 @@ export function targetFromSnapshot(snapshot: PreviewCommentSnapshot): PreviewCom
         : undefined,
     podMembers: podMembers.length > 0 ? podMembers : undefined,
     ...(snapshot.slideIndex === undefined ? {} : { slideIndex: snapshot.slideIndex }),
+    ...(snapshot.motion ? { motion: snapshot.motion } : {}),
   };
 }
 
@@ -188,6 +191,7 @@ export function liveSnapshotForComment(
   comment: PreviewComment,
   snapshots: Map<string, PreviewCommentSnapshot>,
 ): PreviewCommentSnapshot | null {
+  if (comment.motion) return ghostSnapshotFromComment(comment);
   const snapshot = snapshots.get(comment.elementId);
   if (snapshot && snapshot.filePath === comment.filePath && isValidCommentOverlayPosition(snapshot.position)) return snapshot;
   return comment.elementId.startsWith('pin-') && isValidCommentOverlayPosition(comment.position)
@@ -213,6 +217,7 @@ function ghostSnapshotFromComment(comment: PreviewComment, position?: PreviewCom
     memberCount: comment.memberCount,
     podMembers: normalizeMembers(comment.podMembers),
     slideIndex: comment.slideIndex,
+    ...(comment.motion ? { motion: comment.motion } : {}),
   };
 }
 
@@ -275,6 +280,7 @@ export function commentToAttachment(
         : undefined,
     podMembers: podMembers.length > 0 ? podMembers : undefined,
     ...(typeof comment.slideIndex === 'number' ? { slideIndex: comment.slideIndex } : {}),
+    ...(comment.motion ? { motion: comment.motion } : {}),
     imageAttachments: imageAttachments.length > 0 ? imageAttachments : undefined,
     source: 'saved-comment',
   };
@@ -353,6 +359,7 @@ export function buildBoardCommentAttachments(input: {
       memberCount,
       podMembers: podMembers.length > 0 ? podMembers : undefined,
       ...(typeof input.target.slideIndex === 'number' ? { slideIndex: input.target.slideIndex } : {}),
+      ...(input.target.motion ? { motion: input.target.motion } : {}),
       source: 'board-batch',
     }));
 }
@@ -380,6 +387,7 @@ export function buildVisualAnnotationAttachment(input: VisualAnnotationAttachmen
     style: normalizeStyle(target?.style),
     selectionKind: 'visual',
     screenshotPath: input.screenshotPath,
+    ...(input.motion ? { motion: input.motion } : {}),
     markKind: input.markKind,
     intent,
     source: 'board-batch',
@@ -496,6 +504,12 @@ function renderCommentAttachmentContext(commentAttachments: ChatCommentAttachmen
     );
     if (item.comment && item.commentContext !== 'query') {
       lines.push(`comment: ${item.comment}`);
+    }
+    if (item.motion) {
+      lines.push(`motionReferenceTime: ${item.motion.timeSeconds}s / ${item.motion.durationSeconds}s`,
+        `motionSourceFingerprint: ${item.motion.sourceFingerprint}`,
+        ...(item.motion.fps ? [`motionOutputFrame: ${Math.round(item.motion.timeSeconds * item.motion.fps)} (${item.motion.fps} fps)`] : []),
+        'The time identifies the reference image and target; apply changes over the interval requested by the user, not only this single frame.');
     }
     if (selectionKind === 'visual') {
       if (item.screenshotPath) {

@@ -3,6 +3,7 @@ import type { RunResultPackageResponse, RunWorkspace } from './workspaces.js';
 import type {
   PreviewCommentAttachment,
   PreviewCommentMember,
+  PreviewCommentMotionAnchor,
   PreviewCommentPosition,
   PreviewCommentSelectionKind,
   PreviewAnnotationStyle,
@@ -978,6 +979,7 @@ export interface ChatCommentAttachment {
   // Zero-based slide the marked element lives on, for deck artifacts. Carried
   // so the host can flip the preview to that slide when the send starts.
   slideIndex?: number;
+  motion?: PreviewCommentMotionAnchor;
   screenshotPath?: string;
   markKind?: PreviewVisualMarkKind;
   intent?: string;

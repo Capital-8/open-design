@@ -13,6 +13,7 @@ import type {
 	CollabCloudMemberDirectoryEntry,
 	CollabMemberRole,
 } from "@open-design/contracts";
+import { isPreviewCommentImagePath, parsePreviewCommentMotionAnchor } from "@open-design/contracts";
 
 const DEFAULT_FETCH_TIMEOUT_MS = 8_000;
 
@@ -255,6 +256,12 @@ function memberCommentProblem(
 		return "podMembers invalid";
 	if (value.slideIndex !== undefined && !nonNegativeInt(value.slideIndex))
 		return "slideIndex invalid";
+	if (value.motion !== undefined) {
+		if (!parsePreviewCommentMotionAnchor(value.motion)) return "motion invalid";
+		if (!Array.isArray(value.attachments) || !value.attachments.some(item => isRecord(item) && isPreviewCommentImagePath(item.path))) {
+			return "motion screenshot missing";
+		}
+	}
 	if (
 		value.attachments !== undefined &&
 		(!Array.isArray(value.attachments) ||

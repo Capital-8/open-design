@@ -152,6 +152,33 @@ afterEach(async () => {
 });
 
 describe('od comment CLI HTTP/SQLite route integration', () => {
+  it('requires a screenshot for Motion references and round-trips it through CLI, API and SQLite', async () => {
+    const base = await startRouteServer();
+    const common = [...headers(OWNER), '--daemon-url', base, '--json'];
+    const motion = { timeSeconds: 2.4, durationSeconds: 8, fps: 30, sourceFingerprint: 'cli-motion-source' };
+    const motionTarget = { ...target, motion };
+    const noImage = await runCli(['comment', 'create', PROJECT, CONVERSATION, '--target', JSON.stringify(motionTarget), '--prompt', 'Move title', ...common]);
+    expect(noImage.code).not.toBe(0);
+    expect(listPreviewComments(db!, PROJECT, CONVERSATION)).toEqual([]);
+    const screenshot = { path: 'frame.png', name: 'frame.png' };
+    const promptPath = join(tempRoot, 'feedback.txt');
+    writeFileSync(promptPath, 'Make this title larger at the reference moment.');
+    const create = await runCli(['comment', 'create', PROJECT, CONVERSATION, '--target', JSON.stringify(motionTarget),
+      '--attachments', JSON.stringify([screenshot]), '--prompt-file', promptPath, ...common]);
+    expect(create.code, create.stderr).toBe(0);
+    const created = JSON.parse(create.stdout).comment;
+    expect(created).toMatchObject({ motion, attachments: [screenshot] });
+    const update = await runCli(['comment', 'update', PROJECT, CONVERSATION, created.id, '--target', JSON.stringify(target), '--prompt', 'Updated wording', ...common]);
+    expect(update.code, update.stderr).toBe(0);
+    const list = await runCli(['comment', 'list', PROJECT, CONVERSATION, ...common]);
+    expect(JSON.parse(list.stdout).comments).toEqual([expect.objectContaining({ motion, attachments: [screenshot], note: 'Updated wording' })]);
+    const invalid = await fetch(`${base}/api/projects/${PROJECT}/conversations/${CONVERSATION}/comments`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'X-OD-Workspace-Id': WORKSPACE, 'X-OD-Workspace-Member-Id': OWNER },
+      body: JSON.stringify({ target: { ...target, motion: { ...motion, timeSeconds: -1 } }, note: 'Invalid', attachments: [screenshot] }),
+    });
+    expect(invalid.status).toBe(400);
+  });
+
   it('persists the create/list/update/status/delete lifecycle through production CLI and comment routes', async () => {
     const base = await startRouteServer();
     const common = [...headers(OWNER), '--daemon-url', base, '--json'];

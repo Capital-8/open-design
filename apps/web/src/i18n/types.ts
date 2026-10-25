@@ -30,6 +30,31 @@ export const LOCALE_LABEL: Record<Locale, string> = {
 // flat (not deeply nested) so missing-key TS errors point straight at the
 // offending string instead of a generic object mismatch.
 export interface Dict {
+  'motion.title': string;
+  'motion.play': string;
+  'motion.pause': string;
+  'motion.replay': string;
+  'motion.previousFrame': string;
+  'motion.nextFrame': string;
+  'motion.previousStep': string;
+  'motion.nextStep': string;
+  'motion.timeline': string;
+  'motion.timeInput': string;
+  'motion.seconds': string;
+  'motion.annotate': string;
+  'motion.frame': string;
+  'motion.locked': string;
+  'motion.connecting': string;
+  'motion.unavailable': string;
+  'motion.commandFailed': string;
+  'motion.captureFailed': string;
+  'motion.previewChanged': string;
+  'motion.previousSource': string;
+  'motion.capturing': string;
+  'motion.timeLabel': string;
+  'motion.mute': string;
+  'motion.unmute': string;
+
   'billing.wallet': string;
   /** The product name of the allowance pool; kept untranslated in every locale. */
   'billing.codingPlanDesignPlan': string;

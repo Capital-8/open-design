@@ -333,7 +333,7 @@ const SHARE_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json',
 ]);
 const COMMENT_STRING_FLAGS = new Set([
-  'daemon-url', 'workspace', 'workspace-member', 'prompt', 'prompt-file', 'target', 'status', 'read-at', 'file',
+  'daemon-url', 'workspace', 'workspace-member', 'prompt', 'prompt-file', 'target', 'attachments', 'status', 'read-at', 'file',
 ]);
 const COMMENT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // Defined near the top because `runFigma` is reachable through the
@@ -466,6 +466,7 @@ Manage comments through the same daemon HTTP API as the workspace UI.
 Options:
   --file <path>               Exact locally published file for backfill status/retry.
   --target <json>             PreviewCommentTarget JSON for create/update.
+  --attachments <json>        Project image attachments [{path,name}], required for a new Motion reference.
   --prompt <text>             Comment body.
   --prompt-file <path|->      Read the comment body from a file or stdin; mutually exclusive with --prompt.
   --workspace <id>            Exact Workspace for bound project requests.
@@ -610,6 +611,16 @@ async function runComment(args) {
     }
     method = 'POST';
     body = { ...(sub === 'update' ? { id: commentId } : {}), target, note };
+    if (flags.attachments !== undefined) {
+      let attachments;
+      try { attachments = JSON.parse(flags.attachments); }
+      catch { commentUsageError('--attachments must be a JSON array of project images'); }
+      if (!Array.isArray(attachments) || !attachments.every(item => item && typeof item === 'object'
+        && typeof item.path === 'string' && typeof item.name === 'string')) {
+        commentUsageError('--attachments must be a JSON array of {path,name}');
+      }
+      body.attachments = attachments;
+    }
   } else if (sub === 'status') {
     if (typeof flags.status !== 'string' || !flags.status.trim()) {
       commentUsageError('status requires --status');

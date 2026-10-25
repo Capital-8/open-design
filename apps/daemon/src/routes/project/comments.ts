@@ -7,7 +7,7 @@ import type {
   ProjectCommentReadRequest,
   WorkspaceCollabContext,
 } from '@open-design/contracts';
-import { SHARE_COMMENT_MAX_BYTES } from '@open-design/contracts';
+import { SHARE_COMMENT_MAX_BYTES, isPreviewCommentImagePath, parsePreviewCommentMotionAnchor } from '@open-design/contracts';
 import { projectKindFromMetadataToTrackingOrLegacyDefault } from '@open-design/contracts/analytics';
 import type { RouteDeps } from '../../server-context.js';
 import type { BoundWorkspaceResourceMutationGate } from '../../collab/workspace-resource-mutation.js';
@@ -639,6 +639,15 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
         body.authorMemberId = authorMemberId;
         const authorDisplayName = ctx.resolveCurrentAuthorDisplayName?.();
         if (authorDisplayName?.trim()) body.authorDisplayName = authorDisplayName.trim();
+      }
+      if (body.target?.motion !== undefined) {
+        if (!parsePreviewCommentMotionAnchor(body.target.motion)) throw new Error('Invalid Motion reference time');
+        const attachments = body.attachments ?? existing?.attachments;
+        if (!existing?.motion && (!Array.isArray(attachments)
+          || !attachments.some((item: unknown) => item && typeof item === 'object'
+            && isPreviewCommentImagePath((item as { path?: unknown }).path)))) {
+          throw new Error('Motion feedback requires a project image screenshot');
+        }
       }
       if (existing?.sourceFileId) body.sourceFileId = existing.sourceFileId;
       else if (!requestedId && ctx.prepareCommentFile) {

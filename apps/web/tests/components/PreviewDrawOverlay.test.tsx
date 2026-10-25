@@ -19,6 +19,26 @@ afterEach(() => {
   vi.mocked(requestPreviewSnapshot).mockClear();
 });
 
+it('retains a Motion draft and reports a rejected screenshot without sending', async () => {
+  const annotation = vi.fn();
+  window.addEventListener('opendesign:annotation', annotation);
+  try {
+    const { container, getByRole, getByText } = render(
+      <PreviewDrawOverlay active captureViewport requireSnapshot captureSnapshot={async () => { throw new Error('MOTION_PREVIEW_CHANGED'); }}>
+        <div style={{ width: 320, height: 200 }} />
+      </PreviewDrawOverlay>,
+    );
+    const input = container.querySelector<HTMLInputElement>('.preview-draw-note-input')!;
+    fireEvent.change(input, { target: { value: 'Make the title smaller' } });
+    fireEvent.click(getByRole('button', { name: 'Add to input' }));
+    await waitFor(() => expect(getByText('Could not capture this moment. Your draft is saved; please try again.')).toBeTruthy());
+    expect(input.value).toBe('Make the title smaller');
+    expect(annotation).not.toHaveBeenCalled();
+  } finally {
+    window.removeEventListener('opendesign:annotation', annotation);
+  }
+});
+
 function mockElementRect(
   element: Element,
   rect: Partial<DOMRect> & Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,

@@ -6,6 +6,7 @@ import type {
   PreviewCommentAnchorState,
   PreviewCommentAttachment,
   PreviewCommentMember,
+  PreviewCommentMotionAnchor,
   PreviewCommentPosition,
   PreviewCommentSelectionKind,
   PreviewCommentStatus,
@@ -1216,6 +1217,7 @@ export interface CollabCloudComment {
   memberCount?: number;
   podMembers?: PreviewCommentMember[];
   slideIndex?: number;
+  motion?: PreviewCommentMotionAnchor;
   attachments?: PreviewCommentAttachment[];
   status: PreviewCommentStatus;
   /** Drift-ladder anchor state (see {@link PreviewCommentAnchorState}). */

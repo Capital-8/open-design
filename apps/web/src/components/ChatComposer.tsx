@@ -2613,7 +2613,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               if (result.failed.length > 0) {
                 const detailText = result.error ? ` (${result.error})` : '';
                 setUploadError(t('questions.uploadFailed', { failed: result.failed.length }) + detailText);
-                if (uploaded.length === 0) {
+                if (uploaded.length === 0 || detail.motion) {
                   ack({ ok: false, message: t('chat.annotationUploadFailed') });
                   return;
                 }
@@ -2634,6 +2634,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 ...(screenshot ? { screenshotPath: screenshot.path } : {}),
                 markKind: detail.markKind,
                 note: detail.note,
+                ...(detail.motion ? { motion: detail.motion } : {}),
                 bounds: detail.bounds,
                 target: detail.target
                   ? {

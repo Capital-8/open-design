@@ -11645,7 +11645,11 @@ export function ProjectView({
       }
       const queuedCommentIds: string[] = [];
       for (let i = 0; i < commentAttachments.length; i++) {
-        const commentAttachment = commentAttachments[i]!;
+        const original = commentAttachments[i]!;
+        const commentAttachment = original.motion && uploaded.length > 0
+          ? { ...original, imageAttachments: mergePreviewCommentAttachments(original.imageAttachments,
+              uploaded.map(({ path, name }) => ({ path, name }))) }
+          : original;
         const savedImages = chatAttachmentsFromPreviewCommentImages(commentAttachment.imageAttachments);
         const prompt = commentTaskQuery(commentAttachment);
         // Comment/board pin → run: tag entry_from='comment' so the dashboard

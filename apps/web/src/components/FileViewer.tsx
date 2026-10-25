@@ -333,6 +333,11 @@ import {
   useIframeKeepAlivePool,
 } from './IframeKeepAlivePool';
 import { bindMotionPreviewActivity, unbindMotionPreviewActivity } from '../runtime/motion-preview-activity';
+import { isMotionVideoComposition } from '@open-design/contracts/runtime/motion-source-player';
+import type { PreviewCommentMotionAnchor } from '@open-design/contracts';
+import { useMotionPreviewTransport } from '../runtime/motion-preview-transport';
+import { MotionPlaybackControls } from './MotionPlaybackControls';
+import { captureMotionCommentFrame, motionCommentVisible, motionCommentDisplaySnapshot, type MotionCaptureContext } from '../comments/motion-capture';
 
 import type {
   ChatCommentAttachment,
@@ -4788,6 +4793,7 @@ export function CommentSidePanel({
   t,
   composer,
   deckSlideCount,
+  motionSourceFingerprint,
 }: {
   comments: PreviewComment[];
   projectId?: string;
@@ -4828,6 +4834,7 @@ export function CommentSidePanel({
   composer?: ReactNode;
   /** Total deck slides, when the sidebar is attached to a deck preview. */
   deckSlideCount?: number;
+  motionSourceFingerprint?: string;
 }) {
   const { workspaceContext } = useProjectCollabContext();
   const [newCommentDraft, setNewCommentDraft] = useState('');
@@ -5078,6 +5085,11 @@ export function CommentSidePanel({
                   displayNumber={displayCommentNumber(comment, index)}
                   t={t}
                 />
+                {comment.motion ? (
+                  <span className="comment-side-slide" data-testid="comment-motion-time">
+                    {comment.motion.timeSeconds.toFixed(3)}s
+                  </span>
+                ) : null}
                 {typeof comment.slideIndex === 'number' && deckSlideCount && deckSlideCount > 0 ? (
                   <span className="comment-side-slide">
                     {t('fileViewer.speakerNotesSlide', { current: comment.slideIndex + 1, total: deckSlideCount })}
@@ -5102,6 +5114,9 @@ export function CommentSidePanel({
                 ) : null}
               </div>
               <CommentListBody key={comment.note} note={comment.note} t={t} />
+              {comment.motion && motionSourceFingerprint && comment.motion.sourceFingerprint !== motionSourceFingerprint ? (
+                <span role="status" data-testid="comment-motion-previous-source">{t('motion.previousSource')}</span>
+              ) : null}
               {unavailableCommentId === comment.id ? (
                 <span role="status" data-testid="comment-location-unavailable">
                   {t('comment.anchorState.lost')}
@@ -5276,6 +5291,7 @@ export function computeReorderedSortKey(
 
 function CommentSideDock({
   comments,
+  motionSourceFingerprint,
   projectId,
   filePath,
   selectedIds,
@@ -5305,6 +5321,7 @@ function CommentSideDock({
   deckSlideCount,
 }: {
   comments: PreviewComment[];
+  motionSourceFingerprint?: string;
   projectId?: string;
   filePath?: string;
   selectedIds: Set<string>;
@@ -5342,6 +5359,7 @@ function CommentSideDock({
       data-testid="comment-side-dock"
     >
       <CommentSidePanel
+        motionSourceFingerprint={motionSourceFingerprint}
         comments={comments}
         projectId={projectId}
         filePath={filePath}
@@ -10401,7 +10419,11 @@ function HtmlViewer({
   // Edit is handled by its own freeze just below; these are the non-edit
   // passes (Mark/Draw, Inspect) that also must not be yanked out
   // from under the user by a background file change.
-  const annotationFreezeActive = drawOverlayOpen || inspectMode;
+  const motionAnnotationSource = annotationFrozenSource ?? livePreviewSource;
+  const holdsMotionAnnotation = (boardMode || drawOverlayOpen)
+    && Boolean(motionAnnotationSource && isMotionVideoComposition(motionAnnotationSource));
+  const motionCommentMode = boardMode && holdsMotionAnnotation;
+  const annotationFreezeActive = drawOverlayOpen || inspectMode || motionCommentMode;
   // Freeze the iframe input on the snapshot taken at Edit-mode entry. Any
   // source rewrite during edit (1.5s debounced set-style patches) stays
   // invisible to the iframe — live updates flow through od-edit-preview-style
@@ -10439,6 +10461,7 @@ function HtmlViewer({
         setAnnotationFrozenSource(livePreviewSource);
       } else if (
         annotationFrozenSource !== null &&
+        !holdsMotionAnnotation &&
         liveHtml === undefined &&
         livePreviewSource != null &&
         livePreviewSource !== annotationFrozenSource
@@ -10448,7 +10471,7 @@ function HtmlViewer({
     } else if (annotationFrozenSource !== null) {
       setAnnotationFrozenSource(null);
     }
-  }, [annotationFreezeActive, annotationFrozenSource, livePreviewSource, liveHtml]);
+  }, [annotationFreezeActive, annotationFrozenSource, holdsMotionAnnotation, livePreviewSource, liveHtml]);
   const previewSource = (manualEditMode && manualEditFrozenSource !== null)
     ? manualEditFrozenSource
     : (annotationFreezeActive && annotationFrozenSource !== null)
@@ -11345,6 +11368,69 @@ function HtmlViewer({
   }
   const srcDocTransport = committedSrcDocTransportRef.current;
   const srcDocTransportGeneration = srcDocTransport.generation;
+  const isMotionPreview = Boolean(previewSource && isMotionVideoComposition(previewSource));
+  const motionFingerprint = previewSource ? previewSourceFingerprint(previewSource) : '';
+  const motionAnnotationLocked = boardMode || drawOverlayOpen;
+  const motionTransport = useMotionPreviewTransport({
+    iframeRef,
+    contentIdentity: `${projectId}\0${file.name}\0${motionFingerprint}`,
+    identity: `${projectId}\0${file.name}\0${motionFingerprint}\0${useUrlLoadPreview}\0${reloadKey}\0${useUrlLoadPreview ? '' : srcDocTransportGeneration}`,
+    enabled: isMotionPreview && workspaceActive && mode === 'preview',
+    locked: motionAnnotationLocked,
+  });
+  const motionTransportRef = useRef(motionTransport);
+  motionTransportRef.current = motionTransport;
+  const motionCaptureIdentityRef = useRef({ enabled: isMotionPreview, fingerprint: motionFingerprint });
+  motionCaptureIdentityRef.current = { enabled: isMotionPreview, fingerprint: motionFingerprint };
+  function currentMotionCaptureContext(): MotionCaptureContext | null {
+    const runtime = motionTransportRef.current;
+    const state = runtime.getState();
+    const identity = motionCaptureIdentityRef.current;
+    if (!identity.enabled || !state) return null;
+    return {
+      documentToken: runtime.getDocumentToken(),
+      playing: state.playing,
+      locked: state.locked,
+      motion: { timeSeconds: state.time, durationSeconds: state.duration,
+        ...(state.fps ? { fps: state.fps } : {}), sourceFingerprint: identity.fingerprint },
+    };
+  }
+  const currentMotionAnchor = currentMotionCaptureContext()?.motion;
+  const motionDisplayContext = motionTransport.state ? {
+    time: motionTransport.state.time, playing: motionTransport.state.playing, sourceFingerprint: motionFingerprint,
+  } : null;
+  const displayedActiveCommentTarget = activeCommentTarget
+    ? motionCommentDisplaySnapshot(activeCommentTarget, liveCommentTargets, motionDisplayContext) : null;
+  async function lockMotionForAnnotation(): Promise<boolean> {
+    if (!isMotionPreview) return true;
+    try {
+      await motionTransportRef.current.setLocked(true);
+      return true;
+    } catch {
+      setCommentSavedToast(t('motion.previewChanged'));
+      return false;
+    }
+  }
+  async function captureCurrentMotionFrame() {
+    return captureMotionCommentFrame(currentMotionCaptureContext, async () => {
+      const frame = iframeRef.current;
+      if (!frame) return null;
+      await waitForAnimationFrame();
+      await waitForAnimationFrame();
+      return requestPreviewSnapshotWithRetry(frame);
+    });
+  }
+  async function motionCommentImage(): Promise<File | null> {
+    try {
+      const { snapshot, motion } = await captureCurrentMotionFrame();
+      suppressLiveReloadUntilRef.current = Date.now() + 5000;
+      const blob = await fetch(snapshot.dataUrl).then(response => response.blob());
+      return new File([blob], `motion-${motion.timeSeconds.toFixed(3)}s-${Date.now()}.png`, { type: 'image/png' });
+    } catch {
+      setCommentSavedToast(t('motion.captureFailed'));
+      return null;
+    }
+  }
   const srcDoc = srcDocTransport.srcDoc;
   const expectedSrcDocTransportGenerationRef = useRef(srcDocTransportGeneration);
   expectedSrcDocTransportGenerationRef.current = srcDocTransportGeneration;
@@ -12938,14 +13024,14 @@ function HtmlViewer({
         ));
         setActiveCommentTarget((current) => {
           if (!current) return null;
-          if (current.selectionKind === 'pod') return current;
+          if (current.motion || current.selectionKind === 'pod') return current;
           const updated = next.get(current.elementId);
           if (!updated || !isValidCommentOverlayPosition(updated.position)) return composerHoldsUnsentWorkRef.current ? current : null;
           return commentSnapshotEqual(current, updated) ? current : updated;
         });
         setHoveredCommentTarget((current) => {
           if (!current) return null;
-          if (current.selectionKind === 'pod') return current;
+          if (current.motion || current.selectionKind === 'pod') return current;
           const updated = next.get(current.elementId);
           if (!updated || !isValidCommentOverlayPosition(updated.position)) return null;
           return commentSnapshotEqual(current, updated) ? current : updated;
@@ -13017,12 +13103,12 @@ function HtmlViewer({
           return new Map(current).set(snapshot.elementId, snapshot);
         });
         setActiveCommentTarget((current) =>
-          current && current.elementId === snapshot.elementId && !commentSnapshotEqual(current, snapshot)
+          current && !current.motion && current.elementId === snapshot.elementId && !commentSnapshotEqual(current, snapshot)
             ? snapshot
             : current,
         );
         setHoveredCommentTarget((current) =>
-          current && current.elementId === snapshot.elementId && !commentSnapshotEqual(current, snapshot)
+          current && !current.motion && current.elementId === snapshot.elementId && !commentSnapshotEqual(current, snapshot)
             ? snapshot
             : current,
         );
@@ -13138,7 +13224,7 @@ function HtmlViewer({
     commentLocateRequestRef.current = null;
     if (!workspaceActive || !boardMode || !activePreviewCommentId) return;
     const comment = previewComments.find(item => item.id === activePreviewCommentId && item.filePath === file.name);
-    if (!comment || !ownerCommentNeedsLocation(comment, collab.enabled)) return;
+    if (!comment || comment.motion || !ownerCommentNeedsLocation(comment, collab.enabled)) return;
     if (composerHoldsUnsentWorkRef.current) return;
     setActiveCommentTarget(null);
     setHoveredCommentTarget(null);
@@ -13154,7 +13240,7 @@ function HtmlViewer({
   }, [workspaceActive, boardMode, collab.enabled, activePreviewCommentId, commentLocationIntent, previewComments, file.name, commentTargetsKey, commentTargetsReadyKey]);
 
   useEffect(() => {
-    if (!workspaceActive || !boardMode || !activeCommentTarget || activeCommentTarget.selectionKind === 'pod') return;
+    if (!workspaceActive || !boardMode || !activeCommentTarget || activeCommentTarget.motion || activeCommentTarget.selectionKind === 'pod') return;
     iframeRef.current?.contentWindow?.postMessage({
       type: 'od:comment-active-target',
       elementId: activeCommentTarget.elementId,
@@ -15190,6 +15276,7 @@ function HtmlViewer({
       : 0;
     const reloadUsesManualEditUrlStandby = manualEditUrlStandbyRevision > 0;
     if (manualEditMode && !(await requestManualEditSafeExitRef.current())) return;
+    motionTransport.invalidate();
     if (reloadLeavesManualEdit) {
       setManualEditSrcDocActive(false);
       manualEditPersistedDocumentRef.current = null;
@@ -15329,7 +15416,7 @@ function HtmlViewer({
     setAgentToolsOpen(false);
   }
 
-  function activateDrawTool() {
+  async function activateDrawTool() {
     if (viewerOnly) return; // read-only viewer: mark (annotate) is an edit action
     fireArtifactToolbarClick('mark');
     const next = !drawOverlayOpen;
@@ -15338,6 +15425,7 @@ function HtmlViewer({
       setAgentToolsOpen(false);
       return;
     }
+    if (isMotionPreview && !(await lockMotionForAnnotation())) return;
     void capturePreviewScrollPosition();
     const activateDraw = () => {
       setCommentPanelOpen(false);
@@ -15358,7 +15446,7 @@ function HtmlViewer({
     activateDraw();
   }
 
-  function activateCommentTool() {
+  async function activateCommentTool() {
     fireArtifactToolbarClick('comment');
     void capturePreviewScrollPosition();
     if (boardMode && !commentCreateMode && boardTool === 'inspect') {
@@ -15368,6 +15456,7 @@ function HtmlViewer({
       setAgentToolsOpen(false);
       return;
     }
+    if (isMotionPreview && !(await lockMotionForAnnotation())) return;
     const activateComment = () => {
       setCommentPanelOpen(false);
       setCommentCreateMode(false);
@@ -15387,7 +15476,7 @@ function HtmlViewer({
     activateComment();
   }
 
-  function activateCommentCreateTool(returnFocusTarget?: HTMLElement | null) {
+  async function activateCommentCreateTool(returnFocusTarget?: HTMLElement | null) {
     if (returnFocusTarget) commentPanelReturnFocusRef.current = returnFocusTarget;
     fireArtifactToolbarClick('comment');
     void capturePreviewScrollPosition();
@@ -15399,6 +15488,7 @@ function HtmlViewer({
       closeArtifactToolMenus();
       return;
     }
+    if (isMotionPreview && !(await lockMotionForAnnotation())) return;
     const activateCommentCreate = () => {
       setCommentPanelOpen(true);
       setCommentSidePanelCollapsed(false);
@@ -15516,9 +15606,12 @@ function HtmlViewer({
   }
 
   function withDeckSlideIndex(target: PreviewCommentTarget): PreviewCommentTarget {
-    if (!effectiveDeck || typeof slideState?.active !== 'number') return target;
-    if (typeof target.slideIndex === 'number') return target;
-    return { ...target, slideIndex: slideState.active };
+    const saved = currentActiveComposerComment();
+    const motion = saved ? saved.motion : currentMotionCaptureContext()?.motion;
+    const scoped = motion ? { ...target, motion } : target;
+    if (!effectiveDeck || typeof slideState?.active !== 'number') return scoped;
+    if (typeof scoped.slideIndex === 'number') return scoped;
+    return { ...scoped, slideIndex: slideState.active };
   }
 
   async function sendBoardBatch() {
@@ -15552,6 +15645,8 @@ function HtmlViewer({
     try {
       const checked = await currentCommentSaveTarget(activeCommentTarget);
       if (!checked) return;
+      const motionImage = isMotionPreview && !existingComment ? await motionCommentImage() : null;
+      if (isMotionPreview && !existingComment && !motionImage) return;
       const existingAttachments = currentActiveComposerAttachments();
       const attachments = buildBoardCommentAttachments({
         target: withDeckSlideIndex(targetFromSnapshot(checked)),
@@ -15565,7 +15660,7 @@ function HtmlViewer({
       ));
       const result = await onSendBoardCommentAttachments(
         attachments,
-        boardImages,
+        motionImage ? [motionImage, ...boardImages] : boardImages,
       );
       const completedIds = new Set(result.commentIds);
       const pending = attachments.filter(
@@ -15585,6 +15680,8 @@ function HtmlViewer({
   }
 
   async function currentCommentSaveTarget(snapshot: PreviewCommentSnapshot) {
+    const saved = currentActiveComposerComment();
+    if (saved?.motion) return targetFromSnapshot(saved);
     // Free-position and area notes do not refer to one DOM element.
     if (snapshot.elementId.startsWith('pin-') || snapshot.elementId.startsWith('file-comment-') || snapshot.selectionKind === 'pod') return snapshot;
     const checked = await validateCommentSaveTarget(iframeRef.current, snapshot, () =>
@@ -15609,11 +15706,13 @@ function HtmlViewer({
       const checked = await currentCommentSaveTarget(activeCommentTarget);
       if (!checked) return;
       const target = withDeckSlideIndex(targetFromSnapshot(checked));
+      const motionImage = isMotionPreview && !currentActiveComposerComment() ? await motionCommentImage() : null;
+      if (isMotionPreview && !currentActiveComposerComment() && !motionImage) return;
       const saved = await onSavePreviewComment(
         target,
         commentDraft.trim(),
         false,
-        boardImages,
+        motionImage ? [motionImage, ...boardImages] : boardImages,
         activeComposerComment?.id,
       );
       if (saved) {
@@ -15638,7 +15737,7 @@ function HtmlViewer({
       const checked = activeCommentTarget ? await currentCommentSaveTarget(activeCommentTarget) : null;
       if (activeCommentTarget && !checked) return false;
       const idSeed = Date.now().toString(36);
-      const target: PreviewCommentTarget = checked
+      const target: PreviewCommentTarget = withDeckSlideIndex(checked
         ? targetFromSnapshot(checked)
         : {
             filePath: file.name,
@@ -15649,8 +15748,10 @@ function HtmlViewer({
             position: { x: 0, y: 0, width: 0, height: 0 },
             htmlHint: '',
             selectionKind: 'element',
-          };
-      const saved = await onSavePreviewComment(target, cleanNote, false);
+          });
+      const motionImage = isMotionPreview ? await motionCommentImage() : null;
+      if (isMotionPreview && !motionImage) return false;
+      const saved = await onSavePreviewComment(target, cleanNote, false, motionImage ? [motionImage] : undefined);
       if (saved) {
         setCommentSavedToast(t('chat.comments.savedToast'));
         if (activeCommentTarget) clearBoardComposer();
@@ -16094,7 +16195,16 @@ function HtmlViewer({
     if (screenshotInFlightRef.current) return;
     screenshotInFlightRef.current = true;
     try {
-      const snap = await captureExportImageSnapshot();
+      let motion: PreviewCommentMotionAnchor | undefined;
+      let snap;
+      if (isMotionPreview) {
+        if (!(await lockMotionForAnnotation())) return;
+        const captured = await captureCurrentMotionFrame();
+        snap = captured.snapshot;
+        motion = captured.motion;
+      } else {
+        snap = await captureExportImageSnapshot();
+      }
       if (!snap) {
         setExportToast({ message: t('fileViewer.screenshotPreviewLoading'), tone: 'error' });
         return;
@@ -16107,6 +16217,7 @@ function HtmlViewer({
         note: '',
         action: 'draft',
         filePath: file.name,
+        ...(motion ? { motion, markKind: 'click' as const, bounds: { x: 0, y: 0, width: 1, height: 1 } } : {}),
         ack: (result) => {
           if (!result.ok) {
             setExportToast({ message: t('fileViewer.screenshotCaptureFailed'), tone: 'error' });
@@ -16126,8 +16237,9 @@ function HtmlViewer({
       setExportToast({ message, tone: 'error' });
     } finally {
       screenshotInFlightRef.current = false;
+      if (isMotionPreview && !motionAnnotationLocked) void motionTransportRef.current.setLocked(false).catch(() => undefined);
     }
-  }, [captureExportImageSnapshot, file.name, t]);
+  }, [captureExportImageSnapshot, file.name, isMotionPreview, motionAnnotationLocked, t]);
 
   const openImageExportModal = async (context?: HtmlVersionExportContext) => {
     // Don't reopen while an export is still running: reopening resets the shared
@@ -16470,7 +16582,7 @@ function HtmlViewer({
   });
   const activeSideCommentId = activePreviewCommentId;
   const activeCommentTargetVisible = commentTargetIntersectsPreview(
-    activeCommentTarget,
+    displayedActiveCommentTarget,
     overlayPreviewScale,
     { x: overlayPreviewTransform.offsetX, y: overlayPreviewTransform.offsetY },
     previewBodySize,
@@ -16882,9 +16994,9 @@ function HtmlViewer({
       },
     };
   })();
-  const commentComposerNode = boardMode && activeCommentTarget && activeCommentTargetVisible ? (
+  const commentComposerNode = boardMode && displayedActiveCommentTarget && activeCommentTargetVisible ? (
     <BoardComposerPopover
-      target={activeCommentTarget}
+      target={displayedActiveCommentTarget}
       existing={activeComposerComment}
       canEditComment={canEditActiveComment}
       canDeleteComment={canDeleteActiveComment}
@@ -17006,6 +17118,7 @@ function HtmlViewer({
   const commentSidePanel = workspaceActive && commentPanelOpen ? (
     <CommentSideDock
       comments={visibleSideComments}
+      motionSourceFingerprint={motionFingerprint}
       projectId={projectId}
       filePath={file.path || file.name}
       deckSlideCount={effectiveDeck ? slideState?.count : undefined}
@@ -17045,12 +17158,25 @@ function HtmlViewer({
         void onReorderPreviewComment?.(draggedId, sortKey);
       }}
       onReply={(comment) => {
+        requestComposerRetarget(() => { void (async () => {
+        if (comment.motion && isMotionPreview) {
+          try {
+            await motionTransportRef.current.setLocked(false);
+            await motionTransportRef.current.command({ action: 'seek', time: comment.motion.timeSeconds });
+            await motionTransportRef.current.setLocked(true);
+          } catch {
+            setCommentSavedToast(t('motion.previewChanged'));
+            return;
+          }
+        } else if (isMotionPreview && !(await lockMotionForAnnotation())) {
+          return;
+        }
         // Reply == edit on a flat-thread model: prefill the
         // popover with the existing note so the user sees and
         // mutates the current text. Save runs through the
         // same upsert path; matching project/conv/file/element
         // updates note in place rather than creating a new row.
-        const snapshot = liveSnapshotForComment(comment, liveCommentTargets) ?? {
+        let snapshot = (!comment.motion ? liveSnapshotForComment(comment, liveCommentTargets) : null) ?? {
           filePath: comment.filePath,
           elementId: comment.elementId,
           selector: comment.selector,
@@ -17063,9 +17189,22 @@ function HtmlViewer({
           memberCount: comment.memberCount,
           podMembers: comment.podMembers,
           ...(typeof comment.slideIndex === 'number' ? { slideIndex: comment.slideIndex } : {}),
+          ...(comment.motion ? { motion: comment.motion } : {}),
         };
-        requestComposerRetarget(() => {
-          const needsLocation = ownerCommentNeedsLocation(comment, collab.enabled);
+        if (comment.motion && comment.motion.sourceFingerprint === motionFingerprint && isMotionPreview) {
+          const documentToken = motionTransportRef.current.getDocumentToken();
+          const verified = await validateCommentSaveTarget(iframeRef.current, snapshot,
+            () => useUrlLoadPreview ? `url:${iframeRef.current?.src ?? ''}`
+              : `srcdoc:${expectedSrcDocTransportGenerationRef.current}`);
+          if (!documentToken || documentToken !== motionTransportRef.current.getDocumentToken()
+            || typeof verified !== 'object') {
+            setCommentSavedToast(t('motion.previewChanged'));
+            return;
+          }
+          snapshot = { ...verified, motion: comment.motion };
+          setLiveCommentTargets(current => new Map(current).set(comment.elementId, snapshot));
+        }
+          const needsLocation = !comment.motion && ownerCommentNeedsLocation(comment, collab.enabled);
           if (needsLocation) setCommentLocationIntent(intent => intent + 1);
           setActiveCommentTarget(needsLocation ? null : snapshot);
           setHoveredCommentTarget(needsLocation ? null : snapshot);
@@ -17077,7 +17216,7 @@ function HtmlViewer({
           setCommentCreateMode(true);
           setCommentPanelOpen(true);
           setCommentSidePanelCollapsed(false);
-        });
+        })(); });
       }}
       onSendSelected={async () => {
         if (!onSendBoardCommentAttachments) return;
@@ -18014,7 +18153,7 @@ function HtmlViewer({
               data-testid={manualEditMode ? undefined : 'comment-preview-canvas'}
               ref={manualEditMode ? undefined : setCommentPreviewCanvasRef}
             >
-              <div className={manualEditMode ? undefined : 'comment-frame-clip'} style={manualEditMode ? { height: '100%' } : undefined}>
+              <div className={manualEditMode ? undefined : 'comment-frame-clip'} style={manualEditMode ? { height: '100%' } : isMotionPreview ? { bottom: 96 } : undefined}>
                 <div
                   style={
                     manualEditMode
@@ -18026,7 +18165,9 @@ function HtmlViewer({
                     active={drawOverlayOpen}
                     onActiveChange={setDrawOverlayOpen}
                     captureViewport
-                    captureSnapshot={captureExportImageSnapshot}
+                    captureSnapshot={isMotionPreview ? async () => (await captureCurrentMotionFrame()).snapshot : captureExportImageSnapshot}
+                    requireSnapshot={isMotionPreview}
+                    motion={currentMotionAnchor}
                     captureTarget={null}
                     filePath={file.name}
                     sendDisabled={streaming}
@@ -18265,9 +18406,21 @@ function HtmlViewer({
                   ) : null}
                 </div>
               </div>
+              {isMotionPreview && !manualEditMode ? (
+                <MotionPlaybackControls
+                  state={motionTransport.state}
+                  connected={motionTransport.connected}
+                  error={motionTransport.error}
+                  locked={motionAnnotationLocked}
+                  onCommand={motionTransport.command}
+                  onAnnotate={() => activateCommentCreateTool()}
+                />
+              ) : null}
               {boardMode ? (
                 <CommentPreviewOverlays
-                  comments={commentCreateMode ? creationSortedSideComments : []}
+                  comments={commentCreateMode ? creationSortedSideComments
+                    .filter(comment => motionCommentVisible(comment.motion, motionDisplayContext))
+                    .map(comment => motionCommentDisplaySnapshot(comment, liveCommentTargets, motionDisplayContext)) : []}
                   currentUser={commentAuthorSelf}
                   provisionalPinNumber={nextProvisionalPinNumber}
                   t={t}
@@ -18278,7 +18431,7 @@ function HtmlViewer({
                   liveTargets={liveCommentTargets}
                   hoveredTarget={hoveredCommentTarget}
                   hoveredPodMemberId={hoveredPodMemberId}
-                  activeTarget={activeCommentTarget}
+                  activeTarget={motionCommentVisible(activeComposerComment?.motion, motionDisplayContext) ? displayedActiveCommentTarget : null}
                   activeExistingCommentId={activeComposerComment?.id ?? null}
                   boardTool={boardTool}
                   showActivePin={commentCreateMode}
