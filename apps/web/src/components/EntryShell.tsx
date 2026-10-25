@@ -1680,7 +1680,17 @@ export function EntryShell({
         })().catch(() => ({ kind: 'unknown' as const, preflight: null }))
         : null;
       const hintRequest = readAmrRequestConcurrency(scope);
-      const hint = await hintRequest;
+      // Either current, exact-scope refusal can settle this click. A confirmed
+      // funding refusal need not spend the rest of its 500ms budget waiting for
+      // a non-decisive Link hint; a full hint still wins when it arrives first.
+      const firstDecision = fundingEvidence
+        ? await Promise.race([
+          hintRequest.then((hint) => ({ source: 'hint' as const, hint })),
+          fundingEvidence.then((evidence) => ({ source: 'funding' as const, evidence })),
+        ])
+        : { source: 'hint' as const, hint: await hintRequest };
+      const hint = firstDecision.source === 'hint' ? firstDecision.hint
+        : firstDecision.evidence.kind === 'insufficient' ? null : await hintRequest;
       homeConcurrencyPendingRef.current = false;
       // A workspace, model, identity, route change or unmount while reading must
       // never dispatch the earlier payload under the new principal.

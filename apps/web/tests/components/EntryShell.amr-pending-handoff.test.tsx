@@ -368,6 +368,62 @@ describe('OPEND-2614 · funded Home handoff precedes the remaining AMR sign-in g
     expect(screen.getByTestId('home-hero-input').textContent).toContain('Keep this original Home prompt');
   });
 
+  it('RUN-003 shows fresh Home insufficiency before a late Link hint and only retries on another click', async () => {
+    const context = personalContext();
+    const previous = globalThis.fetch;
+    let verdict: 'insufficient' | 'available' = 'insufficient';
+    let releaseHint!: (response: Response) => void;
+    let holdHint = true;
+    let freshReads = 0;
+    const hint = (status: 'full' | 'available') => jsonResponse({ requestConcurrencyHint: {
+      workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      observedAt: new Date().toISOString(), status,
+      running: status === 'full' ? 10 : 0, limit: 10,
+    } });
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/billing/request-concurrency?')) {
+        return holdHint ? new Promise<Response>((resolve) => { releaseHint = resolve; })
+          : Promise.resolve(hint('available'));
+      }
+      if (url.includes('/billing/preflight?')) {
+        freshReads++;
+        return new Promise<Response>((resolve) => setTimeout(() =>
+          resolve(jsonResponse({ preflight: homeFunding(context, verdict) })), 200));
+      }
+      return previous(input, init);
+    }) as typeof fetch;
+    const h = harness('amr');
+    await screen.findByTestId('home-hero-input');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    setHomeHeroPrompt('Keep this draft through both decisions.');
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByTestId('home-hero-submit'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(199); });
+      expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(screen.queryByTestId('amr-balance-dialog')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this draft through both decisions.');
+    await act(async () => releaseHint(hint('full')));
+    expect(screen.getByTestId('amr-balance-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('amr-balance-dialog-dismiss'));
+    await waitFor(() => expect(screen.queryByTestId('amr-balance-dialog')).toBeNull());
+    verdict = 'available';
+    holdHint = false;
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    await submitHome('Keep this draft through both decisions.');
+    await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+    expect(freshReads).toBeGreaterThanOrEqual(2);
+  });
+
   it('allow: begin → gate → create, and the create reuses the optimistic id with the gate witness', async () => {
     const h = harness('amr');
     await submitHome('Draft a landing page.');
