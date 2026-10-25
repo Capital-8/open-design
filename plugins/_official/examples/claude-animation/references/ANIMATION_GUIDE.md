@@ -2,8 +2,8 @@
 
 This guide adapts animation principles from John Heibel's MIT-licensed
 ClaudeAnimationBase. Copyright (c) 2026 John Heibel for the upstream material;
-see `../LICENSE`. The character recipe below is an OpenDesign composition.
-The original upstream guide is linked in `UPSTREAM.md`; its mascot kit and
+see `../runtime/LICENSE`. The character recipe below is an OpenDesign composition.
+The original upstream guide is linked in `../runtime/UPSTREAM.md`; its mascot kit and
 reference sheets are not included in this integration.
 
 ## Story and timing
@@ -30,11 +30,12 @@ or write another original character with the painting primitives below. Build
 expressions from eye size, gaze, wing position and the body's pose. Do not use
 another company's mascot or logo as the default character.
 
-## Runtime provided by the daemon
+## Runtime in the source directory
 
-The runtime injects p5 2.3.3, p5.brush 2.2.3, upstream core.js and timeline.js,
-and PROJECT={duration:5,bpm:120,offset:0}. It does not supply a character kit.
-Do not load a CDN, install packages or launch another browser.
+`media scaffold --template hand-painted` copies p5 2.3.3, p5.brush 2.2.3, the
+upstream core.js and timeline.js, and a player clock into the source directory
+and declares PROJECT={duration:5,bpm:120,offset:0}. No character kit is
+supplied. Do not load a CDN, install packages or launch another browser.
 
 | Helper | Use |
 |---|---|
@@ -51,7 +52,6 @@ Do not load a CDN, install packages or launch another browser.
 
 ## Delivery
 
-Copy assets/template.html into a new hidden project composition directory and
-edit its inline scene script. Keep one canvas#out. Use the media generate/wait
-workflow in SKILL.md, and verify the acceptance checklist before reporting
-completion. The visible deliverable is the final silent MP4.
+Edit the inline scene script in the scaffolded `motion-source/<name>/index.html`.
+Keep one canvas#out and the local scripts. Render with the generate/wait
+workflow in ../SKILL.md. Deliver both the editable source and the silent MP4.

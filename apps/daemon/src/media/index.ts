@@ -97,7 +97,7 @@ import {
 import { prepareHyperFramesAudio } from './hyperframes-audio.js';
 import { renderVelaImage, renderVelaVideo } from './vela.js';
 import { encodeFramesMp4 } from './frame-encoding.js';
-import { renderClaudeAnimation, assertClaudeAnimationOptions } from './claude-animation.js';
+import { renderHandPainted, assertHandPaintedOptions } from './hand-painted.js';
 import {
   ensureProject,
   kindFor,
@@ -480,7 +480,7 @@ export async function generateMedia(args: {
     }
   }
 
-  if (def.provider === 'claude-animation') assertClaudeAnimationOptions({ length, aspect });
+  if (def.provider === 'claude-animation') assertHandPaintedOptions({ length, aspect });
 
   // Clamp registry-bound numeric inputs to their allowed buckets so a
   // hallucinated --length 9999999 doesn't reach a real provider as-is
@@ -750,8 +750,11 @@ export async function generateMedia(args: {
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
     } else if (def.provider === 'claude-animation' && surface === 'video') {
-      const result = await renderClaudeAnimation({
-        resourceRoot: projectRoot, projectDir: dir, compositionDir: ctx.compositionDir,
+      // Hand-painted Motion: an editable motion-source/<id> composition whose
+      // local p5 engine is captured frame by frame, then checked like any
+      // Motion export (linked MP4 path, silent audio policy, decodable frame).
+      const result = await renderHandPainted({
+        projectDir: dir, compositionDir: ctx.compositionDir, outputPath: safeOut,
         desktopFrameRenderer: args.desktopFrameRenderer ?? null, onProgress: args.onProgress,
       });
       bytes = result.bytes;

@@ -94,6 +94,7 @@ const MEDIA_GENERATE_BOOLEAN_FLAGS = new Set([
   'loop',
 ]);
 const MEDIA_SCAFFOLD_STRING_FLAGS = new Set([
+  'template',
   'project',
   'workspace',
   'workspace-member',
@@ -2121,7 +2122,7 @@ async function runMediaScaffold(rawArgs) {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(token ? {} : workspaceHeadersFromExplicitFlags(flags) ?? {}),
       },
-      body: JSON.stringify({ compositionDir }),
+      body: JSON.stringify({ compositionDir, ...(flags.template ? { template: flags.template } : {}) }),
     });
   } catch (err) {
     surfaceFetchError(err, daemonUrl);
@@ -2574,6 +2575,7 @@ async function cliDaemonBaseUrl(flags) {
 function printMediaHelp() {
   console.log(`Usage: od media models [--cloud --project <id>] --json
        od media scaffold --composition-dir .hyperframes-cache/<id> [opts]
+       od media scaffold --composition-dir motion-source/<id> --template hand-painted
        od media generate --surface <image|video|audio> --model <id> [opts]
        od media stock-search --slots '<json>' [opts]
        "$OD_NODE_BIN" "$OD_BIN" media generate --surface <image|video|audio> --model <id> [opts]
@@ -2582,6 +2584,9 @@ Scaffold:
   Creates hyperframes.json, meta.json, and index.html without running
   HyperFrames init or installing global skills. The target must be new and
   live directly under .hyperframes-cache or motion-source (visible editable source).
+  --template hand-painted   motion-source only: a 5s, 16:9, silent p5/p5.brush
+                            painted source with local scripts and licenses.
+                            Render it with --model claude-animation-p5.
   --json is accepted for consistency; scaffold output is always one JSON line.
 
 Generate required:

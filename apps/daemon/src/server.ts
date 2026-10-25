@@ -8631,6 +8631,7 @@ export async function startServer({
     env: process.env,
   });
   const pathDeps = {
+    BUNDLED_PLUGINS_DIR,
     PROJECT_ROOT,
     PROJECTS_DIR,
     ARTIFACTS_DIR,

@@ -118,15 +118,6 @@ describe('homeHeroExamplePluginsForChip — audio chip', () => {
   });
 });
 
-describe('homeHeroExamplePluginsForChip — video ordering', () => {
-  it('keeps new local animation templates in the ordinary ranking instead of forcing them first', () => {
-    const animation = make({ id: 'example-claude-animation', title: 'Hand-painted character animation', mode: 'video', tags: ['video'] });
-    const established = make({ id: 'example-another-video', title: 'A video example', mode: 'video', tags: ['video'] });
-    expect(homeHeroExamplePluginsForChip('video', [animation, established], 'en').map((p) => p.id))
-      .toEqual([established.id, animation.id]);
-  });
-});
-
 describe('pluginMatchesExampleChip — motion-design chip', () => {
   it('places a motion design template under the motion-design chip only', () => {
     expect(pluginMatchesExampleChip(motionShowreel, 'motion-design')).toBe(true);

@@ -2,12 +2,13 @@
   "$schema": "https://open-design.ai/schemas/plugin.v1.json",
   "specVersion": "1.0.0",
   "name": "example-claude-animation",
-  "title": "Hand-painted character animation",
+  "title": "Hand-painted Motion",
   "version": "0.1.0",
-  "description": "Create a 5-second silent hand-painted cartoon with an original character. Painting and timeline toolkit by John Heibel; independent OpenDesign integration.",
+  "description": "A 5-second, 16:9, silent hand-painted character film: an editable Motion source painted with p5.brush and John Heibel's MIT painting/timeline toolkit, plus the rendered MP4.",
   "description_i18n": {
-    "zh-CN": "制作 5 秒、16:9、无声的原创角色手绘动画，基于 John Heibel 的开源绘画和时间轴引擎。",
-    "zh-TW": "製作 5 秒、16:9、無聲的原創角色手繪動畫，基於 John Heibel 的開源繪畫和時間軸引擎。"
+    "en": "A 5-second, 16:9, silent hand-painted character film: an editable Motion source painted with p5.brush and John Heibel's MIT painting/timeline toolkit, plus the rendered MP4.",
+    "zh-CN": "5 秒、16:9、无声的手绘角色动效：交付可编辑、可回放的 Motion 源码（p5.brush 与 John Heibel 的开源绘画/时间轴引擎）和导出的 MP4。",
+    "zh-TW": "5 秒、16:9、無聲的手繪角色動效：交付可編輯、可回放的 Motion 原始碼（p5.brush 與 John Heibel 的開源繪畫/時間軸引擎）和匯出的 MP4。"
   },
   "license": "MIT",
   "author": {
@@ -17,9 +18,9 @@
     "example",
     "first-party",
     "video",
-    "animation",
-    "character-animation",
-    "hand-painted"
+    "motion-design",
+    "hand-painted",
+    "character-animation"
   ],
   "compat": {
     "agentSkills": [
@@ -37,7 +38,7 @@
     "preview": {
       "type": "video",
       "entry": "./example.html",
-      "poster": "./assets/poster.jpg",
+      "poster": "./assets/cover.jpg",
       "video": "./assets/example.mp4"
     },
     "useCase": {
@@ -55,33 +56,21 @@
     "context": {
       "skills": [
         {
-          "ref": "claude-animation"
+          "path": "./SKILL.md"
         },
         {
-          "path": "./SKILL.md"
-        }
-      ]
-    },
-    "pipeline": {
-      "stages": [
-        {
-          "id": "generate",
-          "atoms": [
-            "file-write",
-            "live-artifact"
-          ]
+          "ref": "motion-design"
         }
       ]
     },
     "capabilities": [
-      "prompt:inject",
-      "fs:write"
+      "prompt:inject"
     ]
   },
   "title_i18n": {
-    "en": "Hand-painted character animation",
-    "zh-CN": "手绘角色动画",
-    "zh-TW": "手繪角色動畫",
-    "de": "Handgemalte Figurenanimation"
+    "en": "Hand-painted Motion",
+    "zh-CN": "手绘动效",
+    "zh-TW": "手繪動效",
+    "de": "Handgemalte Motion"
   }
 }

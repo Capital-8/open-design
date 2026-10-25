@@ -1,7 +1,7 @@
 # Third-party software notices
 
-This folder is part of the bundled design-template resource tree. It must ship
-with any binary distribution that includes this renderer. The repository's
+This folder is part of the bundled hand-painted Motion example plugin. It must
+ship with any binary distribution that includes this renderer. The repository's
 Apache-2.0 license does not replace third-party licenses.
 
 | Component | Version / source | License / notice |
@@ -23,8 +23,9 @@ Archive SHA-256: 82ce89f35c4a4155ac9c3c7ec43d399e9a63ba905314abbb7a699e27e23ebd6
 The LGPL applies to p5.js, separately from the integration. Recipients retain
 its modification and redistribution rights. Extract the archive, run npm ci and
 npm run build in its root, then replace the separate p5 package's lib/p5.min.js
-with the rebuilt file. The daemon reads that file at render time without a hash
-allowlist. Rebuilding OpenDesign from its public source is another way to use a
+with the rebuilt file. The Motion scaffold copies that file into each new
+hand-painted source without a hash allowlist, and every source keeps a
+replaceable local p5.min.js. Rebuilding OpenDesign from its public source is another way to use a
 modified library. The library is unmodified and is not compiled into OD's own
 application source. See the complete LGPL text for the precise terms.
 

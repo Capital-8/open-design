@@ -1489,11 +1489,6 @@ export function HomeView({
     // (inputs valid, apply not failed/superseded) — callers use this to
     // decide whether the Send cue should fire.
   ): Promise<boolean> {
-    const animationPreset = record.id === 'example-claude-animation';
-    const projectKind = animationPreset ? 'video' : options?.projectKind ?? null;
-    const projectMetadata = animationPreset
-      ? { kind: 'video' as const, videoModel: 'claude-animation-p5', videoLength: 5, videoAspect: '16:9' as const }
-      : options?.projectMetadata ?? null;
     const applyRequestId = activePluginApplyRequestRef.current + 1;
     activePluginApplyRequestRef.current = applyRequestId;
     const shouldResolveImmediately = options?.deferApply !== true;
@@ -1543,14 +1538,14 @@ export function HomeView({
       // null so the inline pattern-extraction in handlePromptChange
       // doesn't claim ownership of the user's typed text.
       lastRenderedPrompt: suppressPromptUpdate ? null : optimisticPrompt,
-      projectKind,
+      projectKind: options?.projectKind ?? null,
       chipId: options?.chipId ?? null,
       prototypeSubtypeId: options?.prototypeSubtypeId ?? null,
       mediaSurface: options?.mediaSurface ?? null,
       projectMetadata: homeCreateProjectMetadata(
-        projectKind,
+        options?.projectKind ?? null,
         optimisticInputs,
-        projectMetadata,
+        options?.projectMetadata ?? null,
       ),
       editableInputNames: options?.editableInputNames ?? [],
       preserveInputFields: options?.preserveInputFields === true,
@@ -2958,8 +2953,7 @@ export function HomeView({
       // inside it. In Design mode, free-form prompts route through the default
       // design router; in Ask mode they stay plain chat conversations with no
       // hidden router plugin.
-      const resolvedSkillId = activeSkill?.id
-        ?? (submittedActive?.record.id === 'example-claude-animation' ? 'claude-animation' : null);
+      const resolvedSkillId = activeSkill?.id ?? null;
       const submittedChip = submittedRouteChipId
         ? findChip(submittedRouteChipId)
         : null;

@@ -30,7 +30,6 @@ import { COMMENT_IDENTITY_EDIT_DIRECTIVE } from '@open-design/contracts/prompts/
  * The composed string is what the daemon sees as `systemPrompt` and what
  * the Anthropic path sends as `system`.
  */
-import { claudeAnimationPrompt } from '@open-design/contracts';
 import { renderOfficialDesignerPrompt } from './official-system.js';
 import { renderDiscoveryAndPhilosophy, renderSharedFramesBlock } from './discovery.js';
 import {
@@ -979,7 +978,7 @@ export function composeSystemPrompt({
       memoryBody,
       userInstructions,
       projectInstructions,
-    }) + claudeAnimationPrompt(metadata, sessionMode);
+    });
   }
   // Slim core collapses the discovery layer + designer charter + their tail
   // overrides into one charter document; the classic stack keeps the legacy
@@ -1548,7 +1547,7 @@ export function composeSystemPrompt({
         "stop and ask the user a real question instead.",
   );
 
-  return parts.join('') + claudeAnimationPrompt(metadata, sessionMode);
+  return parts.join('');
 }
 
 /**

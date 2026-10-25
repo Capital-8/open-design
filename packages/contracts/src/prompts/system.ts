@@ -30,7 +30,6 @@ import { COMMENT_IDENTITY_EDIT_DIRECTIVE } from './comment-identity.js';
  * The composed string is what the daemon sees as `systemPrompt` and what
  * the Anthropic path sends as `system`.
  */
-import { claudeAnimationPrompt } from './claude-animation.js';
 import type { ChatSessionMode } from '../api/chat.js';
 import type { ProjectMetadata, ProjectTemplate } from '../api/projects.js';
 import { OFFICIAL_DESIGNER_PROMPT, renderOfficialDesignerPrompt } from './official-system.js';
@@ -349,7 +348,7 @@ export function composeSystemPrompt({
       memoryBody,
       userInstructions,
       projectInstructions,
-    }) + claudeAnimationPrompt(metadata, sessionMode);
+    });
   }
   // Discovery + philosophy goes FIRST so its hard rules ("emit a form on
   // requirements decision, brand resolution, and TodoWrite workflow, run
@@ -589,7 +588,7 @@ export function composeSystemPrompt({
   }
 
   parts.push(`\n\n---\n\n${COMMENT_IDENTITY_EDIT_DIRECTIVE}`);
-  return parts.join('') + claudeAnimationPrompt(metadata, sessionMode);
+  return parts.join('');
 }
 
 /**
