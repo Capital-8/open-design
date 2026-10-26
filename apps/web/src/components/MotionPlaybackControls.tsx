@@ -6,6 +6,7 @@ import { useI18n } from '../i18n';
 import { isMotionPlayerState, type MotionTransportError } from '../runtime/motion-preview-transport';
 import { groupMotionTimelineComments, motionTimelineTicks, type MotionTimelineComment } from './motion-timeline';
 import styles from './MotionPlaybackControls.module.css';
+import { MotionFilmstrip, type MotionFilmstripSource } from './MotionFilmstrip';
 
 export function motionStepTime(time: number, duration: number, fps: number | undefined, direction: -1 | 1): number {
   if (!fps) return Math.max(0, Math.min(duration, Math.round((time + direction * .1) * 1000) / 1000));
@@ -25,6 +26,7 @@ export interface MotionPlaybackControlsProps {
   error: MotionTransportError | null;
   locked?: boolean;
   fileName?: string;
+  filmstrip?: MotionFilmstripSource | null;
   comments?: readonly MotionTimelineComment[];
   activeCommentId?: string | null;
   commentsDisabled?: boolean;
@@ -33,14 +35,14 @@ export interface MotionPlaybackControlsProps {
   onAnnotate(): void | Promise<unknown>;
 }
 
-export function MotionPlaybackControls({ state, connected, error, locked = false, fileName, comments = [], activeCommentId, commentsDisabled = false, onOpenComment, onCommand, onAnnotate }: MotionPlaybackControlsProps) {
+export function MotionPlaybackControls({ state, connected, error, locked = false, fileName, filmstrip, comments = [], activeCommentId, commentsDisabled = false, onOpenComment, onCommand, onAnnotate }: MotionPlaybackControlsProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState('0.000');
   const [editing, setEditing] = useState(false);
   const [annotating, setAnnotating] = useState(false);
   const [localError, setLocalError] = useState(false);
   const [openingEditor, setOpeningEditor] = useState(false);
-  const [trackWidth, setTrackWidth] = useState(500);
+  const [trackWidth, setTrackWidth] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelled = useRef(false);
@@ -52,10 +54,12 @@ export function MotionPlaybackControls({ state, connected, error, locked = false
   const time = state?.time ?? 0, duration = state?.duration ?? 0, fps = state?.fps;
   useEffect(() => {
     const track = trackRef.current;
-    if (!track || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => setTrackWidth(track.clientWidth || 500));
-    observer.observe(track);
-    return () => observer.disconnect();
+    if (!track) return;
+    const measure = () => setTrackWidth(track.clientWidth || 500);
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(track);
+    return () => observer?.disconnect();
   }, []);
   useEffect(() => { if (editing) { inputRef.current?.focus(); inputRef.current?.select(); } }, [editing]);
   useEffect(() => () => { editEpoch.current++; }, []);
@@ -131,7 +135,11 @@ export function MotionPlaybackControls({ state, connected, error, locked = false
         <div className={styles.trackContent} ref={trackRef}>
           <div className={styles.seekArea}>
             <div className={styles.ruler} aria-hidden="true">{motionTimelineTicks(duration, trackWidth).map(tick => <span key={tick} className={styles.tick} style={{ left: `${tick / duration * 100}%` }}>{Number(tick.toFixed(3))}{t('motion.seconds')}</span>)}</div>
-            <div className={styles.clip} aria-hidden="true"><Film size={13} /><span>{fileName || t('motion.visualTrack')}</span><span className={styles.clipDuration}>{formatTime(duration)}</span></div>
+            <div className={styles.clip} aria-hidden="true">
+              {filmstrip && connected && <MotionFilmstrip source={filmstrip} duration={duration} width={trackWidth} />}
+              <div className={styles.clipLabel}><Film size={11} /><span>{fileName || t('motion.visualTrack')}</span></div>
+              <span className={styles.clipDuration}>{formatTime(duration)}</span>
+            </div>
             <input className={styles.timeline} type="range" aria-label={t('motion.timeline')} min={0} max={duration || 1}
               step={.001} value={time} disabled={disabled || editing || openingEditor} aria-valuetext={`${time.toFixed(3)} / ${duration.toFixed(3)} ${t('motion.seconds')}`}
               onChange={event => run({ action: 'seek', time: Number(event.target.value) })} />

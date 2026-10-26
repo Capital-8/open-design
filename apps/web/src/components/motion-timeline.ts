@@ -5,7 +5,7 @@ export interface MotionTimelineComment {
   note: string;
 }
 
-export const MOTION_DOCK_HEIGHT = 180;
+export const MOTION_DOCK_HEIGHT = 204;
 
 export function motionCompositionSize(source: string) {
   const root = new DOMParser().parseFromString(source, 'text/html').querySelector('[data-composition-id][data-duration][data-width][data-height]');

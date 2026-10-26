@@ -1,0 +1,5 @@
+.strip { position: absolute; inset: 0; display: flex; pointer-events: none; overflow: hidden; }
+.frame { position: relative; flex: 1; min-width: 0; height: 100%; overflow: hidden; background: var(--bg-subtle); }
+.frame + .frame { border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.frame iframe { position: absolute; inset: auto; border: 0; transform-origin: 0 0; pointer-events: none; max-width: none; }
+.placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-faint); }

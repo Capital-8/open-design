@@ -34,20 +34,20 @@
 .trackLabels { padding-right: 10px; color: var(--text-muted); border-right: 1px solid var(--border-soft); font-size: 10px; }
 .trackLabels > div { display: flex; align-items: center; gap: 7px; padding-left: 15px; }
 .trackLabels > div:nth-child(1) { height: 20px; }
-.trackLabels > div:nth-child(2) { height: 34px; }
+.trackLabels > div:nth-child(2) { height: 58px; }
 .trackLabels > div:nth-child(3) { height: 27px; color: var(--text-soft); }
 .trackContent { position: relative; min-width: 0; margin-left: 15px; }
-.seekArea { position: relative; height: 54px; }
+.seekArea { position: relative; height: 78px; }
 .ruler { position: relative; height: 20px; border-bottom: 1px solid var(--border-soft); background: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), var(--border-soft) calc(10% - 1px), var(--border-soft) 10%) 0 100% / 100% 3px no-repeat; }
 .tick { position: absolute; top: 0; bottom: 0; padding-left: 4px; border-left: 1px solid var(--border); color: var(--text-soft); font-size: 9px; line-height: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tick:last-child { transform: translateX(-100%); padding-left: 0; padding-right: 4px; border-left: 0; border-right: 1px solid var(--border); }
-.clip { height: 28px; margin-top: 4px; display: flex; align-items: center; gap: 7px; padding: 0 10px; overflow: hidden; background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel)); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-soft)); border-radius: 4px; color: var(--text-muted); font-size: 10px; }
-.clip > svg { flex-shrink: 0; color: var(--accent); }
-.clip > span:not(.clipDuration) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.clipDuration { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 9px; color: var(--text-soft); flex-shrink: 0; }
-.timeline { appearance: none; position: absolute; inset: 0; width: 100%; height: 54px; margin: 0; opacity: 0; cursor: ew-resize; }
-.timeline::-webkit-slider-thumb { appearance: none; width: 1px; height: 54px; }
-.timeline::-moz-range-thumb { width: 1px; height: 54px; border: 0; }
+.clip { position: relative; height: 52px; margin-top: 4px; overflow: hidden; background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel)); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-soft)); border-radius: 4px; color: var(--text-muted); font-size: 10px; }
+.clipLabel { position: absolute; z-index: 1; top: 3px; left: 4px; max-width: 70%; display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 3px; background: color-mix(in srgb, var(--bg-panel) 88%, transparent); font-size: 9px; }
+.clipLabel > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clipDuration { position: absolute; right: 4px; bottom: 3px; padding: 2px 4px; border-radius: 3px; background: color-mix(in srgb, var(--bg-panel) 88%, transparent); font-variant-numeric: tabular-nums; font-size: 9px; color: var(--text-soft); }
+.timeline { appearance: none; position: absolute; z-index: 2; inset: 0; width: 100%; height: 78px; margin: 0; opacity: 0; cursor: ew-resize; }
+.timeline::-webkit-slider-thumb { appearance: none; width: 1px; height: 78px; }
+.timeline::-moz-range-thumb { width: 1px; height: 78px; border: 0; }
 .timeline:disabled { cursor: default; }
 .seekArea:has(.timeline:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .commentTrack { height: 27px; margin-top: 3px; border-top: 1px solid var(--border-soft); position: relative; }

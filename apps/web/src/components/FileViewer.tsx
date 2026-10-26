@@ -338,6 +338,7 @@ import type { PreviewCommentMotionAnchor } from '@open-design/contracts';
 import { useMotionPreviewTransport } from '../runtime/motion-preview-transport';
 import { MotionPlaybackControls } from './MotionPlaybackControls';
 import { MOTION_DOCK_HEIGHT, motionCompositionSize, motionStageLayout } from './motion-timeline';
+import { buildMotionFilmstripDocument } from '../runtime/motion-filmstrip';
 import { captureMotionCommentFrame, motionCommentVisible, motionCommentDisplaySnapshot, type MotionCaptureContext } from '../comments/motion-capture';
 
 import type {
@@ -11368,15 +11369,20 @@ function HtmlViewer({
   const srcDocTransportGeneration = srcDocTransport.generation;
   const isMotionPreview = Boolean(previewSource && isMotionVideoComposition(previewSource));
   const motionSize = useMemo(() => isMotionPreview && previewSource ? motionCompositionSize(previewSource) : null, [isMotionPreview, previewSource]);
-  const motionStage = motionSize && deckThumbnailCanvasSize && !manualEditMode ? motionStageLayout(motionSize, {
-    width: deckThumbnailCanvasSize.width,
-    height: Math.max(1, deckThumbnailCanvasSize.height - MOTION_DOCK_HEIGHT),
+  const motionStage = motionSize && !manualEditMode ? motionStageLayout(motionSize, {
+    width: deckThumbnailCanvasSize?.width ?? motionSize.width,
+    height: deckThumbnailCanvasSize ? Math.max(1, deckThumbnailCanvasSize.height - MOTION_DOCK_HEIGHT) : motionSize.height,
   }, zoomMode === 'auto' ? undefined : previewScale) : null;
   const overlayPreviewScale = motionStage?.scale ?? previewShellScale;
   const overlayPreviewTransform: PreviewOverlayTransform = {
     scale: overlayPreviewScale, offsetX: motionStage?.left ?? 0, offsetY: motionStage?.top ?? 0,
   };
   const motionFingerprint = previewSource ? previewSourceFingerprint(previewSource) : '';
+  const motionFilmstrip = useMemo(() => isMotionPreview && motionSize && previewSource && workspaceActive && mode === 'preview' && !manualEditMode && !streaming ? {
+    document: buildMotionFilmstripDocument(previewSource, srcDocBaseHref, reloadKey),
+    identity: `${projectId}:${file.name}:${motionFingerprint}:${reloadKey}:${srcDocBaseHref}`,
+    size: motionSize,
+  } : null, [isMotionPreview, motionSize, previewSource, workspaceActive, mode, manualEditMode, streaming, srcDocBaseHref, reloadKey, projectId, file.name, motionFingerprint]);
   const motionAnnotationLocked = boardMode || drawOverlayOpen;
   const motionTransport = useMotionPreviewTransport({
     iframeRef,
@@ -18435,6 +18441,7 @@ function HtmlViewer({
                   error={motionTransport.error}
                   locked={motionAnnotationLocked}
                   fileName={file.name}
+                  filmstrip={motionFilmstrip}
                   comments={creationSortedSideComments.flatMap((comment, index) => comment.motion?.sourceFingerprint === motionFingerprint
                     ? [{ id: comment.id, time: comment.motion.timeSeconds, number: comment.pinSeq ?? index + 1, note: comment.note }]
                     : [])}
