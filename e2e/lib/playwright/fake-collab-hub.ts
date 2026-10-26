@@ -121,6 +121,7 @@ export async function startFakeCollabHub(options: {
   root: string;
   workspaceId: string;
   workspaceName: string;
+  workspaceType?: 'personal' | 'team';
   clients: readonly ClientIdentity[];
   includePersonalWorkspace?: boolean;
   /** Opt into the producer-health contract used by authority-cache E2E. */
@@ -446,6 +447,7 @@ export async function startFakeCollabHub(options: {
           resource.ownerMemberId = owner.memberId;
         }
       }
+      emit({ type: 'team-resources-changed', workspaceId: options.workspaceId });
       for (const roster of presence.values()) {
         for (const [clientId, entry] of roster) {
           if (entry.memberId === memberId) roster.delete(clientId);
@@ -1159,13 +1161,13 @@ function recordForIdentity(
 }
 
 function workspaceDirectoryItem(
-  options: { workspaceId: string; workspaceName: string },
+  options: { workspaceId: string; workspaceName: string; workspaceType?: 'personal' | 'team' },
   identity: ClientIdentity,
 ) {
   return {
     workspaceId: options.workspaceId,
     workspaceName: options.workspaceName,
-    workspaceType: 'team',
+    workspaceType: options.workspaceType ?? 'team',
     workspaceMemberId: identity.memberId,
     role: identity.role,
     memberStatus: 'active',

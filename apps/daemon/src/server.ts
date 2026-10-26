@@ -396,7 +396,7 @@ import {
   designSystemLogicalResourceId,
   workspaceTeamDesignSystemBindingResourceId,
 } from './design-systems/workspace-team-binding.js';
-import { ownedDesignSystemSourceIsReady } from './design-systems/team-owner-materialization.js';
+import { ownedWorkspaceResourceSourceIsReady } from './collab/owned-resource-source.js';
 import { createLinkedProjectTeamResourceShareService } from './design-systems/team-project-share.js';
 import { prepareDesignTokenContractRebuild } from './design-systems/token-contract-rebuild.js';
 import { registerBrandRoutes } from './brand-routes.js';
@@ -7199,7 +7199,7 @@ export async function startServer({
   const resolveTeamResourceScope = async (req: any) => {
     const verified = await verifyExplicitWorkspaceRequestContext({
       req,
-      requireTeam: true,
+      requireTeam: false,
     });
     if (!verified.ok) return verified;
     const scope = teamResourceRequestScopeFromContext(verified.context);
@@ -7276,15 +7276,33 @@ export async function startServer({
       return candidate.id === expectedHubId;
     });
   };
+  // Ownership may have just transferred to this member. Only a verified
+  // private source on this machine can skip pulling the shared contents.
+  const ownedTeamResourceSourceIsReady = (
+    kind: 'plugin' | 'skill' | 'design_system',
+    resource: TeamResourceShareRecord,
+    scope: TeamResourceRequestScope,
+  ): boolean => {
+    const dirId = kind === 'plugin' ? resource.id : stripPrefixAndValidateId(
+      resource.id, resource.id.startsWith('user:') ? 'user:' : '',
+    );
+    const sourceDir = kind === 'plugin'
+      ? getInstalledPlugin(db, resource.id)?.fsPath
+      : dirId ? path.join(kind === 'skill' ? USER_SKILLS_DIR : USER_DESIGN_SYSTEMS_DIR, dirId) : null;
+    return ownedWorkspaceResourceSourceIsReady({
+      ownerMemberId: resource.ownerMemberId,
+      currentMemberId: scope.principal.memberId,
+      workspaceId: scope.principal.teamId,
+      localSourceExists: typeof sourceDir === 'string' && fs.existsSync(sourceDir),
+      binding: getWorkspaceResourceByResourceId(db, kind, resource.id),
+    });
+  };
   async function syncSharedTeamPlugin(
     resource: TeamResourceShareRecord,
     scope: TeamResourceRequestScope,
   ): Promise<void> {
     const workspaceId = scope.principal.teamId;
-    const isOwnedByCurrentMember =
-      typeof resource.ownerMemberId === 'string' &&
-      resource.ownerMemberId === scope.principal.memberId;
-    if (isOwnedByCurrentMember) return;
+    if (ownedTeamResourceSourceIsReady('plugin', resource, scope)) return;
     const hubResourceId =
       resource.hubResourceId ??
       `plugin-${workspaceId.replace(/[^a-zA-Z0-9_-]/g, '-')}-${resource.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
@@ -7432,13 +7450,7 @@ export async function startServer({
       dirId,
     );
     const workspaceId = scope.principal.teamId;
-    const ownerLocalSourceReady = ownedDesignSystemSourceIsReady({
-      ownerMemberId: resource.ownerMemberId,
-      currentMemberId: scope.principal.memberId,
-      workspaceId,
-      localSourceExists: fs.existsSync(path.join(USER_DESIGN_SYSTEMS_DIR, dirId)),
-      binding: getWorkspaceResourceByResourceId(db, 'design_system', resource.id),
-    });
+    const ownerLocalSourceReady = ownedTeamResourceSourceIsReady('design_system', resource, scope);
     const hubResourceId =
       resource.hubResourceId ??
       `ds-${workspaceId.replace(/[^a-zA-Z0-9_-]/g, '-')}-${resource.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
@@ -7571,9 +7583,7 @@ export async function startServer({
     const hubResourceId =
       resource.hubResourceId ??
       `skill-${workspaceId.replace(/[^a-zA-Z0-9_-]/g, '-')}-${resource.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-    const isOwnedByCurrentMember =
-      typeof resource.ownerMemberId === 'string' &&
-      resource.ownerMemberId === scope.principal.memberId;
+    const ownerLocalSourceReady = ownedTeamResourceSourceIsReady('skill', resource, scope);
     const bindingResourceId = workspaceTeamSkillBindingResourceId(
       workspaceId,
       resource.id,
@@ -7587,7 +7597,7 @@ export async function startServer({
     // all: `enforceSkillWorkspaceMutation` (routes/static-resource.ts) and
     // `listSkills`'s workspace filter (skills.ts) both read this row.
     function markTeamSynced(): boolean {
-      if (isOwnedByCurrentMember || !workspaceId) return false;
+      if (ownerLocalSourceReady || !workspaceId) return false;
       const existingBinding = getWorkspaceResourceByResourceId(
         db,
         'skill',
@@ -7615,7 +7625,7 @@ export async function startServer({
       });
       return true;
     }
-    if (isOwnedByCurrentMember) return;
+    if (ownerLocalSourceReady) return;
     if (
       fs.existsSync(targetDir) &&
       workspaceId &&
@@ -8154,21 +8164,7 @@ export async function startServer({
     scope: TeamResourceRequestScope,
   ): boolean => {
     const workspaceId = scope.principal.teamId;
-    if (resourceType === 'design_system') {
-      const dirId = stripPrefixAndValidateId(resource.id, 'user:');
-      if (
-        dirId
-        && ownedDesignSystemSourceIsReady({
-          ownerMemberId: resource.ownerMemberId,
-          currentMemberId: scope.principal.memberId,
-          workspaceId,
-          localSourceExists: fs.existsSync(path.join(USER_DESIGN_SYSTEMS_DIR, dirId)),
-          binding: getWorkspaceResourceByResourceId(db, 'design_system', resource.id),
-        })
-      ) return true;
-    } else if (resource.ownerMemberId === scope.principal.memberId) {
-      return true;
-    }
+    if (ownedTeamResourceSourceIsReady(resourceType, resource, scope)) return true;
     const bindingResourceId = resourceType === 'plugin'
       ? workspaceTeamPluginBindingResourceId(workspaceId, resource.id)
       : resourceType === 'design_system'
@@ -9734,10 +9730,8 @@ export async function startServer({
             ...(verified.retryable ? { retryable: true } : {}),
           });
         }
-        // Personal resources have no Team hub partition to retract. Their
-        // authoritative Personal scope is still verified above, then local
-        // deletion proceeds without issuing a Team command.
-        if (verified.context.workspaceType !== 'team') return false;
+        // Both workspace kinds can hold explicitly shared resources. Retract
+        // their live hub entry before allowing the source to be deleted.
         const scope = teamResourceRequestScopeFromContext(verified.context);
         if (!scope) {
           throw Object.assign(new Error('the requested workspace is not available to this member'), {

@@ -8086,8 +8086,8 @@ Common options:
   --daemon-url <url>   OpenDesign daemon HTTP base.
   --member <id>        Workspace member id for route-level authorization.
   --role <role>        Workspace role: owner, admin, or member.
-  --workspace-type <t> personal or team. A team share is refused in a personal
-                       workspace, which has no team plane to share into.
+  --workspace-type <t> personal or team. Shared projects and resources stay
+                       scoped to the selected workspace and active member.
   --json               Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
@@ -8273,12 +8273,8 @@ Common options:
   }
   const workspaceHeaders = {
     'x-od-workspace-id': workspaceId,
-    // Only sent when the caller actually says which kind of workspace this is.
-    // The daemon reads an explicit `personal` as the caller ASSERTING there is
-    // no team plane here and refuses a team share on the strength of it (see
-    // collab/team-share-scope.ts), so defaulting the header to 'personal' would
-    // have made `--visibility team` impossible from the CLI. Absent still reads
-    // as personal everywhere it only affects view filtering.
+    // Preserve an explicit workspace type; the daemon verifies workspace and
+    // membership authority for both Personal and Team shared resources.
     ...(typeof flags['workspace-type'] === 'string' && flags['workspace-type'].trim()
       ? { 'x-od-workspace-type': flags['workspace-type'].trim() }
       : {}),

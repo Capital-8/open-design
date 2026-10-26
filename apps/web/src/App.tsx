@@ -39,7 +39,7 @@ import type {
   ProjectScenarioTaskProfile,
   WorkspaceProjectSummary,
 } from '@open-design/contracts';
-import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
+import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID, workspaceContextHasWorkspaceIdentity } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
 import type {
   OptimisticProjectCreationHandoff,
@@ -1385,7 +1385,7 @@ function AppInner() {
     workspaceIdentityCacheKey(invalidationWorkspaceContext),
   ]);
   const handleTeamResourceStreamActive = useWorkspaceSnapshotActivation({
-    enabled: invalidationWorkspaceContext?.workspaceType === 'team',
+    enabled: workspaceContextHasWorkspaceIdentity(invalidationWorkspaceContext),
     identity: resourceStreamIdentity,
     refresh: () => teamResourceRefreshRefs.current.catchUp(),
   });
@@ -1398,6 +1398,10 @@ function AppInner() {
       refreshProjectCatalogRef.current();
     },
     'team-resources-changed': (payload) => {
+      if (!payload.resourceKind) {
+        teamResourceRefreshRefs.current.catchUp();
+        return;
+      }
       if (payload.resourceKind === 'skill') {
         teamResourceRefreshRefs.current.skill(payload.resourceId);
         return;
@@ -2507,10 +2511,10 @@ function AppInner() {
       });
 
       const designSystemsContext = workspaceContextRef.current;
-      // A cached Team identity already has an SSE lifecycle owner below. Do
+      // A cached workspace identity already has an SSE lifecycle owner below. Do
       // not race an eager bootstrap snapshot against its first onActive; the
       // 250ms fallback covers shells where the stream never opens.
-      if (designSystemsContext?.workspaceType !== 'team') {
+      if (!workspaceContextHasWorkspaceIdentity(designSystemsContext)) {
         const designSystemsWorkspaceIdentity = workspaceIdentityCacheKey(designSystemsContext);
         const designSystemsAccountGeneration = currentWorkspaceAccountGeneration();
         const designSystemsCatalogIdentity = JSON.stringify([
@@ -2926,7 +2930,7 @@ function AppInner() {
   // reuse the Workspace id while changing the authoritative membership.
   useEffect(() => {
     if (workspaceContextState.identityChangePending) return;
-    if (workspaceContext?.workspaceType === 'team') return;
+    if (workspaceContextHasWorkspaceIdentity(workspaceContext)) return;
     void refreshDesignSystems();
   }, [
     currentWorkspaceCatalogIdentity,
@@ -3001,7 +3005,7 @@ function AppInner() {
     if (workspaceContextLoading || workspaceContextState.identityChangePending) return;
     if (skillsReadIdentityRef.current === skillsReadIdentity) return;
     skillsReadIdentityRef.current = skillsReadIdentity;
-    if (workspaceContext?.workspaceType === 'team') return;
+    if (workspaceContextHasWorkspaceIdentity(workspaceContext)) return;
     void refreshSkills();
   }, [
     workspaceContextLoading,
@@ -5522,7 +5526,7 @@ function AppInner() {
   useEffect(() => {
     if (route.kind !== 'home') return;
     void refreshTemplates();
-    if (workspaceContext?.workspaceType !== 'team') void refreshDesignSystems();
+    if (!workspaceContextHasWorkspaceIdentity(workspaceContext)) void refreshDesignSystems();
   }, [route.kind, refreshTemplates, refreshDesignSystems, workspaceContext?.workspaceType]);
 
   // Existing card grids (DesignsTab, ProjectView), pickers (NewProjectPanel,

@@ -1,7 +1,7 @@
 import {
   PUBLIC_FILE_MANUAL_REVOKE_REQUIRED,
   SHARE_ENTRY_INDEX_CONFLICT,
-  workspaceContextHasTeamIdentity,
+  workspaceContextHasWorkspaceIdentity,
   type PublicFileManualRevokeRequiredData,
   type ProjectFilePublicShareResponse,
   type ShareUnpublishResponse,
@@ -703,7 +703,7 @@ async function materializeTeamDesignSystems(
   accountGeneration: number,
   options?: FetchDesignSystemsOptions,
 ): Promise<ReadonlySet<string>> {
-  if (!workspaceContext || !workspaceContextHasTeamIdentity(workspaceContext)) {
+  if (!workspaceContext || !workspaceContextHasWorkspaceIdentity(workspaceContext)) {
     return new Set();
   }
   if (options?.materializedTeamIds) {

@@ -70,9 +70,8 @@ export interface TeamResourceRequestScope {
 export function teamResourceRequestScopeFromContext(
   context: WorkspaceCollabContext,
 ): TeamResourceRequestScope | null {
-  // Project sharing is now available in Personal workspaces, but plugins,
-  // skills and design systems retain their existing Team-only boundary.
-  if (context.workspaceType !== 'team') return null;
+  // Workspace type is presentation metadata; verified membership and the
+  // existing permission bits govern every member-shared resource kind.
   const principal = contextToResourceHubPrincipal(context);
   if (!principal || context.memberStatus !== 'active') return null;
   return {
@@ -93,7 +92,6 @@ export function teamResourceRequestScopeForWorkspaceId(
   const membership = items.find(
     (item) =>
       item.workspaceId === requestedWorkspaceId &&
-      item.workspaceType === 'team' &&
       item.memberStatus === 'active' &&
       item.lifecycleState !== 'deleted',
   );
