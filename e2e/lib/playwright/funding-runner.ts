@@ -13,7 +13,61 @@ import { T } from '../timeouts.ts';
 const commandBudgetMs = 600_000;
 const cleanupReserveMs = 120_000;
 
-async function recordOdSource(e2eRoot: string, output: string) {
+const commonFundingSources = [
+  'lib/playwright/assertions.ts',
+  'lib/playwright/campaign-dismissals.ts',
+  'lib/playwright/funding-runner.ts',
+  'lib/playwright/funding.config.ts',
+  'lib/playwright/mock-factory.ts',
+  'lib/playwright/runtime-identity.ts',
+  'lib/playwright/runtime-lifecycle.ts',
+  'lib/playwright/suite.ts',
+  'lib/playwright/workspace-funding-client.ts',
+  'lib/playwright/workspace-funding-fixture.ts',
+  'lib/playwright/workspace-funding-lease.ts',
+  'lib/playwright/workspace-funding-preflight.ts',
+  'lib/timeouts.ts',
+  'lib/tools-dev/cli.ts',
+  'lib/tools-dev/ports.ts',
+  'lib/tools-dev/runtime.ts',
+  'lib/tools-dev/types.ts',
+  'playwright.config.ts'
+] as const;
+
+export function fundingCasePlan(selection?: string) {
+  const plans: Record<string, { config: string; sources: readonly string[]; grep?: string }> = {
+    '': { config: 'lib/playwright/funding.config.ts', sources: ['ui/workspace-funding-sandbox.test.ts'] },
+    bill001: { config: 'lib/playwright/funding.config.ts', sources: ['ui/qa-bill001.private.test.ts'] },
+    ws005: { config: 'lib/playwright/workspace-switch.config.ts', sources: [
+      'lib/playwright/workspace-switch.config.ts', 'lib/playwright/workspace-switch-fixture.ts',
+      'ui/workspace-switch-billing-sandbox.test.ts',
+    ] },
+    view020: { config: 'lib/playwright/notice.config.ts', sources: [
+      'lib/playwright/notice.config.ts', 'lib/playwright/workspace-notice-fixture.ts',
+      'ui/workspace-notice-sandbox.test.ts',
+    ] },
+    view021: { config: 'lib/playwright/free-wallet.config.ts', sources: [
+      'lib/playwright/free-wallet.config.ts', 'lib/playwright/workspace-free-wallet-fixture.ts',
+      'ui/workspace-free-wallet-sandbox.test.ts',
+    ], grep: 'VIEW-021 actual' },
+    'view021-after': { config: 'lib/playwright/free-wallet.config.ts', sources: [
+      'lib/playwright/free-wallet.config.ts', 'lib/playwright/workspace-free-wallet-fixture.ts',
+      'ui/workspace-free-wallet-sandbox.test.ts',
+    ], grep: 'VIEW-021 continuation' },
+  };
+  const filters: Record<string, string> = {
+    project: 'VIEW-015 project', home: 'VIEW-015 home', dp: 'VIEW-015 cash0', inflight: 'VIEW-015 existing A task',
+  };
+  const key = selection ?? '';
+  const plan = Object.hasOwn(plans, key) ? plans[key] : (Object.hasOwn(filters, key)
+    ? { config: 'lib/playwright/funding.config.ts', sources: ['ui/workspace-funding-sandbox.test.ts'], grep: filters[key] }
+    : undefined);
+  if (!plan) throw new Error('Unknown OD_FUNDING_CASE; an explicit supported case selection is required');
+  return { ...plan, sources: [...commonFundingSources, ...plan.sources] };
+}
+
+export async function recordOdSource(e2eRoot: string, output: string, selection?: string) {
+  const plan = fundingCasePlan(selection);
   const exec = promisify(execFile);
   const options = { cwd: dirname(e2eRoot), timeout: T.long, maxBuffer: 16 * 1024 * 1024 };
   const head = await exec('git', ['rev-parse', 'HEAD'], options);
@@ -21,15 +75,10 @@ async function recordOdSource(e2eRoot: string, output: string) {
   const names = await exec('git', ['diff', '--name-only', 'HEAD', '--'], options);
   await writeFile(join(output, 'od-tracked-diff.private.patch'), diff.stdout, { mode: 0o600 });
   const hash = (body: Buffer | string) => createHash('sha256').update(body).digest('hex');
-  const files = ['lib/playwright/funding-runner.ts', 'lib/playwright/funding.config.ts',
-    'lib/playwright/workspace-funding-client.ts', 'lib/playwright/workspace-funding-fixture.ts',
-    'lib/playwright/workspace-funding-lease.ts', 'lib/playwright/suite.ts',
-    'lib/tools-dev/runtime.ts', 'ui/workspace-funding-sandbox.test.ts', 'playwright.config.ts',
-    'lib/playwright/notice.config.ts', 'lib/playwright/workspace-notice-fixture.ts', 'ui/workspace-notice-sandbox.test.ts',
-    'lib/playwright/free-wallet.config.ts', 'lib/playwright/workspace-free-wallet-fixture.ts', 'ui/workspace-free-wallet-sandbox.test.ts',
-    'lib/playwright/workspace-switch.config.ts', 'lib/playwright/workspace-switch-fixture.ts', 'ui/workspace-switch-billing-sandbox.test.ts'];
-  const sources = await Promise.all(files.map(async path => ({ path, sha256: hash(await readFile(join(e2eRoot, path))) })));
-  return { odHead: head.stdout.trim(), trackedDiffPaths: names.stdout.trim().split('\n').filter(Boolean),
+  // A fixed case manifest hashes every imported E2E source. Never skip a missing
+  // required file, and never require unrelated cases that this command cannot run.
+  const sources = await Promise.all(plan.sources.map(async path => ({ path, sha256: hash(await readFile(join(e2eRoot, path))) })));
+  return { selection: selection ?? null, config: plan.config, odHead: head.stdout.trim(), trackedDiffPaths: names.stdout.trim().split('\n').filter(Boolean),
     trackedDiffSha256: hash(diff.stdout), sourceDigest: hash(JSON.stringify(sources)), sources };
 }
 
@@ -98,25 +147,12 @@ async function main() {
       }
     }, async () => {
       const e2eRoot = fileURLToPath(new URL('../..', import.meta.url));
-      const args = ['pnpm', 'exec', 'playwright', 'test', '-c', 'lib/playwright/funding.config.ts'];
       const selection = process.env.OD_FUNDING_CASE;
-      if (selection === 'ws005') {
-        args[args.length - 1] = 'lib/playwright/workspace-switch.config.ts';
-      } else if (selection === 'view021' || selection === 'view021-after') {
-        args[args.length - 1] = 'lib/playwright/free-wallet.config.ts';
-        args.push('--grep', selection === 'view021' ? 'VIEW-021 actual' : 'VIEW-021 continuation');
-      } else if (selection === 'view020') {
-        args[args.length - 1] = 'lib/playwright/notice.config.ts';
-      } else if (selection === 'bill001') {
-        // The explicit testMatch in funding.config.ts selects the disposable
-        // two-actor real-client billing witness for this owned sandbox run.
-      } else if (selection) {
-        const filters: Record<string, string> = { project: 'VIEW-015 project', home: 'VIEW-015 home', dp: 'VIEW-015 cash0', inflight: 'VIEW-015 existing A task' };
-        if (!filters[selection]) throw new Error('OD_FUNDING_CASE must be project, home, dp, inflight, view020, view021, view021-after, or ws005');
-        args.push('--grep', filters[selection]);
-      }
+      const plan = fundingCasePlan(selection);
+      const args = ['pnpm', 'exec', 'playwright', 'test', '-c', plan.config];
+      if (plan.grep) args.push('--grep', plan.grep);
       receipts.push({ entrypoint: 'lib/playwright/funding-runner.ts',
-        command: ['corepack', ...args], ...await recordOdSource(e2eRoot, output) });
+        command: ['corepack', ...args], ...await recordOdSource(e2eRoot, output, selection) });
       const child = await runFundingCommand(args, e2eRoot,
         { ...process.env, ...ownerEnv, OD_FUNDING_OWNER_RUNNER: 'active' },
         join(output, 'playwright.private.log'));
