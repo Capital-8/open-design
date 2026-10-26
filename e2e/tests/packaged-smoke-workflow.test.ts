@@ -2123,6 +2123,9 @@ process.stdin.on("end", () => {
 
     const e2eVitestGate = sectionBetween(tests, "  e2e_vitest:", "  daemon_unit_tests:");
     expect(e2eVitestGate).toContain("ref: ${{ inputs.commit }}");
+    expect(e2eVitestGate).toContain("uses: ./.github/actions/configure-ci-parallelism");
+    expect(e2eVitestGate.indexOf("uses: ./.github/actions/configure-ci-parallelism"))
+      .toBeLessThan(e2eVitestGate.indexOf("pnpm install --frozen-lockfile"));
     expect(e2eVitestGate).toContain("playwright install --with-deps chromium");
     expect(e2eVitestGate).toContain("Allow Chromium user namespaces on GitHub Ubuntu");
     expect(e2eVitestGate).toContain("kernel.apparmor_restrict_unprivileged_userns=0");
@@ -3034,6 +3037,18 @@ process.stdin.on("end", () => {
     // artifact was actually built with.
     expect(smoke).toContain("OD_PACKAGED_E2E_RELEASE_VERSION: ${{ inputs.version }}");
     expect(smoke).toContain("OD_PACKAGED_E2E_RELEASE_CHANNEL: prerelease");
+
+    // The smoke command, not report persistence, determines whether the
+    // advisory validation passed. GitHub's artifact service can be temporarily
+    // unavailable after all smoke assertions have completed.
+    for (const stepName of [
+      "Upload mac arm64 smoke report",
+      "Upload mac intel smoke report",
+      "Upload windows smoke report",
+    ]) {
+      const step = sectionBetween(smoke, `      - name: ${stepName}`, "        with:");
+      expect(step, stepName).toContain("continue-on-error: true");
+    }
 
     // The staged path must stay in lockstep with resolveMacPaths().dmgPath and
     // resolveWinPaths().setupPath, which is the only file `tools-pack install`
