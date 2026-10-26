@@ -12,7 +12,7 @@ test.use({ viewport: { width: 1280, height: 800 } });
 test.describe.configure({ timeout: T.xlong * 5 });
 
 for (const surface of ['project', 'home'] as const) {
-  test(`[P0] VIEW-015 ${surface} keeps B draft and rejects stale funded A after B insufficient`, async ({ page }, info) => {
+  test(`[P1] VIEW-015 ${surface} keeps B draft and rejects stale funded A after B insufficient`, async ({ page }, info) => {
     const client = await startFundingClient(page, info);
     let timing: ReturnType<typeof holdRealBilling> | undefined;
     try {
@@ -112,7 +112,7 @@ for (const surface of ['project', 'home'] as const) {
   });
 }
 
-test('[P0] VIEW-015 cash0 with real available Design Plan completes one correctly scoped run', async ({ page }, info) => {
+test('[P1] VIEW-015 cash0 with real available Design Plan completes one correctly scoped run', async ({ page }, info) => {
   const client = await startFundingClient(page, info);
   let runId: string | undefined;
   let terminal = false;
@@ -182,7 +182,7 @@ test('[P0] VIEW-015 cash0 with real available Design Plan completes one correctl
 });
 
 
-test('[P0] VIEW-015 existing A task keeps original scope while switching to Member B', async ({ page }, info) => {
+test('[P1] VIEW-015 existing A task keeps original scope while switching to Member B', async ({ page }, info) => {
   const client = await startFundingClient(page, info);
   const { fixture, runtime } = client;
   const A = fixture.spaces.funded;
