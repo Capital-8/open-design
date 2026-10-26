@@ -2480,6 +2480,29 @@ process.exit(127);
     });
   });
 
+  it('reuses a verified frozen ad-hoc legacy Skill on an exact retry without admitting another retired Skill', async () => {
+    const fixture = await createFixture('repair');
+    const skillDir = path.join(process.env.OD_DATA_DIR!, 'skills', 'hyperframes');
+    await mkdir(skillDir, { recursive: true });
+    // A locally selectable source establishes the pre-retirement task. Removing
+    // it makes this canonical ID resolve to the retired official catalogue on
+    // retry, while the verified task retains its exact frozen source bytes.
+    await writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: hyperframes\ndescription: Frozen legacy retry fixture\n---\nUse the existing editable animation source.\n');
+    const body = { ...createRunRequest(fixture, 'Update the existing operator header.'), skillIds: ['hyperframes'] };
+    try {
+      queueFixtureIds(fixture);
+      const created = await postRun(started!.url, body);
+      await waitForTask(fixture.taskExecutionId, 'completed');
+      expect(getStrategyTaskExecution(database(), fixture.taskExecutionId)?.frozenSkillPackage.selections.map((selection) => selection.canonicalId)).toEqual(['hyperframes']);
+      await rm(skillDir, { recursive: true, force: true });
+      const retried = await postRun(started!.url, body);
+      expect(retried).toMatchObject({ runId: created.runId, reused: true });
+      const changed = await fetch(`${started!.url}/api/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...body, skillIds: ['hyperframes', 'video-hyperframes'] }) });
+      expect(changed.status).toBe(410);
+      expect(await readProjectInvocations(fixture.logPath, fixture.projectId)).toHaveLength(2);
+    } finally { await rm(skillDir, { recursive: true, force: true }); }
+  }, 60_000);
+
   it('uses the canonical Web current turn as the implicit research query', async () => {
     const fixture = await createFixture('repair');
     const repeatedQuery = 'REPEATED_CURRENT_QUERY_TOKEN';
