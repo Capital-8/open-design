@@ -57,6 +57,7 @@ export function fundingCasePlan(selection?: string) {
   };
   const filters: Record<string, string> = {
     project: 'VIEW-015 project', home: 'VIEW-015 home', dp: 'VIEW-015 cash0', inflight: 'VIEW-015 existing A task',
+    'native-refusal': 'VIEW-015 native funding refusal',
   };
   const key = selection ?? '';
   const plan = Object.hasOwn(plans, key) ? plans[key] : (Object.hasOwn(filters, key)
