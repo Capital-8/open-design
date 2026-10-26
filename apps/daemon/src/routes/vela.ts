@@ -8,6 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
+import { isDeepStrictEqual } from 'node:util';
 import zlib from 'node:zlib';
 
 import {
@@ -1110,7 +1111,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       if (typeof req.body?.target !== 'string') { res.status(400).json({error:'invalid_target'}); return; }
       const revision = readVelaCredentialRevision(env, configuredEnv);
       const result = await createVelaWebIntent({...context,consoleOrigin,target:req.body.target});
-      if (readVelaCredentialRevision(env, configuredEnv) !== revision) { res.status(409).json({error:'account_changed'}); return; }
+      if (!isDeepStrictEqual(readVelaCredentialRevision(env, configuredEnv), revision)) { res.status(409).json({error:'account_changed'}); return; }
       res.json(result);
     } catch (error) {
       const code = error instanceof Error ? error.message : 'amr_web_intent_unavailable';

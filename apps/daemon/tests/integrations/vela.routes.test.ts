@@ -290,6 +290,32 @@ afterEach(async () => {
   }
 });
 
+describe('POST /api/amr/web-intent', () => {
+  it.each([false, true])('checks credential content across the upstream request (changed=%s)', async (changed) => {
+    const previousOrigin = process.env.OD_VELA_WEB_URL;
+    process.env.OD_VELA_WEB_URL = 'http://localhost:5173';
+    const upstream = await startWalletApi((req, res) => {
+      expect(req.url).toBe('/api/v1/auth/intents');
+      expect(req.headers.authorization).toBe('Bearer ck-seeded-key');
+      if (changed) seedLogin('local', { apiUrl: upstream.url, controlKey: 'ck-replaced-key' });
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ intentId: 'intent-local' }));
+    });
+    seedLogin('local', { apiUrl: upstream.url });
+    try {
+      const result = await postJson(`${baseUrl}/api/amr/web-intent`, { target: '/dashboard' });
+      expect(result.status).toBe(changed ? 409 : 200);
+      expect(result.body).toEqual(changed
+        ? { error: 'account_changed' }
+        : { url: 'http://localhost:5173/login?intentId=intent-local' });
+    } finally {
+      if (previousOrigin === undefined) delete process.env.OD_VELA_WEB_URL;
+      else process.env.OD_VELA_WEB_URL = previousOrigin;
+      await upstream.close();
+    }
+  });
+});
+
 describe('GET /api/integrations/vela/wallet', () => {
   it('returns signed_out without reading an upstream wallet API', async () => {
     const walletApi = await startWalletApi((_req, res) => {
