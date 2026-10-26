@@ -134,8 +134,8 @@ test('[P0] @critical entry chrome exposes the primary home creation surface and 
     window.dispatchEvent(new CustomEvent('open-design:home-apply-template', { detail: { chipId: 'hyperframes' } }));
   });
   await expect(page.getByTestId('home-hero-template-picker')).toHaveAttribute('data-type', 'motion-design');
-  await expect(page.getByTestId('home-hero-input')).toHaveValue('Keep my existing motion brief');
-  expect(creationRequests).toEqual([]);
+  await expect(page.getByTestId('home-hero-input')).toHaveText('Keep my existing motion brief');
+  await expectStableCount(() => creationRequests.length, 0, { message: 'legacy entry selection must not create a project or start a run' });
   await testInfo.attach('legacy-hyperframes-entry-to-motion', { body: await page.screenshot(), contentType: 'image/png' });
 
   // The pet picker rail was removed; pet adoption now lives in

@@ -35,7 +35,7 @@ vi.mock('node:crypto', async (importOriginal) => {
   };
 });
 
-import { closeDatabase, listMessages, openDatabase, upsertMessage } from '../src/db.js';
+import { closeDatabase, getProject, listMessages, openDatabase, updateProject, upsertMessage } from '../src/db.js';
 import { AGENT_DEFS } from '../src/runtimes/registry.js';
 import type { FrozenSkillPackageV1 } from '../src/strategies/od-next/frozen-skill-package.js';
 import { agentBinEnvKey } from '../src/runtimes/executables.js';
@@ -1407,15 +1407,6 @@ process.exit(127);
         taskProfile: 'marketing',
         pluginId: 'example-web-prototype',
       },
-      {
-        ...(await createProjectForScenario(started.url, 'approved-hyperframes', {
-          kind: 'video',
-          intent: 'hyperframes',
-          videoModel: 'hyperframes-html',
-        }, undefined, 'hyperframes')),
-        taskProfile: 'hyperframes',
-        pluginId: 'example-hyperframes',
-      },
     ];
     for (const candidate of approved) {
       expect(candidate.metadata?.strategyBinding).toMatchObject({
@@ -1740,6 +1731,36 @@ process.exit(127);
       method: 'POST',
     });
     await waitForRunTerminal(started.url, created.runId as string);
+  });
+
+  it('restores a persisted HyperFrames project binding while its new creation entry remains retired', async () => {
+    const fixture = await createPublicRolloutFixture('legacy-hyperframes-binding', 'design');
+    started = fixture.started;
+    binDir = fixture.binDir;
+    process.env.OD_NEXT_STRATEGY_ROLLOUT = 'active';
+    process.env.OD_NEXT_STRATEGY_LOCAL_SYNTHETIC_CANARY = '1';
+    // Seed the stored pre-upgrade state directly. The retired public create
+    // endpoint must never be used to manufacture a historical project.
+    const metadata = {
+      kind: 'video', intent: 'hyperframes', videoModel: 'hyperframes-html',
+      strategyBinding: { schemaVersion: 1, provenance: 'automatic_default', taskProfile: 'hyperframes', boundAt: 1 },
+    };
+    updateProject(database(), fixture.projectId, { metadata });
+    await stopServer(started);
+    started = await startDaemon();
+    expect(getProject(database(), fixture.projectId)?.metadata).toEqual(metadata);
+
+    const retired = await fetch(`${started.url}/api/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: `${fixture.projectId}-new`, name: 'New old entry', metadata, automaticStrategyTaskProfile: 'hyperframes' }),
+    });
+    expect(retired.status).toBe(410);
+    const continued = await postRun(started.url, publicRunRequest(fixture,
+      'Hold the public rollout run open until canceled.', 'legacy-hyperframes-request'));
+    expect(continued.strategyTask).toMatchObject({ inputStage: 'request', terminal: false });
+    await fetch(`${started.url}/api/runs/${encodeURIComponent(continued.runId as string)}/cancel`, { method: 'POST' });
+    await waitForRunTerminal(started.url, continued.runId as string);
+    expect(getProject(database(), fixture.projectId)?.metadata?.strategyBinding).toEqual(metadata.strategyBinding);
   });
 
   it('admits an unrecognized CLI version without a registered capability fixture', async () => {
