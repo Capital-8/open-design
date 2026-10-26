@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
-import { gunzipSync } from 'node:zlib';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -52,10 +52,14 @@ it('ships the original-character starter and separate p5 license/source notices'
   expect(await readFile(path.join(runtime, 'LICENSE'), 'utf8')).toContain('Copyright (c) 2026 John Heibel');
   expect(await readFile(path.join(runtime, 'licenses/p5-LGPL-2.1.txt'), 'utf8')).toContain('Version 2.1, February 1999');
   expect(await readFile(path.join(runtime, 'licenses/p5.brush-MIT.txt'), 'utf8')).toContain('Alejandro Campos Uribe');
-  const source = await readFile(path.join(runtime, 'licenses/p5-2.3.3-source.tar.gz'));
+  const archivePath = path.join(runtime, 'licenses/p5-2.3.3-source.tar.xz');
+  const source = await readFile(archivePath);
+  // Kept under the CI per-file blob limit (1 MiB) by xz compression.
+  expect(source.length).toBeLessThan(1024 * 1024);
   expect(createHash('sha256').update(source).digest('hex'))
-    .toBe('82ce89f35c4a4155ac9c3c7ec43d399e9a63ba905314abbb7a699e27e23ebd61');
-  const archive = gunzipSync(source).toString('utf8');
-  expect(archive).toContain('p5.js-2.3.3/src/');
-  expect(archive).toContain('package-lock.json');
+    .toBe('bffcfc91b8742de2368d32b19892ba43af2e83559c534ab6851bf4c0e5bbefd9');
+  const entries = execFileSync('tar', ['-tJf', archivePath], { encoding: 'utf8' }).split('\n');
+  expect(entries).toContain('p5.js-2.3.3/src/');
+  expect(entries).toContain('p5.js-2.3.3/package-lock.json');
+  expect(entries).toContain('p5.js-2.3.3/rollup.config.mjs');
 });

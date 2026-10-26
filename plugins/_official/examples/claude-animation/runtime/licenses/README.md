@@ -12,13 +12,17 @@ Apache-2.0 license does not replace third-party licenses.
 
 ## p5.js corresponding source
 
-p5-2.3.3-source.tar.gz contains unmodified library sources, shaders, interface
+p5-2.3.3-source.tar.xz contains unmodified library sources, shaders, interface
 files, translations, build utilities/configuration, package metadata and lockfile
 from the official v2.3.3 source archive. Non-build tests, examples and contributor
 illustrations are omitted. This ships the source itself instead of relying on a
 future written offer or a third-party download link.
 
-Archive SHA-256: 82ce89f35c4a4155ac9c3c7ec43d399e9a63ba905314abbb7a699e27e23ebd61.
+Archive SHA-256: bffcfc91b8742de2368d32b19892ba43af2e83559c534ab6851bf4c0e5bbefd9.
+It is the same tar as the earlier gzip copy (tar SHA-256
+beb9d724c1202c5c8d41831f6dd54f3f4f3929e78a21d24777ff62704e4b47ce), recompressed
+with xz to stay under the repository's per-file size limit. Extract it with
+`tar -xJf p5-2.3.3-source.tar.xz`.
 
 The LGPL applies to p5.js, separately from the integration. Recipients retain
 its modification and redistribution rights. Extract the archive, run npm ci and

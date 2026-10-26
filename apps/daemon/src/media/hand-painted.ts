@@ -106,7 +106,7 @@ redistributable on its own.
 
 p5.min.js is the unmodified upstream library. You may replace it with your own
 build of p5.js; the corresponding source ships with Open Design
-(plugins/_official/examples/claude-animation/runtime/licenses/p5-2.3.3-source.tar.gz)
+(plugins/_official/examples/claude-animation/runtime/licenses/p5-2.3.3-source.tar.xz)
 and is available from https://github.com/processing/p5.js/tree/v2.3.3.
 No license to Anthropic trademarks or mascot artwork is claimed.
 `;
