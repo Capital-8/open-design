@@ -2978,6 +2978,10 @@ export function ProjectView({
     initialHomeSend: boolean;
   } | null>(null);
   const [concurrencyDialogOpen, setConcurrencyDialogOpen] = useState(false);
+  const [fundingRejectedComposerSend, setFundingRejectedComposerSend] = useState<{
+    conversationId: string; authorityKey: string; accountGeneration: number;
+    intentGeneration: number; draft: RejectedComposerSend;
+  } | null>(null);
   const latestRequestSendRef = useRef(new Map<string, string>());
   // Sign-in blocks and live gateway funding rejections share these dialogs.
   // `conversationId` remembers whose sign-in queue may resume. Funding
@@ -8847,6 +8851,7 @@ export function ProjectView({
       if (messagesConversationIdRef.current !== activeConversationId) return false;
       const clientRequestId = meta?.clientRequestId ?? randomUUID();
       const sendAccountGeneration = currentWorkspaceAccountGeneration();
+      const sendIntentGeneration = concurrencyIntentRef.current.generation;
       meta = {
         ...(meta ?? {}),
         clientRequestId,
@@ -9119,6 +9124,7 @@ export function ProjectView({
         // Link admission/refusal path as the final authority, without a lease.
       }
       latestRequestSendRef.current.set(runConversationId, clientRequestId);
+      setFundingRejectedComposerSend(null);
       setConcurrencyDialogOpen(false);
       setConcurrencyRejection(null);
       // This is the accepted retry boundary: all synchronous refusal paths are
@@ -10455,6 +10461,7 @@ export function ProjectView({
           onProjectsRefresh();
         },
         onError: async (err: Error) => {
+          const canRestoreRejectedInput = !liveFocusClosed;
           liveFocusClosed = true;
           // Disconnect-time stamp, used as-is for non-generic-disconnect
           // failures. When the generic-disconnect retry-cap probe below
@@ -10487,6 +10494,27 @@ export function ProjectView({
           // tagged superseded. See the onDone above for the ownership rationale.
           const runMayFinalize =
             !supersededRunsRef.current.has(controller);
+          // Admission can fail in the native child after the composer send
+          // promise resolved. Return only that untouched initial input; a
+          // later model/tool request running out of funds keeps its run history.
+          const unstarted = !observedModelWork && !streamedText.trim() && !latestAssistantMsg.content.trim()
+            && !(latestAssistantMsg.events ?? []).some((event) => event.kind !== 'status' && event.kind !== 'done_key');
+          if (errorCode === AMR_INSUFFICIENT_BALANCE_CODE
+            && config.mode === 'daemon' && assistantAgentId === 'amr'
+            && meta?.composerOwnedDraft && unstarted && canRestoreRejectedInput
+            && runMayFinalize && !controller.signal.aborted && !cancelController.signal.aborted
+            && latestRequestSendRef.current.get(runConversationId) === clientRequestId
+            && modelRequestIdentityIsCurrent()
+            && concurrencyIntentRef.current.generation === sendIntentGeneration
+            && activeConversationIdRef.current === runConversationId
+            && messagesConversationIdRef.current === runConversationId) {
+            setFundingRejectedComposerSend({
+              conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
+              accountGeneration: sendAccountGeneration, intentGeneration: sendIntentGeneration,
+              draft: { nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
+                commentAttachments, meta },
+            });
+          }
           if (runMayFinalize && config.mode === 'daemon' && assistantAgentId === 'amr') {
             showAmrFundingFailure({
               code: errorCode, runKey: assistantId,
@@ -10507,10 +10535,6 @@ export function ProjectView({
               shownFundingFailuresRef.current.add(key);
               // A later model in an active tool workflow can also hit Link's
               // limit. Keep its history, but never re-inject the whole prompt.
-              const unstarted = !observedModelWork && !streamedText.trim() && !latestAssistantMsg.content.trim()
-                // The daemon emits done_key before spawning the child. Its
-                // nonce identifies this run, but is not evidence of model work.
-                && !(latestAssistantMsg.events ?? []).some((event) => event.kind !== 'status' && event.kind !== 'done_key');
               setConcurrencyRejection({
                 conversationId: runConversationId, authorityKey: projectRunAuthorityKey,
                 accountGeneration: sendAccountGeneration, requestId: clientRequestId,
@@ -14450,6 +14474,21 @@ export function ProjectView({
     </>
   );
 
+  let rejectedComposerSend: RejectedComposerSend | undefined;
+  if (concurrencyRejection
+    && concurrencyRejection.conversationId === activeConversationId
+    && concurrencyRejection.authorityKey === projectRunAuthorityKey
+    && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()) {
+    rejectedComposerSend = concurrencyRejection.draft ?? undefined;
+  }
+  if (fundingRejectedComposerSend
+    && fundingRejectedComposerSend.conversationId === activeConversationId
+    && fundingRejectedComposerSend.authorityKey === projectRunAuthorityKey
+    && fundingRejectedComposerSend.accountGeneration === currentWorkspaceAccountGeneration()
+    && fundingRejectedComposerSend.intentGeneration === concurrencyIntentRef.current.generation) {
+    rejectedComposerSend = fundingRejectedComposerSend.draft;
+  }
+
   // The `.app` shell belongs to the caller, not to this component: App.tsx
   // owns the `div.app` around every project-route surface, so switching
   // between them never replays the `.app` entrance animation.
@@ -14583,11 +14622,7 @@ export function ProjectView({
               onAttachComment={attachPreviewComment}
               onDetachComment={detachPreviewComment}
               onDeleteComment={(commentId) => void removePreviewComment(commentId)}
-              rejectedComposerSend={concurrencyRejection
-                && concurrencyRejection.conversationId === activeConversationId
-                && concurrencyRejection.authorityKey === projectRunAuthorityKey
-                && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
-                ? concurrencyRejection.draft ?? undefined : undefined}
+              rejectedComposerSend={rejectedComposerSend}
               amrConcurrencyCardAudience={concurrencyRejection
                 && concurrencyRejection.conversationId === activeConversationId
                 && concurrencyRejection.authorityKey === projectRunAuthorityKey
