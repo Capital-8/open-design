@@ -1472,6 +1472,90 @@ describe('Link request concurrency rejection preserves the original send', () =>
     expect(mockedStreamViaDaemon).toHaveBeenCalledTimes(1);
   });
 
+  it('VIEW-015 restores the original file draft after unknown preflight and a later structured funding refusal', async () => {
+    realChatPane.enabled = true;
+    workspaceScopeMocks.ambientContext = callerContext('member', 'team_pro');
+    renderProjectView({ project: { ...project(), pendingPrompt: null } as never });
+    await flushMounts();
+    await typeAndSettle('B workspace original detailed brief');
+    act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT, {
+      detail: { attachments: [{ path: 'brief.png', name: 'brief.png', kind: 'image' }] },
+    })));
+    await waitFor(() => expect(screen.getByTestId('chat-send')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+    // The default preflight body is unavailable/unknown. The send promise has
+    // already resolved when the native child later reports the Link refusal.
+    await waitFor(() => expect(screen.queryByTestId('chat-send-pending')).toBeNull());
+    expect(composerText().trim()).toBe('');
+    const options = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => {
+      options.onRunCreated?.('funding-admission-rejected-run');
+      options.handlers.onAgentEvent({ kind: 'done_key', key: 'original-native-run-nonce' });
+    });
+    await flushMounts();
+    const refusal = Object.assign(new Error('actual Link insufficient funding'), { code: 'AMR_INSUFFICIENT_BALANCE' });
+    await act(async () => { await options.handlers.onError(refusal); });
+    await screen.findByTestId('amr-balance-owner-dialog');
+    await waitFor(() => expect(composerText()).toBe('B workspace original detailed brief'));
+    expect(within(screen.getByTestId('staged-attachments')).getByTitle('brief.png')).toBeTruthy();
+    expect(screen.queryByTestId('amr-concurrency-dialog')).toBeNull();
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+    // A duplicated terminal event cannot replace the user's newer edit.
+    await typeAndSettle('new unsent idea');
+    await act(async () => { await options.handlers.onError(refusal); });
+    await flushMounts();
+    expect(composerText()).toBe('new unsent idea');
+    expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+  });
+
+  it.each(['new-text', 'new-file', 'text', 'thinking', 'tool', 'artifact', 'canceled', 'account', 'model-roundtrip', 'finished', 'unstructured'] as const)(
+    'VIEW-015 funding refusal does not restore over %s', async (boundary) => {
+      realChatPane.enabled = true;
+      workspaceScopeMocks.ambientContext = callerContext('member', 'team_pro');
+      const agents = [{ id: 'amr', name: 'amr', bin: 'vela', available: true,
+        models: [{ id: 'glm-5', label: 'GLM 5' }, { id: 'deepseek-v4.1-flash', label: 'Flash' }] }] as AgentInfo[];
+      const props = { project: { ...project(), pendingPrompt: null } as never, agents,
+        config: { ...config, agentModels: { amr: { model: 'glm-5' } } } };
+      const view = renderProjectView(props);
+      await flushMounts();
+      await typeAndSettle('original rejected input');
+      await waitFor(() => expect(screen.getByTestId('chat-send')).toBeEnabled());
+      fireEvent.click(screen.getByTestId('chat-send'));
+      await waitFor(() => expect(mockedStreamViaDaemon).toHaveBeenCalledOnce());
+      await waitFor(() => expect(screen.queryByTestId('chat-send-pending')).toBeNull());
+      const options = mockedStreamViaDaemon.mock.calls[0]![0];
+      await act(async () => { options.onRunCreated?.('initial-run'); });
+      if (boundary === 'new-text') await typeAndSettle('new unsent idea');
+      if (boundary === 'new-file') act(() => window.dispatchEvent(new CustomEvent(STAGE_ATTACHMENT_EVENT, {
+        detail: { attachments: [{ path: 'next.png', name: 'next.png', kind: 'image' }] },
+      })));
+      await act(async () => {
+        if (boundary === 'text') options.handlers.onDelta('partial output');
+        if (boundary === 'thinking') options.handlers.onAgentEvent({ kind: 'thinking', text: 'model work' });
+        if (boundary === 'tool') options.handlers.onAgentEvent({ kind: 'tool_use', id: 'read', name: 'Read', input: {} });
+        if (boundary === 'artifact') options.handlers.onAgentEvent({ kind: 'artifact_focus', open: 'index.html' });
+        if (boundary === 'canceled') fireEvent.click(screen.getByRole('button', { name: 'chat.stop' }));
+        if (boundary === 'account') advanceWorkspaceAccountGeneration('VIEW015-new-account');
+        if (boundary === 'finished') options.handlers.onDone('completed');
+      });
+      if (boundary === 'model-roundtrip') {
+        view.rerender(projectViewElement({ ...props,
+          config: { ...config, agentModels: { amr: { model: 'deepseek-v4.1-flash' } } } }));
+        await flushMounts();
+        view.rerender(projectViewElement(props));
+      }
+      await flushMounts();
+      await act(async () => { await options.handlers.onError(Object.assign(new Error('AMR_INSUFFICIENT_BALANCE'), {
+        ...(boundary === 'unstructured' ? {} : { code: 'AMR_INSUFFICIENT_BALANCE' }),
+      })); });
+      await flushMounts();
+      expect(composerText().trim()).toBe(boundary === 'new-text' ? 'new unsent idea' : '');
+      if (boundary === 'new-file') expect(within(screen.getByTestId('staged-attachments')).getByTitle('next.png')).toBeTruthy();
+      expect(mockedStreamViaDaemon).toHaveBeenCalledOnce();
+    },
+  );
+
   it.each([false, true])('Home auto-send only requests a route recovery after an empty actual composer witness (new text=%s)', async (typed) => {
     realChatPane.enabled = true;
     workspaceScopeMocks.ambientContext = callerContext('owner', 'team_pro');

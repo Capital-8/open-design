@@ -289,6 +289,7 @@ export type ChatSendOutcome = void | 'restore-draft';
 
 /** Committed composer content other than the editor text, mirrored for stale send closures. */
 interface ComposerContent {
+  hasPendingUploads: boolean;
   staged: ChatAttachment[];
   stagedVisualComments: ChatCommentAttachment[];
   stagedSkills: SkillSummary[];
@@ -855,6 +856,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
        本身不参与渲染,放进 state 只会让每次上传都多一轮无谓的 diff。
        `previewUrl` 一并记着,移除 / 传完时要 revoke,不然长会话里会漏一串 blob。 */
     const pendingFilesRef = useRef<Map<string, { file: File; previewUrl: string | null }>>(new Map());
+    const lastResetWorkspaceContextIdsRef = useRef<ReadonlySet<string>>(new Set());
     const pendingSeqRef = useRef(0);
     // 组件被卸掉时(切项目 / 关面板)把还没 revoke 的本地缩略图一次收干净。
     useEffect(() => {
@@ -1477,10 +1479,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           const current = latestComposerContentRef.current;
           if (onlyIfEmpty && (
             !editorRef.current || (editorRef.current.getText() ?? draftRef.current).trim()
+            || pendingFilesRef.current.size > 0
             || (current && (current.staged.length > 0 || current.stagedVisualComments.length > 0
               || current.stagedSkills.length > 0 || current.stagedMcpServers.length > 0
               || current.stagedConnectors.length > 0 || current.activeAppliedPlugin !== null
-              || current.quotes.length > 0))
+              || current.quotes.length > 0 || current.hasPendingUploads
+              || current.stagedWorkspaceContexts.length !== lastResetWorkspaceContextIdsRef.current.size
+              || current.stagedWorkspaceContexts.some((item) => !lastResetWorkspaceContextIdsRef.current.has(item.id))))
           )) return false;
           /*
            * 引用是发送时**折进正文**的(`submit()` 里那个 `> 原文` 前缀),所以
@@ -1582,6 +1587,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         Boolean(item.absolutePath?.trim()) && Boolean(workspaceLinkedDirAdds[item.id])
       ));
       const linkedWorkspaceContextIds = new Set(linkedWorkspaceContexts.map((item) => item.id));
+      lastResetWorkspaceContextIdsRef.current = linkedWorkspaceContextIds;
       const nextWorkspaceLinkedDirAdds = Object.fromEntries(
         Object.entries(workspaceLinkedDirAdds).filter(([id]) => linkedWorkspaceContextIds.has(id)),
       );
@@ -1659,6 +1665,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const latestComposerContentRef = useRef<ComposerContent | null>(null);
     useLayoutEffect(() => {
       latestComposerContentRef.current = {
+        hasPendingUploads: pendingUploads.length > 0 || Boolean(externalPendingUploads?.length),
         staged,
         stagedVisualComments,
         stagedSkills,
@@ -1682,11 +1689,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       keptWorkspaceContextIds: ReadonlySet<string>,
     ): boolean {
       const text = editorRef.current?.getText() ?? draftRef.current;
-      if (text.trim()) return true;
+      if (text.trim() || pendingFilesRef.current.size > 0) return true;
       const current = latestComposerContentRef.current;
       if (!current) return false;
       return (
         current.staged.length > 0
+        || current.hasPendingUploads
         || current.stagedVisualComments.length > 0
         || current.stagedSkills.length > 0
         || current.stagedMcpServers.length > 0
