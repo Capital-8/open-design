@@ -328,6 +328,7 @@ interface Props {
    * instance is a second HomeView, so it keeps its own draft rather than
    * fighting Home's over one piece of state.
    */
+  referralNotice?: ReactNode;
   variant?: 'page' | 'dock';
 }
 
@@ -524,6 +525,7 @@ export function HomeView({
   onDeepSeekV4FlashCampaignUseNow,
   deepSeekV4FlashCampaignMetricsConsent = false,
   deepSeekV4FlashCampaignInstallationId = null,
+  referralNotice,
   variant = 'page',
 }: Props) {
   const { locale, t } = useI18n();
@@ -3118,6 +3120,7 @@ export function HomeView({
         />
       )}
       <HomeHero
+        referralNotice={referralNotice}
         variant={variant}
         collapseSignal={collapseSignal}
         workspaceContext={workspaceContext}

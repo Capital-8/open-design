@@ -126,6 +126,7 @@ import {
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
 import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback } from '../runtime/amr-funding-feedback';
+import { ReferralNotice } from './ReferralNotice';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
 import { EntryBlankState } from './EntryBlankState';
@@ -1987,6 +1988,7 @@ export function EntryShell({
               <HomeView
                 {...homeViewProps}
                 isActive={view === 'home'}
+                referralNotice={<ReferralNotice accountId={amrLoggedIn === true ? amrAccountId : null} profile={amrProfile} active={view === 'home'} context={homeFundingContext} billing={workspaceBillingResponse} />}
                 /* Home is the one composer in the shell and consumes the page
                    handoff. The community view used to dock a second HomeView
                    (`variant="dock"`) with a handoff of its own; that mount

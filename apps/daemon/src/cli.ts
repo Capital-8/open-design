@@ -1295,6 +1295,7 @@ async function runAmr(args) {
   od amr login [--json]
   od amr logout [--json]
   od amr status [--refresh] [--json]
+  od amr referral [--json]
 
 Options:
   --daemon-url <url>   OpenDesign daemon HTTP base.
@@ -1306,6 +1307,16 @@ Options:
   const flags = parseFlags(rest, { string: AMR_STRING_FLAGS, boolean: AMR_BOOLEAN_FLAGS });
   const base = await cliDaemonBaseUrl(flags);
   switch (sub) {
+    case 'referral': {
+      const response = await fetch(`${base}/api/integrations/vela/referral-summary`);
+      if (!response.ok) return structuredHttpFailure(response);
+      const summary = await response.json();
+      if (flags.json) return process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
+      console.log(`Campaign\t${summary.campaignStatus}`);
+      console.log(`Invitation rewards\t${summary.inviterIssuedCount}`);
+      console.log(`Available reset cards\t${summary.availableCardCount}`);
+      return;
+    }
     case 'logout': {
       const logoutResp = await fetch(`${base}/api/integrations/vela/logout`, {
         method: 'POST',
