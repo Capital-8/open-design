@@ -4,6 +4,7 @@
   "name": "example-claude-animation",
   "title": "Hand-painted Motion",
   "version": "0.1.0",
+  "publishedAt": "2026-10-12T11:22:13Z",
   "description": "A 5-second, 16:9, silent hand-painted character film: an editable Motion source painted with p5.brush and John Heibel's MIT painting/timeline toolkit, plus the rendered MP4.",
   "description_i18n": {
     "en": "A 5-second, 16:9, silent hand-painted character film: an editable Motion source painted with p5.brush and John Heibel's MIT painting/timeline toolkit, plus the rendered MP4.",
