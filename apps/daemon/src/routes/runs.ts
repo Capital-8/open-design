@@ -2503,6 +2503,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           commentCount: Array.isArray(requestBody.commentAttachments)
             ? requestBody.commentAttachments.length
             : 0,
+          commentAttachments: requestBody.commentAttachments as Parameters<typeof normalizeCommentAttachments>[0],
           linkedDirectoryCount: Array.isArray(runProject?.metadata?.linkedDirs)
             ? runProject.metadata.linkedDirs.length
             : 0,

@@ -608,7 +608,7 @@ export const OD_NEXT_SEMANTIC_REQUEST_FACT_MAP_V1 = [
     producer: 'request',
     source: 'ChatRequest.commentAttachments -> normalizeCommentAttachments()',
     owner: 'Task 04 immutable attachment snapshot',
-    note: 'Raw comment bodies and screenshot paths remain excluded; the Bundle carries only the canonical comment count.',
+    note: 'Normalized comments, Motion time/target and screenshot digests are frozen as an out-of-band feedback resource; the Bundle carries its logical reference and count, never raw bodies or screenshot paths.',
   },
   {
     id: 'image_attachment_selection',

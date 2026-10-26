@@ -16,6 +16,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { redactSecrets } from '../../redact.js';
+import { normalizeCommentAttachments } from '../../runtimes/chat-prompt-inputs.js';
 
 const SNAPSHOT_SCHEMA = 'open-design.od-next-task-input-snapshot/v1' as const;
 export const DEFAULT_OD_NEXT_ATTACHMENT_FILE_CAP_BYTES = 16 * 1024 * 1024;
@@ -41,6 +42,8 @@ type SnapshotSource = {
   sourcePath: string;
   allowedRoot: string;
 };
+
+type SnapshotContentSource = Pick<SnapshotFile, 'kind' | 'sourcePathHash'> & { content: Buffer };
 
 export type SnapshotFile = {
   sourcePathHash?: string;
@@ -579,6 +582,7 @@ export function createOdNextTaskInputSnapshot(input: {
   uploadRoot: string;
   imagePaths?: readonly string[];
   commentCount?: number;
+  commentAttachments?: Parameters<typeof normalizeCommentAttachments>[0];
   linkedDirectoryCount?: number;
   mcpServerCount?: number;
   fileCapBytes?: number;
@@ -591,12 +595,19 @@ export function createOdNextTaskInputSnapshot(input: {
   const inherited = input.inheritedSnapshot
     ? loadOdNextTaskInputSnapshot(input.inheritedSnapshot, input.snapshotsRoot)
     : null;
-  const sources: Array<SnapshotSource | (SnapshotFile & { content: Buffer })> = [
-    ...(input.projectAttachments ?? []).map((sourcePath) => ({
-      kind: 'file' as const,
-      sourcePath,
-      allowedRoot: input.projectRoot,
-    })),
+  const comments = normalizeCommentAttachments(input.commentAttachments);
+  const projectSources = new Map<string, SnapshotSource>();
+  for (const sourcePath of [
+    ...(input.projectAttachments ?? []),
+    ...comments.flatMap(comment => [comment.screenshotPath, ...(comment.imageAttachments ?? []).map(image => image.path)]
+      .filter((value): value is string => Boolean(value))),
+  ]) {
+    projectSources.set(path.resolve(input.projectRoot, sourcePath), {
+      kind: 'file', sourcePath, allowedRoot: input.projectRoot,
+    });
+  }
+  const sources: Array<SnapshotSource | SnapshotContentSource> = [
+    ...projectSources.values(),
     ...(input.imagePaths ?? []).map((sourcePath) => ({
       kind: 'image' as const,
       sourcePath,
@@ -605,7 +616,7 @@ export function createOdNextTaskInputSnapshot(input: {
     ...(inherited?.files ?? []),
   ];
   const countCap = input.countCap ?? DEFAULT_OD_NEXT_ATTACHMENT_COUNT_CAP;
-  if (sources.length - (inherited?.files.length ?? 0) > countCap) {
+  if (sources.length + (comments.length > 0 ? 1 : 0) - (inherited?.files.length ?? 0) > countCap) {
     throw new OdNextTaskInputSnapshotError('OD Next attachment count exceeds the task cap.', 'OD_NEXT_INPUT_SNAPSHOT_OVERSIZE');
   }
   const snapshotsRoot = path.resolve(input.snapshotsRoot);
@@ -655,7 +666,7 @@ export function createOdNextTaskInputSnapshot(input: {
       snapshotCleanupAllowed = true;
     }
     fs.mkdirSync(attachmentsDir, { recursive: false, mode: 0o700 });
-    sources.forEach((source) => {
+    const freezeSource = (source: SnapshotSource | SnapshotContentSource): OdNextAttachmentFactV1 => {
       let bytes: Buffer;
       try {
         bytes = 'content' in source ? source.content : readSourceWithoutFollowingSymlinks(
@@ -671,7 +682,10 @@ export function createOdNextTaskInputSnapshot(input: {
         );
       }
       const identity = sha256(bytes);
-      if ('content' in source && files.some(file => file.kind === source.kind && file.sha256 === identity)) return;
+      if ('content' in source) {
+        const prior = files.findIndex(file => file.kind === source.kind && file.sha256 === identity);
+        if (prior >= 0) return facts[prior]!;
+      }
       if (files.length >= countCap || bytes.length > fileCap) {
         throw new OdNextTaskInputSnapshotError('OD Next inherited attachments exceed the task cap.', 'OD_NEXT_INPUT_SNAPSHOT_OVERSIZE');
       }
@@ -707,7 +721,7 @@ export function createOdNextTaskInputSnapshot(input: {
         bytes: frozen.length,
         sha256: identity,
       });
-      facts.push({
+      const fact: OdNextAttachmentFactV1 = {
         id,
         order: index + 1,
         kind: source.kind,
@@ -715,8 +729,43 @@ export function createOdNextTaskInputSnapshot(input: {
         mediaType: type.mediaType,
         bytes: frozen.length,
         sha256: identity,
+      };
+      facts.push(fact);
+      return fact;
+    };
+    sources.forEach(freezeSource);
+    let feedbackReference: string | undefined;
+    if (comments.length > 0) {
+      const projectRelativePath = (value: string): string => {
+        const relative = path.relative(path.resolve(input.projectRoot), path.resolve(input.projectRoot, value));
+        if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+          throw new OdNextTaskInputSnapshotError('Preview feedback must target a project-relative file.');
+        }
+        return relative.replaceAll('\\', '/');
+      };
+      const feedback = comments.map(({ screenshotPath, imageAttachments, filePath, ...comment }) => {
+        const screenshots = [...new Set([screenshotPath, ...(imageAttachments ?? []).map(image => image.path)]
+          .filter((value): value is string => Boolean(value)))].map(imagePath => {
+          const sourcePathHash = sha256(Buffer.from(projectRelativePath(imagePath)));
+          const image = files.find(file => file.sourcePathHash === sourcePathHash && file.mediaType.startsWith('image/'));
+          if (!image) throw new OdNextTaskInputSnapshotError('Preview feedback screenshot was not frozen as an image.');
+          // Digests remain stable when successor tasks reorder inherited input
+          // files; a positional attachment-NNN reference inside the JSON would not.
+          return { sha256: image.sha256, mediaType: image.mediaType };
+        });
+        return { ...comment, filePath: projectRelativePath(filePath), screenshots };
       });
-    });
+      feedbackReference = freezeSource({
+        kind: 'file',
+        content: Buffer.from(JSON.stringify({
+          schema: 'open-design.preview-feedback/v1',
+          role: 'current_user_preview_feedback',
+          taskExecutionId,
+          screenshotBinding: 'Match each screenshot sha256 to task_metadata.attachments; resolve its task-input reference through OD_TASK_INPUT_DIR.',
+          comments: feedback,
+        })),
+      }).reference;
+    }
     const linkedDirectoryCount = Math.max(0, Math.floor(input.linkedDirectoryCount ?? 0));
     const requestInputFacts: OdNextRequestInputFactsV1 = {
       schema: OD_NEXT_REQUEST_INPUT_FACTS_SCHEMA_V1,
@@ -726,7 +775,10 @@ export function createOdNextTaskInputSnapshot(input: {
         access: 'out_of_band',
       },
       attachments: facts,
-      comments: { count: Math.max(0, Math.floor(input.commentCount ?? 0)) },
+      comments: {
+        count: input.commentAttachments === undefined ? Math.max(0, Math.floor(input.commentCount ?? 0)) : comments.length,
+        ...(feedbackReference ? { reference: feedbackReference, role: 'current_user_preview_feedback' as const } : {}),
+      },
       workspace: {
         project: { reference: 'workspace:project', access: 'out_of_band' },
         linkedDirectories: Array.from({ length: linkedDirectoryCount }, (_, index) => ({
@@ -975,6 +1027,14 @@ export function loadOdNextTaskInputSnapshot(
     ))
   ) {
     throw new OdNextTaskInputSnapshotError('OD Next task input facts do not match frozen files.', 'OD_NEXT_INPUT_SNAPSHOT_TAMPERED');
+  }
+  const feedbackReference = manifest.requestInputFacts.comments?.reference;
+  if (feedbackReference !== undefined && (
+    typeof feedbackReference !== 'string'
+    || manifest.requestInputFacts.comments.role !== 'current_user_preview_feedback'
+    || !manifest.requestInputFacts.attachments.some(fact => fact.reference === feedbackReference && fact.mediaType === 'application/json')
+  )) {
+    throw new OdNextTaskInputSnapshotError('OD Next preview feedback reference does not match a frozen resource.', 'OD_NEXT_INPUT_SNAPSHOT_TAMPERED');
   }
   const attachmentPaths = manifest.requestInputFacts.attachments.map((fact) => pathsById.get(fact.id)!);
   const imagePaths = manifest.requestInputFacts.attachments

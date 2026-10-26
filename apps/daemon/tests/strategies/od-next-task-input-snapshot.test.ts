@@ -67,6 +67,57 @@ afterEach(() => {
 });
 
 describe('OD Next task-scoped input snapshots', () => {
+  it('freezes discoverable Motion feedback with its exact screenshot rather than exposing only a count', () => {
+    const f = fixture();
+    writeFileSync(path.join(f.projectRoot, 'shot.png'), PNG);
+    const motion = { timeSeconds: 2.4, durationSeconds: 8, fps: 30, sourceFingerprint: 'motion-source-sentinel' };
+    const snapshot = createOdNextTaskInputSnapshot({
+      ...f, taskExecutionId: 'motion-feedback', projectAttachments: ['shot.png'], commentCount: 1,
+      commentAttachments: [{
+        id: 'feedback-1', order: 1, filePath: 'index.html', elementId: 'title', selector: '#motion-target-sentinel',
+        label: 'Title', comment: 'Move this title left', currentText: 'Our story', htmlHint: '<h1>Our story</h1>',
+        pagePosition: { x: 10, y: 20, width: 200, height: 40 }, motion,
+        imageAttachments: [{ path: 'shot.png', name: 'shot.png' }],
+      }],
+    });
+    const loaded = loadOdNextTaskInputSnapshot(snapshot, f.snapshotsRoot);
+    const facts = JSON.parse(loaded.workspaceInputFactsText);
+    expect(facts.comments).toMatchObject({ count: 1, role: 'current_user_preview_feedback' });
+    expect(facts.comments.reference).toMatch(/^task-input:attachments\/attachment-\d{3}\.json$/);
+    const feedbackFile = loaded.files.find(file => `task-input:${file.relativePath}` === facts.comments.reference)!;
+    const feedback = JSON.parse(feedbackFile.content.toString());
+    expect(feedback.comments[0]).toMatchObject({ motion, selector: '#motion-target-sentinel', comment: 'Move this title left' });
+    const shot = loaded.files.find(file => file.mediaType === 'image/png')!;
+    expect(feedback.comments[0].screenshots).toEqual([{ sha256: shot.sha256, mediaType: 'image/png' }]);
+    expect(loaded.workspaceInputFactsText).not.toContain('motion-source-sentinel');
+    expect(feedbackFile.content.toString()).not.toContain(f.projectRoot);
+    expect(feedbackFile.content.toString()).not.toContain('shot.png');
+
+    // Current files may change and inherited attachment order may shift. The
+    // original feedback must still resolve its screenshot by content identity.
+    writeFileSync(path.join(f.projectRoot, 'shot.png'), 'changed after capture');
+    writeFileSync(path.join(f.projectRoot, 'new.txt'), 'a new input before the old image');
+    const successor = createOdNextTaskInputSnapshot({ ...f, taskExecutionId: 'next-feedback',
+      projectAttachments: ['new.txt'], inheritedSnapshot: snapshot });
+    const next = loadOdNextTaskInputSnapshot(successor, f.snapshotsRoot);
+    expect(next.files.find(file => file.sha256 === shot.sha256)?.content).toEqual(PNG);
+    expect(next.files.find(file => file.sha256 === feedbackFile.sha256)?.content).toEqual(feedbackFile.content);
+  });
+
+  it('does not duplicate a promoted comment query in the frozen feedback resource', () => {
+    const f = fixture();
+    const snapshot = createOdNextTaskInputSnapshot({ ...f, taskExecutionId: 'query-feedback', commentCount: 1,
+      commentAttachments: [{ id: 'feedback', order: 1, filePath: 'index.html', elementId: 'title', selector: '#title',
+        label: 'Title', comment: 'Already in currentPrompt', commentContext: 'query',
+        currentText: 'Original', htmlHint: '', pagePosition: { x: 0, y: 0, width: 100, height: 30 } }],
+    });
+    const loaded = loadOdNextTaskInputSnapshot(snapshot, f.snapshotsRoot);
+    const facts = JSON.parse(loaded.workspaceInputFactsText);
+    const body = loaded.files.find(file => `task-input:${file.relativePath}` === facts.comments.reference)!.content.toString();
+    expect(body).toContain('#title');
+    expect(body).not.toContain('Already in currentPrompt');
+  });
+
   it('carries verified old attachments into a fresh task even after the original upload is removed', () => {
     const f = fixture();
     const image = path.join(f.uploadRoot, 'reference.png');

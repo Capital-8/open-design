@@ -51,7 +51,13 @@ export interface OdNextRequestInputFactsV1 {
     access: 'out_of_band';
   };
   attachments: OdNextAttachmentFactV1[];
-  comments: { count: number };
+  comments: {
+    count: number;
+    /** Immutable current-turn feedback, readable through OD_TASK_INPUT_DIR.
+     * Bodies and screenshot paths stay outside the inline Prompt Bundle. */
+    reference?: string;
+    role?: 'current_user_preview_feedback';
+  };
   workspace: {
     project: { reference: 'workspace:project'; access: 'out_of_band' } | null;
     linkedDirectories: Array<{
