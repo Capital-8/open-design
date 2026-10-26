@@ -112,6 +112,83 @@ for (const surface of ['project', 'home'] as const) {
   });
 }
 
+test('[P1] VIEW-015 native funding refusal restores an existing project draft and attachment after advisory timeout', async ({ page }, info) => {
+  const client = await startFundingClient(page, info, { initialSpace: 'empty' });
+  let timing: ReturnType<typeof holdRealBilling> | undefined;
+  let passed = false;
+  try {
+    const { fixture, runtime } = client;
+    const B = fixture.spaces.empty;
+    const projectId = await client.createProject(B);
+    await page.goto(runtime.url.web(`/projects/${projectId}`), { waitUntil: 'domcontentloaded', timeout: T.xlong });
+    const input = page.getByTestId('chat-composer-input');
+    await expect(input).toBeVisible({ timeout: T.xlong });
+    const draft = 'VIEW015 native funding refusal must return this original input and attachment';
+    const attachment = { name: 'view015-original-brief.txt', mimeType: 'text/plain', buffer: Buffer.from(draft) };
+    await input.fill(draft);
+    const uploaded = page.waitForResponse(response => response.request().method() === 'POST'
+      && new URL(response.url()).pathname === `/api/projects/${projectId}/upload`, { timeout: T.medium });
+    await page.getByTestId('chat-file-input').setInputFiles(attachment);
+    expect((await uploaded).ok()).toBe(true);
+    const staged = page.getByTestId('staged-attachments');
+    await expect(staged.getByRole('button', { name: `Remove ${attachment.name}`, exact: true })).toBeVisible();
+    const originalPath = new URL(page.url()).pathname;
+    const postStart = client.posts.length;
+    timing = holdRealBilling(page, [B.workspaceId]);
+    await timing.install;
+    const accepted = page.waitForResponse(response => response.request().method() === 'POST'
+      && new URL(response.url()).pathname === '/api/runs', { timeout: T.long });
+    await page.getByTestId('chat-send').click();
+    // This real browser/daemon/native boundary intentionally crosses the
+    // product's advisory deadline. Only original response delivery is held;
+    // the authoritative native refusal and composer restoration stay real.
+    const created = await accepted;
+    expect(created.status()).toBe(202);
+    const { runId } = await created.json() as { runId: string };
+    expect(typeof runId).toBe('string');
+    const held = timing.held.find(row => row.path === '/api/workspace/billing/preflight');
+    expect(held, 'The actual send-time advisory response was held').toBeTruthy();
+    expect(JSON.parse(held!.bodyText).preflight).toMatchObject({
+      workspaceId: B.workspaceId, fundingCheck: 'insufficient',
+    });
+    let result: { status: string; errorCode?: string } | undefined;
+    await expect.poll(async () => {
+      const response = await fetch(runtime.url.web(`/api/runs/${runId}`), {
+        headers: fundingHeaders(B), signal: AbortSignal.timeout(T.short),
+      });
+      expect(response.ok).toBe(true);
+      result = await response.json() as typeof result;
+      return result?.status;
+    }, { timeout: T.xlong }).toBe('failed');
+    await client.attach('native-funding-refusal', { runId, result, originalPath,
+      originalAdvisoryBody: held!.bodyText, originalAdvisorySha256: held!.sha256 });
+    await info.attach('native-funding-refusal-events', {
+      body: await readFile(join(runtime.dataDir, 'runs', runId, 'events.jsonl')), contentType: 'application/x-ndjson',
+    });
+    expect(result?.errorCode).toBe('AMR_INSUFFICIENT_BALANCE');
+    const memberDialog = (B.actorRole ?? 'owner') !== 'owner';
+    const dialog = page.getByTestId(memberDialog ? 'amr-balance-owner-dialog' : 'amr-balance-dialog');
+    await expect(dialog).toBeVisible({ timeout: T.medium });
+    await expect(input).toHaveText(draft);
+    await expect(staged.getByRole('button', { name: `Remove ${attachment.name}`, exact: true })).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe(originalPath);
+    expect(client.posts.slice(postStart).filter(row => row.path === '/api/runs')).toEqual([
+      { path: '/api/runs', workspaceId: B.workspaceId },
+    ]);
+    await info.attach('native-funding-refusal-restored', { body: await page.screenshot(), contentType: 'image/png' });
+    if (memberDialog) await dialog.getByTestId('amr-balance-owner-dismiss').click();
+    else await dialog.getByRole('button', { name: /Not now/i }).click();
+    await expect(dialog).toBeHidden();
+    await input.fill(`${draft} edited after refusal`);
+    await expect(input).toHaveText(`${draft} edited after refusal`);
+    await expect(staged.getByRole('button', { name: `Remove ${attachment.name}`, exact: true })).toBeVisible();
+    passed = true;
+  } finally {
+    try { await timing?.dispose(); }
+    finally { await client.close({ preserveScratch: !passed }); }
+  }
+});
+
 test('[P1] VIEW-015 cash0 with real available Design Plan completes one correctly scoped run', async ({ page }, info) => {
   const client = await startFundingClient(page, info);
   let runId: string | undefined;

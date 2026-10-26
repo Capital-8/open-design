@@ -33,7 +33,7 @@ export async function startFundingClient(page: Page, info: TestInfo, options: {
     fixture,
     initialSpace: wallet?.space ?? switchGiven?.spaces.a ?? fixture.spaces[options.initialSpace ?? 'dp'],
     checkedSpaces: wallet ? { wallet: wallet.space } : switchGiven?.spaces ?? fixture.spaces,
-    runtimeKey: wallet?.space.runtimeKey ?? switchGiven?.deviceRuntimeKey ?? fixture.spaces.dp.runtimeKey,
+    runtimeKey: wallet?.space.runtimeKey ?? switchGiven?.deviceRuntimeKey ?? fixture.spaces[options.initialSpace ?? 'dp'].runtimeKey,
     ...(options.freeWallet ? { identitySuffix: options.freeWallet } : {}),
     attachmentPrefix: options.freeWallet ? `VIEW021-${options.freeWallet}-` : '',
     requireNamePrefix: !wallet,
@@ -269,7 +269,7 @@ export async function startScopedFundingClient(page: Page, info: TestInfo, optio
 }
 
 export function holdRealBilling(page: Page, workspaceIds: string[]) {
-  type Held = { workspaceId: string; path: string; sha256: string;
+  type Held = { workspaceId: string; path: string; sha256: string; bodyText: string;
     upstreamFetchedAt: number; browserCompletedAt: number | null; browserStatus: number | null; requestFailure: string | null;
     release: () => Promise<void>; cleanup: () => Promise<void> };
   const held: Held[] = [];
@@ -289,7 +289,7 @@ export function holdRealBilling(page: Page, workspaceIds: string[]) {
     let fulfilled!: () => void;
     const done = new Promise<void>(resolve => { fulfilled = resolve; });
     let released: Promise<void> | undefined;
-    const row: Held = { workspaceId, path: url.pathname,
+    const row: Held = { workspaceId, path: url.pathname, bodyText: body.toString('utf8'),
       sha256: createHash('sha256').update(body).digest('hex'),
       upstreamFetchedAt: Date.now(), browserCompletedAt: null, browserStatus: null, requestFailure: null,
       release: () => released ??= (async () => {
