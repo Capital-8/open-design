@@ -158,6 +158,11 @@ test("[P1] C09 first subscription reminder remains readable, opens Subscribe and
 		.getByTestId("home-hero-input")
 		.fill("这是用于检查首页输入框自动增高的长内容。".repeat(25));
 	await page.setViewportSize({ width: 700, height: 844 });
+	// The 700px reference keeps the reminder and countdown on one 36px row.
+	await expect.poll(async () => (await notice.boundingBox())?.height).toBe(36);
+	const narrowNotice = await notice.boundingBox();
+	const narrowTitle = await page.locator(".home-hero__title").boundingBox();
+	expect(narrowNotice!.y + narrowNotice!.height).toBeLessThan(narrowTitle!.y);
 	await capture(page, "client-C09-narrow-long");
 	const box = await notice.boundingBox();
 	expect(box!.x).toBeGreaterThanOrEqual(0);
