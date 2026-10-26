@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const tr: Dict = {
+  "motion.visualTrack": "Görüntü",
+  "motion.commentsTrack": "Yorumlar",
+  "motion.noComments": "Buraya geri bildirim eklemek için önizlemeye not ekleyin",
+  "motion.openComment": "{number} numaralı yorumu aç · {time}",
+  "motion.commentGroup": "{count} yorum",
   "motion.title": "Motion oynatma",
   "motion.play": "Oynat",
   "motion.pause": "Duraklat",

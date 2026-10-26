@@ -1,6 +1,11 @@
 import type { Dict } from "../types";
 
 export const zhTW: Dict = {
+  "motion.visualTrack": "畫面",
+  "motion.commentsTrack": "註解",
+  "motion.noComments": "在畫面上標註，註解會顯示在這裡",
+  "motion.openComment": "開啟註解 {number} · {time}",
+  "motion.commentGroup": "{count} 則註解",
   "motion.title": "動效播放",
   "motion.play": "播放",
   "motion.pause": "暫停",

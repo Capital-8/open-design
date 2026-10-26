@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const th: Dict = {
+  "motion.visualTrack": "ภาพ",
+  "motion.commentsTrack": "ความคิดเห็น",
+  "motion.noComments": "ใส่คำอธิบายประกอบในตัวอย่างเพื่อเพิ่มความคิดเห็นที่นี่",
+  "motion.openComment": "เปิดความคิดเห็น {number} · {time}",
+  "motion.commentGroup": "{count} ความคิดเห็น",
   "motion.title": "การเล่น Motion",
   "motion.play": "เล่น",
   "motion.pause": "หยุดชั่วคราว",

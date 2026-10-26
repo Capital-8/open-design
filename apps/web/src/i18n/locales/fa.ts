@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const fa: Dict = {
+  "motion.visualTrack": "تصویر",
+  "motion.commentsTrack": "نظرها",
+  "motion.noComments": "برای افزودن بازخورد در اینجا، روی پیش‌نمایش یادداشت بگذارید",
+  "motion.openComment": "باز کردن نظر {number} · {time}",
+  "motion.commentGroup": "{count} نظر",
   "motion.title": "پخش Motion",
   "motion.play": "پخش",
   "motion.pause": "مکث",

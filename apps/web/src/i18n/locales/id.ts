@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const id: Dict = {
+  "motion.visualTrack": "Visual",
+  "motion.commentsTrack": "Komentar",
+  "motion.noComments": "Beri anotasi pada pratinjau untuk menambahkan masukan di sini",
+  "motion.openComment": "Buka komentar {number} · {time}",
+  "motion.commentGroup": "{count} komentar",
   "motion.title": "Pemutaran Motion",
   "motion.play": "Putar",
   "motion.pause": "Jeda",

@@ -3,33 +3,83 @@
   position: absolute;
   z-index: 5;
   inset: auto 0 0;
+  height: var(--motion-dock-height);
   box-sizing: border-box;
-  height: 96px;
-  padding: 9px 14px;
   border-top: 1px solid var(--border);
   background: var(--bg-panel);
   color: var(--text);
+  font-family: var(--sans);
   font-size: 11px;
   outline-offset: -2px;
 }
-.timelineRow { display: flex; align-items: center; gap: 10px; height: 21px; }
-.time { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.timeline { flex: 1; min-width: 40px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
-.timeline:disabled { cursor: default; opacity: .45; }
-.toolbar { display: flex; align-items: center; gap: 4px; height: 32px; margin-top: 4px; }
-.icon { width: 28px; height: 28px; min-width: 28px; padding: 0; border-radius: 6px; }
-.timeEntry { display: flex; align-items: center; gap: 4px; margin-left: 5px; color: var(--text-muted); }
-.timeEntry input { box-sizing: border-box; width: 71px; height: 26px; padding: 3px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
-.frames { margin-left: 8px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 10px; }
-.spacer { flex: 1; }
-.annotate { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.footer { display: flex; align-items: center; height: 14px; margin-top: 3px; }
-.status { flex: 1; min-width: 0; color: var(--text-muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 760px) { .player { padding-inline: 9px; } }
-@container (max-width: 430px) {
-  .mute, .timeEntry > span, .annotate > span { display: none; }
-  .timeEntry { margin-left: 0; }
-  .timeEntry input { width: 62px; }
-  .annotate { width: 28px; min-width: 28px; padding: 0; gap: 0; }
-  .toolbar { gap: 3px; }
+.toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; height: 44px; padding: 0 14px; border-bottom: 1px solid var(--border-soft); }
+.clock { display: flex; min-width: 0; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timecode { border: 0; background: transparent; padding: 5px 0; color: var(--text-strong); font: inherit; font-size: 12px; font-weight: 600; cursor: text; font-variant-numeric: tabular-nums; border-radius: 3px; }
+.timecode:hover { color: var(--accent); }
+.timecode:disabled { cursor: default; opacity: .5; }
+.total { color: var(--text-soft); font-size: 10px; }
+.timeEntry { display: flex; align-items: center; gap: 4px; }
+.timeEntry input { width: 77px; height: 26px; padding: 3px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.timeEntry > span { color: var(--text-soft); font-size: 10px; }
+.playback { display: flex; gap: 4px; align-items: center; }
+.icon { width: 27px; height: 27px; min-width: 27px; padding: 0; border-radius: 5px; }
+.play { background: var(--text-strong); color: var(--bg-panel); width: 30px; height: 28px; }
+.play:hover:not(:disabled) { background: var(--text); color: var(--bg-panel); }
+.actions { display: flex; justify-content: flex-end; gap: 8px; min-width: 0; }
+.annotate { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 11px; height: 27px; border-radius: 5px; }
+.trackHeader { height: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; color: var(--text-muted); font-size: 10px; }
+.frames { color: var(--text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.frames > span { margin-left: 5px; }
+.tracks { display: grid; grid-template-columns: 86px minmax(0, 1fr); padding-right: 24px; }
+.trackLabels { padding-right: 10px; color: var(--text-muted); border-right: 1px solid var(--border-soft); font-size: 10px; }
+.trackLabels > div { display: flex; align-items: center; gap: 7px; padding-left: 15px; }
+.trackLabels > div:nth-child(1) { height: 20px; }
+.trackLabels > div:nth-child(2) { height: 34px; }
+.trackLabels > div:nth-child(3) { height: 27px; color: var(--text-soft); }
+.trackContent { position: relative; min-width: 0; margin-left: 15px; }
+.seekArea { position: relative; height: 54px; }
+.ruler { position: relative; height: 20px; border-bottom: 1px solid var(--border-soft); background: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), var(--border-soft) calc(10% - 1px), var(--border-soft) 10%) 0 100% / 100% 3px no-repeat; }
+.tick { position: absolute; top: 0; bottom: 0; padding-left: 4px; border-left: 1px solid var(--border); color: var(--text-soft); font-size: 9px; line-height: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tick:last-child { transform: translateX(-100%); padding-left: 0; padding-right: 4px; border-left: 0; border-right: 1px solid var(--border); }
+.clip { height: 28px; margin-top: 4px; display: flex; align-items: center; gap: 7px; padding: 0 10px; overflow: hidden; background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel)); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-soft)); border-radius: 4px; color: var(--text-muted); font-size: 10px; }
+.clip > svg { flex-shrink: 0; color: var(--accent); }
+.clip > span:not(.clipDuration) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clipDuration { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 9px; color: var(--text-soft); flex-shrink: 0; }
+.timeline { appearance: none; position: absolute; inset: 0; width: 100%; height: 54px; margin: 0; opacity: 0; cursor: ew-resize; }
+.timeline::-webkit-slider-thumb { appearance: none; width: 1px; height: 54px; }
+.timeline::-moz-range-thumb { width: 1px; height: 54px; border: 0; }
+.timeline:disabled { cursor: default; }
+.seekArea:has(.timeline:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.commentTrack { height: 27px; margin-top: 3px; border-top: 1px solid var(--border-soft); position: relative; }
+.emptyComments { color: var(--text-faint); font-size: 9px; display: block; padding-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.markerAnchor { position: absolute; top: 4px; transform: translateX(-50%); z-index: 2; }
+.marker { display: block; min-width: 20px; height: 19px; box-sizing: border-box; padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; font: inherit; font-size: 9px; font-variant-numeric: tabular-nums; cursor: pointer; background: var(--bg-panel); color: var(--text-muted); }
+.marker:hover, .activeMarker { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel)); }
+.marker:disabled { opacity: .45; cursor: default; }
+.markerGroup { appearance: none; text-align: center; border-style: double; border-width: 3px; line-height: 13px; }
+.playhead { position: absolute; top: 14px; bottom: 0; border-left: 1px solid var(--accent); pointer-events: none; z-index: 3; }
+.playhead > span { position: absolute; top: -3px; left: -4px; width: 7px; height: 9px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%); }
+.footer { display: flex; align-items: center; gap: 10px; height: 20px; margin: 2px 14px 0; font-size: 9px; color: var(--text-soft); }
+.status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.footerTime { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.player:has(.timeline:disabled) .clip { opacity: .6; }
+@container (max-width: 560px) {
+  .toolbar { padding: 0 10px; gap: 5px; }
+  .total, .mute, .frames > span { display: none; }
+  .actions { gap: 0; }
+  .tracks { grid-template-columns: 66px minmax(0, 1fr); padding-right: 16px; }
+  .trackLabels > div { padding-left: 11px; gap: 5px; }
+  .trackContent { margin-left: 11px; }
+  .clipDuration { display: none; }
+}
+@container (max-width: 380px) {
+  .toolbar { padding-inline: 8px; grid-template-columns: minmax(0, 1fr) auto auto; }
+  .playback { gap: 1px; }
+  .icon { min-width: 25px; width: 25px; }
+  .playback > button:first-child { display: none; }
+  .annotate > span, .timeEntry > span { display: none; }
+  .annotate { padding: 0; min-width: 26px; width: 26px; justify-content: center; }
+  .timecode { font-size: 11px; }
+  .tracks { grid-template-columns: 36px minmax(0, 1fr); }
+  .trackLabels > div > span { display: none; }
 }

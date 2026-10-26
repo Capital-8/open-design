@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const fr: Dict = {
+  "motion.visualTrack": "Image",
+  "motion.commentsTrack": "Commentaires",
+  "motion.noComments": "Annotez l’aperçu pour ajouter vos retours ici",
+  "motion.openComment": "Ouvrir le commentaire {number} · {time}",
+  "motion.commentGroup": "{count} commentaires",
   "motion.title": "Lecture Motion",
   "motion.play": "Lire",
   "motion.pause": "Pause",

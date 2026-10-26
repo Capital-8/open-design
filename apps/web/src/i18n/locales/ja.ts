@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const ja: Dict = {
+  "motion.visualTrack": "映像",
+  "motion.commentsTrack": "コメント",
+  "motion.noComments": "プレビューに注釈を付けると、ここに表示されます",
+  "motion.openComment": "コメント {number} を開く · {time}",
+  "motion.commentGroup": "{count} 件のコメント",
   "motion.title": "モーション再生",
   "motion.play": "再生",
   "motion.pause": "一時停止",

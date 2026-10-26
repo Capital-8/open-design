@@ -1,6 +1,11 @@
 import type { Dict } from "../types";
 
 export const zhCN: Dict = {
+  "motion.visualTrack": "画面",
+  "motion.commentsTrack": "批注",
+  "motion.noComments": "在画面上标注，批注会显示在这里",
+  "motion.openComment": "打开批注 {number} · {time}",
+  "motion.commentGroup": "{count} 条批注",
   "motion.title": "动效播放",
   "motion.play": "播放",
   "motion.pause": "暂停",

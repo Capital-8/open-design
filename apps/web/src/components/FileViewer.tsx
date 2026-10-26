@@ -337,6 +337,7 @@ import { isMotionVideoComposition } from '@open-design/contracts/runtime/motion-
 import type { PreviewCommentMotionAnchor } from '@open-design/contracts';
 import { useMotionPreviewTransport } from '../runtime/motion-preview-transport';
 import { MotionPlaybackControls } from './MotionPlaybackControls';
+import { MOTION_DOCK_HEIGHT, motionCompositionSize, motionStageLayout } from './motion-timeline';
 import { captureMotionCommentFrame, motionCommentVisible, motionCommentDisplaySnapshot, type MotionCaptureContext } from '../comments/motion-capture';
 
 import type {
@@ -9521,6 +9522,8 @@ function HtmlViewer({
   const [boardImagePreviews, setBoardImagePreviews] = useState<{ file: File; url: string }[]>([]);
   const [boardPreviewIndex, setBoardPreviewIndex] = useState<number | null>(null);
   const [sendingBoardBatch, setSendingBoardBatch] = useState(false);
+  const [motionCommentOpening, setMotionCommentOpening] = useState(false);
+  const motionCommentOpeningRef = useRef(false);
   useEffect(() => {
     const next = boardImages.map((file) => ({ file, url: URL.createObjectURL(file) }));
     setBoardImagePreviews(next);
@@ -10311,17 +10314,12 @@ function HtmlViewer({
   ]);
   const previewZoomText = zoomPercentLabel(previewZoomPercent);
   const zoomLevelActive = (level: number) => Math.abs(previewZoomPercent - level) < 0.001;
-  const overlayPreviewScale = effectivePreviewScale(
+  const previewShellScale = effectivePreviewScale(
     previewViewport,
     previewScale,
     boardPreviewCanvasSize,
     boardPreviewScaleOptions,
   );
-  const overlayPreviewTransform: PreviewOverlayTransform = {
-    scale: overlayPreviewScale,
-    offsetX: 0,
-    offsetY: 0,
-  };
   const showDeckNavigation = effectiveDeck && (slideState === null || slideState.count > 0);
   const activeDeckSlideIndex =
     slideState?.active ??
@@ -11369,6 +11367,15 @@ function HtmlViewer({
   const srcDocTransport = committedSrcDocTransportRef.current;
   const srcDocTransportGeneration = srcDocTransport.generation;
   const isMotionPreview = Boolean(previewSource && isMotionVideoComposition(previewSource));
+  const motionSize = useMemo(() => isMotionPreview && previewSource ? motionCompositionSize(previewSource) : null, [isMotionPreview, previewSource]);
+  const motionStage = motionSize && deckThumbnailCanvasSize && !manualEditMode ? motionStageLayout(motionSize, {
+    width: deckThumbnailCanvasSize.width,
+    height: Math.max(1, deckThumbnailCanvasSize.height - MOTION_DOCK_HEIGHT),
+  }, zoomMode === 'auto' ? undefined : previewScale) : null;
+  const overlayPreviewScale = motionStage?.scale ?? previewShellScale;
+  const overlayPreviewTransform: PreviewOverlayTransform = {
+    scale: overlayPreviewScale, offsetX: motionStage?.left ?? 0, offsetY: motionStage?.top ?? 0,
+  };
   const motionFingerprint = previewSource ? previewSourceFingerprint(previewSource) : '';
   const motionAnnotationLocked = boardMode || drawOverlayOpen;
   const motionTransport = useMotionPreviewTransport({
@@ -17115,50 +17122,12 @@ function HtmlViewer({
       )
     : null;
   const unavailableCommentId = boardMode ? lostSelectedCommentId : null;
-  const commentSidePanel = workspaceActive && commentPanelOpen ? (
-    <CommentSideDock
-      comments={visibleSideComments}
-      motionSourceFingerprint={motionFingerprint}
-      projectId={projectId}
-      filePath={file.path || file.name}
-      deckSlideCount={effectiveDeck ? slideState?.count : undefined}
-      selectedIds={selectedSideCommentIds}
-      activeCommentId={activeSideCommentId}
-      unavailableCommentId={unavailableCommentId}
-      // The panel used to be pinned open whenever it was portaled (it docked
-      // into a full-height column, where a collapsed rail made no sense). It
-      // now always floats as a card, so its collapse control has to actually
-      // collapse — forcing `false` here made every click a no-op.
-      collapsed={commentSidePanelCollapsed}
-      hasUnread={hasUnreadSideComments}
-      onCollapsedChange={setCommentSidePanelCollapsed}
-      // Escape remains the explicit floating-card close path. The header
-      // disclosure always preserves this mounted dock as a reversible rail.
-      onDismiss={commentPortalHost ? dismissFloatingCommentPanel : undefined}
-      onToggleSelect={(commentId) => {
-        setSelectedSideCommentIds((current) => {
-          const next = new Set(current);
-          if (next.has(commentId)) next.delete(commentId);
-          else next.add(commentId);
-          return next;
-        });
-      }}
-      onSelectAll={() =>
-        setSelectedSideCommentIds(
-          new Set(
-            visibleSideComments
-              .filter((comment) => canSendCommentToAgent(comment))
-              .map((comment) => comment.id),
-          ),
-        )
-      }
-      onClearSelection={() => setSelectedSideCommentIds(new Set())}
-      onReorder={(orderedIds, draggedId) => {
-        const sortKey = computeReorderedSortKey(visibleSideComments, orderedIds, draggedId);
-        void onReorderPreviewComment?.(draggedId, sortKey);
-      }}
-      onReply={(comment) => {
-        requestComposerRetarget(() => { void (async () => {
+  const openPreviewComment = (comment: PreviewComment) => {
+    if (motionCommentOpeningRef.current) return;
+    requestComposerRetarget(() => { void (async () => {
+      motionCommentOpeningRef.current = true;
+      setMotionCommentOpening(true);
+      try {
         if (comment.motion && isMotionPreview) {
           try {
             await motionTransportRef.current.setLocked(false);
@@ -17204,20 +17173,67 @@ function HtmlViewer({
           snapshot = { ...verified, motion: comment.motion };
           setLiveCommentTargets(current => new Map(current).set(comment.elementId, snapshot));
         }
-          const needsLocation = !comment.motion && ownerCommentNeedsLocation(comment, collab.enabled);
-          if (needsLocation) setCommentLocationIntent(intent => intent + 1);
-          setActiveCommentTarget(needsLocation ? null : snapshot);
-          setHoveredCommentTarget(needsLocation ? null : snapshot);
-          setActivePreviewCommentId(comment.id);
-          setCommentDraft(comment.note);
-          setQueuedBoardNotes([]);
-          setActiveCommentExistingAttachments(comment.attachments ?? []);
-          setBoardMode(true);
-          setCommentCreateMode(true);
-          setCommentPanelOpen(true);
-          setCommentSidePanelCollapsed(false);
-        })(); });
+        const needsLocation = !comment.motion && ownerCommentNeedsLocation(comment, collab.enabled);
+        if (needsLocation) setCommentLocationIntent(intent => intent + 1);
+        setActiveCommentTarget(needsLocation ? null : snapshot);
+        setHoveredCommentTarget(needsLocation ? null : snapshot);
+        setActivePreviewCommentId(comment.id);
+        setCommentDraft(comment.note);
+        setQueuedBoardNotes([]);
+        setActiveCommentExistingAttachments(comment.attachments ?? []);
+        setBoardMode(true);
+        setCommentCreateMode(true);
+        setCommentPanelOpen(true);
+        setCommentSidePanelCollapsed(false);
+      } finally {
+        motionCommentOpeningRef.current = false;
+        setMotionCommentOpening(false);
+      }
+    })(); });
+  };
+  const commentSidePanel = workspaceActive && commentPanelOpen ? (
+    <CommentSideDock
+      comments={visibleSideComments}
+      motionSourceFingerprint={motionFingerprint}
+      projectId={projectId}
+      filePath={file.path || file.name}
+      deckSlideCount={effectiveDeck ? slideState?.count : undefined}
+      selectedIds={selectedSideCommentIds}
+      activeCommentId={activeSideCommentId}
+      unavailableCommentId={unavailableCommentId}
+      // The panel used to be pinned open whenever it was portaled (it docked
+      // into a full-height column, where a collapsed rail made no sense). It
+      // now always floats as a card, so its collapse control has to actually
+      // collapse — forcing `false` here made every click a no-op.
+      collapsed={commentSidePanelCollapsed}
+      hasUnread={hasUnreadSideComments}
+      onCollapsedChange={setCommentSidePanelCollapsed}
+      // Escape remains the explicit floating-card close path. The header
+      // disclosure always preserves this mounted dock as a reversible rail.
+      onDismiss={commentPortalHost ? dismissFloatingCommentPanel : undefined}
+      onToggleSelect={(commentId) => {
+        setSelectedSideCommentIds((current) => {
+          const next = new Set(current);
+          if (next.has(commentId)) next.delete(commentId);
+          else next.add(commentId);
+          return next;
+        });
       }}
+      onSelectAll={() =>
+        setSelectedSideCommentIds(
+          new Set(
+            visibleSideComments
+              .filter((comment) => canSendCommentToAgent(comment))
+              .map((comment) => comment.id),
+          ),
+        )
+      }
+      onClearSelection={() => setSelectedSideCommentIds(new Set())}
+      onReorder={(orderedIds, draggedId) => {
+        const sortKey = computeReorderedSortKey(visibleSideComments, orderedIds, draggedId);
+        void onReorderPreviewComment?.(draggedId, sortKey);
+      }}
+      onReply={openPreviewComment}
       onSendSelected={async () => {
         if (!onSendBoardCommentAttachments) return;
         const selected = visibleSideComments.filter(
@@ -18152,13 +18168,18 @@ function HtmlViewer({
               className={manualEditMode ? 'manual-edit-canvas' : 'comment-preview-canvas'}
               data-testid={manualEditMode ? undefined : 'comment-preview-canvas'}
               ref={manualEditMode ? undefined : setCommentPreviewCanvasRef}
+              style={isMotionPreview && !manualEditMode ? { '--motion-dock-height': `${MOTION_DOCK_HEIGHT}px` } as CSSProperties : undefined}
             >
-              <div className={manualEditMode ? undefined : 'comment-frame-clip'} style={manualEditMode ? { height: '100%' } : isMotionPreview ? { bottom: 96 } : undefined}>
+              <div className={manualEditMode ? undefined : 'comment-frame-clip'} style={manualEditMode ? { height: '100%' } : isMotionPreview ? { bottom: 'var(--motion-dock-height)', background: 'var(--bg-subtle)' } : undefined}>
                 <div
                   style={
                     manualEditMode
                       ? manualEditPreviewShellStyle(previewViewport, previewScale, manualEditViewportWidth)
-                      : previewScaleShellStyle(previewViewport, previewScale)
+                      : motionStage
+                        ? { position: 'absolute', width: motionStage.width, height: motionStage.height, left: motionStage.left, top: motionStage.top, transform: `scale(${motionStage.scale})`, transformOrigin: '0 0' }
+                      : isMotionPreview && previewViewport !== 'desktop'
+                        ? { width: 'calc(100% / var(--preview-scale, 1))', height: 'calc(100% / var(--preview-scale, 1))', transform: 'scale(var(--preview-scale, 1))', transformOrigin: '0 0' }
+                        : previewScaleShellStyle(previewViewport, previewScale)
                   }
                 >
                   <PreviewDrawOverlay
@@ -18408,10 +18429,21 @@ function HtmlViewer({
               </div>
               {isMotionPreview && !manualEditMode ? (
                 <MotionPlaybackControls
+                  key={`${projectId}:${file.name}:${motionFingerprint}`}
                   state={motionTransport.state}
                   connected={motionTransport.connected}
                   error={motionTransport.error}
                   locked={motionAnnotationLocked}
+                  fileName={file.name}
+                  comments={creationSortedSideComments.flatMap((comment, index) => comment.motion?.sourceFingerprint === motionFingerprint
+                    ? [{ id: comment.id, time: comment.motion.timeSeconds, number: comment.pinSeq ?? index + 1, note: comment.note }]
+                    : [])}
+                  activeCommentId={activePreviewCommentId}
+                  commentsDisabled={drawOverlayOpen || sendingBoardBatch || motionCommentOpening}
+                  onOpenComment={id => {
+                    const comment = creationSortedSideComments.find(item => item.id === id && item.motion?.sourceFingerprint === motionFingerprint);
+                    if (comment) openPreviewComment(comment);
+                  }}
                   onCommand={motionTransport.command}
                   onAnnotate={() => activateCommentCreateTool()}
                 />

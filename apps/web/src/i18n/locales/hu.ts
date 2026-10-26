@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const hu: Dict = {
+  "motion.visualTrack": "Kép",
+  "motion.commentsTrack": "Megjegyzések",
+  "motion.noComments": "A nézethez adott megjegyzések itt jelennek meg",
+  "motion.openComment": "{number}. megjegyzés megnyitása · {time}",
+  "motion.commentGroup": "{count} megjegyzés",
   "motion.title": "Motion lejátszás",
   "motion.play": "Lejátszás",
   "motion.pause": "Szünet",

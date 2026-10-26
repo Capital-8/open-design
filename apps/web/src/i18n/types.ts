@@ -54,6 +54,11 @@ export interface Dict {
   'motion.timeLabel': string;
   'motion.mute': string;
   'motion.unmute': string;
+  'motion.visualTrack': string;
+  'motion.commentsTrack': string;
+  'motion.noComments': string;
+  'motion.openComment': string;
+  'motion.commentGroup': string;
 
   'billing.wallet': string;
   /** The product name of the allowance pool; kept untranslated in every locale. */

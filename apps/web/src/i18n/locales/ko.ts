@@ -1,6 +1,11 @@
 import type { Dict } from '../types';
 
 export const ko: Dict = {
+  "motion.visualTrack": "화면",
+  "motion.commentsTrack": "댓글",
+  "motion.noComments": "미리보기에 주석을 추가하면 여기에 표시됩니다",
+  "motion.openComment": "댓글 {number} 열기 · {time}",
+  "motion.commentGroup": "댓글 {count}개",
   "motion.title": "모션 재생",
   "motion.play": "재생",
   "motion.pause": "일시 정지",
