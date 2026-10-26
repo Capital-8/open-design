@@ -384,7 +384,7 @@ Vela：`services/api/test/resources-auth.test.ts`、`comment-file-bound-share-ro
 3. 公开版本事务再次锁定有效 workspace、member／user 和资源 owner；拒绝 locked/deleting/deleted、失效成员和已删除／他人资源。不复制客户端 active-only 规则，不改变有效 paid-period 的现有规则。manifest 插入、可信容量校验、version 和尝试结果同事务提交；低报大小导致 413 时 manifest/version 回滚，暂存仍有尝试归属。
 4. bound alias 对相同 version 精确重放回执，不增加第二份 snapshot 或 alias version。被新版本取代、入口不同或已 redacted 的旧回执不能回滚当前链接。重放仍经过 finalizer，不能绕过停止状态或绑定权限。
 5. 现有 append-only 资源版本保留：已接受的不可变版本及其尝试回执属于可恢复历史，不按“上传垃圾”删除。尚未建版本的过期暂存由后台 collector 回收。现有目录身份、历史版本、公开快照和评论引用不纳入全局 GC。
-6. collector 每分钟运行，每轮最多 16 个尝试、每个最多 64 个 blob，持久化剩余清单；进程重启可以继续。删除失败保留可重试记录。只有未被 manifest 引用、没有有效上传租约、没有其他活跃尝试保护的 digest 才删除对象及索引。find-missing、签名和 commit 为共享 digest 加租约；租约覆盖签名 PUT 有效期。引用写入、租约和回收共用事务锁，避免边回收边建立引用。回收不在发布响应路径执行。
+6. collector 每分钟运行，每轮最多 16 个尝试、每个最多 64 个 blob，持久化剩余清单；进程重启可以继续。删除前先提交 `gc_digest` 删除意图并移除 blob 索引；删除或后续数据库提交失败时保留意图，重启继续。意图未完成时拒绝同 digest 的新上传租约、恢复登记和索引写入，避免恢复引用到已删除对象。其他 collector 完成后，旧 worker 必须重查意图再删除，不能误删后来重传的内容。只有未被 manifest 引用、没有有效上传租约、没有其他活跃尝试保护的 digest 才删除对象及索引。find-missing、签名和 commit 为共享 digest 加租约；租约覆盖签名 PUT 有效期。引用写入、租约和回收共用事务锁，避免边回收边建立引用。回收不在发布响应路径执行。
 7. `preparePublicationAuthority` 返回仅限同一事务、同一身份／资源使用的上下文，finalizer 复用已有 owner/metadata 和锁，不重新取得整套项目权威。不同 HTTP 阶段仍重新认证；这属于防上传期间撤权的必要检查。没有增加权限缓存，也没有实测延迟收益的承诺。
 8. 原停止、精确恢复旧版本、binding-only outbox 和本地提交失败的精确补偿继续沿用。恢复链接不重传新文件；失败不更改工作区 visibility。
 
@@ -400,7 +400,7 @@ Vela：`services/api/test/resources-auth.test.ts`、`comment-file-bound-share-ro
 | Vela `services/api/src/resources/persistence.ts`、`routes.ts`、`public-share-policy.ts` | 原子版本、可信容量、去重回执和上传入口 |
 | Vela `services/api/src/collab/publication-authority.ts`、`app.ts` | 同事务权威复用，保持原绑定规则 |
 | Vela `apps/cli/internal/{client/resource_hub,commands/resource,resource/drive}.go` | CLI 上传协议和恢复键贯穿 |
-| Vela `db/schema/resource_hub.hcl`、两份 `20261022*_public_upload*.sql` | Atlas 生成的尝试／租约与回收游标迁移 |
+| Vela `db/schema/resource_hub.hcl`、两份 `20261022*_public_upload*.sql` 和 `20261023034057_public_upload_delete_intent.sql` | Atlas 生成的尝试／租约与回收游标迁移 |
 
 ### 验证结果及边界
 
@@ -541,3 +541,11 @@ Safari 实机：本机 SafariDriver 报告 Safari 27.2。创建 Safari WebDriver
 提取后新增复验发现更新失败测试仍检查旧 Toast。现在改为断言统一的面板内错误行；同时保留既有更新保护：snapshot/persist 网络失败或手动撤销要求均显示“结果未确认”，已发布链接不提供盲目重试，不承诺远端仍为旧版本。明确失败仍可显式重试。
 
 上线依赖固定为：Vela 数据库迁移 → Vela API（统一校验、恢复及回收）与匹配的 CLI → Open Design 客户端。新客户端不得先于服务端发布。回滚优先退客户端，保留服务端新增表和回执数据；不得通过删表清理已接受上传。PR 创建和 CI 不代表合并、部署或生产验收。
+
+
+## 17. PR 复审修正（2026-10-23）
+
+- **上传回收一致性**：原实现在同一事务内删除多个远端对象，后续对象失败或提交失败会回滚数据库，却无法恢复远端对象。改为先持久化删除意图及索引移除，再删除对象并完成意图；manifest 写入在同一引用锁内复查 blob 存在。已接受版本、历史引用和停止／恢复规则不变。
+- **首次公开发布入口**：未登记项目的只读分享状态现在向有效成员返回空历史，不写 catalog；已登记项目仍只允许未删除项目的 Owner 读取，缺 catalog 但残留 binding 返回错误。点击发布时才登记，并由现有服务端写权限检查约束。避免状态读取失败隐藏首次发布按钮，也不引入工作区可见范围流程的依赖。
+- **复验范围**：真实 PostgreSQL 注入部分删除成功、远端删除成功后调用报错、数据库最终提交失败，验证重启恢复；交错执行两个 collector，验证不误删完成回收后重新上传的对象。首发状态测试核对无登记副作用、无权限拒绝和残留 binding 不误报为空。
+- 本轮问题与修复均由代码和隔离故障测试得出，不表示生产环境已发生数据丢失。服务端先上线的依赖保留；未合并、未部署。
