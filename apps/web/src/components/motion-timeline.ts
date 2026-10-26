@@ -1,3 +1,5 @@
+import type { MotionStructureItem, MotionStructureResponse } from '@open-design/contracts';
+
 export interface MotionTimelineComment {
   id: string;
   time: number;
@@ -6,6 +8,26 @@ export interface MotionTimelineComment {
 }
 
 export const MOTION_DOCK_HEIGHT = 204;
+
+/** Overlapping sounds stay individually reachable without growing the whole dock. */
+export function motionMediaLanes(items: readonly MotionStructureItem[]) {
+  const ends: number[] = [];
+  return [...items].sort((a, b) => (a.start ?? 0) - (b.start ?? 0)).map(item => {
+    const start = item.start ?? 0;
+    let lane = ends.findIndex(end => end <= start);
+    if (lane < 0) lane = ends.length;
+    ends[lane] = start + (item.duration ?? 0);
+    return { item, lane };
+  });
+}
+export function motionMediaTrackHeight(items: readonly MotionStructureItem[]) {
+  return items.length ? Math.min(2, Math.max(...motionMediaLanes(items).map(item => item.lane + 1))) * 26 + 4 : 0;
+}
+export function motionDockHeight(structure?: MotionStructureResponse | null) {
+  return MOTION_DOCK_HEIGHT + (structure?.scenes.length ? 32 : 0)
+    + (structure && (structure.scenes.length || structure.texts.length) ? 62 : 0)
+    + motionMediaTrackHeight(structure?.audio ?? []) + motionMediaTrackHeight(structure?.captions ?? []);
+}
 
 export function motionCompositionSize(source: string) {
   const root = new DOMParser().parseFromString(source, 'text/html').querySelector('[data-composition-id][data-duration][data-width][data-height]');

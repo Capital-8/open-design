@@ -1,5 +1,6 @@
 import { buildPreviewStorageBridge } from './preview-storage';
 import { injectMotionSourcePlayer, markMotionHostedPreview } from '@open-design/contracts/runtime/motion-source-player';
+import { MOTION_TARGET_VISIBILITY_HELPER } from '@open-design/contracts/runtime/motion-target-visibility';
 /**
  * Wrap an artifact's HTML for a sandboxed iframe. Corresponds to
  * buildSrcdoc in packages/runtime/src/index.ts — the reference version also
@@ -1984,6 +1985,7 @@ function injectSelectionBridge(
   }
 ${ANNOTATED_SELECTOR_HELPERS}
 ${COMMENT_IDENTITY_HELPERS}
+${MOTION_TARGET_VISIBILITY_HELPER}
   function domSelectorFor(el){
     if (!el || !el.tagName || el === document.documentElement || el === document.body) return null;
     var parts = [];
@@ -2668,8 +2670,9 @@ function meaningfulDomFallbackTarget(el) {
     }
     if (data.type === 'od:comment-active-target' && data.validateForSave && typeof data.requestId === 'string') {
       var saveNode = null;
-      try { saveNode = document.querySelector(String(data.selector)); } catch (_) {}
+      try { saveNode = data.strictMotion === true ? strictMotionTargetForSelector(data.selector) : document.querySelector(String(data.selector)); } catch (_) {}
       var saveTarget = saveNode && targetFrom(saveNode, true, null, null, true);
+      if (data.strictMotion === true && saveTarget && strictMotionTargetForSelector(saveTarget.selector) !== saveNode) saveTarget = null;
       window.parent.postMessage(saveTarget
         ? Object.assign({}, saveTarget, { type: 'od:comment-active-target-update', documentVersion: 'srcdoc:' + runtimeStateGeneration, requestId: data.requestId, requestedSelector: data.selector })
         : { type: 'od:comment-location-missing', documentVersion: 'srcdoc:' + runtimeStateGeneration, requestId: data.requestId }, '*');

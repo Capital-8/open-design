@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const hu: Dict = {
+  "motion.scenesTrack": "Jelenetek",
+  "motion.textTrack": "Szöveg",
+  "motion.audioTrack": "Hang",
+  "motion.captionsTrack": "Feliratok",
+  "motion.selectScene": "A(z) {number}. jelenet kiválasztása · {label} · {start}–{end}",
+  "motion.selectText": "Szöveg kiválasztása: {text}",
+  "motion.modifySelection": "Megjelölés és módosítás",
+  "motion.sceneContents": "A jelenet tartalma",
+  "motion.noSceneText": "Ebben a jelenetben nincs felismerhető szöveg",
+  "motion.structureLoading": "Jelenetek beolvasása…",
+  "motion.structureUnavailable": "A teljes animáció látható",
+  "motion.targetUnavailable": "Ez a célpont most nem látható. Válassz másik időpontot.",
+  "motion.selectionContext": "„{scene}” jelenet ({start}–{end} mp), célpont: „{target}”:\n",
+  "motion.sceneFallback": "{number}. jelenet",
+  "motion.selectedText": "A jelenet szövege",
   "motion.visualTrack": "Kép",
   "motion.commentsTrack": "Megjegyzések",
   "motion.noComments": "A nézethez adott megjegyzések itt jelennek meg",

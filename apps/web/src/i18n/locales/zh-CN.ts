@@ -1,6 +1,21 @@
 import type { Dict } from "../types";
 
 export const zhCN: Dict = {
+  "motion.scenesTrack": "场景",
+  "motion.textTrack": "文案",
+  "motion.audioTrack": "声音",
+  "motion.captionsTrack": "字幕",
+  "motion.selectScene": "选择场景 {number} · {label} · {start}–{end}",
+  "motion.selectText": "选择文案：{text}",
+  "motion.modifySelection": "标注并修改",
+  "motion.sceneContents": "场景内容",
+  "motion.noSceneText": "此场景没有可识别的文案",
+  "motion.structureLoading": "读取场景…",
+  "motion.structureUnavailable": "显示完整动效",
+  "motion.targetUnavailable": "此刻目标不可见，请调整时间后重试。",
+  "motion.selectionContext": "场景「{scene}」（{start}–{end}秒），目标「{target}」：\n",
+  "motion.sceneFallback": "场景 {number}",
+  "motion.selectedText": "场景内文案",
   "motion.visualTrack": "画面",
   "motion.commentsTrack": "批注",
   "motion.noComments": "在画面上标注，批注会显示在这里",

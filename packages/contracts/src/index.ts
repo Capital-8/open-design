@@ -42,6 +42,7 @@ export * from './api/handoff.js';
 export * from './api/library.js';
 export * from './api/live-artifacts.js';
 export * from './api/media.js';
+export * from './api/motionStructure.js';
 export * from './api/media-stock.js';
 export * from './api/mcp.js';
 export * from './api/memory.js';
@@ -77,6 +78,7 @@ export {
 } from './artifacts/artifact-markdown-context.js';
 export * from './runtime/deck-stage-fallback.js';
 export * from './runtime/html-injection-points.js';
+export * from './runtime/motion-target-visibility.js';
 export * from './runtime/deck-protocol.js';
 export * from './runtime/preview-observability.js';
 export * from './runtime/preview-runtime-state.js';

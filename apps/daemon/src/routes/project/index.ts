@@ -1,5 +1,6 @@
 import { withCommentFileDeletion, type CommentFileDeletion } from '../../collab/comment-file-deletion.js';
 import { injectMotionSourcePlayer, isMotionVideoComposition, markMotionHostedPreview, MOTION_PREVIEW_OUTPUT_HEADER } from '@open-design/contracts/runtime/motion-source-player';
+import { MOTION_TARGET_VISIBILITY_HELPER } from '@open-design/contracts/runtime/motion-target-visibility';
 import { createHash, randomUUID } from 'node:crypto';
 import { trackedCommentFilePaths } from '../../collab/local-comment-files.js';
 import { CommentPreparationError, prepareCommentIdentity } from '../../services/comment-preparation.js';
@@ -130,6 +131,7 @@ import {
 import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { registerProjectConversationRoutes } from './conversations.js';
+import { registerProjectMotionStructureRoutes } from './motion-structure.js';
 import { workspaceProjectGroupCountProperties } from './analytics.js';
 import type { ProjectCommentWorkspaceContextResolution } from './comments.js';
 import {
@@ -908,6 +910,7 @@ const URL_PREVIEW_SELECTION_BRIDGE = `<script data-od-url-selection-bridge>
   function active(){ return commentEnabled; }
 ${ANNOTATED_SELECTOR_HELPERS}
 ${COMMENT_IDENTITY_HELPERS}
+${MOTION_TARGET_VISIBILITY_HELPER}
   function domSelectorFor(el){
     if (!el || !el.tagName || el === document.documentElement || el === document.body) return null;
     var parts = [];
@@ -1364,8 +1367,9 @@ ${COMMENT_IDENTITY_HELPERS}
     }
     if (data.type === 'od:comment-active-target' && data.validateForSave && typeof data.requestId === 'string') {
       var saveNode = null;
-      try { saveNode = document.querySelector(String(data.selector)); } catch (_) {}
+      try { saveNode = data.strictMotion === true ? strictMotionTargetForSelector(data.selector) : document.querySelector(String(data.selector)); } catch (_) {}
       var saveTarget = saveNode && targetFrom(saveNode, true, null, null, true);
+      if (data.strictMotion === true && saveTarget && strictMotionTargetForSelector(saveTarget.selector) !== saveNode) saveTarget = null;
       window.parent.postMessage(saveTarget
         ? Object.assign({}, saveTarget, { type: 'od:comment-active-target-update', documentVersion: commentDocumentVersion, requestId: data.requestId, requestedSelector: data.selector })
         : { type: 'od:comment-location-missing', documentVersion: commentDocumentVersion, requestId: data.requestId }, '*');
@@ -5937,6 +5941,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     undefined,
     authorizeProjectRequest,
   );
+  registerProjectMotionStructureRoutes(app, { ...ctx, authorizeProjectRequest });
   const requestCanWriteWorkspaceProject = createWorkspaceProjectWriteAuthorityCheck(
     ctx.verifyWorkspaceRequestAuthority,
     ctx.isProjectUnmaterializedPlaceholder,

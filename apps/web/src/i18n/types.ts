@@ -59,6 +59,21 @@ export interface Dict {
   'motion.noComments': string;
   'motion.openComment': string;
   'motion.commentGroup': string;
+  'motion.scenesTrack': string;
+  'motion.textTrack': string;
+  'motion.audioTrack': string;
+  'motion.captionsTrack': string;
+  'motion.selectScene': string;
+  'motion.selectText': string;
+  'motion.modifySelection': string;
+  'motion.sceneContents': string;
+  'motion.noSceneText': string;
+  'motion.structureLoading': string;
+  'motion.structureUnavailable': string;
+  'motion.targetUnavailable': string;
+  'motion.selectionContext': string;
+  'motion.sceneFallback': string;
+  'motion.selectedText': string;
 
   'billing.wallet': string;
   /** The product name of the allowance pool; kept untranslated in every locale. */

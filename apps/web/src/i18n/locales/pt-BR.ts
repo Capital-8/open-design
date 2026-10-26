@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const ptBR: Dict = {
+  "motion.scenesTrack": "Cenas",
+  "motion.textTrack": "Texto",
+  "motion.audioTrack": "Áudio",
+  "motion.captionsTrack": "Legendas",
+  "motion.selectScene": "Selecione a cena {number} · {label} · {start}–{end}",
+  "motion.selectText": "Selecione o texto: {text}",
+  "motion.modifySelection": "Anotar e refinar",
+  "motion.sceneContents": "Conteúdo da cena",
+  "motion.noSceneText": "Nenhum texto reconhecido nesta cena",
+  "motion.structureLoading": "Lendo cenas…",
+  "motion.structureUnavailable": "Exibindo a animação completa",
+  "motion.targetUnavailable": "Este elemento não está visível agora. Escolha outro momento.",
+  "motion.selectionContext": "Cena “{scene}” ({start}–{end} s), alvo “{target}”:\n",
+  "motion.sceneFallback": "Cena {number}",
+  "motion.selectedText": "Texto da cena",
   "motion.visualTrack": "Imagem",
   "motion.commentsTrack": "Comentários",
   "motion.noComments": "Anote a prévia para adicionar comentários aqui",

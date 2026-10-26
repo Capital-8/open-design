@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const uk: Dict = {
+  "motion.scenesTrack": "Сцени",
+  "motion.textTrack": "Текст",
+  "motion.audioTrack": "Звук",
+  "motion.captionsTrack": "Субтитри",
+  "motion.selectScene": "Вибрати сцену {number} · {label} · {start}–{end}",
+  "motion.selectText": "Вибрати текст: {text}",
+  "motion.modifySelection": "Позначити й уточнити",
+  "motion.sceneContents": "Вміст сцени",
+  "motion.noSceneText": "У цій сцені немає розпізнаного тексту",
+  "motion.structureLoading": "Читання сцен…",
+  "motion.structureUnavailable": "Показано всю анімацію",
+  "motion.targetUnavailable": "Цей об’єкт зараз не відображається. Виберіть інший момент.",
+  "motion.selectionContext": "Сцена «{scene}» ({start}–{end} с), об’єкт «{target}»:\n",
+  "motion.sceneFallback": "Сцена {number}",
+  "motion.selectedText": "Текст сцени",
   "motion.visualTrack": "Відео",
   "motion.commentsTrack": "Коментарі",
   "motion.noComments": "Додайте примітку до перегляду, і вона з’явиться тут",

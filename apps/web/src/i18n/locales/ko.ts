@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const ko: Dict = {
+  "motion.scenesTrack": "장면",
+  "motion.textTrack": "텍스트",
+  "motion.audioTrack": "오디오",
+  "motion.captionsTrack": "자막",
+  "motion.selectScene": "장면 {number} 선택 · {label} · {start}–{end}",
+  "motion.selectText": "텍스트 선택: {text}",
+  "motion.modifySelection": "주석을 달고 수정",
+  "motion.sceneContents": "장면 콘텐츠",
+  "motion.noSceneText": "이 장면에서 인식된 텍스트가 없습니다",
+  "motion.structureLoading": "장면 읽는 중…",
+  "motion.structureUnavailable": "전체 애니메이션 표시 중",
+  "motion.targetUnavailable": "지금은 이 대상이 보이지 않습니다. 다른 시점을 선택하세요.",
+  "motion.selectionContext": "장면 “{scene}” ({start}–{end}초), 대상 “{target}”:\n",
+  "motion.sceneFallback": "장면 {number}",
+  "motion.selectedText": "장면 내 텍스트",
   "motion.visualTrack": "화면",
   "motion.commentsTrack": "댓글",
   "motion.noComments": "미리보기에 주석을 추가하면 여기에 표시됩니다",

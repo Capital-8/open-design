@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const tr: Dict = {
+  "motion.scenesTrack": "Sahneler",
+  "motion.textTrack": "Metin",
+  "motion.audioTrack": "Ses",
+  "motion.captionsTrack": "Altyazılar",
+  "motion.selectScene": "{number}. sahneyi seç · {label} · {start}–{end}",
+  "motion.selectText": "Metni seç: {text}",
+  "motion.modifySelection": "İşaretle ve düzenle",
+  "motion.sceneContents": "Sahne içeriği",
+  "motion.noSceneText": "Bu sahnede tanınan metin yok",
+  "motion.structureLoading": "Sahneler okunuyor…",
+  "motion.structureUnavailable": "Animasyonun tamamı gösteriliyor",
+  "motion.targetUnavailable": "Bu hedef şu anda görünmüyor. Başka bir an seçin.",
+  "motion.selectionContext": "“{scene}” sahnesi ({start}–{end} sn), hedef “{target}”:\n",
+  "motion.sceneFallback": "{number}. sahne",
+  "motion.selectedText": "Sahne metni",
   "motion.visualTrack": "Görüntü",
   "motion.commentsTrack": "Yorumlar",
   "motion.noComments": "Buraya geri bildirim eklemek için önizlemeye not ekleyin",

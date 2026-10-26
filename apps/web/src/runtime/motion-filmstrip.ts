@@ -1,4 +1,5 @@
 import { prependAfterDoctype } from '@open-design/contracts/runtime/html-injection-points';
+import { MOTION_PREVIEW_COMMAND } from '@open-design/contracts/runtime/motion-source-player';
 import { buildSrcdoc } from './srcdoc';
 
 export const MOTION_FILMSTRIP_LIMIT = 6;
@@ -18,5 +19,15 @@ window.__odMotionThumbnail = true;
 document.addEventListener('play', function (event) {
   if (event.target instanceof HTMLMediaElement) { event.target.muted = true; event.target.pause(); }
 }, true);
+(function () {
+  // A clock can be ready before every media resource finishes loading. Refit
+  // the authored viewport after the host seeks, without a resize observer loop.
+  var fit = function () { window.requestAnimationFrame(function () { window.dispatchEvent(new Event('resize')); }); };
+  window.addEventListener('load', fit, { once: true });
+  window.addEventListener('message', function (event) {
+    if (event.source === window.parent && event.data && event.data.type === '${MOTION_PREVIEW_COMMAND}'
+      && event.data.control && event.data.control.action === 'seek') fit();
+  });
+})();
 </script>`);
 }

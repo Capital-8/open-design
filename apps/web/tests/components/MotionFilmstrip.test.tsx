@@ -73,3 +73,24 @@ it('sets mute protection before author scripts while retaining guarded relative-
   expect(parsed.querySelector('base')?.href).toBe('http://localhost/api/projects/p/raw/');
   expect(parsed.querySelector('[data-od-motion-source-player]')).not.toBeNull();
 });
+
+it('re-runs authored fit handlers when a parked thumbnail receives its real viewport', () => {
+  const frame = document.createElement('iframe'); document.body.append(frame);
+  const child = frame.contentWindow as Window & typeof globalThis;
+  const viewport = child.document.createElement('div'); child.document.body.append(viewport);
+  Object.defineProperty(child, 'innerWidth', { configurable: true, value: 0 });
+  const fit = () => { viewport.style.transform = `scale(${child.innerWidth / 1920})`; };
+  fit(); child.addEventListener('resize', fit);
+  let paint!: () => void;
+  vi.spyOn(child, 'requestAnimationFrame').mockImplementation(callback => { paint = () => callback(0); return 1; });
+  const html = buildMotionFilmstripDocument('<html><body></body></html>', 'http://localhost/', 0);
+  const bootstrap = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-od-motion-filmstrip]')!.textContent!;
+  new Function('window', 'document', 'HTMLMediaElement', 'Event', bootstrap)(child, child.document, child.HTMLMediaElement, child.Event);
+  child.dispatchEvent(new child.MessageEvent('message', { source: child, data: { type: MOTION_PREVIEW_COMMAND, control: { action: 'seek', time: 1 } } }));
+  expect(paint).toBeUndefined();
+  child.dispatchEvent(new child.MessageEvent('message', { source: child.parent, data: { type: MOTION_PREVIEW_COMMAND, control: { action: 'seek', time: 1 } } }));
+  expect(viewport.style.transform).toBe('scale(0)');
+  Object.defineProperty(child, 'innerWidth', { configurable: true, value: 1920 });
+  paint();
+  expect(viewport.style.transform).toBe('scale(1)');
+});

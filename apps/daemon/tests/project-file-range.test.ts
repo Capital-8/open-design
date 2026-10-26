@@ -1503,6 +1503,60 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     } finally { dom.window.close(); }
   });
 
+  it('URL strict Motion validation rejects ambiguous, hidden and offscreen targets without changing ordinary saves', async () => {
+    const response = await fetch(`${rawUrl('body.html')}?odPreviewBridge=selection`);
+    expect(response.status).toBe(200);
+    const bridge = load(await response.text())('script[data-od-url-selection-bridge]').text();
+    const dom = new JSDOM('<body></body>', {
+      url: rawUrl('body.html'), runScripts: 'outside-only', pretendToBeVisual: true,
+    });
+    try {
+      dom.window.eval(`window.posted=[]; window.postMessage=data=>window.posted.push(data);
+        window.scrolled=false; HTMLElement.prototype.scrollIntoView=()=>{window.scrolled=true;};`);
+      dom.window.eval(bridge);
+      const result = dom.window.eval(`(() => {
+        var cases = [
+          {name:'duplicate',html:'<h2 id="title">One</h2><h2 id="title">Two</h2>',left:20,top:20,width:100,height:40,ordinary:true},
+          {name:'duplicate annotation',html:'<h2 id="title" data-od-id="shared">One</h2><h2 data-od-id="shared">Two</h2>',left:20,top:20,width:100,height:40,ordinary:true},
+          {name:'ancestor opacity',html:'<section style="opacity:0"><h2 id="title" style="opacity:1">Title</h2></section>',left:20,top:20,width:100,height:40,ordinary:true},
+          {name:'ancestor visibility',html:'<section style="visibility:hidden"><h2 id="title" style="visibility:visible">Title</h2></section>',left:20,top:20,width:100,height:40,ordinary:true},
+          {name:'ancestor display',html:'<section style="display:none"><h2 id="title">Title</h2></section>',left:20,top:20,width:100,height:40,ordinary:true},
+          {name:'offscreen',html:'<h2 id="title">Title</h2>',left:1100,top:20,width:100,height:40,ordinary:true},
+          {name:'touching edge',html:'<h2 id="title">Title</h2>',left:20,top:768,width:100,height:40,ordinary:true},
+          {name:'invalid geometry',html:'<h2 id="title">Title</h2>',left:NaN,top:20,width:100,height:40},
+          {name:'zero size',html:'<h2 id="title">Title</h2>',left:20,top:20,width:0,height:40},
+          {name:'visible intersection',html:'<section><h2 id="title">Title</h2></section>',left:-20,top:20,width:100,height:40}
+        ];
+        return cases.map(function(test) {
+          document.body.innerHTML=test.html;
+          document.querySelectorAll('h2').forEach(function(node) {
+            node.getBoundingClientRect=()=>new DOMRect(test.left,test.top,test.width,test.height);
+          });
+          var query={type:'od:comment-active-target',validateForSave:true,strictMotion:true,selector:'#title',elementId:'title',requestId:'strict-motion'};
+          window.dispatchEvent(new MessageEvent('message',{data:query}));
+          var strict=window.posted.at(-1);
+          var ordinary;
+          if(test.ordinary) {
+            delete query.strictMotion;
+            query.requestId='ordinary';
+            window.dispatchEvent(new MessageEvent('message',{data:query}));
+            ordinary=window.posted.at(-1).type;
+          }
+          return {name:test.name,type:strict.type,requestId:strict.requestId,documentVersion:strict.documentVersion,ordinary,scrolled:window.scrolled};
+        });
+      })()`);
+      const missing = 'od:comment-location-missing', found = 'od:comment-active-target-update';
+      expect(result).toEqual([
+        ...['duplicate', 'duplicate annotation', 'ancestor opacity', 'ancestor visibility', 'ancestor display', 'offscreen', 'touching edge']
+          .map(name => ({ name, type: missing, requestId: 'strict-motion', documentVersion: `url:${rawUrl('body.html')}`, ordinary: found, scrolled: false })),
+        ...['invalid geometry', 'zero size'].map(name => ({ name, type: missing, requestId: 'strict-motion',
+          documentVersion: `url:${rawUrl('body.html')}`, ordinary: undefined, scrolled: false })),
+        { name: 'visible intersection', type: found, requestId: 'strict-motion',
+          documentVersion: `url:${rawUrl('body.html')}`, ordinary: undefined, scrolled: false },
+      ]);
+    } finally { dom.window.close(); }
+  });
+
   it('URL served complete bridge strictly describes and locates persisted comment identities', async () => {
     const response = await fetch(`${rawUrl('body.html')}?odPreviewBridge=selection`);
     expect(response.status).toBe(200);

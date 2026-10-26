@@ -256,7 +256,7 @@ const PROJECT_STRING_FLAGS = new Set([
   'client-request-id',
   'agent', 'model', 'service-tier', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
-  'source', 'out',
+  'source', 'source-file', 'out',
 ]);
 const PROJECT_RESOURCE_STRING_FLAGS = new Set([
   ...PROJECT_STRING_FLAGS,
@@ -7555,6 +7555,8 @@ async function runProject(args) {
                     [--design-system <id>] [--json]
   od project list                         List projects.
   od project info <id>                    Print one project.
+  od project motion inspect <file> --project <id> [--source-file <path|->] [--json]
+                                          Read declared Motion scenes and content.
   od project restore-automatic-scenario <id> [--json]
                                           Restore the daemon-selected default
                                           scenario with a snapshot CAS guard.
@@ -7623,6 +7625,36 @@ Common options:
   const explicitWorkspaceHeaders = workspaceHeadersFromExplicitFlags(flags);
   const workspaceHeaders = explicitWorkspaceHeaders ?? {};
   switch (sub) {
+    case 'motion': {
+      const positionals = positionalArgs(rest, PROJECT_RESOURCE_STRING_FLAGS);
+      const projectId = typeof flags.project === 'string' ? flags.project.trim() : '';
+      const filePath = positionals[1];
+      if (positionals[0] !== 'inspect' || !filePath || !projectId || positionals.length !== 2) {
+        console.error('Usage: od project motion inspect <file> --project <id> [--source-file <path|->] [--json]');
+        process.exit(2);
+      }
+      let source: string | null;
+      try {
+        source = await readFileFlagOrStdin(flags['source-file']);
+      } catch {
+        console.error('Cannot read --source-file');
+        process.exit(2);
+      }
+      const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/motion/structure`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...workspaceHeaders },
+        body: JSON.stringify({ filePath, ...(source === null ? {} : { source }) }),
+      });
+      if (!resp.ok) return structuredHttpFailure(resp);
+      const data = await resp.json();
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      console.log(data.composition ? `${data.composition.id}\t${data.composition.duration}s` : 'No canonical Motion composition.');
+      for (const item of [...data.scenes, ...data.texts, ...data.audio, ...data.captions]) {
+        console.log(`${item.kind}\t${item.label}\t${item.start ?? '-'}\t${item.duration ?? '-'}\t${item.selector ?? item.src ?? '-'}`);
+      }
+      for (const warning of data.warnings) console.error(warning);
+      return;
+    }
     case 'list': {
       // After 0.18.0's workspace isolation, GET /api/projects is the NO-SCOPE
       // catalog: it only returns projects that were never adopted into a

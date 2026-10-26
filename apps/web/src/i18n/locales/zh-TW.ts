@@ -1,6 +1,21 @@
 import type { Dict } from "../types";
 
 export const zhTW: Dict = {
+  "motion.scenesTrack": "場景",
+  "motion.textTrack": "文案",
+  "motion.audioTrack": "聲音",
+  "motion.captionsTrack": "字幕",
+  "motion.selectScene": "選擇場景 {number} · {label} · {start}–{end}",
+  "motion.selectText": "選擇文案：{text}",
+  "motion.modifySelection": "標註並修改",
+  "motion.sceneContents": "場景內容",
+  "motion.noSceneText": "此場景沒有可辨識的文案",
+  "motion.structureLoading": "讀取場景…",
+  "motion.structureUnavailable": "顯示完整動效",
+  "motion.targetUnavailable": "此刻目標不可見，請調整時間後重試。",
+  "motion.selectionContext": "場景「{scene}」（{start}–{end}秒），目標「{target}」：\n",
+  "motion.sceneFallback": "場景 {number}",
+  "motion.selectedText": "場景內文案",
   "motion.visualTrack": "畫面",
   "motion.commentsTrack": "註解",
   "motion.noComments": "在畫面上標註，註解會顯示在這裡",

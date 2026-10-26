@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const ar: Dict = {
+  "motion.scenesTrack": "المشاهد",
+  "motion.textTrack": "النص",
+  "motion.audioTrack": "الصوت",
+  "motion.captionsTrack": "الترجمة النصية",
+  "motion.selectScene": "اختيار المشهد {number} · {label} · {start}–{end}",
+  "motion.selectText": "اختيار النص: {text}",
+  "motion.modifySelection": "إضافة ملاحظة وتحسين",
+  "motion.sceneContents": "محتوى المشهد",
+  "motion.noSceneText": "لم يتم التعرف على نص في هذا المشهد",
+  "motion.structureLoading": "جارٍ قراءة المشاهد…",
+  "motion.structureUnavailable": "عرض الحركة كاملة",
+  "motion.targetUnavailable": "هذا العنصر غير ظاهر الآن. اختر لحظة أخرى.",
+  "motion.selectionContext": "المشهد «{scene}» ({start}–{end} ثانية)، العنصر «{target}»:\n",
+  "motion.sceneFallback": "المشهد {number}",
+  "motion.selectedText": "نص المشهد",
   "motion.visualTrack": "الصورة",
   "motion.commentsTrack": "التعليقات",
   "motion.noComments": "أضف ملاحظة إلى المعاينة لتظهر هنا",

@@ -54,6 +54,10 @@ async function startProjectStubServer(deleteResponse: unknown = { ok: true }, sh
       requests.push(captured);
 
       res.setHeader('content-type', 'application/json');
+      if (captured.method === 'POST' && captured.url === '/api/projects/project-1/motion/structure') {
+        res.end(JSON.stringify({ sourceFingerprint: 'motion-fixture', composition: { id: 'eco', duration: 15, width: 1920, height: 1080 }, scenes: [], texts: [], audio: [], captions: [], warnings: [] }));
+        return;
+      }
       if (captured.method === 'DELETE' && captured.url === '/api/projects/project-1/files/nested%2Findex.html') {
         res.end(JSON.stringify(deleteResponse));
         return;
@@ -239,16 +243,18 @@ async function startProjectStubServer(deleteResponse: unknown = { ok: true }, sh
   };
 }
 
-async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
+async function runCli(args: string[], stdin?: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.NODE_OPTIONS;
   try {
-    const { stdout, stderr } = await execFileP(process.execPath, [TSX_CLI, CLI_SRC, ...args], {
+    const completion = execFileP(process.execPath, [TSX_CLI, CLI_SRC, ...args], {
       cwd: DAEMON_ROOT,
       env,
       timeout: 15_000,
       maxBuffer: 4 * 1024 * 1024,
     });
+    if (stdin !== undefined) completion.child.stdin!.end(stdin);
+    const { stdout, stderr } = await completion;
     return { stdout, stderr, code: 0 };
   } catch (err) {
     const failed = err as { stdout?: string; stderr?: string; code?: number | null };
@@ -261,6 +267,40 @@ async function runCli(args: string[]): Promise<{ stdout: string; stderr: string;
 }
 
 describe('od project CLI', () => {
+  it('reads Motion inspection source from stdin without changing the source bytes', async () => {
+    stub = await startProjectStubServer();
+    const source = '<h2>stdin source 中文</h2>\n\n';
+    const result = await runCli(['project', 'motion', 'inspect', 'index.html', '--project', 'project-1', '--source-file', '-', '--daemon-url', stub.baseUrl, '--json'], source);
+    expect(result.code).toBe(0);
+    const request = stub.requests.find((item) => item.url.endsWith('/motion/structure'))!;
+    expect(JSON.parse(request.body)).toEqual({ filePath: 'index.html', source });
+  });
+
+  it('inspects Motion through the shared HTTP endpoint with exact source-file content', async () => {
+    stub = await startProjectStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-motion-inspect-cli-'));
+    const sourceFile = join(tempRoot, 'source.html');
+    const source = '<h2>Exact unsaved source 中文</h2>\n';
+    writeFileSync(sourceFile, source);
+    const result = await runCli(['project', 'motion', 'inspect', 'nested/index.html', '--project', 'project-1', '--source-file', sourceFile, '--daemon-url', stub.baseUrl, '--workspace', 'ws-1', '--workspace-member', 'member-1', '--json']);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout).sourceFingerprint).toBe('motion-fixture');
+    const request = stub.requests.find((item) => item.url.endsWith('/motion/structure'))!;
+    expect(request.method).toBe('POST');
+    expect(JSON.parse(request.body)).toEqual({ filePath: 'nested/index.html', source });
+    expect(request.headers['x-od-workspace-id']).toBe('ws-1');
+    expect(request.headers['x-od-workspace-member-id']).toBe('member-1');
+  });
+
+  it('inspects disk source by default and reports malformed Motion commands', async () => {
+    stub = await startProjectStubServer();
+    const result = await runCli(['project', 'motion', 'inspect', 'index.html', '--project', 'project-1', '--daemon-url', stub.baseUrl, '--json']);
+    expect(result.code).toBe(0);
+    const request = stub.requests.find((item) => item.url.endsWith('/motion/structure'))!;
+    expect(JSON.parse(request.body)).toEqual({ filePath: 'index.html' });
+    expect((await runCli(['project', 'motion', 'inspect', 'index.html', '--daemon-url', stub.baseUrl])).code).toBe(2);
+  });
+
   describe.each([false, true])('share error classification, json=%s', json => {
     const args = ['project', 'share', 'publish', 'project-1', '--path', 'nested/index.html', ...(json ? ['--json'] : [])];
 

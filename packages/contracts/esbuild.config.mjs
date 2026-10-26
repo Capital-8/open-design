@@ -8,6 +8,8 @@ await build({
     "./src/critique.ts",
     "./src/prompts/comment-identity.ts",
     "./src/api/connectionTest.ts",
+    "./src/api/motionStructure.ts",
+    "./src/runtime/motion-target-visibility.ts",
     "./src/api/amrWallet.ts",
     "./src/api/orbit.ts",
     "./src/api/finalize.ts",

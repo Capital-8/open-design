@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const ja: Dict = {
+  "motion.scenesTrack": "シーン",
+  "motion.textTrack": "テキスト",
+  "motion.audioTrack": "音声",
+  "motion.captionsTrack": "字幕",
+  "motion.selectScene": "シーン {number} を選択 · {label} · {start}–{end}",
+  "motion.selectText": "テキストを選択：{text}",
+  "motion.modifySelection": "注釈を付けて修正",
+  "motion.sceneContents": "シーンの内容",
+  "motion.noSceneText": "このシーンには認識できるテキストがありません",
+  "motion.structureLoading": "シーンを読み取り中…",
+  "motion.structureUnavailable": "アニメーション全体を表示しています",
+  "motion.targetUnavailable": "この時点では対象が表示されていません。別の時点を選んでください。",
+  "motion.selectionContext": "シーン「{scene}」（{start}–{end}秒）、対象「{target}」：\n",
+  "motion.sceneFallback": "シーン {number}",
+  "motion.selectedText": "シーン内のテキスト",
   "motion.visualTrack": "映像",
   "motion.commentsTrack": "コメント",
   "motion.noComments": "プレビューに注釈を付けると、ここに表示されます",

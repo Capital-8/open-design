@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const id: Dict = {
+  "motion.scenesTrack": "Adegan",
+  "motion.textTrack": "Teks",
+  "motion.audioTrack": "Audio",
+  "motion.captionsTrack": "Takarir",
+  "motion.selectScene": "Pilih adegan {number} · {label} · {start}–{end}",
+  "motion.selectText": "Pilih teks: {text}",
+  "motion.modifySelection": "Beri anotasi & perbaiki",
+  "motion.sceneContents": "Konten adegan",
+  "motion.noSceneText": "Tidak ada teks yang dikenali dalam adegan ini",
+  "motion.structureLoading": "Membaca adegan…",
+  "motion.structureUnavailable": "Menampilkan seluruh animasi",
+  "motion.targetUnavailable": "Target ini tidak terlihat sekarang. Pilih waktu lain.",
+  "motion.selectionContext": "Adegan “{scene}” ({start}–{end} dtk), target “{target}”:\n",
+  "motion.sceneFallback": "Adegan {number}",
+  "motion.selectedText": "Teks dalam adegan",
   "motion.visualTrack": "Visual",
   "motion.commentsTrack": "Komentar",
   "motion.noComments": "Beri anotasi pada pratinjau untuk menambahkan masukan di sini",

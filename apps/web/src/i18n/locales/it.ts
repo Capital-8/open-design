@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const it: Dict = {
+  "motion.scenesTrack": "Scene",
+  "motion.textTrack": "Testo",
+  "motion.audioTrack": "Audio",
+  "motion.captionsTrack": "Sottotitoli",
+  "motion.selectScene": "Seleziona la scena {number} · {label} · {start}–{end}",
+  "motion.selectText": "Seleziona il testo: {text}",
+  "motion.modifySelection": "Annota e migliora",
+  "motion.sceneContents": "Contenuto della scena",
+  "motion.noSceneText": "Nessun testo riconosciuto in questa scena",
+  "motion.structureLoading": "Lettura delle scene…",
+  "motion.structureUnavailable": "Visualizzazione dell’animazione completa",
+  "motion.targetUnavailable": "Questo elemento non è visibile ora. Scegli un altro istante.",
+  "motion.selectionContext": "Scena «{scene}» ({start}–{end} s), elemento «{target}»:\n",
+  "motion.sceneFallback": "Scena {number}",
+  "motion.selectedText": "Testo della scena",
   "motion.visualTrack": "Immagine",
   "motion.commentsTrack": "Commenti",
   "motion.noComments": "Annota l’anteprima per aggiungere commenti qui",

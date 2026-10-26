@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const fa: Dict = {
+  "motion.scenesTrack": "صحنه‌ها",
+  "motion.textTrack": "متن",
+  "motion.audioTrack": "صدا",
+  "motion.captionsTrack": "زیرنویس",
+  "motion.selectScene": "انتخاب صحنه {number} · {label} · {start}–{end}",
+  "motion.selectText": "انتخاب متن: {text}",
+  "motion.modifySelection": "نشانه‌گذاری و اصلاح",
+  "motion.sceneContents": "محتوای صحنه",
+  "motion.noSceneText": "متنی در این صحنه شناسایی نشد",
+  "motion.structureLoading": "در حال خواندن صحنه‌ها…",
+  "motion.structureUnavailable": "نمایش کل پویانمایی",
+  "motion.targetUnavailable": "این هدف اکنون دیده نمی‌شود. زمان دیگری را انتخاب کنید.",
+  "motion.selectionContext": "صحنه «{scene}» ({start}–{end} ثانیه)، هدف «{target}»:\n",
+  "motion.sceneFallback": "صحنه {number}",
+  "motion.selectedText": "متن صحنه",
   "motion.visualTrack": "تصویر",
   "motion.commentsTrack": "نظرها",
   "motion.noComments": "برای افزودن بازخورد در اینجا، روی پیش‌نمایش یادداشت بگذارید",

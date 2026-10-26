@@ -3,6 +3,17 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { validateCommentSaveTarget } from '../../src/comments/validate-save-target';
 const target = { filePath: 'index.html', elementId: 'old', selector: 'button', label: 'button', text: 'old', htmlHint: '<button>', position: { x: 0, y: 0, width: 100, height: 40 } };
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+it.each([undefined, false, true])('only requests strict Motion validation when explicitly enabled: %s', async strictMotion => {
+  const frame = document.createElement('iframe'); document.body.append(frame);
+  const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+  const result = validateCommentSaveTarget(frame, target, undefined, { strictMotion });
+  const request = post.mock.calls[0]![0] as { requestId: string; strictMotion?: boolean };
+  if (strictMotion) expect(request.strictMotion).toBe(true);
+  else expect(request).not.toHaveProperty('strictMotion');
+  window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
+    data: { type: 'od:comment-location-missing', documentVersion: `url:${frame.src}`, requestId: request.requestId } }));
+  expect(await result).toBe('missing');
+});
 it('ignores other frames and accepts the requested selector even with a new element ID', async () => {
   const frame = document.createElement('iframe'); document.body.append(frame);
   const post = vi.spyOn(frame.contentWindow!, 'postMessage');

@@ -1,6 +1,21 @@
 import type { Dict } from '../types';
 
 export const th: Dict = {
+  "motion.scenesTrack": "ฉาก",
+  "motion.textTrack": "ข้อความ",
+  "motion.audioTrack": "เสียง",
+  "motion.captionsTrack": "คำบรรยาย",
+  "motion.selectScene": "เลือกฉาก {number} · {label} · {start}–{end}",
+  "motion.selectText": "เลือกข้อความ: {text}",
+  "motion.modifySelection": "ทำเครื่องหมายและปรับแก้",
+  "motion.sceneContents": "เนื้อหาในฉาก",
+  "motion.noSceneText": "ไม่พบข้อความที่รู้จำได้ในฉากนี้",
+  "motion.structureLoading": "กำลังอ่านฉาก…",
+  "motion.structureUnavailable": "กำลังแสดงภาพเคลื่อนไหวทั้งหมด",
+  "motion.targetUnavailable": "ขณะนี้ไม่เห็นเป้าหมาย โปรดเลือกช่วงเวลาอื่น",
+  "motion.selectionContext": "ฉาก “{scene}” ({start}–{end} วินาที) เป้าหมาย “{target}”:\n",
+  "motion.sceneFallback": "ฉาก {number}",
+  "motion.selectedText": "ข้อความในฉาก",
   "motion.visualTrack": "ภาพ",
   "motion.commentsTrack": "ความคิดเห็น",
   "motion.noComments": "ใส่คำอธิบายประกอบในตัวอย่างเพื่อเพิ่มความคิดเห็นที่นี่",

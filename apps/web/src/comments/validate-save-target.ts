@@ -7,6 +7,7 @@ export function validateCommentSaveTarget(
   frame: HTMLIFrameElement | null,
   target: PreviewCommentSnapshot,
   currentDocumentVersion: () => string = () => `url:${frame?.src ?? ''}`,
+  options: { strictMotion?: boolean } = {},
 ): Promise<PreviewCommentSnapshot | 'missing' | 'unavailable'> {
   if (!frame?.contentWindow) return Promise.resolve('unavailable');
   const recipient = frame.contentWindow;
@@ -40,6 +41,7 @@ export function validateCommentSaveTarget(
     const timeout = window.setTimeout(() => finish('unavailable'), 3000);
     window.addEventListener('message', receive);
     recipient.postMessage({ type: 'od:comment-active-target', elementId: target.elementId,
-      selector: target.selector, validateForSave: true, requestId }, '*');
+      selector: target.selector, validateForSave: true, requestId,
+      ...(options.strictMotion ? { strictMotion: true } : {}) }, '*');
   });
 }

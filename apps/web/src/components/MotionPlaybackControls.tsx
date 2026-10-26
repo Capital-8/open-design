@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Button, Input } from '@open-design/components';
 import { Film, MessageSquare, MessageSquarePlus, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import type { MotionPlayerControl, MotionPlayerState } from '@open-design/contracts/runtime/motion-source-player';
+import type { MotionStructureItem, MotionStructureResponse } from '@open-design/contracts';
 import { useI18n } from '../i18n';
 import { isMotionPlayerState, type MotionTransportError } from '../runtime/motion-preview-transport';
-import { groupMotionTimelineComments, motionTimelineTicks, type MotionTimelineComment } from './motion-timeline';
+import { groupMotionTimelineComments, motionMediaTrackHeight, motionTimelineTicks, type MotionTimelineComment } from './motion-timeline';
+import { MotionSceneContents, MotionStructureTracks } from './MotionStructureTracks';
 import styles from './MotionPlaybackControls.module.css';
 import { MotionFilmstrip, type MotionFilmstripSource } from './MotionFilmstrip';
 
@@ -27,6 +29,12 @@ export interface MotionPlaybackControlsProps {
   locked?: boolean;
   fileName?: string;
   filmstrip?: MotionFilmstripSource | null;
+  structure?: MotionStructureResponse | null;
+  selectedItemId?: string | null;
+  structureDisabled?: boolean;
+  structureModifyDisabled?: boolean;
+  onSelectItem?(item: MotionStructureItem): void;
+  onModifyItem?(item: MotionStructureItem): void;
   comments?: readonly MotionTimelineComment[];
   activeCommentId?: string | null;
   commentsDisabled?: boolean;
@@ -35,7 +43,7 @@ export interface MotionPlaybackControlsProps {
   onAnnotate(): void | Promise<unknown>;
 }
 
-export function MotionPlaybackControls({ state, connected, error, locked = false, fileName, filmstrip, comments = [], activeCommentId, commentsDisabled = false, onOpenComment, onCommand, onAnnotate }: MotionPlaybackControlsProps) {
+export function MotionPlaybackControls({ state, connected, error, locked = false, fileName, filmstrip, structure, selectedItemId, structureDisabled = false, structureModifyDisabled = false, onSelectItem, onModifyItem, comments = [], activeCommentId, commentsDisabled = false, onOpenComment, onCommand, onAnnotate }: MotionPlaybackControlsProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState('0.000');
   const [editing, setEditing] = useState(false);
@@ -105,6 +113,9 @@ export function MotionPlaybackControls({ state, connected, error, locked = false
   const groups = groupMotionTimelineComments(comments, duration, trackWidth);
   const markerDisabled = !connected || !state?.active || annotating || openingEditor || editing || commentsDisabled || !onOpenComment;
   const commentLabel = (comment: MotionTimelineComment) => `${t('motion.openComment', { number: comment.number, time: formatTime(comment.time) })}${comment.note ? ` · ${comment.note}` : ''}`;
+  const structureProps = structure ? { structure, time, duration, selectedId: selectedItemId,
+    disabled: !connected || !state?.active || annotating || openingEditor || editing || structureDisabled, modifyDisabled: structureModifyDisabled,
+    onSelect: (item: MotionStructureItem) => onSelectItem?.(item), onModify: (item: MotionStructureItem) => onModifyItem?.(item) } : null;
   return (
     <div className={styles.player} role="region" aria-label={t('motion.title')} tabIndex={0} onKeyDown={onKeyDown}>
       <div className={styles.toolbar}>
@@ -131,7 +142,11 @@ export function MotionPlaybackControls({ state, connected, error, locked = false
       </div>
       <div className={styles.trackHeader}><span>{t('motion.timeline')}</span>{fps && <span className={styles.frames}>{t('motion.frame', { frame, count: frameCount })} <span>· {fps} fps</span></span>}</div>
       <div className={styles.tracks}>
-        <div className={styles.trackLabels} aria-hidden="true"><div /><div><Film size={13} /><span>{t('motion.visualTrack')}</span></div><div><MessageSquare size={12} /><span>{t('motion.commentsTrack')}</span></div></div>
+        <div className={styles.trackLabels} aria-hidden="true"><div /><div><Film size={13} /><span>{t('motion.visualTrack')}</span></div>
+          {!!structure?.scenes.length && <div style={{ height: 32 }}><span>{t('motion.scenesTrack')}</span></div>}
+          {!!structure?.audio.length && <div style={{ height: motionMediaTrackHeight(structure.audio) }}><span>{t('motion.audioTrack')}</span></div>}
+          {!!structure?.captions.length && <div style={{ height: motionMediaTrackHeight(structure.captions) }}><span>{t('motion.captionsTrack')}</span></div>}
+          <div style={{ height: 27 }}><MessageSquare size={12} /><span>{t('motion.commentsTrack')}</span></div></div>
         <div className={styles.trackContent} ref={trackRef}>
           <div className={styles.seekArea}>
             <div className={styles.ruler} aria-hidden="true">{motionTimelineTicks(duration, trackWidth).map(tick => <span key={tick} className={styles.tick} style={{ left: `${tick / duration * 100}%` }}>{Number(tick.toFixed(3))}{t('motion.seconds')}</span>)}</div>
@@ -144,6 +159,7 @@ export function MotionPlaybackControls({ state, connected, error, locked = false
               step={.001} value={time} disabled={disabled || editing || openingEditor} aria-valuetext={`${time.toFixed(3)} / ${duration.toFixed(3)} ${t('motion.seconds')}`}
               onChange={event => run({ action: 'seek', time: Number(event.target.value) })} />
           </div>
+          {structureProps && <MotionStructureTracks {...structureProps} />}
           <div className={styles.commentTrack}>
             {groups.length === 0 && <span className={styles.emptyComments}>{t('motion.noComments')}</span>}
             {groups.map(group => <div key={group.comments[0]!.id} className={styles.markerAnchor} style={{ left: `clamp(10px, ${group.time / duration * 100}%, calc(100% - 10px))` }}>
@@ -154,6 +170,7 @@ export function MotionPlaybackControls({ state, connected, error, locked = false
           <div className={styles.playhead} style={{ left: `${duration ? time / duration * 100 : 0}%` }} aria-hidden="true"><span /></div>
         </div>
       </div>
+      {structureProps && <MotionSceneContents {...structureProps} />}
       <div className={styles.footer}>
         <div className={styles.status} role={status ? 'status' : undefined}>{status}</div>
         <span className={styles.footerTime}>{formatTime(time)} / {formatTime(duration)}</span>
