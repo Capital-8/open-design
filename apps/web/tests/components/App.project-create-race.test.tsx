@@ -757,6 +757,14 @@ const mockedDuplicateProject = vi.mocked(duplicateProject);
 const mockedGetProject = vi.mocked(getProject);
 const mockedInvalidatePluginCatalogCache = vi.mocked(invalidatePluginCatalogCache);
 const mockedListProjects = vi.mocked(listProjects);
+
+/** Workspace fixtures become visible only after their request identity resolves.
+ * An unscoped boot response belongs to signed-out/local state. */
+function mockWorkspaceProjectList(projects: Project[]): void {
+  mockedListProjects.mockImplementation(async (options) =>
+    options?.workspaceContext ? projects : []);
+}
+
 const mockedListTemplates = vi.mocked(listTemplates);
 const mockedPatchProject = vi.mocked(patchProject);
 const mockedFetchDaemonConfig = vi.mocked(fetchDaemonConfig);
@@ -3010,7 +3018,7 @@ describe('App project creation routing', () => {
       createdAt: 20,
       updatedAt: 20,
     };
-    mockedListProjects.mockResolvedValue([workspaceAProject]);
+    mockWorkspaceProjectList([workspaceAProject]);
     mockedGetProject.mockResolvedValue(workspaceAProject);
 
     render(<App />);
@@ -3605,7 +3613,7 @@ describe('App project creation routing', () => {
       name: 'Before rename',
       workspaceId: 'ws-1',
     };
-    mockedListProjects.mockResolvedValue([sharedProject]);
+    mockWorkspaceProjectList([sharedProject]);
     const olderMetadataRefresh = deferred<Response>();
     const newerMetadataRefresh = deferred<Response>();
     let catalogReads = 0;
@@ -4032,7 +4040,7 @@ describe('App project creation routing', () => {
       ...existingProject,
       workspaceId: context.workspaceId,
     };
-    mockedListProjects.mockResolvedValue([scopedProject]);
+    mockWorkspaceProjectList([scopedProject]);
     stubWorkspaceContext(context.workspaceId, context.workspaceMemberId);
 
     render(<App />);
@@ -4122,7 +4130,7 @@ describe('App project creation routing', () => {
 
   it('passes the active project persisted Workspace to the tab switch guard', async () => {
     stubWorkspaceContext('ws-1', 'wm-1');
-    mockedListProjects.mockResolvedValue([{
+    mockWorkspaceProjectList([{
       ...existingProject,
       workspaceId: 'ws-1',
     }]);
@@ -4139,7 +4147,7 @@ describe('App project creation routing', () => {
 
   it('owns one AMR auth continuation above ProjectView and clears it after consume, cancel, or route exit', async () => {
     stubWorkspaceContext('ws-1', 'wm-1');
-    mockedListProjects.mockResolvedValue([{
+    mockWorkspaceProjectList([{
       ...existingProject,
       workspaceId: 'ws-1',
     }]);
@@ -4219,7 +4227,7 @@ describe('App project creation routing', () => {
   });
 
   it('preserves an exact retry through Settings and returns to its project after sign-in', async () => {
-    mockedListProjects.mockResolvedValue([{
+    mockWorkspaceProjectList([{
       ...existingProject,
       workspaceId: 'ws-1',
     }]);
@@ -4292,7 +4300,7 @@ describe('App project creation routing', () => {
     expect(workspaceIdentityCacheKey(scopeContext)).not.toBe(
       workspaceIdentityCacheKey(accountContext),
     );
-    mockedListProjects.mockResolvedValue([{ ...existingProject, workspaceId: 'ws-1' }]);
+    mockWorkspaceProjectList([{ ...existingProject, workspaceId: 'ws-1' }]);
     const loginStatus: VelaLoginStatus = {
       loggedIn: true,
       profile: 'test',

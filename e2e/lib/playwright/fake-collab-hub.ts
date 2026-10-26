@@ -106,6 +106,8 @@ export type FakeCollabHub = {
   setEventsAvailable: (memberId: string, available: boolean) => void;
   eventSubscriberCount: (memberId: string) => number;
   emitEvent: (event: HubEvent) => void;
+  /** Model a successful mutation whose directory read has not caught up yet. */
+  setTeamProjectCatalogVisible: (projectId: string, visible: boolean) => void;
   removeMember: (memberId: string) => void;
   setMemberRole: (memberId: string, role: ClientIdentity['role']) => void;
   addWorkspace: (memberId: string, workspaceId: string, workspaceName: string) => void;
@@ -135,6 +137,7 @@ export async function startFakeCollabHub(options: {
   const subscribers = new Set<Subscriber>();
   const blockedEventMembers = new Set<string>();
   const removedMembers = new Set<string>();
+  const hiddenTeamProjectIds = new Set<string>();
   const memberRemovals: Array<{
     workspaceId: string;
     removedMemberId: string;
@@ -347,6 +350,7 @@ export async function startFakeCollabHub(options: {
           workspaceBalances,
           memberRoles,
           removedMembers,
+          hiddenTeamProjectIds,
           emit,
         });
         return json(response, 200, { stdout });
@@ -414,6 +418,10 @@ export async function startFakeCollabHub(options: {
     eventSubscriberCount: (memberId) =>
       [...subscribers].filter((subscriber) => subscriber.memberId === memberId).length,
     emitEvent: emit,
+    setTeamProjectCatalogVisible: (projectId, visible) => {
+      if (visible) hiddenTeamProjectIds.delete(projectId);
+      else hiddenTeamProjectIds.add(projectId);
+    },
     removeMember: (memberId) => {
       if (removedMembers.has(memberId)) return;
       const owner = options.clients.find((client) =>
@@ -551,6 +559,7 @@ async function handleCommand(input: {
   workspaceBalances: Map<string, { balanceUsd: string; revision: number }>;
   memberRoles: Map<string, ClientIdentity['role']>;
   removedMembers: Set<string>;
+  hiddenTeamProjectIds: Set<string>;
   emit: (event: HubEvent) => void;
 }): Promise<string> {
   const { args } = input;
@@ -617,6 +626,7 @@ async function handleTeamProjectsCommand(input: {
   identity: ClientIdentity;
   workspaceId: string;
   projects: Map<string, TeamProjectRecord>;
+  hiddenTeamProjectIds: Set<string>;
   resources: Map<string, ResourceRecord>;
   emit: (event: HubEvent) => void;
 }): Promise<string> {
@@ -627,7 +637,8 @@ async function handleTeamProjectsCommand(input: {
     return jsonLine({
       workspaceId: input.workspaceId,
       projects: [...input.projects.values()].filter(
-        (project) => project.workspaceId === input.workspaceId && project.visibility === 'team',
+        (project) => project.workspaceId === input.workspaceId && project.visibility === 'team'
+          && !input.hiddenTeamProjectIds.has(project.projectId),
       ).map((project) => recordForIdentity(project, input.identity)),
     });
   }

@@ -390,8 +390,12 @@ export function shouldRouteToFirstRunOnboarding(
 }
 
 function workspaceProjectListViewForRoute(route: Route): WorkspaceProjectListView {
-  if (route.kind === 'home' && route.view === 'all-projects') return 'all';
-  if (route.kind === 'home' && route.view === 'drafts') return 'drafts';
+  // Both entry URLs host the same Recent / Personal / Team collection tabs.
+  // Read the complete scoped catalog so a confirmed share stays on screen
+  // while the independent shared-project directory catches up.
+  if (route.kind === 'home' && (route.view === 'all-projects' || route.view === 'drafts')) {
+    return 'all';
+  }
   if (route.kind === 'project') return 'all';
   return 'recent';
 }
@@ -1634,11 +1638,8 @@ function AppInner() {
   // mutation still carries the current request's independently verified
   // Workspace context. An exact account/workspace/member+view hit is safe to
   // render while it revalidates; any other identity is cleared before paint.
-  const projectListScopeRef = useRef(currentProjectListScope);
   const projectDisplayKeyRef = useRef(currentProjectDisplayKey);
   if (projectDisplayKeyRef.current !== currentProjectDisplayKey) {
-    const leftAResolvedWorkspace =
-      projectListScopeRef.current !== UNRESOLVED_PROJECT_LIST_SCOPE;
     const snapshot = readProjectDisplaySnapshot(currentProjectDisplayKey);
     // A create/import is immediately projected into `projects`, but opening
     // that project changes the list projection from Home's `recent` to `all`.
@@ -1657,14 +1658,16 @@ function AppInner() {
               ? project.workspaceId == null
               : project.workspaceId === workspaceContext.workspaceId
           ));
-    projectListScopeRef.current = currentProjectListScope;
     projectDisplayKeyRef.current = currentProjectDisplayKey;
     if (snapshot) {
       const snapshotIds = new Set(snapshot.projects.map((project) => project.id));
       const preserved = pendingProjects.filter((project) => !snapshotIds.has(project.id));
       setProjects(preserved.length > 0 ? [...preserved, ...snapshot.projects] : snapshot.projects);
       setProjectsLoading(false);
-    } else if (leftAResolvedWorkspace) {
+    } else {
+      // Entering a workspace or changing account generation retires the local
+      // display too. Only an exact snapshot or this scope's pending creates
+      // may remain while its authoritative list is in flight.
       setProjects(pendingProjects);
       setProjectsLoading(true);
     }
