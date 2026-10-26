@@ -1,3 +1,4 @@
+import { openExternalUrl } from "../providers/registry";
 // InlineModelSwitcher — top-bar chip exposing CLI/BYOK + model picker.
 //
 // Lives in the entry view's sticky top-bar so users can swap between a
@@ -866,17 +867,14 @@ export function InlineModelSwitcher({
       resolvedDeviceId: getResolvedDeviceId(),
       installationId: config.installationId,
     });
-    window.open(
+    void openExternalUrl(
       attributedAmrUrl(
         amrPlansUrlForProfile(
           amrStatus?.profile ?? config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE,
         ),
         attribution,
         deviceId,
-      ),
-      '_blank',
-      'noopener,noreferrer',
-    );
+      ));
   }, [
     amrStatus?.profile,
     analytics.track,
@@ -1654,7 +1652,7 @@ export function InlineModelSwitcher({
                             resolvedDeviceId: getResolvedDeviceId(),
                             installationId: config.installationId,
                           });
-                          window.open(
+                          void openExternalUrl(
                             attributedAmrUrl(
                               amrPlansUrlForProfile(
                                 amrStatus?.profile ??
@@ -1662,10 +1660,7 @@ export function InlineModelSwitcher({
                               ),
                               attribution,
                               deviceId,
-                            ),
-                            '_blank',
-                            'noopener,noreferrer',
-                          );
+                            ));
                         }}
                       >
                         {t('settings.amrUpgrade')}

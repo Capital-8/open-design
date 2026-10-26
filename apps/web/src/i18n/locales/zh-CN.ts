@@ -219,6 +219,7 @@ export const zhCN: Dict = {
   "chat.runError.clientEnvironmentCause.network": "网络连不上",
   "chat.runError.clientEnvironmentCause.hostPolicy": "被系统策略拦截",
   "chat.runError.clientEnvironmentCause.localStorage": "本机存储读写失败",
+  'account.openFailed': '无法打开账号页面，请重试。',
   "common.cancel": "取消",
   "chat.selectFromLibrary": "从资源库导入",
   "chat.importFigma": "从 Figma 导入",

@@ -64,6 +64,10 @@ async function postJson<T = unknown>(
   body?: unknown,
   headers: Record<string, string> = {},
 ): Promise<{ status: number; body: T }> {
+  if (url.endsWith('/api/integrations/vela/logout') && body === undefined) {
+    const current = await getJson<{user: {id: string} | null; credentialRevision: string}>(url.replace(/logout$/, 'status'));
+    body = {expectedAppUserId: current.body.user?.id ?? '', expectedCredentialRevision: current.body.credentialRevision};
+  }
   const init: RequestInit = {
     method: 'POST',
     headers: body === undefined ? headers : { 'Content-Type': 'application/json', ...headers },
@@ -3281,6 +3285,15 @@ describe('Production touchpoint runtime proxy', () => {
 });
 
 describe('POST /api/integrations/vela/logout', () => {
+  it('requires the observed account and credential revision before sign-out', async () => {
+    seedLogin('local');
+    const missing = await postJson(`${baseUrl}/api/integrations/vela/logout`, {});
+    expect(missing.status).toBe(400);
+    const wrong = await postJson(`${baseUrl}/api/integrations/vela/logout`, {expectedAppUserId: 'other-user', expectedCredentialRevision: 'old-revision'});
+    expect(wrong.status).toBe(409);
+    expect(JSON.parse(readFileSync(configPath(), 'utf8')).profiles.local.runtimeKey).toBeTruthy();
+  });
+
   it('drops back to preset AMR models after file-backed logout invalidates the cached remote catalog', async () => {
     seedLogin('local');
 
@@ -3428,6 +3441,7 @@ describe('POST /api/integrations/vela/logout', () => {
           VELA_OPENCODE_BIN: '/tmp/opencode',
           OPEN_DESIGN_AMR_PROFILE: 'local',
           VELA_RUNTIME_KEY: 'rt-env-secret',
+          VELA_CONTROL_KEY: 'ck-env-secret',
           VELA_LINK_URL: 'https://openrouter.example/v1',
         },
       },
@@ -3452,6 +3466,7 @@ describe('POST /api/integrations/vela/logout', () => {
 
       const nextConfig = await readAppConfig(dataDir);
       expect(nextConfig.agentCliEnv?.amr?.VELA_RUNTIME_KEY).toBeUndefined();
+      expect(nextConfig.agentCliEnv?.amr?.VELA_CONTROL_KEY).toBeUndefined();
       expect(nextConfig.agentCliEnv?.amr?.VELA_LINK_URL).toBeUndefined();
 
       const nextAmrConfig = JSON.parse(readFileSync(configPath(), 'utf8'));

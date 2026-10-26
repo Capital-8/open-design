@@ -11,6 +11,8 @@ import { useT } from '../i18n';
 interface Props {
   /** Disables both actions while the sign-out request is in flight. */
   busy?: boolean;
+  email?: string | null;
+  confirmDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -23,7 +25,7 @@ interface Props {
  * alertdialog shape (Dialog + title/description/footer primitives) instead of
  * inventing a new popup.
  */
-export function SignOutConfirmDialog({ busy = false, onCancel, onConfirm }: Props) {
+export function SignOutConfirmDialog({ busy = false, email, confirmDisabled = false, onCancel, onConfirm }: Props) {
   const t = useT();
   const titleId = useId();
   const dialog = (
@@ -37,6 +39,7 @@ export function SignOutConfirmDialog({ busy = false, onCancel, onConfirm }: Prop
     >
       <DialogTitle id={titleId}>{t('signOut.confirmTitle')}</DialogTitle>
       <DialogDescription>{t('signOut.confirmMessage')}</DialogDescription>
+      {email ? <p>{email}</p> : null}
       <DialogFooter className="row">
         <button
           type="button"
@@ -50,7 +53,7 @@ export function SignOutConfirmDialog({ busy = false, onCancel, onConfirm }: Prop
           type="button"
           className="primary"
           onClick={onConfirm}
-          disabled={busy}
+          disabled={busy || confirmDisabled}
           data-testid="sign-out-confirm-accept"
         >
           {t('signOut.confirmAction')}

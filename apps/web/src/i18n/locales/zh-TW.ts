@@ -219,6 +219,7 @@ export const zhTW: Dict = {
   "chat.runError.clientEnvironmentCause.network": "網路連不上",
   "chat.runError.clientEnvironmentCause.hostPolicy": "被系統原則攔截",
   "chat.runError.clientEnvironmentCause.localStorage": "本機儲存讀寫失敗",
+  'account.openFailed': '無法開啟帳號頁面，請重試。',
   "common.cancel": "取消",
   "chat.selectFromLibrary": "從資源庫匯入",
   "chat.importFigma": "從 Figma 匯入",

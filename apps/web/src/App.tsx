@@ -981,6 +981,8 @@ export function App() {
 
 function AppInner() {
   const { t, locale } = useI18n();
+  const [failedAmrWebUrl, setFailedAmrWebUrl] = useState<string | null>(null);
+  useEffect(() => { const listener = (event: Event) => setFailedAmrWebUrl((event as CustomEvent<string>).detail); window.addEventListener('amr-web-intent-error', listener); return () => window.removeEventListener('amr-web-intent-error', listener); }, []);
   const iframeKeepAlivePool = useIframeKeepAlivePool();
   const clientType = useMemo(() => detectClientType(), []);
   const hostPlatform = useMemo(() => getOpenDesignHost()?.client.platform, []);
@@ -6170,6 +6172,7 @@ function AppInner() {
         })}
       />
       <DeletedShareNotices state={deletedShares} />
+      {failedAmrWebUrl ? <Toast message={t('account.openFailed')} role="alert" tone="error" actionLabel={t('invite.error.retry')} onAction={() => {const url=failedAmrWebUrl;setFailedAmrWebUrl(null);void openExternalUrl(url);}} onDismiss={()=>setFailedAmrWebUrl(null)} /> : null}
       {workingDirError ? (
         <Toast
           message={workingDirError}

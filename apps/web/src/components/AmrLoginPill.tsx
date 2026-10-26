@@ -728,16 +728,20 @@ export function AmrLoginPill({
   // recvqgMWpJZqhL: the pill's sign-out button only ARMS the confirmation
   // dialog; `performLogout` (the real daemon logout) runs on explicit confirm.
   const [confirmingLogout, setConfirmingLogout] = useState(false);
+  const [logoutSnapshot,setLogoutSnapshot] = useState<VelaLoginStatus | null>(null);
 
   const handleLogout = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    setLogoutSnapshot(status);
     setConfirmingLogout(true);
-  }, []);
+  }, [status]);
 
   const performLogout = useCallback(async () => {
     setErrorMessage(null);
     setPending('logout');
-    const result = await velaLogout();
+    if (!logoutSnapshot?.credentialRevision) { await refresh(); setPending(null); setErrorMessage(t('settings.amrLoginErrorCompact')); return; }
+    const result = await velaLogout({expectedAppUserId:logoutSnapshot.user?.id ?? '',expectedCredentialRevision:logoutSnapshot.credentialRevision});
+    if (result.status === 409) { const current=await fetchVelaLoginStatus();setLogoutSnapshot(current);await refresh();setPending(null);return; }
     loginStartedAtRef.current = null;
     loginPendingRef.current = false;
     setPending(null);
@@ -750,7 +754,7 @@ export function AmrLoginPill({
     await refresh();
     notifyAmrLoginStatusChanged('status-changed');
     await onSignedOut?.();
-  }, [onSignedOut, refresh, t]);
+  }, [onSignedOut, refresh, t, logoutSnapshot]);
 
   // Keep the management link on the same status snapshot that supplies the
   // visible profile badge and account data. The module-level runtime origin is
@@ -841,6 +845,7 @@ export function AmrLoginPill({
       />
       {confirmingLogout ? (
         <SignOutConfirmDialog
+          email={logoutSnapshot?.user?.email}
           busy={logoutInFlight}
           onCancel={() => setConfirmingLogout(false)}
           onConfirm={() => void performLogout()}
