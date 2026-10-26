@@ -1514,7 +1514,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
         acceptCredentials: () => {
           const mergedEnv = mergeVelaEnv(env, configuredEnv);
           const target = readVelaLogoutTarget(mergedEnv);
-          if (!target?.controlKeyId || !readVelaControlApiContext(env, configuredEnv) || mergedEnv.VELA_RUNTIME_KEY?.trim() || mergedEnv.VELA_CONTROL_KEY?.trim()) throw new Error('saved_credentials_not_active');
+          if (!target?.controlKeyId || !readVelaControlApiContext(env, configuredEnv, true) || mergedEnv.VELA_RUNTIME_KEY?.trim() || mergedEnv.VELA_CONTROL_KEY?.trim()) throw new Error('saved_credentials_not_active');
           clearVelaAuthorizationState();
           clearAllVelaLiveAccounts();
           clearVelaWalletSnapshotCache();

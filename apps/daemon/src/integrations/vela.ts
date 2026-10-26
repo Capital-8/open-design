@@ -397,6 +397,7 @@ export interface VelaApiContext {
 }
 
 interface VelaProfileShape {
+  pendingLogin?: unknown;
   controlKeyId?: string;
   controlKey?: string;
   runtimeKey?: string;
@@ -530,7 +531,7 @@ function readRawVelaLoginStatus(
   const file = readConfigFile();
   const stored = file?.profiles?.[profile];
   const storedRuntimeKey = stored?.runtimeKey?.trim() ?? '';
-  if (!storedRuntimeKey) {
+  if (!storedRuntimeKey || stored?.pendingLogin) {
     return {
       loggedIn: false,
       loginInFlight,
@@ -747,8 +748,9 @@ function velaControlKeyDigest(controlKey: string): string {
 export function readVelaControlApiContext(
   env: NodeJS.ProcessEnv = process.env,
   configuredEnv: Record<string, string> = {},
+  allowPendingLogin = false,
 ): VelaControlApiContext | null {
-  const context = readRawVelaControlApiContext(env, configuredEnv);
+  const context = readRawVelaControlApiContext(env, configuredEnv, allowPendingLogin);
   if (
     context
     && expiredVelaControlKeys.has(velaControlKeyDigest(context.controlKey))
@@ -759,6 +761,7 @@ export function readVelaControlApiContext(
 function readRawVelaControlApiContext(
   env: NodeJS.ProcessEnv = process.env,
   configuredEnv: Record<string, string> = {},
+  allowPendingLogin = false,
 ): VelaControlApiContext | null {
   const mergedEnv = mergeVelaEnv(env, configuredEnv);
   const profile = resolveAmrProfile(mergedEnv);
@@ -778,7 +781,7 @@ function readRawVelaControlApiContext(
   const apiContext = readVelaApiContext(env, configuredEnv, snapshot);
   const stored = snapshot.stored;
   const controlKey = stored?.controlKey?.trim() ?? '';
-  if (!controlKey) return null;
+  if (!controlKey || (stored?.pendingLogin && !allowPendingLogin)) return null;
   return {
     ...apiContext,
     controlKey,
@@ -825,6 +828,7 @@ export function forgetVelaLogin(env: NodeJS.ProcessEnv = process.env): void {
   delete keptProfileConfig.controlKeyId;
   delete keptProfileConfig.runtimeKey;
   delete keptProfileConfig.user;
+  delete keptProfileConfig.pendingLogin;
   const nextProfiles = { ...parsed.profiles };
   nextProfiles[profile] = keptProfileConfig;
   writeFileSync(

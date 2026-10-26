@@ -108,6 +108,14 @@ describe('resolveAmrProfile', () => {
 });
 
 describe('readVelaLoginStatus', () => {
+  it('does not publish credentials with an unfinished receipt after a daemon restart', () => {
+    writeConfig({ profiles: { local: { controlKey: 'pending-control', runtimeKey: 'pending-runtime', pendingLogin: { deviceId: 'attempt' }, user: {id: 'u', email: 'u@example.test'} } } });
+    const env = { OPEN_DESIGN_AMR_PROFILE: 'local' };
+    expect(readVelaLoginStatus(env)).toMatchObject({loggedIn: false, sessionState: 'signed_out'});
+    expect(readVelaControlApiContext(env)).toBeNull();
+    expect(readVelaControlApiContext(env, {}, true)?.controlKey).toBe('pending-control');
+  });
+
   afterEach(() => clearVelaAuthorizationState());
 
   it('marks only the rejected credential revision as requiring sign-in again', () => {
