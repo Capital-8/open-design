@@ -5,6 +5,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BrowserContext, Page } from '@playwright/test';
 import { clusterTest as test, expect } from '@/playwright/suite';
+import { seedCampaignDismissals } from '@/playwright/campaign-dismissals';
 import { createToolsDevSuite } from '@/tools-dev/runtime';
 import { warmPlaywrightDaemonRuntime, warmPlaywrightWebRuntime } from '@/playwright/runtime-lifecycle';
 import { ACTIVE_ARTIFACT_PREVIEW_SELECTOR } from '@/playwright/artifact-preview';
@@ -46,7 +47,7 @@ test('[P1] F12 Owner and F15 Admin Member retain ChatPanel then manually recover
       await mkdir(runtime.dataDir,{recursive:true});await writeFile(join(runtime.dataDir,'app-config.json'),JSON.stringify(config));
       const env = { AMR_HOME:home,VELA_BIN:vela,VELA_PROFILE:'local',OPEN_DESIGN_AMR_PROFILE:'local',VELA_API_URL:cfg.urls.api,VELA_LINK_URL:cfg.urls.link,VELA_CONTROL_KEY:actor.controlKey,VELA_OPENCODE_BIN:process.env.CHATPANEL_OPENCODE_BIN ?? '',OD_WORKSPACE_CONTEXT_SOURCE:'vela',OD_COLLAB_TRANSPORT:'off',OD_RESOURCE_TRANSPORT:'off',OD_TEAM_PROJECTS_TRANSPORT:'off',OD_VELA_WEB_URL:cfg.urls.web,OPENCODE_DISABLE_DEFAULT_PLUGINS:'1',OPENCODE_DISABLE_EXTERNAL_SKILLS:'1' };
       assert(env.VELA_OPENCODE_BIN);
-      const context = await browser.newContext({viewport:{width:1440,height:1000}});const page = await context.newPage();
+      const context = await browser.newContext({viewport:{width:1440,height:1000}});await seedCampaignDismissals(context);const page = await context.newPage();
       const headers:Record<string,string>={'x-od-workspace-id':workspace.workspaceId,'x-od-workspace-type':'team','x-od-workspace-member-id':memberId,'x-od-workspace-role':role,'x-od-workspace-member-status':'active','x-od-workspace-lifecycle-state':'active'};
       const creates:unknown[]=[], network:unknown[]=[], events:unknown[]=[];
       const c:Client={role,page,context,runtime,env,headers,prompt:'',rawURL:'',artifact:Buffer.alloc(0),creates,events,network,proof:{role,memberId,actorId:actor.userId,namespace,caseId:role==='owner'?'client:UISTATE-F12-CLIENT':'client:UISTATE-F15-CLIENT',environmentFlags:{OD_WORKSPACE_CONTEXT_SOURCE:'vela',OD_COLLAB_TRANSPORT:'off',OD_RESOURCE_TRANSPORT:'off',OD_TEAM_PROJECTS_TRANSPORT:'off'},steps:[]}};clients.push(c);
