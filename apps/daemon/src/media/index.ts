@@ -97,6 +97,7 @@ import {
   resolveHyperFramesNodeBin,
 } from './hyperframes-runtime.js';
 import { prepareHyperFramesAudio, hyperFramesAudioEncodingArgs, type HyperFramesAudioTrack } from './hyperframes-audio.js';
+import { captureMotionRenderSource, motionRenderEvidence, type MotionRenderSourceEvidence } from './motion-render-evidence.js';
 import { renderVelaImage, renderVelaVideo } from './vela.js';
 import {
   ensureProject,
@@ -764,6 +765,7 @@ export async function generateMedia(args: {
         dir,
         args.desktopFrameRenderer ?? null,
         (safeOut.lastIndexOf('.') > 0 ? safeOut.slice(0, safeOut.lastIndexOf('.')) : safeOut) + '.mp4',
+        projectId,
         args.onProgress,
       );
       bytes = result.bytes;
@@ -3883,6 +3885,7 @@ async function renderHyperFrames(
   projectDir: string,
   desktopFrameRenderer: DesktopFrameRenderer | null,
   outputPath: string,
+  projectId: string,
   onProgress?: ProgressFn,
 ): Promise<RenderResult> {
   const compRel = ctx.compositionDir;
@@ -3948,10 +3951,28 @@ async function renderHyperFrames(
   const tmpOutput = path.join(tmpRoot, 'render.mp4');
   const usesHeadlessOverride = Boolean(process.env.HYPERFRAMES_BROWSER_PATH?.trim());
   const usesDesktopRenderer = !usesHeadlessOverride && desktopFrameRenderer != null;
+  let sourceBefore: MotionRenderSourceEvidence | null = null;
+  const captureSource = async (): Promise<void> => {
+    if (motionExport) sourceBefore = await captureMotionRenderSource(compAbs, path.resolve(projectDir, outputPath));
+  };
+  const reportSource = async (videoBytes: Buffer | null): Promise<void> => {
+    if (!motionExport) return;
+    try {
+      const after = await captureMotionRenderSource(compAbs, path.resolve(projectDir, outputPath));
+      // Persisted in daemon diagnostics, not model instructions or user progress.
+      // This evidence has a bounded directory scope and never gates delivery.
+      console.error('[motion-render-evidence]', JSON.stringify(motionRenderEvidence({
+        projectId, compositionDir: compRel, output: outputPath, before: sourceBefore, after, videoBytes,
+      })));
+    } catch (error) {
+      console.warn('[motion-render-evidence] unavailable', errorMessage(error));
+    }
+  };
   try {
     if (usesHeadlessOverride) {
       // Explicit daemon-only override. Never auto-discover or auto-download a
       // browser here: the packaged product path is the bundled Electron engine.
+      await captureSource();
       await runHyperFramesRender(compAbs, tmpOutput, Boolean(motionExport), onProgress);
     } else if (desktopFrameRenderer) {
       await renderHyperFramesWithDesktop(
@@ -3960,6 +3981,7 @@ async function renderHyperFrames(
         tmpOutput,
         desktopFrameRenderer,
         onProgress,
+        captureSource,
       );
     } else {
       throw new Error(
@@ -3968,12 +3990,14 @@ async function renderHyperFrames(
     }
     if (motionExport) await assertMotionExport(tmpOutput, motionExport);
     const bytes = await readFile(tmpOutput);
+    await reportSource(bytes);
     return {
       bytes,
       providerNote: `hyperframes/${usesDesktopRenderer ? 'electron-html' : 'local-html'} · ${ctx.aspect} · ${bytes.length} bytes`,
       suggestedExt: '.mp4',
     };
   } catch (err) {
+    await reportSource(null);
     const stderr =
       errorStringProp(err, 'stderr').trim();
     const message = stderr || errorMessage(err);
@@ -3989,6 +4013,7 @@ async function renderHyperFramesWithDesktop(
   tmpOutput: string,
   desktopFrameRenderer: DesktopFrameRenderer,
   onProgress?: ProgressFn,
+  onSourceReady?: () => Promise<void>,
 ): Promise<void> {
   const sourcePath = path.join(compAbs, 'index.html');
   const original = await readFile(sourcePath, 'utf8');
@@ -4004,6 +4029,7 @@ async function renderHyperFramesWithDesktop(
   const html = injectHyperFramesFrameBridge(audio.html, browserRuntime);
   const framesDir = path.join(tmpRoot, 'frames');
 
+  await onSourceReady?.();
   onProgress?.('Rendering HyperFrames with the bundled Electron Chromium…');
   const rendered = await desktopFrameRenderer({
     baseHref: pathToFileURL(`${compAbs}${path.sep}`).href,
