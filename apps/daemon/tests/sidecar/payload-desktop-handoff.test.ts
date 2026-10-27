@@ -80,12 +80,13 @@ describe("legacy payload desktop handoff", () => {
     const spawn = vi.fn(async (_request: SidecarLaunchRequest) => ({ stop }) as unknown as SpawnedSidecar);
     try {
       const stopOuter = vi.fn();
-      const inspectOuter = vi.fn(async () => [{ pid: 4321, ppid: 1, command: value.outerExecutablePath }]);
+      const inspectOuter = vi.fn(async () => [{ pid: 4321, ppid: 1, command: `${value.outerExecutablePath} opendesign://workspace/open?example=1` }]);
       const options = { env, outerPid: 4321, platform: "darwin" as const, spawn, stopOuter, inspectOuter };
       expect(await launchUnsupervisedPayloadDesktop(options)).toBe(true);
       expect(stopOuter).toHaveBeenCalledWith(4321);
       expect(spawn.mock.calls[0]?.[0]).toMatchObject({ command: value.payloadExecutablePath, detached: true });
       expect(spawn.mock.calls[0]?.[0]?.args).toContain("--od-launcher-delegated-generation");
+      expect(spawn.mock.calls[0]?.[0]?.args).toContain("opendesign://workspace/open?example=1");
 
       await writeFile(value.launcherPaths.runtimePath, JSON.stringify({
         active: { generation: 1, version: value.version }, channel: "beta",

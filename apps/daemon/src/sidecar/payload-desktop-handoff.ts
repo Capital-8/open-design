@@ -243,6 +243,7 @@ export async function launchUnsupervisedPayloadDesktop(options: {
   const command = platform === "win32" ? outerProcess?.command.toLowerCase() : outerProcess?.command;
   if (command == null || ![expected, `"${expected}"`].some((prefix) =>
     command === prefix || command.startsWith(`${prefix} `))) return false;
+  const deepLink = outerProcess?.command.match(/(?:^|\s)["']?(opendesign:\/\/[^\s"']+)/)?.[1];
   const selected = runtime.active.version === appVersion ? runtime.active
     : runtime.lastSuccessful.version === appVersion ? runtime.lastSuccessful : null;
   if (selected == null) return false;
@@ -250,6 +251,7 @@ export async function launchUnsupervisedPayloadDesktop(options: {
     args: [
       ...buildLauncherAfterQuitArgs({ targetPid: outer.pid, timeoutMs: HANDOFF_PAYLOAD_WAIT_TIMEOUT_MS }),
       ...(samePointer(selected, runtime.active) ? buildLauncherDelegatedArgs(selected) : []),
+      ...(deepLink == null ? [] : [deepLink]),
     ],
     command: payloadExecutablePath,
     cwd: dirname(payloadExecutablePath),
