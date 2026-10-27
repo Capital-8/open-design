@@ -129,7 +129,7 @@ test('[P1] OPEND-4440 unresolved workspace stays neutral before switching to a k
     workspaceName: `Plan ${plan}`, workspaceType: 'team', role: 'owner',
     memberStatus: 'active', lifecycleState: 'active',
   }));
-  let active = scopes[0];
+  let active = scopes[0]!;
   const context = () => ({ ...active, billingState: 'active',
     planId: active === scopes[1] ? 'max' : null,
     permissions: { canViewWorkspaceSettings: true, canInviteMembers: true, canManageBilling: true } });
