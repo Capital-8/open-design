@@ -29,7 +29,6 @@ const metadata = (metadataPath.length > 0
   channel?: string;
   control?: { launcher?: { version?: { min?: string; url?: string } } };
   releaseState?: string;
-  platforms?: Record<string, { artifacts?: Record<string, { url?: string }> }>;
   releaseTargets?: Record<string, { artifacts?: Record<string, { url?: string }>; status?: string }>;
   [key: string]: unknown;
 };
@@ -96,14 +95,6 @@ for (const target of ["mac_arm64", "win_x64", "mac_x64", "linux_x64"]) {
   if (result !== "success" || targetMetadata == null) continue;
   if ((target === "mac_arm64" || target === "win_x64") && targetMetadata.artifacts?.payload?.url == null) {
     throw new Error(`metadata target ${target} is missing launcher payload artifact`);
-  }
-  if (releaseChannel === "stable" && target !== "linux_x64") {
-    const platform = target === "mac_arm64" ? "mac" : target === "mac_x64" ? "macIntel" : "win";
-    const installer = platform === "win" ? "installer" : "dmg";
-    const artifacts = metadata.platforms?.[platform]?.artifacts;
-    if (artifacts?.payload != null || !artifacts?.[installer]?.url) {
-      throw new Error(`stable ${platform} updater feed must offer the installer without a payload`);
-    }
   }
 }
 

@@ -127,24 +127,6 @@ export function selectedWinPlatformKey(arch: string): string {
   return `win-${sanitizePathSegment(arch)}`;
 }
 
-// 0.22.0 is the first stable outer launcher containing supervised sidecar
-// startup. Older installed outers cannot safely start the current daemon.
-const STABLE_SUPERVISED_OUTER_MIN = "0.22.0";
-
-function stableReleasePayload(metadata: Record<string, unknown>, config: DesktopUpdaterConfig): Record<string, unknown> | null {
-  if (config.channel !== DESKTOP_UPDATE_CHANNELS.STABLE) return null;
-  const target = config.platform === "darwin"
-    ? config.arch === "arm64" ? "mac_arm64" : config.arch === "x64" ? "mac_x64" : null
-    : config.platform === "win32" && config.arch === "x64" ? "win_x64" : null;
-  if (target == null) return null;
-  const targets = objectField(metadata, "releaseTargets");
-  const published = targets == null ? null : objectField(targets, target);
-  if (published?.status !== "published") return null;
-  const artifacts = objectField(published, "artifacts");
-  const payload = artifacts == null ? null : objectField(artifacts, "payload");
-  return payload != null && stringField(payload, "url") != null ? payload : null;
-}
-
 export function selectedPackageLauncherArtifact(config: DesktopUpdaterConfig, preferPayload = false): {
   artifactKey: "dmg" | "installer" | "payload";
   artifactType: "dmg" | "installer" | "payload";
@@ -261,8 +243,7 @@ export function selectUpdateCandidate(
     };
   }
   const artifacts = objectField(platform, "artifacts");
-  const artifactRecord = (artifacts == null ? null : objectField(artifacts, artifactSelection.artifactKey))
-    ?? (preferPayload ? stableReleasePayload(metadata, config) : null);
+  const artifactRecord = artifacts == null ? null : objectField(artifacts, artifactSelection.artifactKey);
   const url = artifactRecord == null ? null : stringField(artifactRecord, "url");
   if (artifactRecord == null || url == null) {
     return {
@@ -377,21 +358,16 @@ export async function resolveInstalledOuterVersion(config: DesktopUpdaterConfig)
  *    be read, the gate trips conservatively: local state that cannot be
  *    identified is itself a reinstall signal.
  *
- * Stable payloads advertised in releaseTargets also require an outer with
- * supervised-sidecar support, even if the feed has no configured floor.
- * Missing metadata otherwise preserves compatibility with older feeds.
- * Returns the reinstall requirement or null when in-place update is allowed.
+ * Missing/malformed metadata fields are ignored (fail-open) so older feeds keep
+ * updating seamlessly. Returns the reinstall requirement for the status
+ * snapshot, or null when an in-place payload update is acceptable.
  */
 export function remoteRequiresReinstall(
   metadata: Record<string, unknown>,
   config: DesktopUpdaterConfig,
   installedOuterVersion: string | null,
 ): DesktopUpdateReinstallSnapshot | null {
-  const declaredMin = controlLauncherVersionMin(metadata);
-  const minVersion = stableReleasePayload(metadata, config) != null &&
-    (declaredMin == null || compareVersions(declaredMin, STABLE_SUPERVISED_OUTER_MIN) < 0)
-    ? STABLE_SUPERVISED_OUTER_MIN
-    : declaredMin;
+  const minVersion = controlLauncherVersionMin(metadata);
   const url = controlLauncherVersionUrl(metadata);
   const shared = {
     ...(minVersion == null ? {} : { minVersion }),
