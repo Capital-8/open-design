@@ -136,6 +136,14 @@ for (const [state, role] of [['B02', 'owner'], ['B03', 'member'], ['B27', 'admin
     if (role !== 'owner') await expect(dialog.locator('[aria-haspopup="listbox"]:enabled')).toHaveCount(0);
     await capture(page, state);
     if (role === 'owner') {
+      // OPEND-4453: use the established 12px field padding plus its 1px border,
+      // rather than leaving unused space after a text-adjacent chevron.
+      const rightInset = await dialog.locator('[aria-haspopup="listbox"]').evaluate(trigger => {
+        const arrow = trigger.querySelector('svg');
+        if (!arrow) throw new Error('Invitation role chevron missing');
+        return trigger.getBoundingClientRect().right - arrow.getBoundingClientRect().right;
+      });
+      expect(rightInset).toBeCloseTo(13, 1);
       await expect(dialog.getByRole('heading')).toBeFocused();
       await page.keyboard.press('Shift+Tab');
       await expect(dialog.getByRole('button', { name: '发送邀请', exact: true })).toBeFocused();

@@ -125,8 +125,8 @@
 .root:not(.onboarding) .context { margin-top:14px; }
 .root:not(.onboarding) :is(.input,.role,.add) { font-weight:400; }
 .root:not(.onboarding) :is(.input,.role) { line-height:22px; }
-.root:not(.onboarding) .role { justify-content:flex-start;gap:6px; }
-.root:not(.onboarding) .role svg { width:14px;height:14px;color:#888; }
+.root:not(.onboarding) .role { justify-content:space-between;gap:6px; }
+.root:not(.onboarding) .role svg { flex-shrink:0;width:14px;height:14px;color:#888; }
 .root:not(.onboarding) .fixedRole { line-height:normal; }
 .root:not(.onboarding) .labels { color:#555; }
 .root:not(.onboarding) .close { top:-2px;font-weight:400;line-height:normal;color:#333; }
