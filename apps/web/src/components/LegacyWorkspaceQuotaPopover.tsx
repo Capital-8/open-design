@@ -23,7 +23,7 @@ export function LegacyWorkspaceQuotaPopover({ view, context, profile, consoleOri
   const owner = context?.role === 'owner';
   // Preserve the existing contracts billing policy: locked workspaces remain readable.
   const readable = context?.memberStatus === 'active' && isWorkspaceLifecycleReadable(context.lifecycleState);
-  const shownBadge = view.tier ?? (badgeTier === 'team' ? 'team' : null);
+  const shownBadge = view.planKnown ? view.tier ?? (badgeTier === 'team' ? 'team' : null) : null;
   // Go has 5h + 7d; other paid tiers only 7d.
   const durations = view.tier === 'free' ? [] : view.tier === 'go' ? [18_000, 604_800] : [604_800];
   function resetCountdown(raw: string | null | undefined) {
@@ -65,6 +65,7 @@ export function LegacyWorkspaceQuotaPopover({ view, context, profile, consoleOri
       <div className="entry-nav-rail__menu-credits-head">
         <span className="entry-nav-rail__menu-credits-plan" role={shownBadge && shownBadge !== 'team' ? 'img' : undefined}
           aria-label={shownBadge && shownBadge !== 'team' ? shownBadge : undefined}>
+          {!view.planKnown ? <span aria-busy="true" aria-label={t('common.loading')}>—</span> : null}
           {shownBadge === 'team' ? planLabel : null}
           {/* A scoped balance alone does not prove a plan tier. */}
           {shownBadge ? <PlanWordmark tier={shownBadge} height={shownBadge === 'team' ? 11 : 20} /> : null}

@@ -306,3 +306,85 @@ test('[P0] F06 member concurrency notice preserves the frozen spacing and button
   await acknowledge.click();
   expect(runs.bodies).toHaveLength(1);
 });
+
+// 2026-10-27 user confirmation: Max uses the unified F04/F06 illustration
+// frame, while F05 still offers waiting/manual resend, never a higher plan.
+test('[P1] F05 Max Owner uses the unified dialog and preserves a manually editable draft', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.addInitScript(() => {
+    localStorage.setItem('open-design:locale', 'zh-CN');
+    localStorage.setItem('open-design:locale-source', 'manual');
+  });
+  await applyStandardMocks(page);
+  await mockSignedInVelaAccount(page, { plan: 'max', balanceUsd: '100.00' });
+  await routeAgents(page, [{ id: 'amr', name: 'OpenDesign AMR', bin: 'vela', available: true,
+    version: 'test', models: [{ id: 'glm-5', label: 'glm-5' }] }]);
+  const config = { mode: 'daemon', agentId: 'amr', skillId: null, designSystemId: null,
+    onboardingCompleted: true, privacyDecisionAt: 1, agentModels: { amr: { model: 'glm-5' } },
+    telemetry: { metrics: false, content: false, artifactManifest: false } };
+  await seedBrowserConfig(page, config);
+  await page.route('**/api/app-config', route => route.fulfill({ json: { config } }));
+  const projectId = `f05-${testInfo.testId}-${Date.now()}`;
+  await createProjectViaApi(page, projectId, 'F05 Max unified concurrency notice', {
+    accountPlan: 'max', accountBalanceUsd: '100.00', accountCredits: 1_000_000,
+  });
+  const context = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, planId: 'team_max' };
+  await page.route('**/api/workspace/context', route => route.fulfill({ json: { context } }));
+  await page.route(`**/api/projects/${projectId}/workspace-scope`, route => route.fulfill({ json: {
+    scope: { kind: 'personal', projectId, workspaceId: context.workspaceId, visibility: 'personal', context },
+  } }));
+  await page.route('**/api/workspace/billing/preflight?**', route => route.fulfill({ json: { preflight: {
+    schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+    modelId: 'glm-5', generatedAt: new Date().toISOString(), balanceUsd: '100', funding: 'wallet',
+    fundingCheck: 'available', modelCovered: false, codingPlan: { workspaceId: context.workspaceId,
+      generatedAt: new Date().toISOString(), eligible: false, tier: null, windows: [] },
+  } } }));
+  const events = [
+    'event: start', 'data: {"bin":"vela"}', '',
+    'event: agent', 'data: {"type":"done_key","key":"f05-protocol-key"}', '',
+    'event: error', 'data: {"message":"membership concurrency limit exceeded","error":{"code":"AGENT_EXECUTION_FAILED","message":"membership concurrency limit exceeded"},"failureDetail":"membership_concurrency_limit"}', '',
+    'event: end', 'data: {"code":1,"status":"failed","failureDetail":"membership_concurrency_limit"}', '', '',
+  ].join('\n');
+  const runs = await routeSuccessfulRuns(page, { runId: `f05-rejected-${Date.now()}`, eventBody: events });
+  await gotoProject(page, projectId);
+  const input = page.getByTestId('chat-composer-input');
+  await expect(input).toBeVisible({ timeout: T.long });
+  const draft = 'Max 并发占满后保留这段草稿，等其他任务结束再手动发送';
+  await input.fill(draft);
+  await page.getByTestId('chat-send').click();
+  const dialog = page.getByTestId('amr-concurrency-dialog');
+  await expect(dialog).toBeVisible({ timeout: T.long });
+  await expect(dialog).toContainText('手动');
+  await expect(dialog).not.toContainText('升级套餐');
+  await expect(page.getByTestId('amr-concurrency-upgrade')).toHaveCount(0);
+  await expect(dialog.locator('li')).toHaveCount(0);
+  await expect(input).toHaveText(draft);
+  await expect(dialog.locator('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
+  await dialog.locator('img').evaluate((image: HTMLImageElement) => image.decode());
+  await page.evaluate(() => document.fonts.ready);
+  await expect.poll(async () => (await dialog.boundingBox())?.width).toBe(480);
+  const dismiss = page.getByTestId('amr-concurrency-close');
+  await expect(dismiss).toHaveCSS('height', '40px');
+  await expect(dismiss).toHaveCSS('width', '432px');
+  await testInfo.attach('f05-max-desktop-dialog', { body: await dialog.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
+  await testInfo.attach('f05-max-desktop-page', { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(async () => (await dialog.boundingBox())?.width).toBe(width - 32);
+    await expect(dismiss).toBeVisible();
+    await expect.poll(() => dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await testInfo.attach(`f05-max-mobile-${width}`, { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
+  }
+  await dismiss.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(input).toHaveText(draft);
+  await expect(input).toBeEditable();
+  await input.fill(`${draft}；已继续编辑`);
+  await expect(input).toHaveText(`${draft}；已继续编辑`);
+  expect(runs.bodies).toHaveLength(1);
+  await testInfo.attach('f05-max-result', { body: JSON.stringify({
+    boundary: 'Real web/daemon with controlled account, preflight and rejected-run HTTP. No real Link or provider call.',
+    draftPreservedAndEditable: true, runPostsAfterDismissAndEdit: runs.bodies.length,
+    desktopWidth: 480, mobileWidths: [358, 288], noHigherPlan: true,
+  }, null, 2), contentType: 'application/json' });
+});
