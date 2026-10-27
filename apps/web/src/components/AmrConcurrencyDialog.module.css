@@ -1,13 +1,3 @@
-.panel {
-  width: min(480px, calc(100vw - 32px));
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
 /* Frozen client F04 (2026-10-20) supplies its own system typography. Inheriting
  * the app's 125% body line-height compressed the title from 25px to 17.5px.
  * Keep palette tokens theme-aware while matching the supplied light frame. */

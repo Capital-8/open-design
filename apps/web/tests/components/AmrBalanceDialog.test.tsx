@@ -472,7 +472,7 @@ describe('AmrBalanceDialog', () => {
     const recoveryReads: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
-      if (url.includes('includePreflight=1')) {
+      if (url.includes('includePreflight=1') && url.includes('modelId=model')) {
         recoveryReads.push(url);
         const observedAt = new Date().toISOString();
         return new Response(JSON.stringify({
@@ -533,7 +533,7 @@ describe('AmrBalanceDialog', () => {
     });
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = String(input);
-      if (url.includes('includePreflight=1')) {
+      if (url.includes('includePreflight=1') && url.includes('modelId=model')) {
         preflightUrls.push(url);
         return hungPreflight;
       }

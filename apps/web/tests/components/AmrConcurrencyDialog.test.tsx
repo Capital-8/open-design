@@ -266,3 +266,48 @@ it.each(['max', 'member', 'unknown', 'other-workspace', 'other-member'] as const
     expect(open).not.toHaveBeenCalled();
   },
 );
+
+// User confirmation 2026-10-27: Max uses the same illustrated concurrency
+// frame; reaching the top tier must not invent another plan or auto-retry.
+it.each(['max', 'team_max'])('Max Owner %s keeps the unified illustration with manual dismissal only', (planId) => {
+  const context = workspaceContextFixture({ workspaceId: 'max-unified-frame', workspaceMemberId: 'max-owner',
+    role: 'owner', planId,
+    permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
+  const onClose = vi.fn(); const open = vi.fn(); vi.stubGlobal('open', open);
+  render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
+    workspaceContext={context} profile="local" onClose={onClose} />);
+  const dialog = screen.getByRole('dialog');
+  expect(dialog.querySelector('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
+  expect(dialog.className).toContain('frozenPanel');
+  expect(dialog).toHaveTextContent('manually');
+  expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+  expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  expect(screen.getAllByRole('button')).toHaveLength(2);
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(open).not.toHaveBeenCalled();
+});
+
+// The user also removed the plain fallback entirely. Missing purchase proof
+// changes available actions, never the shared dialog frame or its artwork.
+it.each(['workspace', 'profile', 'upgrade-permission'] as const)(
+  'keeps the unified frame without %s purchase readiness', (missing) => {
+    const context = workspaceContextFixture({ workspaceId: 'unified-fallback', workspaceMemberId: 'fallback-owner',
+      role: 'owner', planId: 'team_pro',
+      permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
+    const onClose = vi.fn(); const open = vi.fn(); vi.stubGlobal('open', open);
+    render(<AmrConcurrencyDialog branch={resolveAmrBalanceBranch({ context })}
+      workspaceContext={missing === 'workspace' ? null : context}
+      profile={missing === 'profile' ? null : 'local'} upgradeAllowed={missing !== 'upgrade-permission'} onClose={onClose} />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.querySelector('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
+    expect(dialog.className).toContain('frozenPanel');
+    expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(open).not.toHaveBeenCalled();
+  },
+);

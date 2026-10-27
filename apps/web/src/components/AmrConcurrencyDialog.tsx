@@ -21,7 +21,6 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
   const upgradeUrl = upgradeAllowed && branch.audience === 'owner' && branch.tier !== 'max' && workspaceContext
     ? workspaceUpgradeUrl(workspaceContext, null, { fallbackProfile: profile, consoleOrigin }) : null;
   const memberNotice = branch.audience === 'member';
-  const illustrated = Boolean(upgradeUrl) || memberNotice;
   const benefits = [
     t('chat.amrConcurrencyGate.benefit1'),
     t('chat.amrConcurrencyGate.benefit2'),
@@ -29,22 +28,20 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
     t('chat.amrConcurrencyGate.benefit4'),
   ];
   return (
-    <Dialog className={illustrated ? `${frame.panel} ${frame.frozenPanel} ${styles.offerPanel}` : styles.panel} backdropClassName={illustrated ? frame.frozenBackdrop : undefined} onClose={onClose} closeOnEscape
+    <Dialog className={`${frame.panel} ${frame.frozenPanel} ${styles.offerPanel}`} backdropClassName={frame.frozenBackdrop} onClose={onClose} closeOnEscape
       ariaLabelledBy="amr-concurrency-title" data-testid="amr-concurrency-dialog">
-      {illustrated ? <>
-        <div className={frame.banner}>
-          <img className={frame.bannerImage} src="/upgrade/cloud-signin-aurora.jpg"
-            width={1680} height={720} alt="" decoding="async" draggable={false} />
-        </div>
-        <Button variant="ghost" className={frame.closeButton} onClick={onClose} aria-label={t('common.close')}>
-          <Icon name="close" size={14} />
-        </Button>
-      </> : null}
-      <h2 id="amr-concurrency-title" className={illustrated ? frame.title : undefined}>
+      <div className={frame.banner}>
+        <img className={frame.bannerImage} src="/upgrade/cloud-signin-aurora.jpg"
+          width={1680} height={720} alt="" decoding="async" draggable={false} />
+      </div>
+      <Button variant="ghost" className={frame.closeButton} onClick={onClose} aria-label={t('common.close')}>
+        <Icon name="close" size={14} />
+      </Button>
+      <h2 id="amr-concurrency-title" className={frame.title}>
         {t(memberNotice ? 'chat.amrConcurrencyGate.teamTitle'
           : upgradeUrl ? 'chat.amrConcurrencyGate.title' : 'chat.runError.title.membershipConcurrencyLimit')}
       </h2>
-      <p className={illustrated ? `${frame.message}${memberNotice ? ` ${frame.memberMessage}` : ''}` : undefined}>{t(upgradeUrl
+      <p className={`${frame.message}${upgradeUrl ? '' : ` ${frame.memberMessage}`}`}>{t(upgradeUrl
         ? 'chat.amrConcurrencyGate.message'
         : branch.audience === 'member'
           ? 'chat.amrConcurrencyGate.teamMessage'
@@ -58,10 +55,10 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
           </li>)}
         </ul>
       </div> : null}
-      <div className={illustrated ? frame.actions : styles.actions}>
-        <Button variant={upgradeUrl ? 'ghost' : memberNotice ? 'primary' : 'secondary'}
+      <div className={frame.actions}>
+        <Button variant={upgradeUrl ? 'ghost' : 'primary'}
           className={upgradeUrl ? `${frame.later} ${styles.laterButton}`
-            : memberNotice ? `${frame.cta} ${styles.noticeButton}` : undefined}
+            : `${frame.cta} ${styles.noticeButton}`}
           onClick={onClose} data-testid="amr-concurrency-close">
           {t(upgradeUrl ? 'chat.amrBalanceGate.laterCta'
             : memberNotice ? 'chat.amrBalanceOwner.dismissCta' : 'common.close')}
