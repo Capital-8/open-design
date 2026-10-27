@@ -3215,10 +3215,10 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
 .comment-side-author-copy { flex: 0 1 auto; }
 .comment-side-check { margin-left: auto; }
 
-.comment-side-item { font-weight: 400; }
+.comment-side-item { font-weight: 500; }
 .comment-side-collapse svg + svg { margin-left: -9px; }
 .comment-side-select-all { display: inline-flex; align-items: center; gap: 6px; }
 .comment-side-select-all::before { content: ''; width: 14px; height: 14px; border: 1px solid #d8d8d8; border-radius: 3px; box-sizing: border-box; }
 .comment-side-select-all[aria-pressed="true"]::before { content: '✓'; color: white; background: #333; border-color: #333; font-size: 11px; line-height: 12px; text-align: center; }
 .comment-detail-author { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.comment-detail-time { flex-shrink: 0; font-size: 10px; font-weight: 400; color: #a3a3a3; }
+.comment-detail-time { flex-shrink: 0; font-size: 10px; font-weight: 500; color: #a3a3a3; }

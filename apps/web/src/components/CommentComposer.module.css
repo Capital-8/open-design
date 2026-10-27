@@ -17,7 +17,7 @@
 .menuItems button:hover:not(:disabled) { background:#f4f4f4; }
 .error { color:#d63c35; font-size:12px; margin:6px 0 0; }
 .error button { background:none; border:0; color:inherit; cursor:pointer; text-decoration:underline; }
-.detail p { font-weight:400; font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin:0; }
+.detail p { font-weight: 500; font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin:0; }
 .clamped { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .expanded { display:block; }
 .detail button { border:0; background:none; color:#666; padding:6px 0 0; cursor:pointer; font-size:12px; }
@@ -34,7 +34,7 @@
 .popover:has(.detail) :global(.comment-popover-section-compose) { padding:0 0 0 28px; }
 
 .popover[data-existing-comment="false"] :global(.comment-popover-titlebar) { display:none; }
-.popover textarea { font-weight:400; font-size:13px; line-height:1.5; background:transparent; }
+.popover textarea { font-weight: 500; font-size:13px; line-height:1.5; background:transparent; }
 
 .error { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
 .counter { flex-shrink:0; white-space:nowrap; font-size:11px; }
@@ -52,5 +52,5 @@
 .popover[data-existing-comment="false"] .error { margin:6px 14px 8px; }
 .popover[data-existing-comment="false"] :global(.comment-popover-actions) { margin-top:0; padding:0 14px 10px; }
 
-.popover .menuItems button { font-weight:400; }
-.menuItems .deleteAction { color:#f04142; font-weight:400; }
+.popover .menuItems button { font-weight: 500; }
+.menuItems .deleteAction { color:#f04142; font-weight: 500; }

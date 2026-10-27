@@ -63,7 +63,7 @@
   border-radius: 8px;
   background: #f5f5f5;
   color: #848484;
-  font-weight: 400;
+  font-weight: 500;
 }
 .alignmentMessage {
   display: flex;
@@ -75,7 +75,7 @@
   flex: none;
   margin-top: 2px;
 }
-.alignmentMessage p { font-weight: 400; }
+.alignmentMessage p { font-weight: 500; }
 .alignmentMessage > svg { width: 15px; height: 15px; }
 .alignmentRetry {
   display: inline-flex;

@@ -18,6 +18,6 @@
 .previewImages a { display:block; width:56px; height:48px; overflow:hidden; border-radius:5px; }
 .previewImages img { width:100%; height:100%; object-fit:cover; }
 .rail .more,.rail .avatar :global(.comment-side-avatar) { writing-mode:horizontal-tb; text-orientation:mixed; letter-spacing:normal; }
-.rail .more { font-size:12px; font-weight:400; }
+.rail .more { font-size:12px; font-weight: 500; }
 
 .rail:global(.comment-side-rail):hover { background:#fff; border-color:#ededed; }
