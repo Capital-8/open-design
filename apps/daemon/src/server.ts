@@ -9627,6 +9627,7 @@ export async function startServer({
     projectFiles: projectFileDeps,
     validation: validationDeps,
     fetchProjectCreationWorkspaceDirectory,
+    allowStaticDevWorkspaceContext: process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() !== 'vela',
     enforceWorkspaceProjectMutation: enforceAuthoritativeProjectMutation,
   });
 

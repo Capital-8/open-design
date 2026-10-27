@@ -8,6 +8,30 @@ import { register } from 'prom-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceBillingResponse } from '@open-design/contracts';
 
+const velaCommands = vi.hoisted(() => ({ pending: new Set<Promise<string>>() }));
+
+// Keep the real CLI invocation and profile behavior, but own its completion.
+// Hub catch-up can still be finishing a command when the HTTP server closes.
+vi.mock('../src/integrations/vela-command.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/integrations/vela-command.js')>();
+  return {
+    ...actual,
+    runVelaCommand: (...args: Parameters<typeof actual.runVelaCommand>) => {
+      const command = actual.runVelaCommand(...args);
+      velaCommands.pending.add(command);
+      const settled = () => { velaCommands.pending.delete(command); };
+      void command.then(settled, settled);
+      return command;
+    },
+  };
+});
+
+async function drainVelaCommands(): Promise<void> {
+  while (velaCommands.pending.size > 0) {
+    await Promise.allSettled([...velaCommands.pending]);
+  }
+}
+
 type StartedServer = {
   url: string;
   server: Server;
@@ -65,6 +89,9 @@ afterEach(async () => {
       await new Promise<void>((resolve) => current.close(() => resolve()));
     }
   }
+  // Do not delete the executable/log directory or restore its environment
+  // until every owned child has exited; otherwise a late append recreates it.
+  await drainVelaCommands();
   if (scratch) await rm(scratch, { recursive: true, force: true });
   scratch = null;
   for (const [key, value] of savedEnv) {
@@ -394,6 +421,7 @@ describe('server workspace billing runtime wiring', () => {
     if (daemon!.server.listening)
       await new Promise<void>((resolve) => daemon!.server.close(() => resolve()));
     daemon = null;
+    await drainVelaCommands();
     await start();
     expect(await read()).toMatchObject({ workspaceBalance: { balanceUsd: '70.00' } });
   }, 60_000);
