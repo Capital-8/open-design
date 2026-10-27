@@ -4146,7 +4146,7 @@ function OnboardingView({
           </footer>
         </div>
         <div className="onboarding-cloud__art" aria-hidden="true">
-          <img src="/onboarding/onboarding-cloud-art.webp" alt="" />
+          <img src="/onboarding/registration-invite-art.webp" alt="" />
         </div>
       </section>
     );
