@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useCloudSignIn } from './use-cloud-sign-in';
 import { createPortal } from 'react-dom';
 import { Button } from '@open-design/components';
@@ -33,6 +33,7 @@ interface Props {
  * another account. Workspace membership IDs intentionally are not account IDs. */
 export function HomeInviteSurface({ accountId, context, active, signedOut = false, identityReady = true }: Props) {
   const { t } = useI18n();
+  const bannerRef = useRef<HTMLDivElement>(null);
   const storageKey = accountId ? `od.invitation-banner.dismissed:${encodeURIComponent(accountId)}` : signedOut ? 'od.invitation-banner.dismissed:local' : null;
   const [dismissal, setDismissal] = useState<string | null>(() => {
     try { return storageKey && window.localStorage.getItem(storageKey) === '1' ? storageKey : null; } catch { return null; }
@@ -70,6 +71,34 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
       setDismissal(null);
     }
   }, [storageKey]);
+  // Match A03's 56px desktop lift without moving the title or composer.
+  // When an expanded input leaves less room, reduce only the visual lift so
+  // the invitation remains inside the main scroll surface rather than clipped.
+  useLayoutEffect(() => {
+    const banner = bannerRef.current;
+    const scroll = banner?.closest<HTMLElement>('.entry-main--scroll');
+    if (!banner || !scroll) return;
+    let lift = 0;
+    const update = () => {
+      const rowTop = banner.getBoundingClientRect().top + lift;
+      const edge = Math.max(0, scroll.getBoundingClientRect().top) + 16;
+      lift = window.matchMedia('(min-width: 761px)').matches
+        ? Math.min(56, Math.max(0, rowTop - edge)) : 0;
+      banner.style.setProperty('--home-invite-lift', String(lift));
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(banner.parentElement ?? banner);
+    observer.observe(scroll);
+    scroll.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+    return () => {
+      observer.disconnect();
+      scroll.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      banner.style.removeProperty('--home-invite-lift');
+    };
+  }, [active, storageKey, dismissal, principal, signedOut, context?.permissions.canInviteMembers, context?.memberStatus, context?.lifecycleState]);
   function dismiss() {
     if (!storageKey) return;
     setDismissal(storageKey);
@@ -96,7 +125,7 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
   if (!signedOut && (!context || context.memberStatus !== 'active'
     || context.lifecycleState !== 'active' || !context.permissions.canInviteMembers)) return null;
   const banner = active && storageKey && dismissal !== storageKey ? (
-    <div className={styles.banner} role="region" aria-label={t('homeInvite.invite')}>
+    <div ref={bannerRef} className={styles.banner} role="region" aria-label={t('homeInvite.invite')}>
       <span className={styles.copy}>{t('homeInvite.banner')}</span>
       <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => signedOut ? void begin() : setOpen(true)}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
       <Button variant="ghost" className={styles.close} aria-label={t('homeInvite.dismiss')} onClick={dismiss}><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="m4.5 4.5 7 7m0-7-7 7" /></svg></Button>
