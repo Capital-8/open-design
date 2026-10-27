@@ -15,8 +15,8 @@ export function AudioPlaybackIcon({ playing }: { playing: boolean }): ReactEleme
           strokeLinejoin="round"
         />
       ) : (
-        // Preserve the approved 18px glyph and -1px horizontal offset in the 26px disc.
-        <path d="M9 7.75v10.5L17.25 13z" fill="var(--chat-bg)" />
+        // Keep the 18px glyph optically centered within the 26px disc.
+        <path d="M10 7.75v10.5L18.25 13z" fill="var(--chat-bg)" />
       )}
     </svg>
   );
