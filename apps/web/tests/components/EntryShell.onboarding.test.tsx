@@ -722,13 +722,17 @@ describe('EntryShell Home submit handoff', () => {
     // explicit user plugin choice on the public create contract.
     expect(onCreateProject.mock.calls[0]?.[0]?.pluginId).toBeUndefined();
     expect(submit.disabled).toBe(true);
-    // The arrow stays visually stable while creation is in flight: no spinner,
-    // no busy state — the disabled lock above is the whole sending treatment.
-    expect(submit.getAttribute('aria-busy')).toBe('false');
-    expect(submit.getAttribute('aria-label')).toBe('Run');
+    expect(submit.getAttribute('aria-busy')).toBe('true');
+    expect(submit.getAttribute('aria-label')).toBe('Sending…');
+    expect(submit.querySelector('svg')).toHaveClass('icon-spin');
 
     resolveCreate(true);
-    await waitFor(() => expect(submit.disabled).toBe(false));
+    await waitFor(() => {
+      expect(submit.disabled).toBe(false);
+      expect(submit.getAttribute('aria-busy')).toBe('false');
+      expect(submit.getAttribute('aria-label')).toBe('Run');
+      expect(submit.querySelector('svg')).not.toHaveClass('icon-spin');
+    });
   });
 });
 

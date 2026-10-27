@@ -589,22 +589,28 @@ describe('EntryShell AMR workspace precheck race', () => {
       await Promise.resolve();
     });
     expect(mockedCheckAmrBalanceGate).toHaveBeenCalledTimes(1);
-    // The Home arrow never flashes a busy treatment (the destination Chat frame
-    // owns progress); the in-flight window is only visible as the disabled lock.
     expect((screen.getByTestId('home-hero-submit') as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByTestId('home-hero-submit').getAttribute('aria-busy')).toBe('false');
+    expect(submitButton).toHaveAttribute('aria-busy', 'true');
+    expect(submitButton).toHaveAttribute('aria-label', 'Sending…');
+    expect(submitButton.querySelector('svg')).toHaveClass('icon-spin');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(400);
     });
     expect(mockedCheckAmrBalanceGate).toHaveBeenCalledTimes(2);
     expect(onCreateProject).not.toHaveBeenCalled();
+    expect(submitButton).toBeDisabled();
+    expect(submitButton).toHaveAttribute('aria-busy', 'true');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_200);
     });
     expect(mockedCheckAmrBalanceGate).toHaveBeenCalledTimes(3);
     expect(onCreateProject).toHaveBeenCalledTimes(1);
+    expect(submitButton).toBeEnabled();
+    expect(submitButton).toHaveAttribute('aria-busy', 'false');
+    expect(submitButton).toHaveAttribute('aria-label', 'Run');
+    expect(submitButton.querySelector('svg')).not.toHaveClass('icon-spin');
   });
 
   it('moves a locally signed-in account from initial syncing to compact auto recovery', async () => {
