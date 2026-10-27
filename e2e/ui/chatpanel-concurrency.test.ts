@@ -19,6 +19,7 @@ test('[P1] F12 Owner and F15 Admin Member retain ChatPanel then manually recover
   const cfg = JSON.parse(await readFile(join(directory, 'sandbox.private.json'), 'utf8'));
   const fixture = JSON.parse(await readFile(join(directory, 'chatpanel-registration.private.json'), 'utf8'));
   const workspace = fixture.spaces.main;
+  const resumed = process.env.CHATPANEL_RESUME_GIVEN ? JSON.parse(await readFile(process.env.CHATPANEL_RESUME_GIVEN, 'utf8')) : null;
   const evidence = process.env.CHATPANEL_NATIVE_OUTPUT ?? join(directory, 'native');
   await mkdir(evidence, { recursive: true });
   const provider = JSON.parse(await readFile(join(directory, 'provider-state.json'), 'utf8'));
@@ -63,20 +64,25 @@ test('[P1] F12 Owner and F15 Admin Member retain ChatPanel then manually recover
       const current = await (await page.request.get(daemonURL(runtime,'/api/workspace/context'),{headers})).json();assert.equal(current.context.workspaceId,workspace.workspaceId);assert.equal(current.context.workspaceMemberId,memberId);assert.equal(current.context.role,role);
       const preflight = await (await page.request.get(daemonURL(runtime,`/api/workspace/billing/preflight?workspaceId=${workspace.workspaceId}&modelId=gpt-5.6-sol`),{headers})).json();assert.equal(preflight.preflight.billingMode,'shared');assert.equal(preflight.preflight.codingPlan.tier,'go');assert.equal(preflight.preflight.fundingCheck,'available');
       const hint = await (await page.request.get(daemonURL(runtime,`/api/workspace/billing/request-concurrency?workspaceId=${workspace.workspaceId}`))).json();assert.equal(hint.requestConcurrencyHint.limit,10);assert.equal(hint.requestConcurrencyHint.running,0);
-      const projectId=`cp-${role}-${randomUUID()}`, filename=`existing-${role}.html`, title=`Existing ${role} artifact stays exact`;
-      const response=await page.request.post(daemonURL(runtime,'/api/projects'),{headers,data:{id:projectId,name:`F12 F15 ${role}`,skillId:null,designSystemId:null,pendingPrompt:null,metadata:{kind:'prototype'}}});assert(response.ok(),await response.text());const body=await response.json();const conversationId=body.conversationId;assert.equal(typeof conversationId,'string');
+      const previous = resumed?.roles.find((r:{role:string}) => r.role===role);
+      if(previous){assert.equal(previous.actorId,actor.userId);assert.equal(previous.memberId,memberId);}
+      const projectId=previous?.projectId ?? `cp-${role}-${randomUUID()}`, filename=previous?.artifact.filename ?? `existing-${role}.html`, title=`Existing ${role} artifact stays exact`;
+      let conversationId:string;
+      if (!previous) {
+      const response=await page.request.post(daemonURL(runtime,'/api/projects'),{headers,data:{id:projectId,name:`F12 F15 ${role}`,skillId:null,designSystemId:null,pendingPrompt:null,metadata:{kind:'prototype'}}});assert(response.ok(),await response.text());const body=await response.json();conversationId=body.conversationId;assert.equal(typeof conversationId,'string');
       const html=`<!doctype html><html><body><h1>${title}</h1><p>Pre-existing artifact Given via the actual daemon API.</p></body></html>`;
       const file=await page.request.post(daemonURL(runtime,`/api/projects/${projectId}/files`),{headers,data:{name:filename,content:html}});assert(file.ok(),await file.text());
       const messageId=`existing-${randomUUID()}`,now=Date.now();const message=await page.request.put(daemonURL(runtime,`/api/projects/${projectId}/conversations/${conversationId}/messages/${messageId}`),{headers,data:{id:messageId,role:'assistant',content:'已有产物，保留其原字节。',runStatus:'succeeded',createdAt:now-1000,startedAt:now-2000,endedAt:now-1000,producedFiles:[{name:filename,path:filename,localPath:`/project/${projectId}/${filename}`,type:'file',size:Buffer.byteLength(html),mtime:now-1000,kind:'html',mime:'text/html'}],events:[{kind:'text',text:'已有产物。'},{kind:'artifact_focus',show:[filename]}]}});assert(message.ok(),await message.text());
-      c.rawURL=daemonURL(runtime,`/api/projects/${projectId}/raw/${filename}`);c.artifact=await (await page.request.get(c.rawURL,{headers})).body();
+      } else {conversationId=previous.conversationId;}
+      c.rawURL=daemonURL(runtime,`/api/projects/${projectId}/raw/${filename}`);c.artifact=await (await page.request.get(c.rawURL,{headers})).body();if(previous)assert.equal(hash(c.artifact),previous.artifact.sha256);
       await page.goto(runtime.url.web(`/projects/${projectId}/conversations/${conversationId}/files/${filename}`),{waitUntil:'domcontentloaded',timeout:T.xlong});
       await expect(page.getByTestId('chat-composer-input')).toBeVisible({timeout:T.xlong});await expect(page.frameLocator(ACTIVE_ARTIFACT_PREVIEW_SELECTOR).getByRole('heading',{name:title})).toBeVisible({timeout:T.xlong});
-      c.prompt=`只回复一行已完成，不修改已有产物。QA:${JSON.stringify({id:`manual-${role}-${randomUUID()}`,tokens:1000,text:`${role} manual completion`})}`;
+      c.prompt=previous?.originalPrompt ?? `只回复一行已完成，不修改已有产物。QA:${JSON.stringify({id:`manual-${role}-${randomUUID()}`,tokens:1000,text:`${role} manual completion`})}`;
       await page.getByTestId('chat-composer-input').fill(c.prompt);
       c.proof={...c.proof,projectId,conversationId,artifact:{filename,bytes:c.artifact.length,sha256:hash(c.artifact),given:'Real daemon project/file/message API, no generated task claimed'},originalPrompt:c.prompt,context:current,preflight,hint,webURL:runtime.url.web('/'),daemonURL:daemonURL(runtime,'/')};await save();
     }
     const initialProvider=await providerState();assert.equal(initialProvider.events.length,0);
-    await writeFile(join(directory,'native-ready.private.json'),JSON.stringify({at:new Date().toISOString(),roles:clients.map(c=>c.proof),modelRequests:0,threeProjectPanelsReady:true},null,2));
+    await writeFile(process.env.CHATPANEL_READY_FILE ?? join(directory,'native-ready.private.json'),JSON.stringify({at:new Date().toISOString(),roles:clients.map(c=>c.proof),modelRequests:0,threeProjectPanelsReady:true},null,2));
     await waitFile('holder/RUN013-held-ready.safe.json');const h=await load('holder/RUN013-holder-runtime.safe.json');controlURL=h.url;
     let state=await control('/state');assert(state.barrierValidNow && state.callerPending===10 && state.counts.advisory.running===10);
     for(const c of clients){
