@@ -213,6 +213,46 @@ describe('workspaceBillingSummaryForContext — plan is partitioned like money',
     expect(projected?.membershipTier).toBe('plus');
   });
 
+  // RUN-013 actual Free Owner shape: directory context is conservatively
+  // active/null and the account summary has no tier; only the scoped snapshot
+  // proves Free. Keep account money separate from that workspace plan.
+  it.each(['free', 'max'])('uses the validated personal %s snapshot before an empty account tier', (tier) => {
+    const context = { ...teamContext('personal-a'), workspaceType: 'personal',
+      role: 'owner', billingState: 'active', planId: null } as WorkspaceCollabContext;
+    const summary = { ...personalPlusAccount, membershipTier: '', subscriptionStatus: '' };
+    const response = { summary, workspaceBalance: null,
+      workspaceSnapshot: snapshotFor('personal-a', {
+        billingState: tier === 'free' ? 'free' : 'active', planId: tier,
+      }) } as WorkspaceBillingResponse;
+    const projected = workspaceBillingSummaryForContext(response, context);
+    expect(projected).toEqual({ ...summary, membershipTier: tier,
+      subscriptionStatus: tier === 'free' ? 'free' : 'active' });
+    expect(response.summary).toBe(summary);
+  });
+
+  it('keeps a proven personal Free plan when the account summary is unavailable', () => {
+    const context = { ...teamContext('personal-a'), workspaceType: 'personal' } as WorkspaceCollabContext;
+    const response = { summary: null, workspaceBalance: null,
+      workspaceSnapshot: snapshotFor('personal-a', { billingState: 'free', planId: 'free' }) } as WorkspaceBillingResponse;
+    expect(workspaceBillingSummaryForContext(response, context)?.membershipTier).toBe('free');
+  });
+
+  it.each(['missing', 'workspace', 'member', 'scope-version', 'unknown'] as const)(
+    'keeps the personal account fallback for %s plan proof', (kind) => {
+      const context = { ...teamContext('personal-a'), workspaceType: 'personal' } as WorkspaceCollabContext;
+      const snapshot = snapshotFor('personal-a', { billingState: 'free', planId: 'free' });
+      expect(snapshot).toBeTruthy();
+      const response = { summary: personalPlusAccount, workspaceBalance: null,
+        workspaceSnapshot: snapshot } as WorkspaceBillingResponse;
+      if (kind === 'missing') response.workspaceSnapshot = null;
+      if (kind === 'workspace' && response.workspaceSnapshot) response.workspaceSnapshot.workspaceId = 'other';
+      if (kind === 'member' && response.workspaceSnapshot) response.workspaceSnapshot.workspaceMemberId = 'other';
+      if (kind === 'scope-version' && response.workspaceSnapshot) Object.assign(response.workspaceSnapshot, { billingScopeVersion: 1 });
+      if (kind === 'unknown' && response.workspaceSnapshot) response.workspaceSnapshot.billing = { billingState: 'active', planId: null };
+      expect(workspaceBillingSummaryForContext(response, context)).toBe(personalPlusAccount);
+    },
+  );
+
   it('requires exact v2 Workspace proof for personal money too', () => {
     const personalContext = {
       workspaceId: 'personal-a',

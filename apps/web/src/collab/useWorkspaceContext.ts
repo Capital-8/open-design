@@ -1866,10 +1866,11 @@ export function useWorkspaceBillingResponse(
  * Plan and money are partitioned on the same key — `workspaceId` +
  * `workspaceMemberId`:
  *
- *  • personal workspace — the account IS the scope, so the summary passes
- *    through untouched. (A team-namespaced tier is deliberately kept here:
- *    `hasTeamPlan` offers the team surfaces to a personal workspace that holds
- *    a team plan.)
+ *  • every workspace — a positive plan from the context-authorized snapshot
+ *    takes precedence over the account summary, including shared Personal
+ *    workspaces whose directory context conservatively omits their plan.
+ *  • personal workspace without snapshot plan proof — keep the legacy account
+ *    summary fallback untouched, including team-namespaced tiers.
  *  • team workspace — the plan comes from the context-authorized snapshot.
  *    Without one, the account tier may stand in ONLY when it is itself
  *    team-namespaced (`isTeamPlanTier`), because a personal tier
@@ -1895,11 +1896,13 @@ export function workspaceBillingSummaryForContext(
 ): WorkspaceBillingSummary | null {
   if (!response || !context) return null;
   const summary = response.summary;
-  if (context.workspaceType !== 'team') return summary ?? null;
   const snapshot = workspaceBillingSnapshotForContext(response, context);
   const snapshotTier =
     snapshot?.billing.planId?.trim()
     || (snapshot?.billing.billingState === 'free' ? 'free' : '');
+  // Shared Personal workspaces also have an exact workspace/member plan.
+  // Without positive snapshot plan proof, retain the legacy account fallback.
+  if (context.workspaceType !== 'team' && !snapshotTier) return summary ?? null;
   const accountTier = summary?.membershipTier?.trim() ?? '';
   const teamNamespacedAccountTier = isTeamPlanTier(accountTier) ? accountTier : '';
   const scopedTier = snapshotTier || teamNamespacedAccountTier;

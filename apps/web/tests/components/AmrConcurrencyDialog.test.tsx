@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { buildWorkspacePermissions } from '@open-design/contracts';
+import { buildWorkspacePermissions, type WorkspaceBillingResponse } from '@open-design/contracts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AmrConcurrencyDialog } from '../../src/components/AmrConcurrencyDialog';
-import { resolveAmrBalanceBranch } from '../../src/runtime/amr-balance-branch';
+import { workspaceBillingSummaryForContext } from '../../src/collab/useWorkspaceContext';
+import { resolveAmrBalanceBranch, resolveAmrConcurrencyPresentation } from '../../src/runtime/amr-balance-branch';
 import { workspaceContextFixture } from '../helpers/workspace-context';
 
 const translation = vi.hoisted(() => ({ language: 'en' }));
@@ -192,3 +193,76 @@ it.each([undefined, null, '', '  '])('does not offer an upgrade before profile %
   expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
   expect(open).not.toHaveBeenCalled();
 });
+
+// RUN-013 original Free Owner upgrade dialog. This reproduces the actual
+// directory + account-summary + authorized snapshot combination, including
+// the presentation guard used by EntryShell/ProjectView rather than relying
+// on the dialog component's default upgradeAllowed=true.
+it('keeps the frozen Free Owner upgrade action from the exact personal workspace snapshot', () => {
+  translation.language = 'zh-CN';
+  const context = workspaceContextFixture({ workspaceId: 'run013-free-w1', workspaceMemberId: 'run013-owner',
+    workspaceType: 'personal', memberCount: 2, role: 'owner', planId: null, billingState: 'active',
+    permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
+  const response: WorkspaceBillingResponse = {
+    summary: { workspaceId: null, membershipTier: '', subscriptionStatus: '',
+      totalAvailableCredits: 0, subscriptionCredits: 0, rechargeCredits: 0,
+      balanceUsd: '0', availableActions: [], workspaceBalance: null },
+    workspaceBalance: null,
+    workspaceSnapshot: { schemaVersion: 1, workspaceId: context.workspaceId,
+      workspaceMemberId: context.workspaceMemberId, billingScopeVersion: 2,
+      billing: { billingState: 'free', planId: 'free' },
+      wallet: { balanceUsd: '0.4985', expiresAt: null, updatedAt: null },
+      revisions: { billing: 'billing-1', wallet: 'wallet-1' } },
+  };
+  const presentation = resolveAmrConcurrencyPresentation({ context,
+    billing: workspaceBillingSummaryForContext(response, context) });
+  const open = vi.fn(); vi.stubGlobal('open', open);
+  const onClose = vi.fn();
+  render(<AmrConcurrencyDialog {...presentation} workspaceContext={context}
+    profile="local" consoleOrigin="http://127.0.0.1:57457" onClose={onClose} />);
+  const dialog = screen.getByRole('dialog');
+  expect(dialog.querySelector('img')).toHaveAttribute('src', '/upgrade/cloud-signin-aurora.jpg');
+  expect(screen.getAllByRole('listitem')).toHaveLength(4);
+  expect(screen.getByTestId('amr-concurrency-close')).toHaveTextContent('暂不需要');
+  expect(screen.getByTestId('amr-concurrency-upgrade')).toHaveTextContent('升级套餐');
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTestId('amr-concurrency-upgrade'));
+  const target = new URL(open.mock.calls[0]![0]);
+  expect(target.origin).toBe('http://127.0.0.1:57457');
+  expect(target.searchParams.get('workspaceId')).toBe(context.workspaceId);
+  expect(target.searchParams.get('billing')).toBe('plan');
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+it.each(['max', 'member', 'unknown', 'other-workspace', 'other-member'] as const)(
+  'keeps the concurrency upgrade guard for personal %s proof', (proof) => {
+    const role = proof === 'member' ? 'member' : 'owner';
+    const context = workspaceContextFixture({ workspaceId: 'personal-current', workspaceMemberId: 'current-member',
+      workspaceType: 'personal', memberCount: 2, role, planId: null, billingState: 'active',
+      permissions: buildWorkspacePermissions({ role, lifecycleState: 'active' }) });
+    let snapshotBilling = { billingState: 'free', planId: 'free' } as NonNullable<WorkspaceBillingResponse['workspaceSnapshot']>['billing'];
+    if (proof === 'unknown') snapshotBilling = { billingState: 'active', planId: null };
+    else if (proof === 'max') snapshotBilling = { billingState: 'active', planId: 'max' };
+    const response: WorkspaceBillingResponse = { summary: {
+      workspaceId: null, membershipTier: '', subscriptionStatus: '', totalAvailableCredits: 0,
+      subscriptionCredits: 0, rechargeCredits: 0, balanceUsd: '0', availableActions: [], workspaceBalance: null,
+    }, workspaceBalance: null, workspaceSnapshot: { schemaVersion: 1,
+      workspaceId: proof === 'other-workspace' ? 'other-space' : context.workspaceId,
+      workspaceMemberId: proof === 'other-member' ? 'other-member' : context.workspaceMemberId,
+      billingScopeVersion: 2,
+      billing: snapshotBilling,
+      wallet: { balanceUsd: '0.4985', expiresAt: null, updatedAt: null },
+      revisions: { billing: 'b', wallet: 'w' },
+    } };
+    const presentation = resolveAmrConcurrencyPresentation({ context,
+      billing: workspaceBillingSummaryForContext(response, context) });
+    expect(presentation.upgradeAllowed).toBe(false);
+    if (proof === 'max') expect(presentation.branch.tier).toBe('max');
+    if (proof === 'member') expect(presentation.branch.audience).toBe('member');
+    const open = vi.fn(); vi.stubGlobal('open', open);
+    render(<AmrConcurrencyDialog {...presentation} workspaceContext={context}
+      profile="local" consoleOrigin="http://127.0.0.1:57457" onClose={vi.fn()} />);
+    expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
+    expect(open).not.toHaveBeenCalled();
+  },
+);
