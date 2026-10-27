@@ -58,6 +58,8 @@ export interface RegisterImportRoutesDeps extends RouteDeps<'db' | 'http' | 'upl
   publicFileMutations?: PublicFileMutations;
   stopPublicFilesBeforeDelete?: CommentFileDeletion;
   fetchProjectCreationWorkspaceDirectory?: () => Promise<WorkspaceDirectoryFetchResult>;
+  /** Same explicit local/dev compatibility policy as ordinary project creation. */
+  allowStaticDevWorkspaceContext?: boolean;
   enforceWorkspaceProjectMutation?: BoundWorkspaceResourceMutationGate;
 }
 
@@ -123,6 +125,8 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
         const createWorkspace = await authorizeCreatedProjectWorkspace(
           req,
           ctx.fetchProjectCreationWorkspaceDirectory,
+          {},
+          ctx.allowStaticDevWorkspaceContext === true,
         );
         if (!createWorkspace.ok) {
           fs.promises.unlink(req.file.path).catch(() => {});
@@ -369,6 +373,8 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       const createWorkspace = await authorizeCreatedProjectWorkspace(
         req,
         ctx.fetchProjectCreationWorkspaceDirectory,
+        {},
+        ctx.allowStaticDevWorkspaceContext === true,
       );
       if (!createWorkspace.ok) {
         return sendCreatedProjectWorkspaceError(res, createWorkspace);
