@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, Page, Request } from '@playwright/test';
 
 import { clusterTest as test, expect } from '@/playwright/suite';
 import { warmPlaywrightDaemonRuntime, warmPlaywrightWebRuntime } from '@/playwright/runtime-lifecycle';
@@ -31,6 +31,15 @@ type Binding = {
   modelId: string;
 };
 type RunResponse = { status: number; runId: string | null };
+type BillingRead = {
+  requestedAt: string;
+  completedAt: string;
+  status: number;
+  workspaceId: string | null;
+  workspaceMemberId: string | null;
+  fundingCheck: string | null;
+  balanceUsd: string | null;
+};
 type Case = {
   role: Role;
   surface: Surface;
@@ -39,6 +48,7 @@ type Case = {
   projectId: string | null;
   requests: Array<{ at: string; method: string; path: string; workspaceId: string | null }>;
   runResponses: RunResponse[];
+  billingReads: BillingRead[];
   runBodies: Array<{ currentPrompt: string | null; attachmentPaths: string[];
     projectId: string | null; conversationId: string | null; userMessageId: string | null }>;
   draft: string;
@@ -210,11 +220,19 @@ async function startSession(browser: Browser, fixture: Fixture, role: Role, atte
       const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
       const requests: Case['requests'] = [];
       const runResponses: RunResponse[] = [];
+      const billingReads: BillingRead[] = [];
+      const billingRequests = new Map<Request, string>();
       const runBodies: Case['runBodies'] = [];
       cases.push({ role, surface, actor, page, projectId: surface === 'project' ? projectId : null,
-        requests, runResponses, runBodies, draft: '', attachment: '' });
+        requests, runResponses, billingReads, runBodies, draft: '', attachment: '' });
       page.on('request', request => {
-        const path = new URL(request.url()).pathname;
+        const url = new URL(request.url());
+        const path = url.pathname;
+        if (request.method() === 'GET'
+          && ['/api/workspace/billing', '/api/workspace/billing/preflight'].includes(path)
+          && url.searchParams.get('workspaceId') === fixture.space.workspaceId) {
+          billingRequests.set(request, new Date().toISOString());
+        }
         if (path.startsWith('/api/')) requests.push({ at: new Date().toISOString(),
           method: request.method(), path, workspaceId: request.headers()['x-od-workspace-id'] ?? null });
         if (request.method() === 'POST' && path === '/api/runs') {
@@ -231,6 +249,22 @@ async function startSession(browser: Browser, fixture: Fixture, role: Role, atte
         }
       });
       page.on('response', response => {
+        const requestedAt = billingRequests.get(response.request());
+        if (requestedAt) {
+          billingRequests.delete(response.request());
+          const read: BillingRead = { requestedAt, completedAt: new Date().toISOString(),
+            status: response.status(), workspaceId: null, workspaceMemberId: null,
+            fundingCheck: null, balanceUsd: null };
+          void response.json().then(body => {
+            const wallet = body.workspaceBalance ?? body.workspaceSnapshot;
+            const proof = body.preflight ?? wallet;
+            billingReads.push({ ...read, completedAt: new Date().toISOString(),
+              workspaceId: proof?.workspaceId ?? null,
+              workspaceMemberId: proof?.workspaceMemberId ?? null,
+              fundingCheck: body.preflight?.fundingCheck ?? null,
+              balanceUsd: body.preflight?.balanceUsd ?? wallet?.balanceUsd ?? wallet?.wallet?.balanceUsd ?? null });
+          }).catch(() => { billingReads.push(read); });
+        }
         if (response.request().method() !== 'POST' || new URL(response.url()).pathname !== '/api/runs') return;
         void response.json().then(body => {
           runResponses.push({ status: response.status(),
@@ -473,15 +507,21 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
     const funded = await receipt('RUN011-funded.json');
     expect(funded.fundingCheck).toBe('available');
     expect(funded.workspaceId).toBe(fixture.space.workspaceId);
+    const reconnectStartedAt = new Date().toISOString();
     for (const item of all) {
       await item.page.context().setOffline(false);
       expect(await item.page.evaluate(() => navigator.onLine)).toBe(true);
     }
     const reconnectedAt = new Date().toISOString();
     for (const item of all) {
-      const session = sessions.find(candidate => candidate.role === item.role)!;
-      expect((await preflight(item, session, fixture)).fundingCheck).toBe('available');
-      await item.page.evaluate(() => window.dispatchEvent(new Event('od:workspace-billing-refresh')));
+      // Observe the product's own online/poll refresh after real funding. A
+      // test-generated GET or refresh event would conceal a recovery failure.
+      await expect.poll(() => item.billingReads.some(read => read.status === 200
+        && Date.parse(read.requestedAt) >= Date.parse(reconnectStartedAt)
+        && read.workspaceId === fixture.space.workspaceId
+        && read.workspaceMemberId === item.actor.memberId
+        && (read.fundingCheck === 'available' || Number(read.balanceUsd) > 0)),
+      { timeout: T.xlong, intervals: [250, 500, 1000] }).toBe(true);
     }
     const noClickStart = new Date().toISOString();
     const automatic = await Promise.all(all.map(item => item.page.waitForEvent('request', {
@@ -494,8 +534,10 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
       await assertRetained(item);
       await item.page.screenshot({ path: join(output!, 'RUN011-' + caseKey(item) + '-funded-no-click.png') });
     }
-    await save('RUN011-funded-no-click.safe.json', { binding, disconnectedAt, reconnectedAt, noClickStart,
-      observedAt: new Date().toISOString(), funded, cases: blocked });
+    await save('RUN011-funded-no-click.safe.json', { binding, disconnectedAt, reconnectStartedAt,
+      reconnectedAt, noClickStart, observedAt: new Date().toISOString(), funded, cases: blocked,
+      naturalBillingReads: all.map(item => ({ role: item.role, surface: item.surface,
+        reads: item.billingReads })) });
     const completed: Array<{ role: Role; surface: Surface; runId: string }> = [];
     const allCanonicalIds: string[] = [];
     for (const item of all) {
@@ -601,7 +643,13 @@ test('[P0] RUN011 six roles and surfaces retain drafts until one manual funded s
       cases: all.map(item => ({ role: item.role, surface: item.surface,
         requests: item.requests, runResponses: item.runResponses })) });
   } finally {
-    for (const session of sessions.reverse()) await stopSession(session);
+    try {
+      await save('RUN011-natural-billing-readbacks.private.json', { binding,
+        cases: sessions.flatMap(session => session.cases).map(item => ({ role: item.role,
+          surface: item.surface, reads: item.billingReads })) });
+    } finally {
+      for (const session of sessions.reverse()) await stopSession(session);
+    }
   }
 });
 
