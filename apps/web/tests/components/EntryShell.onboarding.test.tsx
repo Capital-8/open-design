@@ -2,7 +2,7 @@ import * as workspaceContextModule from '../../src/collab/useWorkspaceContext';
 import { workspaceContextFixture } from '../helpers/workspace-context';
 // @vitest-environment jsdom
 
-import { useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -179,6 +179,7 @@ function renderOnboarding(
 function renderHome(
   overrides: Partial<React.ComponentProps<typeof EntryShell>> = {},
   path = '/',
+  strict = false,
 ) {
   window.history.replaceState(null, '', path);
   const props: React.ComponentProps<typeof EntryShell> = {
@@ -220,11 +221,8 @@ function renderHome(
     ...overrides,
   };
 
-  render(
-    <I18nProvider initial="en">
-      <EntryShell {...props} />
-    </I18nProvider>,
-  );
+  const shell = <I18nProvider initial="en"><EntryShell {...props} /></I18nProvider>;
+  render(strict ? <StrictMode>{shell}</StrictMode> : shell);
 
   return props;
 }
@@ -737,6 +735,29 @@ describe('EntryShell Home submit handoff', () => {
 });
 
 describe('EntryShell onboarding OpenDesign AMR runtime', () => {
+  it.each(['header', 'banner'] as const)('opens the client welcome screen and starts one browser sign-in from the signed-out %s invitation', async (entry) => {
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/integrations/vela/status')) {
+        return jsonResponse({ loggedIn: false, profile: 'prod', configPath: '/x', user: null });
+      }
+      if (url.endsWith('/api/integrations/vela/login') && init?.method === 'POST') {
+        return jsonResponse({ pid: 123 }, 202);
+      }
+      return jsonResponse({});
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+    renderHome({ config: baseConfig({ onboardingCompleted: true, agentId: 'claude-code' }), amrLoggedIn: false }, '/', true);
+    const entries = await screen.findAllByRole('button', { name: /^Invite$/ });
+    expect(entries).toHaveLength(2);
+    fireEvent.click(entries[entry === 'header' ? 0 : 1]!);
+    expect(await screen.findByRole('heading', { name: 'Welcome to OpenDesign' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/onboarding');
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith('/api/integrations/vela/login') && init?.method === 'POST')).toHaveLength(1));
+    expect(screen.getByRole('button', { name: /Cancel sign-in/i })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: /Invite members/i })).toBeNull();
+  });
+
   it('gates Home on an authoritative signed-out Cloud session without clearing saved setup', async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({ loggedIn: false, profile: 'prod', configPath: '/x', user: null }),
@@ -1469,6 +1490,7 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
 
     expect(screen.getByRole('heading', { name: 'Welcome to OpenDesign' })).toBeTruthy();
     expect(await findCloudSignInButton()).toBeTruthy();
+    expect(document.querySelector('.onboarding-cloud__art img')?.getAttribute('src')).toBe('/onboarding/registration-invite-art.webp');
     // No runtime card, no AMR version text, no "Sign in to continue" CTA.
     expect(screen.queryByRole('button', { name: /OpenDesign AMR/i })).toBeNull();
     expect(screen.queryByText('AMR v0.1.0')).toBeNull();

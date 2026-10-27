@@ -708,6 +708,11 @@ export function EntryShell({
   // view from the route rather than keeping it in component state.
   const route = useRoute();
   const view: EntryViewKind = route.kind === 'home' ? route.view : 'home';
+  const [inviteSignInRequest, setInviteSignInRequest] = useState<'start' | 'waiting' | null>(null);
+  useEffect(() => {
+    // Returning to Local/BYOK without signing in abandons this invitation.
+    if (view !== 'onboarding' && amrLoggedIn === false && inviteSignInRequest === 'waiting') setInviteSignInRequest(null);
+  }, [view, amrLoggedIn, inviteSignInRequest]);
   // The one shared workspace context. Any non-null context is a real workspace
   // (personal or team); workspace surfaces gate on B's permission bits, not on
   // workspaceType.
@@ -2057,6 +2062,10 @@ export function EntryShell({
     },
   });
   const registrationInviteActive = registrationInvite !== null;
+  useEffect(() => {
+    // A new account's mandatory invitation step already fulfils this intent.
+    if (registrationInviteActive) setInviteSignInRequest(null);
+  }, [registrationInviteActive]);
   useLayoutEffect(() => {
     onRegistrationInviteActiveChange?.(registrationInviteActive);
     return () => onRegistrationInviteActiveChange?.(false);
@@ -2080,6 +2089,8 @@ export function EntryShell({
       <div className="entry-shell entry-shell--no-header entry-shell--onboarding">
         <main className="entry-onboarding-modal" aria-label={t('settings.welcomeTitle')}>
           <OnboardingView
+            autoCloudSignInRequested={inviteSignInRequest === 'start'}
+            onAutoCloudSignInConsumed={() => setInviteSignInRequest('waiting')}
             config={config}
             agents={agents}
             agentsLoading={agentsLoading}
@@ -2270,7 +2281,7 @@ export function EntryShell({
               <HomeView
                 {...homeViewProps}
                 isActive={view === 'home'}
-                inviteSurface={<HomeInviteSurface signedOut={amrLoggedIn === false} identityReady={!workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure} accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} />}
+                inviteSurface={<HomeInviteSurface signedOut={amrLoggedIn === false} identityReady={!workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure} accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} onSignInRequested={() => { setInviteSignInRequest('start'); navigate({ kind: 'home', view: 'onboarding' }); }} openAfterSignIn={inviteSignInRequest === 'waiting'} onSignInInviteConsumed={() => setInviteSignInRequest(null)} />}
                 /* Home is the one composer in the shell and consumes the page
                    handoff. The community view used to dock a second HomeView
                    (`variant="dock"`) with a handoff of its own; that mount
@@ -2573,6 +2584,8 @@ export function EntryShell({
 }
 
 function OnboardingView({
+  autoCloudSignInRequested = false,
+  onAutoCloudSignInConsumed,
   config,
   providerModelsCache: sharedProviderModelsCache,
   onProviderModelsCacheChange,
@@ -2589,6 +2602,8 @@ function OnboardingView({
   onAmrLoginStatusChange,
   onFinish,
 }: {
+  autoCloudSignInRequested?: boolean;
+  onAutoCloudSignInConsumed?: () => void;
   config: AppConfig;
   providerModelsCache?: ProviderModelsCache;
   onProviderModelsCacheChange?: Dispatch<SetStateAction<ProviderModelsCache>>;
@@ -2676,6 +2691,7 @@ function OnboardingView({
   const amrHydratedLoginPollStartedRef = useRef(false);
   const onboardingMountedRef = useRef(true);
   const amrLoginStartPendingRef = useRef(false);
+  const autoCloudSignInClaimedRef = useRef(false);
   const amrLoginCancelRequestedRef = useRef(false);
   const amrAuthAttemptIdRef = useRef<string | null>(null);
   const providerModelsAutoFetchKeyRef = useRef<string | null>(null);
@@ -3526,6 +3542,15 @@ function OnboardingView({
     }
   }
 
+  useEffect(() => {
+    if (!autoCloudSignInRequested || !amrStatusResolved || autoCloudSignInClaimedRef.current) return;
+    // The invitation entry hands off before starting auth: this mounted
+    // welcome screen owns the single login request and its cancel/retry UI.
+    autoCloudSignInClaimedRef.current = true;
+    onAutoCloudSignInConsumed?.();
+    if (!amrLoginBusy) void handleCloudSignIn();
+  }, [autoCloudSignInRequested, amrStatusResolved]);
+
   async function handleCancelAmrLogin() {
     if (!amrLoginBusy || amrLoginCancelPending) return;
     const loginStartPending = amrLoginStartPendingRef.current;
@@ -4146,7 +4171,7 @@ function OnboardingView({
           </footer>
         </div>
         <div className="onboarding-cloud__art" aria-hidden="true">
-          <img src="/onboarding/onboarding-cloud-art.webp" alt="" />
+          <img src="/onboarding/registration-invite-art.webp" alt="" />
         </div>
       </section>
     );
