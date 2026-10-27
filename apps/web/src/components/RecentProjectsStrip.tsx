@@ -29,7 +29,6 @@ import type { DesignSystemSummary, Project } from '../types';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { RemixIcon } from './RemixIcon';
-import { InviteDialog } from './InviteDialog';
 import { ProjectDeleteConfirmDialog } from './project-actions/ProjectDeleteConfirmDialog';
 import { useProjectDeleteFlow } from './project-actions/useProjectDeleteFlow';
 import { useBatchProjectShareCount } from './project-actions/useBatchProjectShareCount';
@@ -42,10 +41,6 @@ import {
   notifyTeamProjectsChanged,
   useWorkspaceContext,
 } from '../collab/useWorkspaceContext';
-import {
-  canAccessWorkspaceInviteFlow,
-  resolveWorkspaceInviteTarget,
-} from './EntryNavRail';
 import { moveWorkspaceProject } from '../state/projects';
 import {
   workspaceContextHasWorkspaceIdentity,
@@ -418,8 +413,6 @@ export function RecentProjectsStrip({
     collaborationEnabled ??
     (workspaceContextHasWorkspaceIdentity(workspaceContext) &&
       workspaceContext?.permissions.canShareProjects === true);
-  const canAccessInviteFlow = canAccessWorkspaceInviteFlow(workspaceContext);
-  const inviteTarget = resolveWorkspaceInviteTarget(workspaceContext);
   const canManageCollection =
     canManageProjectCollection ??
     (workspaceContext?.permissions.canManageSharedResources === true ||
@@ -474,7 +467,6 @@ export function RecentProjectsStrip({
     'owner' | 'kind' | 'display' | null
   >(null);
   const displayTriggerRef = useRef<HTMLButtonElement>(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set());
   // Confirmation gates for the bulk bar. Batch move reuses the single-card
@@ -1234,26 +1226,6 @@ export function RecentProjectsStrip({
             </div>
           ) : null}
           <div className="recent-projects__controls">
-            {/* The invite CTA belongs to the team collection: the team space
-                grid, and the 团队项目 tab of 全部项目 that replaced the rail's
-                team entry (OPEND-3108). */}
-            {(space === 'team' || (showCollectionTabs && collection === 'teamProjects')) &&
-            canAccessInviteFlow && inviteTarget.kind !== 'unavailable' ? (
-              <button
-                type="button"
-                className="recent-projects__invite"
-                onClick={() => {
-                  trackCollection('invite_teammates');
-                  if (inviteTarget.kind === 'vela') {
-                    window.open(inviteTarget.url, '_blank', 'noopener,noreferrer');
-                  } else if (inviteTarget.kind === 'local') {
-                    setInviteOpen(true);
-                  }
-                }}
-              >
-                <Icon name="share" size={15} /> {t('recentProjects.inviteTeammates')}
-              </button>
-            ) : null}
             {canManageCollection ? (
               <button
                 type="button"
@@ -2047,16 +2019,6 @@ export function RecentProjectsStrip({
           </DialogFooter>
         </Dialog>
       ) : null}
-      <InviteDialog
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        workspaceContext={workspaceContext}
-        canAssignRoles={
-          workspaceContext?.role === 'owner'
-        }
-        entryFrom="all_projects"
-
-      />
     </section>
   );
 }
