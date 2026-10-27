@@ -760,7 +760,14 @@ test('[P0] full team keeps free local invitation available across entry points',
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
 
   await openTeamProjectsTab(page);
-  await page.getByRole('button', { name: 'Invite teammates' }).click();
+  const collectionControls = page.locator('.recent-projects__controls');
+  await expect(collectionControls).toBeVisible();
+  await expect(collectionControls.getByRole('button', { name: 'Invite teammates', exact: true })).toHaveCount(0);
+  const shellInvite = page.getByRole('banner', { name: 'Workspace tabs' })
+    .getByRole('button', { name: 'Invite', exact: true });
+  await expect(shellInvite).toBeVisible();
+  await expect(shellInvite).toBeEnabled();
+  await shellInvite.click();
   await expect(dialog).toBeVisible();
   expect(await inviteUrls(page)).toEqual([]);
 });
@@ -819,6 +826,16 @@ test('[P1] seat updates keep the free local invite flow available without reload
 test('[P0] unknown team seat state keeps local invite available across rail and project surfaces', async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    const target = window as Window & typeof globalThis & {
+      __workspaceInviteUrls?: string[];
+    };
+    target.__workspaceInviteUrls = [];
+    window.open = ((url?: string | URL) => {
+      target.__workspaceInviteUrls!.push(String(url ?? ''));
+      return null;
+    }) as typeof window.open;
+  });
   await wireWorkspaceMocks(page, TEAM_UNKNOWN_SEATS, [TEAM_UNKNOWN_SEATS]);
   await page.route('**/api/workspace/projects/team', async (route) => {
     await route.fulfill({
@@ -834,11 +851,20 @@ test('[P0] unknown team seat state keeps local invite available across rail and 
   await page.getByRole('menu').getByRole('menuitem', { name: 'Invite colleague' }).click();
   const dialog = page.getByRole('dialog', { name: 'Invite members' });
   await expect(dialog).toBeVisible();
+  expect(await inviteUrls(page)).toEqual([]);
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
 
   await openTeamProjectsTab(page);
-  await page.getByRole('button', { name: 'Invite teammates' }).click();
+  const collectionControls = page.locator('.recent-projects__controls');
+  await expect(collectionControls).toBeVisible();
+  await expect(collectionControls.getByRole('button', { name: 'Invite teammates', exact: true })).toHaveCount(0);
+  const shellInvite = page.getByRole('banner', { name: 'Workspace tabs' })
+    .getByRole('button', { name: 'Invite', exact: true });
+  await expect(shellInvite).toBeVisible();
+  await expect(shellInvite).toBeEnabled();
+  await shellInvite.click();
   await expect(dialog).toBeVisible();
+  expect(await inviteUrls(page)).toEqual([]);
 });
 
 test('[P0] team member without invite permission sees projects but no invite or admin actions', async ({
