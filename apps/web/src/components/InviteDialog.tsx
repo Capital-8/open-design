@@ -11,7 +11,7 @@ import { countBucket, stableAnalyticsErrorCode, workspaceAnalyticsDimensions } f
 import styles from './InviteDialog.module.css';
 
 export interface InviteRow { email: string; role: string }
-interface Row extends InviteRow { idempotencyKey: string; error?: string | undefined }
+interface Row extends InviteRow { idempotencyKey: string; error?: string | undefined; validated?: boolean }
 interface Props {
   variant?: 'dialog' | 'onboarding';
   onFinish?: (sentCount: number, completion: 'sent' | 'skipped') => void;
@@ -45,7 +45,6 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
   const dimensions = workspaceAnalyticsDimensions(workspaceContext);
   const owner = workspaceContext?.role === 'owner' && canAssignRoles;
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
-  const [validated, setValidated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentCount, setSentCount] = useState(0);
@@ -104,7 +103,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     setBatchSuccess(null); setPartialCount(null); setReadyToEnter(false); completionSent.current = false;
     controller.current?.abort();
     setHelpOpen(false);
-    setRows([emptyRow()]); setError(null); setSentCount(0); setValidated(false); setSubmitting(false); setOpenRoleIndex(null);
+    setRows([emptyRow()]); setError(null); setSentCount(0); setSubmitting(false); setOpenRoleIndex(null);
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     if (!onboarding) dialog.current?.querySelector<HTMLHeadingElement>('h2')?.focus();
@@ -196,7 +195,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
   }
   function close() { if (!onboarding) { click('close'); requestVersion.current += 1; controller.current?.abort(); onClose(); } }
   async function submit() {
-    setValidated(true);
+    setRows(previous => previous.map(row => ({ ...row, validated: true })));
     if (submittingRef.current || rowErrors(rows, false).some(Boolean)) return;
     if (!workspaceContext || workspaceContext.memberStatus !== 'active') { setError(t('workspaceInvite.submitFailed')); return; }
     submittingRef.current = true;
@@ -310,8 +309,8 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
         <div className={styles.rows} data-invite-rows>
           {rows.map((row, index) => <div className={`${styles.row} ${rows.length === 1 ? styles.single : ''}`} key={index} data-invite-row>
             <input type="email" className={styles.input} value={row.email} placeholder={t(onboarding ? 'workspaceInvite.onboardingEmailPlaceholder' : 'workspaceInvite.emailPlaceholder')} aria-label={t('workspaceInvite.emailLabel')}
-              disabled={submitting} aria-invalid={validated && !!errors[index]} aria-describedby={validated && errors[index] ? `${id}-error-${index}` : undefined}
-              onChange={event => updateRow(index, { email: event.target.value })} onBlur={() => { if (row.email.trim()) setValidated(true); }} />
+              disabled={submitting} aria-invalid={!!(row.validated || row.error) && !!errors[index]} aria-describedby={!!(row.validated || row.error) && errors[index] ? `${id}-error-${index}` : undefined}
+              onChange={event => updateRow(index, { email: event.target.value })} />
             {owner ? <Button ref={element => { triggers.current[index] = element; }} className={styles.role} disabled={submitting}
               aria-label={t('workspaceInvite.roleLabel')} data-menu-keyboard={!onboarding && openRoleIndex === index && menuKeyboardFocus ? true : undefined} aria-haspopup="listbox" aria-expanded={openRoleIndex === index} aria-controls={`${id}-roles`}
               onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setMenuKeyboardFocus(true); setOpenRoleIndex(index); requestAnimationFrame(() => { const options = menu.current?.querySelectorAll<HTMLButtonElement>('button'); (event.key === 'ArrowUp' ? options?.[options.length - 1] : options?.[0])?.focus(); }); } }}
@@ -319,7 +318,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
               {roleText(row.role)}{onboarding ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.9999 13.1714L16.9497 8.22168L18.3639 9.63589L11.9999 15.9999L5.63599 9.63589L7.0502 8.22168L11.9999 13.1714Z" /></svg> : <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>}</Button> : <span className={styles.fixedRole}>{roleText('member')}</span>}
             {rows.length > 1 ? <Button className={styles.remove} aria-label={t('workspaceInvite.removeRow')} disabled={submitting}
               onClick={() => { click('remove_recipient_row'); setRows(previous => previous.filter((_, i) => i !== index)); setOpenRoleIndex(null); }}>{'×'}</Button> : null}
-            {validated && errors[index] ? <p className={styles.lineError} id={`${id}-error-${index}`} role="alert">{errors[index]}</p> : null}
+            {!!(row.validated || row.error) && errors[index] ? <p className={styles.lineError} id={`${id}-error-${index}`} role="alert">{errors[index]}</p> : null}
           </div>)}
         </div>
         <Button className={styles.add} disabled={submitting} onClick={() => { click('add_recipient_row'); focusAddedRow.current = true; setRows(previous => [...previous, emptyRow()]); }}>{onboarding ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z" /></svg>{t('workspaceInvite.addMember')}</> : locale === 'en' ? t('workspaceInvite.addMember') : `＋ ${t('workspaceInvite.addMember')}`}</Button>

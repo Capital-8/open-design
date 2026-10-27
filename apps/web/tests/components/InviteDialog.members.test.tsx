@@ -62,6 +62,29 @@ describe('member-line invitation states', () => {
     expect(screen.getAllByRole('textbox')[1]!.getAttribute('aria-invalid')).toBe('true');
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it.each(['dialog', 'onboarding'] as const)('OPEND-4343 %s validates recipients only on submit and leaves added rows untouched', variant => {
+    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    render(<InviteDialog variant={variant} open workspaceContext={owner} onClose={() => {}} />);
+    email('first@example.com');
+    fireEvent.blur(screen.getAllByRole('textbox')[0]!);
+    fireEvent.click(screen.getByRole('button', { name: /添加成员|add member/i }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    email('invalid', 1);
+    fireEvent.blur(screen.getAllByRole('textbox')[1]!);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(sendButton());
+    expect(screen.getAllByRole('textbox')[1]!.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(fetcher).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /添加成员|add member/i }));
+    expect(screen.getAllByRole('textbox')[2]!.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    email('second@example.com', 1);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(sendButton());
+    expect(screen.getAllByRole('textbox')[2]!.getAttribute('aria-invalid')).toBe('true');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it('removes only sent rows, retains failed roles and retries them once', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response([{ email: 'sent@example.com', ok: true }, { email: 'retry@example.com', ok: false, error: 'active_pending_invite' }]))
       .mockResolvedValueOnce(response([{ email: 'corrected@example.com', ok: true }]));
