@@ -438,30 +438,7 @@ export function hasActiveShare(state: ProjectShareState | null | undefined): boo
  */
 export const SHARE_COMMENT_PAGE_LIMIT = 500;
 
-/**
- * Anti-abuse ceiling on a comment body, in BYTES. Not a product limit.
- *
- * The product decision is that comment length is not limited: no character
- * count, no disabled send button, no truncation, and no `maxLength` on the
- * input. A 4000-character cap was proposed and explicitly rejected, as was an
- * earlier 200-code-point one and a later 1–400 character one. This constant
- * exists only so a single request cannot be used to push unbounded bytes at
- * the server, which is a transport concern.
- *
- * The distinction is load-bearing, not pedantic:
- *
- * - It is measured in BYTES, not characters, because it is about payload size
- *   rather than anything a person types. Never render it as a character
- *   budget, and never derive a counter from it.
- * - Exceeding it is `PAYLOAD_TOO_LARGE`, not `INVALID_COMMENT`. It is not a
- *   validation rule about what a comment may say.
- * - The client must NOT pre-check it. The input stays uncapped; the server
- *   refuses the pathological case. A client-side check would reintroduce the
- *   exact "count and disable" behaviour the product ruled out.
- *
- * 64 KiB is roughly twenty thousand Chinese characters. Anything reaching it
- * is a script or a paste accident, not a person writing a comment.
- */
+/** Transport ceiling, independent of the 400-grapheme product limit. */
 export const SHARE_COMMENT_MAX_BYTES = 64 * 1024;
 
 /**
@@ -2203,6 +2180,7 @@ export interface CommentAlignAttachment {
  * whole pixels before comparing; sub-pixel drift is not an edit.
  */
 export interface CommentAlignBox {
+  anchor?: { u: number; v: number };
   x: number;
   y: number;
   width: number;

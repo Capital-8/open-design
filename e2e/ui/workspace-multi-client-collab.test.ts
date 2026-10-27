@@ -523,11 +523,12 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
             .filter({ hasText: COLLAB_COMMENT_NOTE })).toBeVisible({ timeout: T.medium });
           await expect(ownerPage.getByRole('alertdialog', { name: 'Prepare static comments · save source version' })).toHaveCount(0);
           await expect(ownerPage.getByTestId('comment-identity-preparation')).toHaveCount(0);
+          await ownerPage.getByTestId('comment-side-item').filter({ hasText: COLLAB_COMMENT_NOTE }).click();
         })(),
       ]);
       expect(initialRead.ok()).toBeTruthy();
 
-      await test.step('keep the collapsed rail unread until it is expanded', async () => {
+      await test.step('keep a received comment unread until its detail is opened', async () => {
         const collapsedReadRequests: string[] = [];
         const recordCollapsedRead = (request: Request) => {
           if (isProjectCommentReadRequest(request, projectId)) {
@@ -579,12 +580,14 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
           await expect(collapsedRail).toContainText('2', { timeout: T.medium });
           expect(collapsedReadRequests).toEqual([]);
 
-          const expandedRead = ownerPage.waitForResponse((response) =>
-            isProjectCommentReadResponse(response, projectId),
-          );
           await collapsedRail.click();
           await expect(ownerPage.getByTestId('comment-side-panel')).toBeVisible();
-          expect((await expandedRead).ok()).toBeTruthy();
+          expect(collapsedReadRequests).toEqual([]);
+          const detailRead = ownerPage.waitForResponse((response) =>
+            isProjectCommentReadResponse(response, projectId),
+          );
+          await ownerPage.getByTestId('comment-side-item').filter({ hasText: 'Member comment received while the owner rail is collapsed.' }).click();
+          expect((await detailRead).ok()).toBeTruthy();
 
           await ownerPage.keyboard.press('Escape');
           await expect(ownerPage.getByTestId('comment-side-panel')).toHaveCount(0);

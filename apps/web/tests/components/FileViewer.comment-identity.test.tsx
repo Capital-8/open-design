@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { buildWorkspacePermissions, buildWorkspaceSeatSummary } from '@open-design/contracts';
+import { CollabProvider, type CollabContextValue } from '../../src/collab/collab-context';
 import { FileViewer, commentAuthorAvatarColor } from '../../src/components/FileViewer';
 import { AMR_LOGIN_STATUS_EVENT } from '../../src/components/amrLoginPolling';
 import { advanceWorkspaceAccountGeneration, resetWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
@@ -36,8 +38,14 @@ async function savedPin() {
   });
   return (await screen.findByTestId('comment-saved-marker-pin')).querySelector('.comment-saved-pin');
 }
-beforeEach(() => resetWorkspaceAccountGeneration());
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); resetWorkspaceAccountGeneration(); });
+beforeEach(() => {
+  resetWorkspaceAccountGeneration();
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return this.matches('.viewer-body, .comment-preview-canvas') ? new DOMRect(100, 100, 800, 600) : original.call(this);
+  });
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); resetWorkspaceAccountGeneration(); });
 
 it.each([
   ['👩🏽‍💻 Engineer', '👩🏽‍💻'], ['👍🏽 Visitor', '👍🏽'], ['🇨🇳 Visitor', '🇨🇳'],
@@ -55,9 +63,10 @@ it.each([
   expect(pin).toHaveStyle({ background: swatch.bg, color: swatch.fg });
   expect(pin).toHaveTextContent(initial);
   fireEvent.click(pin!);
-  const activePin = await screen.findByTestId('comment-active-pin');
-  expect(activePin).toHaveTextContent(initial);
-  expect(activePin).toHaveStyle({ background: swatch.bg, color: swatch.fg });
+  const selectedPin = await savedPin();
+  expect(screen.queryByTestId('comment-active-pin')).toBeNull();
+  expect(selectedPin).toHaveTextContent(initial);
+  expect(selectedPin).toHaveStyle({ background: swatch.bg, color: swatch.fg });
   if (name.trim()) expect(row).toHaveTextContent(name);
 });
 
@@ -120,4 +129,24 @@ it('3650: account boundary invalidates self identity and a late old response can
   });
   await act(async () => resolveOld(account('self')));
   await waitFor(() => expect(screen.getByTestId('comment-unread-dot')).toBeVisible());
+});
+
+it('uses the known current member display seed for a draft pin and target', async () => {
+  stubAccount(async () => account('self'));
+  const collab: CollabContextValue = {
+    workspaceContext: { workspaceId: 'ws', workspaceType: 'team', workspaceMemberId: 'self-member', role: 'owner', displayName: 'Self',
+      memberStatus: 'active', lifecycleState: 'active', billingState: 'active', planId: null, providerMode: 'platform_credits',
+      seatSummary: buildWorkspaceSeatSummary({seatLimit:3,usedSeats:1}), permissions:buildWorkspacePermissions({role:'owner',lifecycleState:'active'}) },
+    workspaceContextLoading:false,enabled:false,member:null,present:[],publishedVersion:null,syncState:null,viewerOnly:false,
+    writerAuthority:'allowed',isOwner:true,isEffectiveOwner:true,isSharedNonOwner:false,ownerDisplayName:null,ownerRole:null,downloadPending:false,
+    reportChange(){},requestPublish(){},refreshPresence(){},checkStatusNow(){},
+  };
+  render(<CollabProvider value={collab}>{tree([{...comment,authorKind:'member',authorMemberId:'self-member'}])}</CollabProvider>);
+  fireEvent.click(screen.getByTestId('board-mode-toggle'));
+  const frame=screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+  await act(async()=>window.dispatchEvent(new MessageEvent('message',{source:frame.contentWindow,data:{type:'od:comment-target',
+    filePath:file.name,elementId:'new',selector:'h2',label:'h2',text:'',htmlHint:'',position:{x:20,y:40,width:200,height:80},hoverPoint:{x:50,y:60}}})));
+  const swatch=commentAuthorAvatarColor(comment.authorKey!);
+  expect(screen.getByTestId('comment-active-pin')).toHaveStyle({background:swatch.bg,color:swatch.fg});
+  expect(screen.getByTestId('comment-active-pin')).toHaveTextContent('S');
 });

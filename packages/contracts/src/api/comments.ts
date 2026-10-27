@@ -1,5 +1,13 @@
 import type { OkResponse } from '../common.js';
 
+export const COMMENT_MAX_CHARACTERS = 400;
+const commentSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** Count the text that will be stored; surrounding whitespace is trimmed on save. */
+export function countCommentCharacters(note: string): number {
+  return Array.from(commentSegmenter.segment(note.trim())).length;
+}
+
 export type PreviewCommentStatus =
   | 'open'
   | 'attached'
@@ -8,7 +16,19 @@ export type PreviewCommentStatus =
   | 'resolved'
   | 'failed';
 
+/** Element-local click point, independent of scrolling and viewport scale. */
+export interface PreviewCommentPoint { u: number; v: number }
+
+export function isPreviewCommentPoint(value: unknown): value is PreviewCommentPoint {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as PreviewCommentPoint;
+  return Number.isFinite(point.u) && Number.isFinite(point.v)
+    && point.u >= 0 && point.u <= 1 && point.v >= 0 && point.v <= 1;
+}
+
 export interface PreviewCommentPosition {
+  /** Optional for historical comments. Stored with the element rectangle. */
+  anchor?: PreviewCommentPoint;
   x: number;
   y: number;
   width: number;

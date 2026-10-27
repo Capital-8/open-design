@@ -1,4 +1,4 @@
-import type { ChangeEvent, ClipboardEvent, CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { ReactNode, ChangeEvent, ClipboardEvent, CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { Button, Textarea } from '@open-design/components';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -8,6 +8,9 @@ import type { PreviewComment, PreviewCommentMember } from '../types';
 import { isImeComposing } from '../utils/imeComposing';
 
 import { Icon } from './Icon';
+import { COMMENT_MAX_CHARACTERS, countCommentCharacters } from '@open-design/contracts';
+import { CommentImage } from './CommentBrowse';
+import browseStyles from './CommentComposer.module.css';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -449,6 +452,8 @@ export function BoardComposerPopover({
   docked = false,
   commenting = true,
   discardPending = false,
+  saveError = false,
+  author,
 }: {
   target: PreviewCommentSnapshot;
   existing: PreviewComment | null;
@@ -502,7 +507,26 @@ export function BoardComposerPopover({
   commenting?: boolean;
   /** A pick was held back to protect unsent work; the next pick discards it. */
   discardPending?: boolean;
+  saveError?: boolean;
+  author?: ReactNode;
 }) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<CSSProperties>({});
+  const [detailExpanded, setDetailExpanded] = useState(false);
+  const [detailOverflows, setDetailOverflows] = useState(false);
+  const detailRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { setDetailExpanded(false); }, [existing?.id]);
+  useLayoutEffect(() => {
+    const node = detailRef.current;
+    if (!node) return;
+    if (detailExpanded) return;
+    const measure = () => setDetailOverflows(node.scrollHeight > node.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [existing?.id, existing?.note, detailExpanded]);
   const pendingCount = notes.length + (draft.trim() ? 1 : 0);
   const podMembers = target.podMembers ?? [];
   const composingRef = useRef(false);
@@ -620,11 +644,13 @@ export function BoardComposerPopover({
   // `sendDisabled` (prop) is the external gate (e.g. the chat can't accept the
   // batch right now); combine it with the local "nothing to send" / sending
   // checks so the send-to-chat CTA reflects both.
-  const sendBlocked = (pendingCount === 0 && !hasAnyImage) || sending || sendDisabled;
+  const characterCount = countCommentCharacters(draft);
+  const overLimit = !existing && characterCount > COMMENT_MAX_CHARACTERS;
+  const sendBlocked = (pendingCount === 0 && !hasAnyImage) || sending || sendDisabled || overLimit;
   const isPodSelection = target.selectionKind === 'pod';
   const hasSaveContent = Boolean(trimmedDraft) || hasAnyImage;
   const existingChanged = existing ? trimmedDraft !== existingNote || hasFreshImage : true;
-  const saveDisabled = !hasSaveContent || !existingChanged || sending;
+  const saveDisabled = !hasSaveContent || !existingChanged || sending || overLimit;
   // Queue-on-send swaps the primary label to the annotation-queue wording.
   const primaryLabel = sending
     ? t('chat.comments.sending')
@@ -647,11 +673,27 @@ export function BoardComposerPopover({
     e.preventDefault();
     onAttachImages?.(imgs);
   }
+  const actionsMenu = (
+          <div className={browseStyles.menu}>
+            <button type="button" className={browseStyles.menuToggle} aria-label={t('comment.moreActions')} aria-haspopup="menu" onClick={event => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setMenuPosition({ left: Math.min(window.innerWidth - 140, Math.max(16, rect.right - 120)), top: Math.min(window.innerHeight - 110, rect.bottom + 4) });
+              menuRef.current?.togglePopover();
+            }}>···</button>
+            <div ref={menuRef} popover="auto" role="menu" className={browseStyles.menuItems} style={menuPosition}>
+              {canSendToAgent && allowSendToChat ? <button type="button" data-testid="comment-add-send" disabled={sendBlocked} title={sendDisabled ? sendDisabledReason : undefined} onClick={() => void onSendBatch()}>{primaryLabel}</button> : null}
+              {existing && onDeleteComment && canDeleteComment ? <button type="button" className={browseStyles.deleteAction} disabled={sending} onClick={() => void onDeleteComment(existing.id)}>{t('common.delete')}</button> : null}
+              {isPodSelection && canEditComment && !existing ? <button type="button" data-testid="comment-popover-add-note" disabled={!draft.trim() || sending || overLimit} onClick={onAddDraft}>{t('chat.comments.addNote')}</button> : null}
+            </div>
+          </div>
+  );
   return (
     <div
       ref={popoverRef}
-      className={`comment-popover comment-popover-composer${docked ? ' comment-popover-docked' : ''}${dragging ? ' comment-popover-dragging' : ''}`}
+      className={`${browseStyles.popover} comment-popover comment-popover-composer${docked ? ' comment-popover-docked' : ''}${dragging ? ' comment-popover-dragging' : ''}`}
       data-testid="comment-popover"
+      data-existing-comment={Boolean(existing)}
+      data-over-limit={overLimit}
       role="dialog"
       aria-modal="false"
       aria-label="Annotation"
@@ -675,8 +717,10 @@ export function BoardComposerPopover({
             <span aria-hidden />
           </button>
           <span className="comment-popover-title" title={target.label || target.elementId}>
-            {target.label || target.elementId}
+            {existing ? (author ?? existing.authorDisplayName ?? t('comment.unknownAuthor')) : t('chat.comments.comment')}
           </span>
+          {existing ? actionsMenu : null}
+          <button type="button" className="comment-popover-close" aria-label={t('common.close')} onClick={onClose}><Icon name="close" size={14} /></button>
           {onViewAllComments ? (
             <button
               type="button"
@@ -694,9 +738,9 @@ export function BoardComposerPopover({
           outside this box (see below) so a height-clamped card can never push
           the buttons out of view. */}
       <div className="comment-popover-body">
-        <section className="comment-popover-section comment-popover-section-params">
+        {!commenting ? <section className="comment-popover-section comment-popover-section-params">
           <AnnotationStyleSummary target={target} testId="comment-popover-style-summary" />
-        </section>
+        </section> : null}
         {podMembers.length > 0 ? (
           <div className="board-pod-summary">
             <strong>{t('chat.comments.capturedItems', { n: target.memberCount || podMembers.length })}</strong>
@@ -715,8 +759,9 @@ export function BoardComposerPopover({
                   }}
                 >
                   {summarizeMember(member)}
-                  <button
+                  {!existing && canEditComment ? <button
                     type="button"
+                    disabled={sending}
                     className="board-pod-chip-remove"
                     onClick={() => onRemoveMember(member.elementId)}
                     onFocus={() => onHoverMember?.(member.elementId)}
@@ -725,7 +770,7 @@ export function BoardComposerPopover({
                     title={t('chat.comments.remove')}
                   >
                     <Icon name="close" size={14} />
-                  </button>
+                  </button> : null}
                 </span>
               ))}
             </div>
@@ -757,7 +802,7 @@ export function BoardComposerPopover({
                       rel="noopener noreferrer"
                       title={item.name}
                     >
-                      <img src={item.url} alt="" aria-hidden />
+                      <CommentImage src={item.url} name={item.name} failedLabel={t('comment.imageFailed')} />
                     </a>
                   </div>
                 ))}
@@ -775,6 +820,7 @@ export function BoardComposerPopover({
                     <button
                       type="button"
                       className="comment-popover-image-remove"
+                      disabled={sending}
                       onClick={() => onRemoveImage?.(index)}
                       aria-label={t('chat.annotationAttachedRemove')}
                       title={t('chat.annotationAttachedRemove')}
@@ -785,12 +831,17 @@ export function BoardComposerPopover({
                 ))}
               </div>
             ) : null}
-            <Textarea
+            {existing ? <div className={browseStyles.detail} data-testid="comment-popover-detail">
+              <p ref={detailRef} className={detailExpanded ? browseStyles.expanded : browseStyles.clamped}>{existing.note}</p>
+              {detailOverflows || detailExpanded ? <button type="button" onClick={() => setDetailExpanded(value => !value)} aria-expanded={detailExpanded}>
+                {t(detailExpanded ? 'chat.comments.collapseBody' : 'chat.comments.expandBody')}
+              </button> : null}
+            </div> : <Textarea
               data-testid="comment-popover-input"
               className={!canEditComment ? 'composer-note--readonly' : undefined}
               value={draft}
               autoFocus={canEditComment}
-              readOnly={!canEditComment}
+              readOnly={!canEditComment || sending}
               aria-label={t('chat.comments.placeholder')}
               placeholder={t('chat.comments.placeholder')}
               onChange={(event) => onDraft(event.target.value)}
@@ -820,7 +871,9 @@ export function BoardComposerPopover({
                   }
                 }
               }}
-            />
+            />}
+            {overLimit ? <p role="alert" className={browseStyles.error}><span>{t('comment.overLimit', { count: characterCount, max: COMMENT_MAX_CHARACTERS })}</span><span className={browseStyles.counter}>{characterCount}/{COMMENT_MAX_CHARACTERS}</span></p> : null}
+            {!existing && saveError ? <p role="alert" className={browseStyles.error}>{t('comment.saveFailed')} <button type="button" disabled={saveDisabled} onClick={() => void onSaveComment()}>{t('preview.retry')}</button></p> : null}
             {/* OP2: explain WHY the textarea is read-only when it's specifically
                 a share-page (external) comment — team-member-vs-team-member
                 read-only (OP3) has no such reason line, board only asked for
@@ -836,111 +889,18 @@ export function BoardComposerPopover({
           </section>
         ) : null}
       </div>
-      {commenting ? (
-        <div className="comment-popover-actions">
-          <div className="comment-popover-actions-start">
-            {onAttachImages && canEditComment ? (
-              <>
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={onImageInputChange}
-                />
-                <button
-                  type="button"
-                  className="comment-popover-close"
-                  onClick={() => imageInputRef.current?.click()}
-                  title={t('chat.annotationAttachImage')}
-                  aria-label={t('chat.annotationAttachImage')}
-                >
-                  <Icon name="attach" size={14} />
-                </button>
-              </>
-            ) : null}
-            {existing && onDeleteComment && canDeleteComment ? (
-              <button
-                type="button"
-                className="comment-popover-close comment-popover-delete"
-                onClick={() => void onDeleteComment(existing.id)}
-                title={t('common.delete')}
-                aria-label={t('common.delete')}
-              >
-                <Icon name="trash" size={14} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="comment-popover-close"
-                onClick={onClose}
-                title={t('common.close')}
-                aria-label={t('common.close')}
-              >
-                <Icon name="close" size={14} />
-              </button>
-            )}
-          </div>
-          <div className="comment-popover-actions-end">
-            {isPodSelection ? (
-              <>
-                {/* Pod: add-note is secondary, send-to-chat is the primary CTA.
-                    Add-note composes new note text (an edit), so it is gated by
-                    canEditComment; send-to-chat by canSendToAgent. */}
-                {canEditComment ? (
-                  <Button
-                    variant="ghost"
-                    data-testid="comment-popover-add-note"
-                    disabled={!draft.trim()}
-                    onClick={onAddDraft}
-                  >
-                    {t('chat.comments.addNote')}
-                  </Button>
-                ) : null}
-                {canSendToAgent && allowSendToChat ? (
-                  <Button
-                    variant="primary"
-                    data-testid="comment-add-send"
-                    disabled={sendBlocked}
-                    title={sendDisabled ? sendDisabledReason : undefined}
-                    onClick={() => void onSendBatch()}
-                  >
-                    {primaryLabel}
-                  </Button>
-                ) : null}
-              </>
-            ) : (
-              <>
-                {/* Element: comment (save) is the primary CTA (also Enter);
-                    send-to-chat is secondary. Save (edit) is gated by
-                    canEditComment; send-to-chat by canSendToAgent. */}
-                {canSendToAgent && allowSendToChat ? (
-                  <Button
-                    variant="ghost"
-                    data-testid="comment-add-send"
-                    disabled={sendBlocked}
-                    title={sendDisabled ? sendDisabledReason : undefined}
-                    onClick={() => void onSendBatch()}
-                  >
-                    {primaryLabel}
-                  </Button>
-                ) : null}
-                {canEditComment ? (
-                  <Button
-                    variant="primary"
-                    data-testid="comment-popover-save"
-                    disabled={saveDisabled}
-                    onClick={() => void onSaveComment()}
-                  >
-                    {t('chat.comments.comment')}
-                  </Button>
-                ) : null}
-              </>
-            )}
-          </div>
+      {commenting && !existing ? <div className="comment-popover-actions">
+        <div className="comment-popover-actions-start">
+          {!existing && onAttachImages && canEditComment ? <>
+            <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={onImageInputChange} />
+            <button type="button" className="comment-popover-close" disabled={sending} onClick={() => imageInputRef.current?.click()} title={t('chat.annotationAttachImage')} aria-label={t('chat.annotationAttachImage')}><Icon name="image" size={16} /></button>
+          </> : null}
         </div>
-      ) : null}
+        {!existing ? actionsMenu : null}
+        {!existing && canEditComment ? <button type="button" className={browseStyles.send} data-testid="comment-popover-save" aria-label={t('chat.comments.comment')} disabled={isPodSelection ? sendBlocked : saveDisabled} onClick={() => void (isPodSelection ? onSendBatch() : onSaveComment())}>
+          {sending ? <span className={browseStyles.spinner} aria-label={t('common.loading')} /> : <span aria-hidden>↑</span>}
+        </button> : null}
+      </div> : null}
     </div>
   );
 }

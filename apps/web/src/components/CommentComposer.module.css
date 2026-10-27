@@ -1,0 +1,56 @@
+.popover { border-radius:12px; padding:12px; background:#fff; backdrop-filter:none; -webkit-backdrop-filter:none; border:1px solid #e6e6e6; box-shadow:0 4px 18px #00000012; color:#333; }
+.popover :global(.comment-popover-titlebar) { min-height:40px; padding:8px 12px; gap:8px; }
+.popover :global(.comment-popover-drag-handle) { display:none; }
+.popover :global(.comment-popover-view-all) { display:none; }
+.popover :global(.comment-popover-title) { flex:1; min-width:0; font-size:12px; }
+.popover :global(.comment-popover-section-compose) { border:0; padding:8px 12px; }
+.popover :global(.comment-popover-actions) { padding:4px 10px 10px; }
+.popover textarea { border:0; outline:0; box-shadow:none; resize:none; padding:0; min-height:58px; }
+.send { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border:0; border-radius:50%; background:#272727; color:#fff; font-size:23px; cursor:pointer; }
+.send:disabled { opacity:.35; cursor:default; }
+.menu { position:relative; }
+.menuToggle { border:0; background:transparent; padding:0; color:#666; list-style:none; cursor:pointer; font-size:23px; line-height:28px; width:28px; text-align:center; }
+
+.menuItems { position:fixed; inset:auto; margin:0; z-index:10001; width:120px; box-sizing:border-box; border:1px solid #ddd; padding:4px; border-radius:8px; background:white; box-shadow:0 4px 14px #0001; }
+.menuItems button { display:block; width:100%; text-align:left; border:0; background:none; padding:8px; color:#333; font-size:12px; cursor:pointer; }
+.menuItems button:disabled { opacity:.4; cursor:default; }
+.menuItems button:hover:not(:disabled) { background:#f4f4f4; }
+.error { color:#d63c35; font-size:12px; margin:6px 0 0; }
+.error button { background:none; border:0; color:inherit; cursor:pointer; text-decoration:underline; }
+.detail p { font-weight:400; font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin:0; }
+.clamped { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.expanded { display:block; }
+.detail button { border:0; background:none; color:#666; padding:6px 0 0; cursor:pointer; font-size:12px; }
+.spinner { width:14px; height:14px; border:2px solid #fff7; border-top-color:white; border-radius:50%; animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.popover:has(.detail) :global(.comment-popover-section-compose) { padding:0 12px 12px 40px; }
+
+.popover:has(.detail) :global(.comment-popover-titlebar) { margin:0; padding:0 0 8px; }
+.popover:has(.detail) :global(.comment-popover-title) { overflow:visible; }
+
+.popover :global(.comment-popover-close) { width:22px; height:22px; min-height:0; padding:0; border:0; background:transparent; color:#888; }
+.popover:has(.detail) :global(.comment-popover-titlebar) { min-height:22px; }
+.popover:has(.detail) :global(.comment-popover-section-compose) { padding:0 0 0 28px; }
+
+.popover[data-existing-comment="false"] :global(.comment-popover-titlebar) { display:none; }
+.popover textarea { font-weight:400; font-size:13px; line-height:1.5; background:transparent; }
+
+.error { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.counter { flex-shrink:0; white-space:nowrap; font-size:11px; }
+
+.popover[data-existing-comment="false"] :global(.comment-popover-section-compose) { padding:0; }
+.popover[data-existing-comment="false"] textarea { field-sizing:content; height:auto; min-height:60px; max-height:180px; padding:0; }
+.popover[data-over-limit="true"] textarea { height:180px; }
+.popover :global(.comment-popover-actions) { padding:8px 0 0; gap:8px; }
+.popover :global(.comment-popover-actions) > .menu { margin-left:auto; }
+.popover .menuToggle { width:22px; height:22px; min-height:0; line-height:22px; font-size:18px; }
+.popover .send { width:30px; height:30px; min-height:0; }
+.popover[data-existing-comment="false"] { padding:0; }
+.popover[data-existing-comment="false"] textarea { display:block; box-sizing:border-box; padding:14px 14px 12px; min-height:66px; max-height:186px; }
+.popover[data-over-limit="true"] textarea { height:186px; }
+.popover[data-existing-comment="false"] .error { margin:6px 14px 8px; }
+.popover[data-existing-comment="false"] :global(.comment-popover-actions) { margin-top:0; padding:0 14px 10px; }
+
+.popover .menuItems button { font-weight:400; }
+.menuItems .deleteAction { color:#f04142; font-weight:400; }

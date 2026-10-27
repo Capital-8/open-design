@@ -1497,7 +1497,7 @@
 }
 .comment-preview-layer {
   --comment-side-dock-width: 320px;
-  --comment-side-dock-rail-width: 42px;
+  --comment-side-dock-rail-width: 48px;
   --comment-side-dock-stacked-height: 220px;
   --comment-side-dock-stacked-rail-height: 48px;
 }
@@ -1687,11 +1687,11 @@
   align-items: center;
   justify-content: center;
   pointer-events: auto;
-  transform: translate(-50%, -50%);
+  transform: none;
 }
 .comment-saved-pin:hover,
 .comment-active-pin:hover {
-  transform: translate(-50%, -50%);
+  transform: none;
 }
 .comment-active-pin {
   pointer-events: none;
@@ -2123,7 +2123,7 @@
   --comment-accent-surface-strong: color-mix(in srgb, var(--comment-accent) 18%, var(--bg-panel));
   --comment-accent-border: color-mix(in srgb, var(--comment-accent) 64%, var(--border));
   position: relative;
-  width: 320px;
+  width: 100%;
   height: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -2147,9 +2147,9 @@
   gap: 10px;
   height: 56px;
   min-height: 56px;
-  padding: 0 16px;
-  border-bottom: 1px solid #EDEDED;
-  background: #FAFAFA;
+  padding: 0 10.5px 0 14.5px;
+  border-bottom: 0;
+  background: transparent;
 }
 .comment-side-title {
   display: inline-flex;
@@ -3203,3 +3203,22 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
   background: var(--bg-panel);
   min-height: 100%;
 }
+
+/* Collaboration comment panel resize affordance. */
+.comment-side-resizer { position:absolute; z-index:3; left:-4px; top:8px; bottom:8px; width:8px; cursor:col-resize; touch-action:none; }
+.comment-side-resizer:focus-visible { outline:2px solid var(--text-muted); outline-offset:1px; }
+.comment-side-time { flex-shrink:0; white-space:nowrap; }
+.comment-side-author-copy { min-width:0; }
+.comment-side-author-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.comment-side-author { flex: 0 1 auto; }
+.comment-side-author-copy { flex: 0 1 auto; }
+.comment-side-check { margin-left: auto; }
+
+.comment-side-item { font-weight: 400; }
+.comment-side-collapse svg + svg { margin-left: -9px; }
+.comment-side-select-all { display: inline-flex; align-items: center; gap: 6px; }
+.comment-side-select-all::before { content: ''; width: 14px; height: 14px; border: 1px solid #d8d8d8; border-radius: 3px; box-sizing: border-box; }
+.comment-side-select-all[aria-pressed="true"]::before { content: '✓'; color: white; background: #333; border-color: #333; font-size: 11px; line-height: 12px; text-align: center; }
+.comment-detail-author { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.comment-detail-time { flex-shrink: 0; font-size: 10px; font-weight: 400; color: #a3a3a3; }

@@ -157,6 +157,8 @@ export interface Dict {
   'fileViewer.commentSync.backfillPendingCountBody': string;
   /** K4: reopen-resume comment sync busy state, shown in the primary share button itself. */
   'fileViewer.commentSync.reopenSyncBusy': string;
+  'fileViewer.commentSync.alignRetryPending': string;
+  'fileViewer.commentSync.alignRetrying': string;
   'fileViewer.commentSync.alignFailedBody': string;
   'fileViewer.shareGuide.title': string;
   'fileViewer.shareGuide.description': string;
@@ -3070,6 +3072,7 @@ export interface Dict {
   'chat.comments.select': string;
   'chat.comments.expandBody': string;
   'chat.comments.collapseBody': string;
+  'chat.comments.deselectAll': string;
   'chat.comments.selectAll': string;
   'chat.comments.deselect': string;
   'chat.comments.nSelected': string;
@@ -5821,4 +5824,13 @@ export interface Dict {
   'labs.optOutSkip': string;
   'labs.optOutOtherPlaceholder': string;
   'labs.optOutSubmit': string;
+  "comment.unknownAuthor": string;
+  "comment.moreCount": string;
+  "comment.resizePanel": string;
+  "comment.overLimit": string;
+  "comment.saveFailed": string;
+  "comment.imageFailed": string;
+  "comment.moreActions": string;
+  "fileViewer.commentSync.alignRetryFailed": string;
+  "fileViewer.commentSync.alignRetrySucceeded": string;
 }

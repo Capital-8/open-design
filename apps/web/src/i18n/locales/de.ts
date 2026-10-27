@@ -1,6 +1,9 @@
 import type { Dict } from '../types';
 
 export const de: Dict = {
+  'chat.comments.deselectAll': 'Deselect all',
+  'fileViewer.commentSync.alignRetrying': 'Retrying…',
+  'fileViewer.commentSync.alignRetryPending': 'Syncing comments…',
   'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
   'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
   'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
@@ -5526,4 +5529,13 @@ export const de: Dict = {
   'chat.record.canceled': "Abgebrochen",
   'chat.record.pending': "Noch nicht gestartet",
   'chat.record.unfinished': "Nicht abgeschlossen",
+  "comment.unknownAuthor": "Unknown author",
+  "comment.moreCount": "Show comments ({n})",
+  "comment.resizePanel": "Resize comments panel",
+  "comment.overLimit": "Comment exceeds {max} characters. Shorten it before sending.",
+  "comment.saveFailed": "Could not save comment. Try again.",
+  "comment.imageFailed": "Image unavailable",
+  "comment.moreActions": "More comment actions",
+  'fileViewer.commentSync.alignRetryFailed': 'Sync failed. Try again.',
+  'fileViewer.commentSync.alignRetrySucceeded': 'Comments synced',
 };

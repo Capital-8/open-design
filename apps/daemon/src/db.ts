@@ -26,6 +26,7 @@ import {
   stripDoneMarkers,
   stripNextStepMarkers,
   asPreviewCommentAnchorState,
+  isPreviewCommentPoint,
 } from '@open-design/contracts';
 import { parseCommentFileState } from './collab/comment-file-facts.js';
 import { migrateCollabSyncSnapshots } from './collab/sync-snapshot-store.js';
@@ -5022,11 +5023,13 @@ function compactWhitespace(value: string): string {
 
 function normalizePosition(input: unknown) {
   const value: DbRow = input && typeof input === 'object' ? input as DbRow : {};
+  if (value.anchor !== undefined && !isPreviewCommentPoint(value.anchor)) throw new Error('invalid comment anchor');
   return {
-    x: finiteNumber(value.x),
-    y: finiteNumber(value.y),
-    width: finiteNumber(value.width),
-    height: finiteNumber(value.height),
+    ...(value.anchor ? { anchor: { u: value.anchor.u, v: value.anchor.v } } : {}),
+    x: typeof value.x === 'number' && Number.isFinite(value.x) ? value.x : 0,
+    y: typeof value.y === 'number' && Number.isFinite(value.y) ? value.y : 0,
+    width: typeof value.width === 'number' && Number.isFinite(value.width) ? value.width : 0,
+    height: typeof value.height === 'number' && Number.isFinite(value.height) ? value.height : 0,
   };
 }
 
