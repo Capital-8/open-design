@@ -1,3 +1,4 @@
+import { ReferralEntry } from './ReferralEntry';
 import { useStartupReady } from '../observability/startup-ready';
 import { navigationTiming, useProjectNavigationReady, observeNavigation } from '../observability/navigation-timing';
 import { withLiveArtifactDeliveries } from '../runtime/live-artifact-delivery';
@@ -14471,6 +14472,7 @@ export function ProjectView({
               <CenteredLoader />
             </div>
           )}
+          <ReferralEntry />
         </div>
         {/* The comment panel is a floating card over the workspace in EVERY
             state (per product: 任何状态下评论卡片都在这个位置). It used to dock
