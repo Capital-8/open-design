@@ -60,3 +60,11 @@ pnpm tools-pack linux stop --headless
 pnpm tools-pack linux build --containerized
 pnpm tools-serve start updater
 ```
+
+## Dogfood distribution
+
+`tools/release/DOGFOOD.md` defines the versioned manifest consumed by the office
+mirror's adaptor-based URL import. Platform uploads use distinct public names;
+the release-beta dogfood aggregation job publishes a complete build manifest.
+Historical builds can be recovered from retained Actions artifacts through
+`dogfood-import-manifest.yml`, with credentials held by that workflow.

@@ -43,6 +43,14 @@ cli
   });
 
 cli
+  .command("backfill-dogfood", "Publish import metadata and platform-safe files from a retained Actions run")
+  .action(async () => { await import("./storage/backfill-dogfood.ts"); });
+
+cli
+  .command("publish-dogfood-manifest", "Aggregate platform manifests into a mirror import manifest")
+  .action(async () => { await import("./storage/publish-dogfood-manifest.ts"); });
+
+cli
   .command("publish-dsh-bootstrap", "Publish immutable DeepSeek Harness bootstrap installers")
   .action(async () => {
     await import("./storage/publish-dsh-bootstrap.ts");

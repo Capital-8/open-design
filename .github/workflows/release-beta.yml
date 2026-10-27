@@ -671,6 +671,9 @@ jobs:
         if: ${{ !cancelled() && !inputs.publish }}
         continue-on-error: true
         env:
+          DOGFOOD_TARGET: mac_arm64
+          DOGFOOD_BRANCH: ${{ needs.metadata.outputs.branch }}
+          DOGFOOD_ENVIRONMENT: ${{ inputs.amr_profile || 'prod' }}
           DOGFOOD_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           DOGFOOD_BUILD_JSON_KEYS: dmgPath
           DOGFOOD_BUILD_JSON_PATH: ${{ runner.temp }}/release-build/mac_arm64/build.json
@@ -1008,6 +1011,25 @@ jobs:
             exit "$build_status"
           fi
 
+      - name: Upload mac_x64 dogfood build to release storage
+        if: ${{ !cancelled() && !inputs.publish }}
+        continue-on-error: true
+        env:
+          DOGFOOD_TARGET: mac_x64
+          DOGFOOD_BRANCH: ${{ needs.metadata.outputs.branch }}
+          DOGFOOD_ENVIRONMENT: ${{ inputs.amr_profile || 'prod' }}
+          DOGFOOD_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          DOGFOOD_BUILD_JSON_KEYS: dmgPath
+          DOGFOOD_BUILD_JSON_PATH: ${{ runner.temp }}/release-build/mac_x64/build.json
+          DOGFOOD_VERSION: ${{ needs.metadata.outputs.beta_version }}
+          RELEASE_PUBLIC_ORIGIN: ${{ inputs.release_public_origin != '' && inputs.release_public_origin || vars.CLOUDFLARE_R2_RELEASES_PUBLIC_ORIGIN }}
+          RELEASE_STORAGE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_RELEASES_AK }}
+          RELEASE_STORAGE_BUCKET: ${{ secrets.CLOUDFLARE_R2_RELEASES_BUCKET }}
+          RELEASE_STORAGE_ENDPOINT: ${{ secrets.CLOUDFLARE_R2_RELEASES_URL }}
+          RELEASE_STORAGE_REGION: auto
+          RELEASE_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_RELEASES_SK }}
+        run: pnpm exec tools-release publish-dogfood
+
       - name: Delete failed mac_x64 tools-pack cache
         if: ${{ steps.mac_x64_tools_pack_build.outcome == 'failure' && steps.mac_x64_tools_pack_cache_restore.outputs.cache-matched-key != '' }}
         continue-on-error: true
@@ -1284,6 +1306,9 @@ jobs:
         if: ${{ !cancelled() && !inputs.publish }}
         continue-on-error: true
         env:
+          DOGFOOD_TARGET: win_x64
+          DOGFOOD_BRANCH: ${{ needs.metadata.outputs.branch }}
+          DOGFOOD_ENVIRONMENT: ${{ inputs.amr_profile || 'prod' }}
           DOGFOOD_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           DOGFOOD_BUILD_JSON_KEYS: installerPath,portableZipPath
           DOGFOOD_BUILD_JSON_PATH: ${{ runner.temp }}\release-build\win_x64\build.json
@@ -1481,6 +1506,25 @@ jobs:
           TOOLS_PACK_CACHE_DIR: ${{ runner.temp }}/tools-pack-cache
           TOOLS_PACK_DIR: ${{ runner.temp }}/tools-pack
         run: bash tools/release/scripts/build-platform.sh
+
+      - name: Upload linux_x64 dogfood build to release storage
+        if: ${{ !cancelled() && !inputs.publish }}
+        continue-on-error: true
+        env:
+          DOGFOOD_TARGET: linux_x64
+          DOGFOOD_BRANCH: ${{ needs.metadata.outputs.branch }}
+          DOGFOOD_ENVIRONMENT: ${{ inputs.amr_profile || 'prod' }}
+          DOGFOOD_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          DOGFOOD_BUILD_JSON_KEYS: appImagePath
+          DOGFOOD_BUILD_JSON_PATH: ${{ runner.temp }}/release-build/linux_x64/build.json
+          DOGFOOD_VERSION: ${{ needs.metadata.outputs.beta_version }}
+          RELEASE_PUBLIC_ORIGIN: ${{ inputs.release_public_origin != '' && inputs.release_public_origin || vars.CLOUDFLARE_R2_RELEASES_PUBLIC_ORIGIN }}
+          RELEASE_STORAGE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_RELEASES_AK }}
+          RELEASE_STORAGE_BUCKET: ${{ secrets.CLOUDFLARE_R2_RELEASES_BUCKET }}
+          RELEASE_STORAGE_ENDPOINT: ${{ secrets.CLOUDFLARE_R2_RELEASES_URL }}
+          RELEASE_STORAGE_REGION: auto
+          RELEASE_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_RELEASES_SK }}
+        run: pnpm exec tools-release publish-dogfood
 
       - name: Write linux_x64 release report
         if: ${{ always() }}
@@ -1717,3 +1761,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash .github/scripts/release/github/cleanup-artifacts.sh
+
+  dogfood_manifest:
+    name: Publish dogfood import manifest
+    needs: [metadata, build_mac_arm64, build_mac_x64, build_win_x64, build_linux_x64]
+    if: >-
+      ${{ always() && !cancelled() && !inputs.publish && needs.metadata.result == 'success'
+        && (!inputs.enable_mac_arm64 || needs.build_mac_arm64.result == 'success')
+        && (!inputs.enable_mac_x64 || needs.build_mac_x64.result == 'success')
+        && (!inputs.enable_win_x64 || needs.build_win_x64.result == 'success')
+        && (!inputs.enable_linux_x64 || needs.build_linux_x64.result == 'success') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.commit }}
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - name: Publish import manifest
+        env:
+          DOGFOOD_VERSION: ${{ needs.metadata.outputs.beta_version }}
+          DOGFOOD_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          DOGFOOD_TARGETS: ${{ inputs.enable_mac_arm64 && 'mac_arm64,' || '' }}${{ inputs.enable_mac_x64 && 'mac_x64,' || '' }}${{ inputs.enable_win_x64 && 'win_x64,' || '' }}${{ inputs.enable_linux_x64 && 'linux_x64' || '' }}
+          RELEASE_PUBLIC_ORIGIN: ${{ inputs.release_public_origin != '' && inputs.release_public_origin || vars.CLOUDFLARE_R2_RELEASES_PUBLIC_ORIGIN }}
+          RELEASE_STORAGE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_RELEASES_AK }}
+          RELEASE_STORAGE_BUCKET: ${{ secrets.CLOUDFLARE_R2_RELEASES_BUCKET }}
+          RELEASE_STORAGE_ENDPOINT: ${{ secrets.CLOUDFLARE_R2_RELEASES_URL }}
+          RELEASE_STORAGE_REGION: auto
+          RELEASE_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_RELEASES_SK }}
+        run: pnpm exec tools-release publish-dogfood-manifest

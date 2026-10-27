@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
 
-import { bool, contentType, optional, publicUrl, required, storageConfigFromEnv, writeJson } from "./common.ts";
+import { bool, contentType, optional, publicUrl, required, storageConfigFromEnv, writeJson, requiredTarget } from "./common.ts";
 import { collectDogfoodCandidatePaths, dogfoodObjectKey, dogfoodPrefix, parseDogfoodPathList } from "./dogfood.ts";
+import { dogfoodFile, manifestKey, type DogfoodManifest } from "./dogfood-manifest.ts";
 import { putStorageObject } from "./s3-upload.ts";
 
 type UploadedFile = {
@@ -64,13 +65,22 @@ if (present.length === 0 && !allowEmpty) {
 const prefix = dogfoodPrefix({ buildId, version });
 const storage = present.length > 0 ? storageConfigFromEnv() : null;
 const uploaded: UploadedFile[] = [];
+const target = present.length > 0 ? requiredTarget("DOGFOOD_TARGET") : null;
+const manifest: DogfoodManifest = {
+  schemaVersion: 1, version, buildId, generatedAt: new Date().toISOString(),
+  commit: optional("RELEASE_COMMIT", optional("GITHUB_SHA")),
+  branch: optional("DOGFOOD_BRANCH", optional("GITHUB_REF_NAME")),
+  environment: optional("DOGFOOD_ENVIRONMENT", optional("OPEN_DESIGN_AMR_PROFILE", "prod")), files: [],
+};
 
 for (const path of present) {
   const body = readFileSync(path);
   // Every destination is minted by dogfoodObjectKey, which validates the key
   // before it is ever handed to the storage client. Nothing in this command can
   // name a channel prefix, a latest pointer, or an updater feed file.
-  const objectKey = dogfoodObjectKey({ buildId, fileName: basename(path), version });
+  if (target == null) throw new Error("DOGFOOD_TARGET is required");
+  const file = dogfoodFile(target, basename(path), body.byteLength, createHash("sha256").update(body).digest("hex"));
+  const objectKey = dogfoodObjectKey({ buildId, fileName: file.name, version });
   const name = objectKey.slice(prefix.length + 1);
   if (storage == null) throw new Error("storage config is required to upload dogfood artifacts");
   await putStorageObject({
@@ -81,6 +91,7 @@ for (const path of present) {
     contentType: contentType(name),
     objectKey,
   });
+  manifest.files.push(file);
   uploaded.push({
     name,
     objectKey,
@@ -89,6 +100,12 @@ for (const path of present) {
     url: publicUrl(publicOrigin, prefix, name),
   });
   console.log(`uploaded ${path} to ${objectKey}`);
+}
+
+if (storage != null && target != null) {
+  await putStorageObject({ ...storage, body: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`),
+    cacheControl: "public, max-age=60, must-revalidate", contentType: "application/json; charset=utf-8",
+    objectKey: manifestKey(version, buildId, target) });
 }
 
 const summary = [

@@ -2573,6 +2573,20 @@ process.stdin.on("end", () => {
     }
   });
 
+  it("[P1] aggregates dogfood imports only after all requested platform builds finish", async () => {
+    const beta = parseYaml(await readFile(releaseBetaWorkflowPath, "utf8"));
+    const job = beta.jobs.dogfood_manifest;
+    expect(job.needs).toEqual(["metadata", "build_mac_arm64", "build_mac_x64", "build_win_x64", "build_linux_x64"]);
+    expect(job.if).toContain("!inputs.publish");
+    for (const target of ["mac_arm64", "mac_x64", "win_x64", "linux_x64"]) {
+      const publisher = beta.jobs[`build_${target}`].steps.find((step: { name?: string }) => step.name === `Upload ${target} dogfood build to release storage`);
+      expect(publisher.env.DOGFOOD_TARGET).toBe(target);
+      expect(job.if).toContain(`needs.build_${target}.result == 'success'`);
+    }
+    const final = job.steps.find((step: { name?: string }) => step.name === "Publish import manifest");
+    expect(final.run).toBe("pnpm exec tools-release publish-dogfood-manifest");
+  });
+
   it("[P2] publishes release notes through one channel-neutral tools-release pipeline", async () => {
     const workflows = await Promise.all([
       readFile(releaseBetaWorkflowPath, "utf8"),
