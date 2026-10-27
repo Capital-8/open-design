@@ -123,6 +123,41 @@ test('[P2] home chrome exposes the composer execution pill and the rail settings
   await expect(page.getByTestId('entry-settings-button')).toBeVisible();
 });
 
+test('[P1] OPEND-4452 project tabs omit the duplicate invitation button while shell invitation remains usable', async ({ page }, info) => {
+  const scope = { workspaceId: 'invite-project-tabs', workspaceMemberId: 'invite-project-owner',
+    workspaceName: 'Project tabs', workspaceType: 'team', role: 'owner', memberStatus: 'active', lifecycleState: 'active',
+    billingState: 'active', planId: 'max', permissions: { canInviteMembers: true, canShareProjects: true, canManageSharedResources: true, canViewWorkspaceSettings: true } };
+  await page.route('**/api/integrations/vela/status*', route => route.fulfill({ json: {
+    loggedIn: true, profile: 'test', user: { id: 'project-invite-user', email: 'projects@example.invalid' },
+  } }));
+  await page.route('**/api/workspace/context', route => route.fulfill({ json: { context: scope } }));
+  await page.route('**/api/workspace/directory', route => route.fulfill({ json: { items: [scope], activeWorkspaceId: scope.workspaceId } }));
+  await page.route('**/api/projects*', route => route.fulfill({ json: { projects: [{
+    id: 'opend-4452-project', name: 'Invitation entry review', skillId: null, designSystemId: null,
+    createdAt: 1, updatedAt: 2, status: { value: 'not_started' },
+  }] } }));
+  await page.route('**/api/workspaces/*/projects*', route => route.fulfill({ json: { projects: [{
+    workspaceId: scope.workspaceId, visibility: 'private', project: {
+      id: 'opend-4452-project', name: 'Invitation entry review', skillId: null, designSystemId: null,
+      createdAt: 1, updatedAt: 2, status: { value: 'not_started' },
+    },
+  }] } }));
+  await gotoEntryHome(page);
+  await ensureRailOpen(page);
+  await page.getByTestId('entry-nav-drafts').click();
+  for (const collection of ['recent', 'personalProjects', 'teamProjects']) {
+    const tab = page.getByTestId(`recent-projects-collection-${collection}`);
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('.recent-projects__controls').getByRole('button', { name: 'Invite teammates', exact: true })).toHaveCount(0);
+  }
+  await info.attach('projects-without-duplicate-invite', { body: await page.screenshot(), contentType: 'image/png' });
+  const invite = page.getByRole('button', { name: 'Invite', exact: true });
+  await expect(invite).toBeVisible();
+  await invite.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
 test('[P1] OPEND-4440 unresolved workspace stays neutral before switching to a known Max plan', async ({ page }, info) => {
   const scopes = ['unknown', 'max'].map(plan => ({
     workspaceId: `plan-${plan}`, workspaceMemberId: `member-${plan}`,
