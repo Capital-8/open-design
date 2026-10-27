@@ -1097,10 +1097,10 @@ export function EntryTopRightCluster({
   // The pill and the card name the same scoped tier. Keep the legacy TEAM
   // fallback for a team plan that has no recognized D4 tier.
   const quotaView = workspaceQuotaView({ context, response: billingResponse, tier: labelTier, balanceUsd });
-  const planTier = quotaView.tier ?? planBadgeTierForWorkspace({
+  const planTier = quotaView.planKnown ? quotaView.tier ?? planBadgeTierForWorkspace({
     tier: rawTier || tierLabel,
     workspaceType: context?.workspaceType,
-  });
+  }) : null;
 
   const [accountMenuMode, setAccountMenuMode] = useState<'closed' | 'hover' | 'pinned'>(
     'closed',
@@ -1425,6 +1425,7 @@ export function EntryTopRightCluster({
                   className="entry-top-right-credits"
                   data-testid="entry-top-right-credits"
                   aria-haspopup="dialog"
+                  aria-busy={!quotaView.planKnown || undefined}
                   aria-expanded={creditsPanelOpen}
                   aria-controls={creditsPanelOpen ? creditsPanelId : undefined}
                   aria-label={showUpgradePill ? t('entry.creditsUpgrade') : t('entry.credits')}
@@ -1434,7 +1435,9 @@ export function EntryTopRightCluster({
                     openCreditsPanel();
                   }}
                 >
-                  {showUpgradePill ? (
+                  {!quotaView.planKnown ? (
+                    <span className={styles.planLoading} aria-label={t('common.loading')} />
+                  ) : showUpgradePill ? (
                     /* Owner's Free plan: the pill stops reporting a balance that is only
                        ever 0.00 and sells the upgrade instead — spark mark plus
                        the same 升级 / Upgrade label the billing card uses, on

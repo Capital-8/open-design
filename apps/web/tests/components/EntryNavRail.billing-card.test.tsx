@@ -119,18 +119,15 @@ describe('account menu billing card — scoped plan tier (#146)', () => {
     expect(billingCard().getByRole('img', { name: 'plus' })).toBeTruthy();
   });
 
-  // The label is a plan question, so an unknown tier must not be answered from
-  // the workspace kind either way — but a paid MEMBER is a case B does not yet
-  // report a per-workspace plan for (it sends planId only to owners), so the
-  // legacy workspace-type hint is all that is left there. Guard that the
-  // POSITIVE free entitlement is what flips the label, not the member case.
-  it('keeps the legacy team hint when B has not reported any entitlement', () => {
+  // OPEND-4440: workspace kind is not evidence of the pending subscription.
+  it('keeps an unconfirmed member plan neutral (OPEND-4440)', () => {
     renderRail({
       context: context({ role: 'member', billingState: 'active', planId: null } as Partial<WorkspaceCollabContext>),
       billing: billing(),
     });
 
-    expect(billingCard().getByText('团队版')).toBeTruthy();
+    expect(billingCard().queryByText('团队版')).toBeNull();
+    expect(screen.getByTestId('entry-top-right-credits').getAttribute('aria-busy')).toBe('true');
   });
 });
 

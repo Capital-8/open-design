@@ -255,3 +255,13 @@
   background: #fafafa;
   color: #666;
 }
+
+/* An unresolved workspace tier carries no plan identity. */
+.planLoading {
+  display: block;
+  width: 36px;
+  height: 12px;
+  border-radius: 4px;
+  background: currentColor;
+  opacity: .18;
+}
