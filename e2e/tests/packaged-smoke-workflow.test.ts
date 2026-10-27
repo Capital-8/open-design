@@ -2038,10 +2038,12 @@ process.stdin.on("end", () => {
     expect(explicitIgnores, "Keep visual ownership and private real-service lanes outside the generic UI pool").toBeDefined();
     expect([...explicitIgnores!.matchAll(/'([^']+)'/g)].map((match) => match[1])).toEqual([
       "visual-*.test.ts",
+      "workspace-depletion-sandbox.test.ts",
       "api-security-view016.test.ts",
       "workspace-free-concurrency-sandbox.test.ts",
       "workspace-manual-retry-sandbox.test.ts",
       "workspace-funding-sandbox.test.ts",
+      "qa-bill001.private.test.ts",
       "workspace-notice-sandbox.test.ts",
       "workspace-free-wallet-sandbox.test.ts",
       "workspace-switch-billing-sandbox.test.ts",
@@ -2049,6 +2051,14 @@ process.stdin.on("end", () => {
       "workspace-concurrency-retry-sandbox.test.ts",
       "workspace-api-wallet-sandbox.test.ts",
       "workspace-api-wallet-readback-sandbox.test.ts",
+      "link-closure-sandbox.test.ts",
+      "link-f04-sandbox.test.ts",
+      "link-run013-sandbox.test.ts",
+      "link-run011-matrix-sandbox.test.ts",
+      "link-run003-latency-sandbox.test.ts",
+      "link-run012-checkout-sandbox.test.ts",
+      "link-run010-reconnect-sandbox.test.ts",
+      "link-run012-controlled-sandbox.test.ts",
     ]);
     expect(benchmarkWorkflow).toContain("  workflow_call:");
     expect(benchmarkWorkflow).toContain('description: "Exact git ref to validate. Prerelease passes its resolved build commit."');

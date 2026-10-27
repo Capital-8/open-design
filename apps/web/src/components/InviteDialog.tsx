@@ -331,7 +331,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
       </form></>}
       {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => onFinish?.(sentCount, 'skipped')}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}><label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label><span>{`© ${new Date().getFullYear()} OpenDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
     </section>
-    {onboarding ? <div className={styles.art} aria-hidden="true"><img src="/onboarding/registration-invite-art.png" alt="" /></div> : null}
+    {onboarding ? <div className={styles.art} aria-hidden="true"><img src="/onboarding/registration-invite-art.webp" alt="" /></div> : null}
     {owner && openRoleIndex !== null ? createPortal(<div className={`${styles.menu} ${onboarding ? styles.onboardingMenu : styles.dialogMenu}`} ref={menu} style={menuPos} role="listbox" id={`${id}-roles`}
       onKeyDown={event => {
         if (event.key === 'Escape' || event.key === 'Tab') { event.preventDefault(); event.stopPropagation(); setOpenRoleIndex(null); triggers.current[openRoleIndex]?.focus(); }

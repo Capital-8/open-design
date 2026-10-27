@@ -15,7 +15,7 @@ describe('registration invitation guidance', () => {
   it('uses the original rider art, two-line explanation and skip without cancel or premature success event', () => {
     const finish = mount();
     expect(screen.getByText('免费邀请同事，一起做设计')).toBeTruthy();
-    expect(document.querySelector('img')?.getAttribute('src')).toBe('/onboarding/registration-invite-art.png');
+    expect(document.querySelector('img')?.getAttribute('src')).toBe('/onboarding/registration-invite-art.webp');
     expect(screen.queryByRole('button', { name: '取消' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '暂时跳过' }));
     expect(finish).toHaveBeenCalledWith(0, 'skipped');

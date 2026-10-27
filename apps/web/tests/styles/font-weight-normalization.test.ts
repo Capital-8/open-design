@@ -41,6 +41,9 @@ const pendingNormalization = new Set([
   'apps/web/src/components/CloudSignInTip.module.css',
   'apps/web/src/components/HomeInviteSurface.module.css',
   'apps/web/src/components/InviteDialog.module.css',
+  // The frozen shared quota popover retains the delivered 400-weight balance
+  // and window copy; a global ladder change must not restyle that surface.
+  'apps/web/src/components/WorkspaceQuotaPopover.module.css',
 ]);
 
 function cssFiles(root: string): string[] {
