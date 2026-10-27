@@ -27,11 +27,14 @@ interface Props {
   active: boolean;
   signedOut?: boolean;
   identityReady?: boolean;
+  onSignInRequested?: () => void;
+  openAfterSignIn?: boolean;
+  onSignInInviteConsumed?: () => void;
 }
 
 /** Account-scoped dismissal survives workspace changes without sharing it with
  * another account. Workspace membership IDs intentionally are not account IDs. */
-export function HomeInviteSurface({ accountId, context, active, signedOut = false, identityReady = true }: Props) {
+export function HomeInviteSurface({ accountId, context, active, signedOut = false, identityReady = true, onSignInRequested, openAfterSignIn = false, onSignInInviteConsumed }: Props) {
   const { t } = useI18n();
   const bannerRef = useRef<HTMLDivElement>(null);
   const storageKey = accountId ? `od.invitation-banner.dismissed:${encodeURIComponent(accountId)}` : signedOut ? 'od.invitation-banner.dismissed:local' : null;
@@ -49,20 +52,26 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
     setSent(0);
   }, [principal, accountId]);
   useEffect(() => {
-    if (!pendingSignInInvite || signedOut || !accountId || !identityReady || !context) return;
+    if ((!pendingSignInInvite && !openAfterSignIn) || signedOut || !accountId || !identityReady || !context) return;
     setPendingSignInInvite(false);
+    onSignInInviteConsumed?.();
     if (context.memberStatus === 'active' && context.lifecycleState === 'active' && context.permissions.canInviteMembers) setOpen(true);
-  }, [pendingSignInInvite, signedOut, accountId, identityReady, context]);
+  }, [pendingSignInInvite, openAfterSignIn, signedOut, accountId, identityReady, context, onSignInInviteConsumed]);
+
+  function requestSignIn() {
+    if (onSignInRequested) onSignInRequested();
+    else void begin();
+  }
 
   useEffect(() => {
     function onOpen(event: Event) {
       const detail = (event as CustomEvent).detail;
-      if (signedOut && detail?.signedOut) { void begin(); return; }
+      if (signedOut && detail?.signedOut) { requestSignIn(); return; }
       if (context && detail?.workspaceId === context.workspaceId && detail?.workspaceMemberId === context.workspaceMemberId) setOpen(true);
     }
     window.addEventListener(OPEN_INVITE, onOpen);
     return () => window.removeEventListener(OPEN_INVITE, onOpen);
-  }, [context, signedOut, begin]);
+  }, [context, signedOut, begin, onSignInRequested]);
   useEffect(() => {
     if (!storageKey) return;
     try {
@@ -127,7 +136,7 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
   const banner = active && storageKey && dismissal !== storageKey ? (
     <div ref={bannerRef} className={styles.banner} role="region" aria-label={t('homeInvite.invite')}>
       <span className={styles.copy}>{t('homeInvite.banner')}</span>
-      <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => signedOut ? void begin() : setOpen(true)}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
+      <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => signedOut ? requestSignIn() : setOpen(true)}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
       <Button variant="ghost" className={styles.close} aria-label={t('homeInvite.dismiss')} onClick={dismiss}><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="m4.5 4.5 7 7m0-7-7 7" /></svg></Button>
     </div>
   ) : null;

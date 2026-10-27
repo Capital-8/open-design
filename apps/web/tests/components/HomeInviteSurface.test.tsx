@@ -107,4 +107,23 @@ describe('home invitation entry', () => {
     result.rerender(view('account-one', { ...context, memberStatus: 'removed' }));
     expect(screen.queryByRole('button', { name: '邀请' })).toBeNull();
   });
+  it('hands signed-out entries to the welcome screen and consumes their returned invitation only after identity resolves', () => {
+    const requestSignIn = vi.fn();
+    const consumed = vi.fn();
+    const local = (signedOut: boolean, ready: boolean, pending = false) => <I18nProvider initial="zh-CN"><HomeInviteTrigger context={signedOut ? null : context} signedOut={signedOut} /><HomeInviteSurface accountId={signedOut ? null : 'account-one'} context={signedOut ? null : context} active signedOut={signedOut} identityReady={ready} onSignInRequested={requestSignIn} openAfterSignIn={pending} onSignInInviteConsumed={consumed} /></I18nProvider>;
+    const result = render(local(true, false));
+    const entries = screen.getAllByRole('button', { name: '邀请' });
+    fireEvent.click(entries[0]!);
+    fireEvent.click(entries[1]!);
+    expect(requestSignIn).toHaveBeenCalledTimes(2);
+    expect(login.begin).not.toHaveBeenCalled();
+    result.rerender(local(false, false, true));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(consumed).not.toHaveBeenCalled();
+    result.rerender(local(false, true, true));
+    expect(screen.getByRole('dialog', { name: '邀请成员' })).toBeTruthy();
+    expect(consumed).toHaveBeenCalledTimes(1);
+    result.rerender(local(false, true, false));
+    expect(consumed).toHaveBeenCalledTimes(1);
+  });
 });
