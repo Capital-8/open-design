@@ -65,6 +65,12 @@ test('[P1] B01 invitation layout stays usable at Windows scaled and narrow sizes
     expect(footerBox!.y).toBeGreaterThanOrEqual(skipBox!.y + skipBox!.height);
   };
   await expectFooterAtBottom();
+  const language = host.form.locator('section > footer select');
+  // Keep the shared select chevron when applying the local transparent fill.
+  await expect(language).not.toHaveCSS('background-image', 'none');
+  await expect(language).toHaveCSS('background-size', '12px 12px');
+  await expect(language).toHaveCSS('background-position', 'calc(100% - 12px) 50%');
+  await expect(language).toHaveCSS('padding-right', '32px');
   await captureRegistration(page, 'B01-scaled');
   await role.click();
   await expect(page.getByRole('option', { name: /管理员/ })).toBeVisible();
@@ -93,6 +99,10 @@ test('[P1] B01 invitation layout stays usable at Windows scaled and narrow sizes
   await expectFooterAtBottom();
   await expect(host.form.locator('section > footer select')).toBeInViewport();
   await captureRegistration(page, 'B01-short-narrow-footer');
+  await language.selectOption('en');
+  await expect(page.getByRole('combobox')).toHaveValue('en');
+  await page.getByRole('combobox').selectOption('zh-CN');
+  await expect(language).toHaveValue('zh-CN');
 });
 
 test('[P1] OPEND-4321 new member registration keeps the role text clear of the email field', async ({ page }) => {
