@@ -1,12 +1,14 @@
 import { useId } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Button,
   Dialog,
   DialogDescription,
   DialogFooter,
   DialogTitle,
 } from '@open-design/components';
 import { useT } from '../i18n';
+import styles from './SignOutConfirmDialog.module.css';
 
 interface Props {
   /** Disables both actions while the sign-out request is in flight. */
@@ -30,34 +32,34 @@ export function SignOutConfirmDialog({ busy = false, email, confirmDisabled = fa
   const titleId = useId();
   const dialog = (
     <Dialog
-      className="modal-confirm"
+      className={`modal-confirm ${styles.dialog}`}
       role="alertdialog"
-      onClose={onCancel}
+      onClose={() => { if (!busy) onCancel(); }}
       closeOnEscape
       ariaLabelledBy={titleId}
       data-testid="sign-out-confirm-dialog"
     >
       <DialogTitle id={titleId}>{t('signOut.confirmTitle')}</DialogTitle>
       <DialogDescription>{t('signOut.confirmMessage')}</DialogDescription>
-      {email ? <p>{email}</p> : null}
-      <DialogFooter className="row">
-        <button
+      {email ? <div className={styles.account}><span className={styles.avatar} aria-hidden>{email.slice(0, 1).toUpperCase()}</span><span>{email}</span></div> : null}
+      <DialogFooter className={styles.actions}>
+        <Button
           type="button"
           onClick={onCancel}
           disabled={busy}
           data-testid="sign-out-confirm-cancel"
         >
           {t('common.cancel')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="primary"
+          className={styles.confirm}
           onClick={onConfirm}
           disabled={busy || confirmDisabled}
           data-testid="sign-out-confirm-accept"
         >
           {t('signOut.confirmAction')}
-        </button>
+        </Button>
       </DialogFooter>
     </Dialog>
   );

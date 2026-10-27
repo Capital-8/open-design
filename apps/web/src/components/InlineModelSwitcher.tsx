@@ -340,6 +340,14 @@ export function InlineModelSwitcher({
         setAmrLoginPending(false);
         return;
       }
+      if (outcome === 'cancelled') {
+        stopAmrPolling();
+        amrLoginStartedAtRef.current = null;
+        setAmrLoginPending(false);
+        setAmrLoginError(null);
+        notifyAmrLoginStatusChanged('login-canceled');
+        return;
+      }
       if (outcome === 'stopped' || outcome === 'timed-out') {
         stopAmrPolling();
         if (outcome === 'timed-out') {

@@ -2241,12 +2241,8 @@ export function ChatPane({
     }
     if (onConsumeAmrAuthRetryContinuation(amrAuthRetryContinuation)) {
       amrAuthRetrySignedOutWitnessRef.current = null;
-      onRetry(
-        retryAssistant,
-        retryAssistant.agentId === 'amr'
-          ? 'authorize_and_retry'
-          : 'switch_runtime_retry',
-      );
+      // Authentication restores the conversation, not execution permission.
+      // The user retries explicitly once the account and Workspace are ready.
     }
   }, [
     activeConversationId,

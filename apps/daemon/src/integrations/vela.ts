@@ -500,8 +500,8 @@ function readRawVelaLoginStatus(
   const profile = resolveAmrProfile(mergedEnv);
   const configPath = amrConfigPath();
   const loginInFlight = isVelaLoginInFlight();
-  // Only meaningful while signing in (loggedIn becomes true once vela writes the
-  // runtime key); empty otherwise so completed sessions don't echo a stale URL.
+  // Include the active attempt even when an old credential remains during reauthentication.
+  // Completed sessions must not echo a stale activation URL.
   const activationFields: Partial<VelaLoginStatus> =
     loginInFlight && activeLoginActivation
       ? {
@@ -525,6 +525,7 @@ function readRawVelaLoginStatus(
       profile,
       user: null,
       configPath,
+      ...activationFields,
       ...readVelaLoginAttemptSnapshot(),
     };
   }
@@ -558,6 +559,7 @@ function readRawVelaLoginStatus(
     profile,
     user,
     configPath,
+    ...activationFields,
     ...readVelaLoginAttemptSnapshot(),
   };
 }
@@ -982,6 +984,10 @@ function beginLoginActivationCapture(
     const lines = receiptBuffer.split('\n');
     receiptBuffer = lines.pop()?.slice(-LOGIN_CAPTURE_LIMIT_BYTES) ?? '';
     for (const line of lines) {
+      if (line.trim() === 'OPEN_DESIGN_AMR_AUTH_COMPLETION\tcancelled') {
+        const current = currentVelaLoginAttempt(attempt);
+        if (current) current.loginError = 'login_cancelled';
+      }
       if (line.trim() === 'OPEN_DESIGN_AMR_AUTH_COMPLETION\tstdin-v1') capture.completionProtocol = true;
       if (line.trim() === 'OPEN_DESIGN_AMR_AUTH_COMPLETION\tcredentials_persisted' && capture.completionProtocol && !accepting) {
         accepting = true;

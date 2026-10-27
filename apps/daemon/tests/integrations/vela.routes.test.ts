@@ -2055,6 +2055,20 @@ describe('POST /api/integrations/vela/login', () => {
     }
   });
 
+  it('exposes the new activation link while existing credentials are still present', async () => {
+    seedLogin('local');
+    process.env.FAKE_VELA_LOGIN_DELAY_MS = '30000';
+    const login = await postJson(`${baseUrl}/api/integrations/vela/login`);
+    expect(login.status).toBe(202);
+    const during = await getJson<{ loginInFlight: boolean; activationUrl?: string; userCode?: string }>(
+      `${baseUrl}/api/integrations/vela/status`,
+    );
+    expect(during.body.loginInFlight).toBe(true);
+    expect(during.body.activationUrl).toContain('deviceId=fake-device');
+    expect(during.body.userCode).toBe('FAKE-CODE');
+    await postJson(`${baseUrl}/api/integrations/vela/login/cancel`);
+  });
+
   it('surfaces and cancels a delayed login subprocess', async () => {
     process.env.FAKE_VELA_LOGIN_DELAY_MS = '30000';
 

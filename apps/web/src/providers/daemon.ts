@@ -1296,6 +1296,7 @@ export interface VelaLiveAccount {
 }
 
 export interface VelaLoginStatus {
+  loginError?: string;
   loggedIn: boolean;
   sessionState?: import('@open-design/contracts').AmrSessionState;
   credentialRevision?: string;
