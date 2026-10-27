@@ -20,6 +20,12 @@ describe('registration invitation guidance', () => {
     fireEvent.click(screen.getByRole('button', { name: '暂时跳过' }));
     expect(finish).toHaveBeenCalledWith(0, 'skipped');
   });
+  it('keeps the member role read-only for a non-owner registration', () => {
+    render(<I18nProvider initial="zh-CN"><OnboardingInviteView workspaceContext={{ ...context, role: 'member' }} onFinish={vi.fn()} /></I18nProvider>);
+    expect(screen.getByText('成员')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '角色' })).toBeNull();
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
   it('keeps an existing-member conflict local without a misleading batch failure', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response([{ email: 'member@example.com', ok: false, error: 'already_member' }])));
     const finish = mount(); email('member@example.com'); await send();

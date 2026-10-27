@@ -42,6 +42,39 @@ test('[P1] B01 only the new-registration signal enters the real invitation host'
   await captureRegistration(page, 'B01-narrow');
 });
 
+test('[P1] B01 invitation layout stays usable at Windows scaled and narrow sizes', async ({ page }) => {
+  const host = await start(page);
+  await page.setViewportSize({ width: 1268, height: 715 });
+  const input = host.form.locator('input[type=email]').first();
+  const role = host.form.getByRole('button', { name: '角色', exact: true }).first();
+  const inputBox = await input.boundingBox();
+  const roleBox = await role.boundingBox();
+  expect(inputBox).not.toBeNull(); expect(roleBox).not.toBeNull();
+  expect(inputBox!.height).toBe(48);
+  expect(roleBox!.height).toBe(inputBox!.height);
+  expect(roleBox!.y).toBe(inputBox!.y);
+  await captureRegistration(page, 'B01-scaled');
+  await role.click();
+  await expect(page.getByRole('option', { name: /管理员/ })).toBeVisible();
+  await captureRegistration(page, 'B01-scaled-role');
+  await page.keyboard.press('Escape');
+  for (let index = 1; index < 5; index++) await host.form.getByRole('button', { name: '添加成员' }).click();
+  await expect(host.form.locator('input[type=email]').last()).toBeFocused();
+  expect(await host.form.locator('[data-invite-rows]').evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+  await expect.poll(async () => {
+    const rowsBox = await host.form.locator('[data-invite-rows]').boundingBox();
+    const lastBox = await host.form.locator('input[type=email]').last().boundingBox();
+    return lastBox!.y + lastBox!.height <= rowsBox!.y + rowsBox!.height;
+  }).toBe(true);
+  await captureRegistration(page, 'B01-scaled-rows');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(host.form.locator('img')).toBeHidden();
+  expect(await host.form.evaluate(el => el.scrollWidth)).toBeLessThanOrEqual(390);
+  await host.form.getByRole('button', { name: '暂时跳过' }).scrollIntoViewIfNeeded();
+  await expect(host.form.getByRole('button', { name: '暂时跳过' })).toBeInViewport();
+  await captureRegistration(page, 'B01-scaled-narrow');
+});
+
 test('[P1] B04 multiple rows retain independent roles and can be removed', async ({ page }) => {
   const host = await start(page);
   await host.form.getByRole('button', { name: '添加成员' }).click();

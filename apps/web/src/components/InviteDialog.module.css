@@ -58,10 +58,11 @@
 .onboarding .labels > span { font-size:12px;line-height:18px;color:#5c5c5c; }
 .onboarding .labels > span:first-child { position:relative;top:6px; }
 .onboarding .labels > span:last-child { padding-left:13px; }
-.onboarding .rows { width:calc(100% + 38px);margin-left:-4px;padding:4px 42px 4px 4px;box-sizing:border-box;max-height:176px;overflow-x:hidden;scrollbar-gutter:stable;scrollbar-width:auto; }
+.onboarding .rows { display:flex;flex-direction:column;gap:12px;width:calc(100% + 38px);margin-left:-4px;padding:4px 42px 4px 4px;box-sizing:border-box;max-height:176px;overflow-x:hidden;scroll-padding-block:4px;scrollbar-gutter:stable;scrollbar-width:auto; }
 .onboarding .rows::-webkit-scrollbar { width:6px; }
 .onboarding .rows::-webkit-scrollbar-thumb { background:#c7c7c7;border-radius:4px; }
 .onboarding .input,.onboarding .role,.onboarding .fixedRole { height:48px;min-height:48px;font-size:14px;font-weight:600;line-height:17.5px;border-radius:9px; }
+.onboarding .fixedRole { box-sizing:border-box;width:100%;padding:0 12px;border:1px solid #dedede;background:#fff;color:#494949; }
 .onboarding .input { background:#fafafa;color:#494949; }
 .onboarding .role:not(:disabled),.onboarding .role:is(:hover,:active):not(:disabled) { color:#494949;border-color:#dedede; }
 .onboarding .input::placeholder { color:#bdbdbd;opacity:1; }
@@ -72,8 +73,7 @@
 .onboarding .submit:disabled { opacity:1;background:#f2f2f2;color:#b6b6b6; }
 .onboarding .skip { line-height:1.4;position:relative;top:-8px;width:max-content;height:48px;min-height:48px;margin:24px 0 0;padding:12px 16px;border:0;background:none;box-shadow:none;color:#888;font-size:13px;font-weight:600; }
 .onboarding .lineError,.onboarding .error { color:#d43c32; }
-.onboarding .row { margin-bottom:12px;row-gap:0; }
-.onboarding .row:last-child { margin-bottom:0; }
+.onboarding .row { flex-shrink:0;margin-bottom:0;row-gap:0; }
 .onboarding .lineError { position:relative;top:2px;grid-column:1;margin:0;line-height:20px;color:#f04142; }
 .onboarding .input[aria-invalid=true] { border-color:#cf6868;background:#fffafa; }
 .onboarding .error { position:relative;top:2px;margin:12px 0;line-height:20px;color:#f04142; }
