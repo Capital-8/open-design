@@ -11,6 +11,7 @@ import {
 } from "./common.ts";
 import { assertCurrentVersionReservation, versionLockObjectKey } from "./beta-version-reservation.ts";
 import { getStorageObject, putStorageObject, putStorageObjectWithStatus } from "./s3-upload.ts";
+import { legacySafeUpdaterPlatform } from "./legacy-update-feed.ts";
 import {
   assertLauncherVersionFloorSatisfiable,
   resolveLauncherVersionFloor,
@@ -320,7 +321,7 @@ for (const def of targetDefs) {
       status: "published",
     };
     releaseTargets[def.target] = readyManifest;
-    platforms[def.legacyKey] = readyManifest;
+    platforms[def.legacyKey] = legacySafeUpdaterPlatform(releaseChannel, def.legacyKey, readyManifest);
     readyTargets.push(def.target);
   } else {
     const status = result === "success" ? "missing" : "failed";
