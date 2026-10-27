@@ -92,6 +92,7 @@ async function createUpdaterFixture(options: {
   failArtifactAttempts?: number;
   failFirstArtifactWithTerminated?: boolean;
   includePayload?: boolean;
+  splitStablePayload?: boolean;
   launcherSchema?: number;
   platform?: FixturePlatform;
   payloadBody?: string;
@@ -150,7 +151,7 @@ async function createUpdaterFixture(options: {
                 size: artifactBody.byteLength,
                 url: `http://${serverAddress(server)}${artifactPath}`,
               },
-              ...(options.includePayload === true
+              ...(options.includePayload === true && options.splitStablePayload !== true
                 ? {
                     payload: {
                       name: payloadName,
@@ -163,6 +164,14 @@ async function createUpdaterFixture(options: {
             },
           },
         },
+        ...(options.splitStablePayload === true ? {
+          releaseTargets: {
+            [platform === "win" ? "win_x64" : "mac_arm64"]: {
+              status: "published",
+              artifacts: { payload: { name: payloadName, sha256Url: `http://${serverAddress(server)}${payloadPath}.sha256`, size: payloadBody.byteLength, url: `http://${serverAddress(server)}${payloadPath}` } },
+            },
+          },
+        } : {}),
         version: 1,
       }));
       return;
@@ -938,9 +947,9 @@ describe("desktop updater", () => {
     await writeFile(
       launcherRuntimePath,
       `${JSON.stringify({
-        active: { generation: 0, version: "1.0.0-beta.1" },
-        channel: "beta",
-        lastSuccessful: { generation: 0, version: "1.0.0-beta.1" },
+        active: { generation: 0, version: currentVersion },
+        channel: fixtureOptions?.channel ?? "beta",
+        lastSuccessful: { generation: 0, version: currentVersion },
         namespace: "release-beta-win",
         schemaVersion: LAUNCHER_SCHEMA_VERSION,
       })}\n`,
@@ -968,13 +977,13 @@ describe("desktop updater", () => {
         await writeFile(
           join(destinationRoot, "manifest.json"),
           `${JSON.stringify({
-            channel: "beta",
+            channel: fixtureOptions?.channel ?? "beta",
             entry: { cwd: "payload", executable: "payload/Open Design.exe" },
             namespace: "release-beta-win",
             payloadRoot: "payload",
             platform: "win32",
             schemaVersion: LAUNCHER_SCHEMA_VERSION,
-            version: "1.0.0-beta.2",
+            version: fixtureOptions?.version ?? "1.0.0-beta.2",
           })}\n`,
         );
         await writeFile(join(destinationRoot, "payload", "resources", "open-design-config.json"), "{}\n");
@@ -997,6 +1006,22 @@ describe("desktop updater", () => {
       },
     };
   }
+
+  it("uses the stable release payload only when the installed outer supports it", async () => {
+    for (const [outer, expected] of [["0.13.0", "installer"], ["0.27.0", "payload"], [null, "installer"]] as const) {
+      const { snapshot, close } = await runLauncherReseedCheck(
+        { channel: "stable", version: "0.28.0", splitStablePayload: true },
+        "0.27.0",
+        { installedOuterVersion: outer },
+      );
+      try {
+        expect(snapshot.artifact?.type).toBe(expected);
+        expect(snapshot.capabilities.canApplyInPlace).toBe(expected === "payload");
+      } finally {
+        await close();
+      }
+    }
+  });
 
   it("routes to the installer when the feed launcher.schema exceeds this build", async () => {
     const { snapshot, close } = await runLauncherReseedCheck({ launcherSchema: LAUNCHER_SCHEMA_VERSION + 1 });
