@@ -10,6 +10,7 @@ export interface RegistrationReceipt { accountId: string; deviceAuthorizationId:
 export interface RegistrationAccount { id: string; receipt?: RegistrationReceipt }
 export async function registrationHost(page: Page, options: {
   account?: RegistrationAccount;
+  role?: 'owner' | 'member';
   existingSetup?: boolean;
   initiallyAuthenticated?: boolean;
   contextFailure?: 'forbidden' | 'workspace' | 'member' | 'permission';
@@ -27,7 +28,7 @@ export async function registrationHost(page: Page, options: {
   await page.setViewportSize({ width: 1440, height: 900 });
   await configureVisualPage(page, { config, agents: [VISUAL_AMR_AGENT], velaLoggedIn: false });
   await page.addInitScript(() => { localStorage.setItem('od.entry.railOpen', 'true'); localStorage.setItem('open-design:locale', 'zh-CN'); localStorage.setItem('open-design:locale-source', 'manual'); });
-  const workspace = () => ({ workspaceId: `${account.id}-workspace`, workspaceMemberId: `${account.id}-member`, workspaceName: 'Xiaoyi’s Workspace', workspaceType: 'personal', role: 'owner', memberStatus: 'active', lifecycleState: 'active', isDefault: true, billingState: 'active', planId: 'free', workspaceSettingsUrl: 'https://console.example.test/settings', permissions: { canInviteMembers: true, canManageMembers: true, canManageBilling: true, canManageAutoRecharge: false, canShareProjects: true, canWriteSyncedFiles: true, canViewWorkspaceSettings: true, canManageSharedResources: true } });
+  const workspace = () => ({ workspaceId: `${account.id}-workspace`, workspaceMemberId: `${account.id}-member`, workspaceName: 'Xiaoyi’s Workspace', workspaceType: 'personal', role: options.role ?? 'owner', memberStatus: 'active', lifecycleState: 'active', isDefault: true, billingState: 'active', planId: 'free', workspaceSettingsUrl: 'https://console.example.test/settings', permissions: { canInviteMembers: true, canManageMembers: true, canManageBilling: true, canManageAutoRecharge: false, canShareProjects: true, canWriteSyncedFiles: true, canViewWorkspaceSettings: true, canManageSharedResources: true } });
   await page.route('**/api/app-config', route => {
     if (route.request().method() === 'PUT') { Object.assign(config, route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); }
     return route.fulfill({ json: { config } });

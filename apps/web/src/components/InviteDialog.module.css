@@ -62,7 +62,8 @@
 .onboarding .rows::-webkit-scrollbar { width:6px; }
 .onboarding .rows::-webkit-scrollbar-thumb { background:#c7c7c7;border-radius:4px; }
 .onboarding .input,.onboarding .role,.onboarding .fixedRole { height:48px;min-height:48px;font-size:14px;font-weight:600;line-height:17.5px;border-radius:9px; }
-.onboarding .fixedRole { box-sizing:border-box;width:100%;padding:0 12px;border:1px solid #dedede;background:#fff;color:#494949; }
+/* Fixed member roles follow B03 plain text; align with the registration role label. */
+.onboarding .fixedRole { margin-inline-start:13px;padding:0;border:0;border-radius:0;background:transparent;color:var(--invite-note);font-size:13px;font-weight:500;line-height:20px; }
 .onboarding .input { background:#fafafa;color:#494949; }
 .onboarding .role:not(:disabled),.onboarding .role:is(:hover,:active):not(:disabled) { color:#494949;border-color:#dedede; }
 .onboarding .input::placeholder { color:#bdbdbd;opacity:1; }
