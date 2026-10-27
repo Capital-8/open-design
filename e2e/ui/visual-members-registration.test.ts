@@ -103,13 +103,17 @@ test('[P1] OPEND-4321 new member registration keeps the role text clear of the e
   const email = host.form.locator('input[type=email]').first();
   const member = host.form.getByText('成员', { exact: true });
   await expect(member).toBeVisible();
+  await expect(member).toHaveCSS('border-top-width', '0px');
+  await expect(member).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(member).toHaveCSS('font-size', '13px');
   const inputBox = await email.boundingBox();
   const textBox = await member.evaluate(element => {
     const range = document.createRange(); range.selectNodeContents(element);
     const rect = range.getBoundingClientRect();
     return { x: rect.x, y: rect.y, height: rect.height };
   });
-  // HTML B01: 8px column gap + 1px role border + 12px inner padding.
+  // Confirmed OPEND-4321: B03 plain text aligned with the role label,
+  // retaining the registration layout's clear separation from the email.
   expect(textBox.x - (inputBox!.x + inputBox!.width)).toBe(21);
   await captureRegistration(page, 'OPEND-4321-new-member-spacing');
   await page.setViewportSize({ width: 390, height: 844 });
@@ -118,6 +122,13 @@ test('[P1] OPEND-4321 new member registration keeps the role text clear of the e
   const narrowRole = await member.boundingBox();
   expect(narrowRole!.x).toBeGreaterThanOrEqual(narrowInput!.x + narrowInput!.width + 8);
   await captureRegistration(page, 'OPEND-4321-new-member-narrow');
+  await host.invite(async route => {
+    await route.fulfill({ json: { results: [{ email: 'colleague@example.com', ok: true }] } });
+  });
+  await email.fill('colleague@example.com');
+  await host.form.getByRole('button', { name: '发送邀请', exact: true }).click();
+  await expect.poll(() => host.invitationRequests.length).toBe(1);
+  expect(host.invitationRequests[0]).toMatchObject({ invites: [{ email: 'colleague@example.com', role: 'member' }] });
 });
 
 test('[P1] OPEND-4343 added invitation rows stay clean until submission', async ({ page }) => {
