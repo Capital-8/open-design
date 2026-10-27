@@ -67,6 +67,7 @@ export interface ConversationChatContext {
    * signed-out / personal usage.
    */
   workspaceContext?: WorkspaceCollabContext | null;
+  onTouchProject?: (sentAt: number) => void;
 }
 
 export interface UseConversationChatResult {
@@ -258,6 +259,7 @@ export function useConversationChat(
       setStreaming(true);
       setError(null);
       if (!retryTarget) persist(userMsg);
+      ctxRef.current.onTouchProject?.(startedAt);
 
       const controller = new AbortController();
       const cancelController = new AbortController();

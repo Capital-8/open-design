@@ -2336,12 +2336,10 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       // otherwise leave the project buried under more recent activity.
       if (typeof meta.projectId === 'string' && meta.projectId) {
         updateProject(db, meta.projectId, {});
-        // Web sends (including local queues/retries) record recency through
-        // their timestamp-only project PATCH. Headless sends have no such
-        // callback: use the persisted message time, never the Run finish time.
-        if (!clientUserMessageId) {
-          recordProjectUserQuery(db, meta.projectId, savedUserMessage?.createdAt);
-        }
+        // API callers may supply their own message ID without a web PATCH.
+        // Persisted message time preserves queue/replay semantics; the monotonic
+        // write cannot move a newer web send or manual retry backwards.
+        recordProjectUserQuery(db, meta.projectId, savedUserMessage?.createdAt);
       }
     };
     const fallbackAutomaticBeforeStart = async (error: unknown): Promise<boolean> => {

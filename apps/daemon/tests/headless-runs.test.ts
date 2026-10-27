@@ -526,7 +526,7 @@ describe('POST /api/runs headless fallbacks', () => {
     expect(user?.runContext).toEqual(runContext);
   });
 
-  it('bumps project updatedAt after omit-pin user message seed', async () => {
+  it.each([undefined, 'api-client-user-id'])('records project recency for a seeded user turn with ID %s', async (userMessageId) => {
     started = await startTestServer();
     const older = await createProject(started.url, 'Older project for activity order');
     await delay(5);
@@ -550,6 +550,7 @@ describe('POST /api/runs headless fallbacks', () => {
         projectId: older.projectId,
         conversationId: older.conversationId,
         message: `activity bump seed ${randomUUID()}`,
+        userMessageId,
       }),
     });
     expect(runResponse.status).toBe(202);

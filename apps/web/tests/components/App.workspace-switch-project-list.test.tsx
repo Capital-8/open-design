@@ -49,7 +49,7 @@ import {
   fetchPromptTemplates,
   fetchSkills,
 } from '../../src/providers/registry';
-import { listProjects, listTemplates } from '../../src/state/projects';
+import { listProjects, listTemplates, patchProject } from '../../src/state/projects';
 import {
   notifyWorkspaceContextRefresh,
   resetTeamProjectsCache,
@@ -83,7 +83,7 @@ vi.mock('../../src/components/EntryView', () => ({
       <div data-testid="entry-projects-failed">{String(Boolean(projectsLoadFailed))}</div>
       <button onClick={() => void onProjectsRefresh?.().catch(() => {})}>Retry projects</button>
       {projects.map((project) => (
-        <div key={project.id} data-testid={`entry-project-${project.id}`}>
+        <div key={project.id} data-testid={`entry-project-${project.id}`} data-recency={project.lastUserQueryAt}>
           {project.name}
         </div>
       ))}
@@ -98,6 +98,7 @@ vi.mock('../../src/components/ProjectView', async () => {
       project: Project;
       workspaceContextOverride?: ReturnType<typeof workspaceContext> | null;
       onBack: () => void;
+      onTouchProject: (sentAt: number) => void;
       onProjectChange: (project: Project) => void;
       onProjectsRefresh: () => Promise<void> | void;
     }) => {
@@ -135,6 +136,8 @@ vi.mock('../../src/components/ProjectView', async () => {
       ]);
       return (
         <main data-testid="project-view">
+          <span data-testid="project-recency">{props.project.lastUserQueryAt}</span>
+          <button data-testid="project-send" onClick={() => props.onTouchProject(5000)}>Send</button>
           <span data-testid="project-title">{props.project.name}</span>
           <button
             type="button"
@@ -210,6 +213,7 @@ vi.mock('../../src/state/projects', async () => {
     ...actual,
     listProjects: vi.fn(),
     listTemplates: vi.fn(),
+    patchProject: vi.fn(),
   };
 });
 
@@ -1103,6 +1107,43 @@ describe('App project list across a workspace switch', () => {
       },
     });
   });
+  it.each(['before-send', 'during-write'] as const)('preserves send recency against a stale list issued %s', async (timing) => {
+    const original = { ...WORKSPACE_A_PROJECT, workspaceId: 'ws-a', lastUserQueryAt: 100 };
+    const oldRead = deferred<Project[]>();
+    const write = deferred<Project | null>();
+    vi.mocked(patchProject).mockReturnValue(write.promise);
+    vi.mocked(listProjects).mockResolvedValue([original]);
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input), 'http://d.local').pathname;
+      const body = pathname.endsWith('/workspace/directory')
+        ? workspaceDirectoryFixture([workspaceContext('ws-a')])
+        : pathname.endsWith('/workspace/context') ? workspaceContextPayload('ws-a')
+        : pathname.endsWith('/workspace-scope') ? { scope: {
+          kind: 'team', projectId: original.id, workspaceId: 'ws-a', visibility: 'team', context: workspaceContext('ws-a'),
+        } }
+        : pathname === `/api/projects/${original.id}` ? { project: original }
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    window.history.replaceState(null, '', `/projects/${original.id}`);
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('project-view')).toBeTruthy());
+    if (timing === 'during-write') fireEvent.click(screen.getByTestId('project-send'));
+    vi.mocked(listProjects).mockReturnValueOnce(oldRead.promise);
+    await act(async () => fireEvent.click(screen.getByTestId('project-refresh')));
+    if (timing === 'before-send') fireEvent.click(screen.getByTestId('project-send'));
+    await waitFor(() => expect(screen.getByTestId('project-recency').textContent).toBe('5000'));
+    await act(async () => write.resolve({ ...original, lastUserQueryAt: 5000 }));
+    await act(async () => oldRead.resolve([original]));
+    expect(screen.getByTestId('project-recency').textContent).toBe('5000');
+    // Fresh post-write reads remain authoritative, including newer remote sends.
+    vi.mocked(listProjects).mockResolvedValue([{ ...original, lastUserQueryAt: 6000 }]);
+    await act(async () => fireEvent.click(screen.getByTestId('project-refresh')));
+    await waitFor(() => expect(screen.getByTestId('project-recency').textContent).toBe('6000'));
+    fireEvent.click(screen.getByTestId('project-back'));
+    await waitFor(() => expect(screen.getByTestId(`entry-project-${original.id}`).getAttribute('data-recency')).toBe('6000'));
+  });
+
   it('keeps a rejected list distinct from an empty success and clears failure after retry', async () => {
     vi.mocked(listProjects).mockRejectedValue(new Error('projects 403'));
     render(<App />);

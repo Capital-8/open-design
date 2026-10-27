@@ -1357,6 +1357,10 @@ function AppInner() {
   }
   const locallyDeletedProjectIdsRef = useRef<Map<string, number>>(new Map());
   const projectListMutationVersionRef = useRef(0);
+  const pendingProjectRecencyRef = useRef(new Map<string, {
+    sentAt: number;
+    settledVersion?: number;
+  }>());
   const projectRenameStatesRef = useRef<Map<string, QueuedProjectRenameState>>(new Map());
   const pendingProjectNameProjectionsRef = useRef<Map<string, PendingProjectNameProjection>>(
     new Map(),
@@ -1623,6 +1627,16 @@ function AppInner() {
         request.scopeKey,
         project.id,
       ]);
+      const recency = pendingProjectRecencyRef.current.get(key);
+      if (recency) {
+        if (recency.settledVersion !== undefined && request.mutationVersion >= recency.settledVersion) {
+          // A fresh read after the best-effort write settles is authoritative,
+          // including a failed write. Reads issued before/during it stay fenced.
+          pendingProjectRecencyRef.current.delete(key);
+        } else {
+          project = { ...project, lastUserQueryAt: Math.max(project.lastUserQueryAt ?? 0, recency.sentAt) };
+        }
+      }
       const pending = pendingProjectNameProjectionsRef.current.get(key);
       if (!pending) return project;
       if (
@@ -4357,11 +4371,19 @@ function AppInner() {
   const handleTouchProject = useCallback((sentAt = Date.now()) => {
     const projectId = route.kind === 'project' ? route.projectId : null;
     if (!projectId) return;
+    const mutationContext = projectRouteWorkspaceContextRef.current ?? workspaceContextRef.current;
+    const key = JSON.stringify([
+      currentWorkspaceAccountGeneration(), projectListScopeKey(mutationContext), projectId,
+    ]);
+    const pending: { sentAt: number; settledVersion?: number } = {
+      sentAt: Math.max(pendingProjectRecencyRef.current.get(key)?.sentAt ?? 0, sentAt),
+    };
+    pendingProjectRecencyRef.current.set(key, pending);
+    projectListMutationVersionRef.current += 1;
     const recordSend = (project: Project): Project => project.id === projectId
       ? { ...project, lastUserQueryAt: Math.max(project.lastUserQueryAt ?? 0, sentAt) }
       : project;
     setProjects((curr) => curr.map(recordSend));
-    const mutationContext = projectRouteWorkspaceContextRef.current ?? workspaceContextRef.current;
     if (mutationContext) {
       patchProjectDisplaySnapshots({
         accountGeneration: currentWorkspaceAccountGeneration(),
@@ -4370,7 +4392,11 @@ function AppInner() {
       });
     }
     // Best effort: no wait or retry on the message send path.
-    void patchProject(projectId, { lastUserQueryAt: sentAt }, mutationContext);
+    const settle = () => {
+      if (pendingProjectRecencyRef.current.get(key) !== pending) return;
+      pending.settledVersion = ++projectListMutationVersionRef.current;
+    };
+    void patchProject(projectId, { lastUserQueryAt: sentAt }, mutationContext).then(settle, settle);
   }, [route]);
 
   const handleProjectChange = useCallback((updated: Project) => {
