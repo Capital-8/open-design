@@ -125,6 +125,19 @@ for (const group of ['C', 'D'] as const) {
   test(`[P1] RUN010 ${group === 'C' ? 'pre-send refusal' : 'in-run depletion'} reconnect keeps unsent input manual and preserves original workspace`, async ({ browser }) => {
     test.setTimeout(T.xlong * 10);
     const { fixture, space, output, binding, save, marker, receipt } = await prepare(group);
+    if (group === 'D') {
+      await expect.poll(async () => {
+        try {
+          const ready = JSON.parse(await readFile(join(output, 'observer-ready.safe.json'), 'utf8'));
+          expect(ready).toMatchObject({group, alias:fixture.alias, fixtureSha256:binding.fixtureSha256,
+            odSha:fixture.tuple.odSha, amrSha:fixture.tuple.amrSha});
+          return true;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+          throw error;
+        }
+      }, {timeout:T.long}).toBe(true);
+    }
     const namespace = 'link-run010-' + group.toLowerCase() + '-' + randomUUID().slice(0, 8);
     const root = join(e2eWorkspaceRoot(), '.tmp', 'e2e', namespace);
     const scratch = join(root, 'scratch');
