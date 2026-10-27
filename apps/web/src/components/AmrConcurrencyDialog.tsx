@@ -1,3 +1,5 @@
+import { useWorkspaceJourney } from '../analytics/use-workspace-journey';
+import { workspaceAnalyticsDimensions } from '../analytics/workspace';
 import { Button, Dialog } from '@open-design/components';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import { useT } from '../i18n';
@@ -9,7 +11,8 @@ import styles from './AmrConcurrencyDialog.module.css';
 
 /** A real Link request rejection, never a local task-slot reservation. Closing
  * or changing plans only dismisses the notice; sending again is always manual. */
-export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consoleOrigin, upgradeAllowed = true, onClose }: {
+export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consoleOrigin, upgradeAllowed = true, pageName = 'chat_panel', onClose }: {
+  pageName?: 'home' | 'chat_panel';
   branch: AmrBalanceBranch;
   upgradeAllowed?: boolean;
   workspaceContext: WorkspaceCollabContext | null;
@@ -18,6 +21,8 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
   onClose: () => void;
 }) {
   const t = useT();
+  const journey = useWorkspaceJourney({ page_name: pageName, area: 'concurrency_limit_dialog', reason: 'concurrency_limit', stage: 'mid_run', ...workspaceAnalyticsDimensions(workspaceContext) });
+  const close = () => { journey.click('close'); onClose(); };
   const upgradeUrl = upgradeAllowed && branch.audience === 'owner' && branch.tier !== 'max' && workspaceContext
     ? workspaceUpgradeUrl(workspaceContext, null, { fallbackProfile: profile, consoleOrigin }) : null;
   const memberNotice = branch.audience === 'member';
@@ -28,13 +33,13 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
     t('chat.amrConcurrencyGate.benefit4'),
   ];
   return (
-    <Dialog className={`${frame.panel} ${frame.frozenPanel} ${styles.offerPanel}`} backdropClassName={frame.frozenBackdrop} onClose={onClose} closeOnEscape
+    <Dialog className={`${frame.panel} ${frame.frozenPanel} ${styles.offerPanel}`} backdropClassName={frame.frozenBackdrop} onClose={close} closeOnEscape
       ariaLabelledBy="amr-concurrency-title" data-testid="amr-concurrency-dialog">
       <div className={frame.banner}>
         <img className={frame.bannerImage} src="/upgrade/cloud-signin-aurora.jpg"
           width={1680} height={720} alt="" decoding="async" draggable={false} />
       </div>
-      <Button variant="ghost" className={frame.closeButton} onClick={onClose} aria-label={t('common.close')}>
+      <Button variant="ghost" className={frame.closeButton} onClick={close} aria-label={t('common.close')}>
         <Icon name="close" size={14} />
       </Button>
       <h2 id="amr-concurrency-title" className={frame.title}>
@@ -59,12 +64,12 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
         <Button variant={upgradeUrl ? 'ghost' : 'primary'}
           className={upgradeUrl ? `${frame.later} ${styles.laterButton}`
             : `${frame.cta} ${styles.noticeButton}`}
-          onClick={onClose} data-testid="amr-concurrency-close">
+          onClick={close} data-testid="amr-concurrency-close">
           {t(upgradeUrl ? 'chat.amrBalanceGate.laterCta'
             : memberNotice ? 'chat.amrBalanceOwner.dismissCta' : 'common.close')}
         </Button>
         {upgradeUrl ? <Button className={`${frame.cta} ${styles.upgradeButton}`}
-          onClick={() => window.open(upgradeUrl, '_blank', 'noopener,noreferrer')}
+          onClick={() => { journey.click('upgrade'); window.open(upgradeUrl, '_blank', 'noopener,noreferrer'); }}
           data-testid="amr-concurrency-upgrade">{t('chat.amrBalanceGate.plansCta')}</Button> : null}
       </div>
     </Dialog>
