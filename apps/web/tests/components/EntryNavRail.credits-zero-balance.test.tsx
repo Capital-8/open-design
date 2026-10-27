@@ -193,16 +193,17 @@ describe('top-right credits pill', () => {
   });
 
   it('keeps the pill and the zero balance while the plan is still unknown', async () => {
-    // Billing has not answered yet: hiding the pill on an unresolved plan
-    // would make it flicker in and out as the read lands. With no plan at all
-    // the display label resolves free — the state a local dev workspace sits
-    // in — so the pill sells the upgrade and the card keeps the zero.
+    // OPEND-4440: keep the capsule mounted while billing resolves, without
+    // treating an unknown entitlement as Free. The wallet row is independent.
     renderRail({
       context: context({ planId: null, billingState: undefined } as Partial<WorkspaceCollabContext>),
       billing: null,
       balanceUsd: '0',
     });
-    expect(creditsPill()?.textContent).toContain('升级');
+    expect(creditsPill()).not.toBeNull();
+    expect(creditsPill()?.getAttribute('aria-busy')).toBe('true');
+    expect(creditsPill()?.textContent).not.toContain('升级');
+    expect(creditsPill()?.querySelector('svg.plan-wordmark')).toBeNull();
     expect((await creditsRow()).textContent).toContain('$0.00');
   });
 });
