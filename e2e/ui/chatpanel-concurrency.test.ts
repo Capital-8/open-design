@@ -32,7 +32,10 @@ test('[P1] F12 Owner and F15 Admin Member retain ChatPanel then manually recover
   const roleNames = ['owner', 'admin', 'member'] as const;
   type Client = { role: string; page: Page; context: BrowserContext; runtime: ReturnType<typeof createToolsDevSuite>; env: Record<string,string>; headers: Record<string,string>; prompt: string; rawURL: string; artifact: Buffer; creates: unknown[]; events: unknown[]; network: unknown[]; proof: Record<string,unknown> };
   const clients: Client[] = [];
-  const proof: Record<string, unknown> = { cases: ['client:UISTATE-F12-CLIENT', 'client:UISTATE-F15-CLIENT'], actualProductAMR: '289dbce6b021cbbf139bf070a0b9c486823f950c', actualProductOD: 'dd39556468811fd473d4aa27168b5c47956e1435', startedAt: new Date().toISOString(), workspaceId: workspace.workspaceId, roles: [], boundary: 'Real ChatPanel, daemon project/artifact Given, native Vela/OpenCode, canonical API/Link/PG/Redis; only supplier HTTP controlled. No Home case, UI response mock, price/quota/permission mutation or actual PSP payment.' };
+  const actualProductAMR = process.env.RUN013_PRODUCT_BASELINE_SHA ?? '289dbce6b021cbbf139bf070a0b9c486823f950c';
+  const actualProductOD = process.env.RUN013_OD_BASELINE_SHA ?? 'dd39556468811fd473d4aa27168b5c47956e1435';
+  assert.match(actualProductAMR, /^[a-f0-9]{40}$/);assert.match(actualProductOD, /^[a-f0-9]{40}$/);
+  const proof: Record<string, unknown> = { cases: ['client:UISTATE-F12-CLIENT', 'client:UISTATE-F15-CLIENT'], actualProductAMR, actualProductOD, startedAt: new Date().toISOString(), workspaceId: workspace.workspaceId, roles: [], boundary: 'Real ChatPanel, daemon project/artifact Given, native Vela/OpenCode, canonical API/Link/PG/Redis; only supplier HTTP controlled. No Home case, UI response mock, price/quota/permission mutation or actual PSP payment.' };
   const save = () => writeFile(join(evidence, 'F12-F15-actual.private.json'), JSON.stringify({ ...proof, roles: clients.map(c => ({ ...c.proof, creates: c.creates, network: c.network, events: c.events })) }, null, 2));
   let controlURL = '';
   const control = async (path: string) => { const response = await fetch(`${controlURL}${path}`, { method: path === '/state' ? 'GET' : 'POST', signal: AbortSignal.timeout(T.long) }); const body = await response.json(); assert(response.ok, JSON.stringify(body)); return body; };
