@@ -2013,13 +2013,10 @@ export function EntryNavRail({
   const canAccessInviteFlow = canAccessWorkspaceInviteFlow(context);
   const workspaceSettingsUrl = context?.workspaceSettingsUrl?.trim() || null;
 
-  // Message-center panel for the SIGNED-OUT shell only (the bell on the local
-  // account dock in the footer is the one opener there). The signed-in panel —
-  // plus the unread badge on its dock bell — lives inside
+  // Keep signed-out announcement delivery mounted without adding a local
+  // identity or bell to A01. The signed-in inbox and unread badge live in
   // `EntryTopRightCluster` with the account menu.
   const [messageCenterOpen, setMessageCenterOpen] = useState(false);
-  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
-  const messageCenterRailRef = useRef<HTMLButtonElement | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
   useEffect(() => {
     if (!teamOpen) return;
@@ -2615,9 +2612,7 @@ export function EntryNavRail({
               analyticsPage={analyticsPage}
               label={t('recentProjects.title')}
             />
-            {/* No message-centre item here any more: signed out, the bell
-                rides the local account dock in the footer below (OPEND-3140),
-                the same slot the signed-in dock gives it. */}
+            {/* A01 does not add an account/message-centre row while signed out. */}
           </div>
         )}
         {/* Bottom of the nav column: the host `EntryTopRightCluster` portals
@@ -2629,90 +2624,35 @@ export function EntryNavRail({
       {/* Signed in, the social links ride the account dock above the identity
           row (see `EntryTopRightCluster`), so the footer only renders when it
           has a notice to show — an empty shell here read as a dead white
-          strip under the account row. Signed out renders the local twin of
-          that dock down here, under the sign-in card. */}
+          strip under the account row. Signed out keeps the sign-in card and
+          existing community links without a second identity row. */}
       {context ? (
         footerNotice ? <div className="entry-nav-rail__footer">{footerNotice}</div> : null
       ) : (
         <div className="entry-nav-rail__footer">
           {footerNotice}
-          {/* Local account dock (OPEND-3140): the signed-out twin of the dock
-              `EntryTopRightCluster` portals into the rail foot when signed in
-              — social links above an identity row whose trailing slot is the
-              message-centre bell. The identity here is the local mode itself
-              (there is no account to name), and opening it lands in Settings,
-              where the local CLI / BYOK configuration lives. The sign-in card
-              owns the final footer slot in local mode; these account and social
-              controls remain reachable above it. */}
+          {/* A01 keeps the signed-out footer focused on its sign-in card.
+              Settings already has a navigation entry; do not add a duplicate
+              local identity or message-centre row above the card. Existing
+              community links remain outside this local-row correction. */}
           <div
             className="entry-nav-rail__account-dock entry-nav-rail__account-dock--local"
             data-testid="entry-nav-local-account-dock"
           >
             <RailSocialRow page={analyticsPage} dimensions={workspaceDimensions} />
-            <div className="entry-nav-rail__account">
-              <button
-                type="button"
-                className="entry-nav-rail__account-trigger"
-                aria-label={t('entry.accountSettings')}
-                title={t('entry.accountSettings')}
-                data-testid="entry-nav-local-account"
-                onClick={() => {
-                  trackAccountMenuClick(analytics.track, {
-                    page_name: analyticsPage,
-                    area: 'account_menu',
-                    element: 'settings',
-                  });
-                  onOpenSettings?.();
-                }}
-              >
-                <span
-                  className="entry-nav-rail__account-avatar entry-nav-rail__account-avatar--local"
-                  aria-hidden
-                >
-                  <Icon name="terminal" size={14} />
-                </span>
-                <span className="entry-nav-rail__account-name">{t('entry.localAccountName')}</span>
-              </button>
-              <button
-                type="button"
-                ref={messageCenterRailRef}
-                className="entry-nav-rail__account-bell"
-                aria-haspopup="dialog"
-                aria-expanded={messageCenterOpen}
-                aria-label={t('messageCenter.title')}
-                title={t('messageCenter.title')}
-                data-testid="entry-nav-message-center"
-                onClick={() => {
-                  trackAccountMenuClick(analytics.track, {
-                    page_name: analyticsPage,
-                    area: 'account_menu',
-                    element: 'message_center',
-                  });
-                  setMessageCenterOpen(true);
-                }}
-              >
-                <Icon name="bell" size={15} />
-                {messageUnreadCount > 0 ? (
-                  <span className="entry-nav-rail__menu-item-dot" aria-hidden />
-                ) : null}
-              </button>
-            </div>
           </div>
         </div>
       )}
       </div>
 
-      {/* Signed-out message-center panel + unread polling (the local dock's
-          bell above is its opener). Signed-in mounts move into
-          `EntryTopRightCluster` — context-gating both sides is what keeps
-          exactly one panel (and one unread poller) alive. */}
+      {/* Keep signed-out announcement delivery and unread polling mounted.
+          Signed-in mounts move into `EntryTopRightCluster`; context-gating
+          both sides keeps exactly one panel (and one poller) alive. */}
       {context ? null : (
         <MessageCenter
           hideTrigger
-          returnFocusRef={messageCenterRailRef}
           open={messageCenterOpen}
           onOpenChange={setMessageCenterOpen}
-          onUnreadCountChange={setMessageUnreadCount}
           onOpenNotificationSettings={onOpenSettings ? () => onOpenSettings('notifications') : undefined}
           priorityAnnouncementActive={priorityAnnouncementActive}
           onPriorityAnnouncementPendingChange={onPriorityAnnouncementPendingChange}
