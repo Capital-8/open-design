@@ -150,7 +150,7 @@
 .playGlyph {
   display: grid;
   place-items: center;
-  transform: translateX(1px);
+  transform: translateX(-1px);
 }
 .playGlyph svg {
   width: 18px;
