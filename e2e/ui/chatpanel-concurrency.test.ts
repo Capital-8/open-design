@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { BrowserContext, Page } from '@playwright/test';
 import { clusterTest as test, expect } from '@/playwright/suite';
 import { seedCampaignDismissals } from '@/playwright/campaign-dismissals';
-import { createToolsDevSuite } from '@/tools-dev/runtime';
+import { createToolsDevSuite, e2eWorkspaceRoot } from '@/tools-dev/runtime';
 import { warmPlaywrightDaemonRuntime, warmPlaywrightWebRuntime } from '@/playwright/runtime-lifecycle';
 import { ACTIVE_ARTIFACT_PREVIEW_SELECTOR } from '@/playwright/artifact-preview';
 import { T } from '@/timeouts';
@@ -19,7 +19,7 @@ test('[P1] F12 Owner and F15 Admin Member retain ChatPanel then manually recover
   const cfg = JSON.parse(await readFile(join(directory, 'sandbox.private.json'), 'utf8'));
   const fixture = JSON.parse(await readFile(join(directory, 'chatpanel-registration.private.json'), 'utf8'));
   const workspace = fixture.spaces.main;
-  const evidence = join(directory, 'native');
+  const evidence = process.env.CHATPANEL_NATIVE_OUTPUT ?? join(directory, 'native');
   await mkdir(evidence, { recursive: true });
   const provider = JSON.parse(await readFile(join(directory, 'provider-state.json'), 'utf8'));
   const providerURL = `http://127.0.0.1:${provider.port}`;
@@ -38,9 +38,10 @@ test('[P1] F12 Owner and F15 Admin Member retain ChatPanel then manually recover
     for (const role of roleNames) {
       const actor = fixture.actors[role], memberId = workspace.members[role]; assert(actor && memberId);
       const namespace = `cp-${role}-${process.pid}-${randomUUID().slice(0,4)}`;
-      const root = join(directory, 'clients', role);
-      const runtime = createToolsDevSuite({ root, namespace, ownerPid: process.pid, dataDir: join(root,'data'), toolsDevRoot: join(root,'tools-dev'), codexHomeDir: join(root,'codex-home') });
-      const home = join(root,'data','agent-runtime','amr-local'); await mkdir(home,{recursive:true});
+      const root = join(e2eWorkspaceRoot(), '.tmp', 'e2e', namespace);
+      const clientData = join(directory, 'clients', role, 'data');
+      const runtime = createToolsDevSuite({ root, namespace, ownerPid: process.pid, dataDir: clientData, toolsDevRoot: join(root,'tools-dev'), codexHomeDir: join(root,'codex-home') });
+      const home = join(clientData,'agent-runtime','amr-local'); await mkdir(home,{recursive:true});
       const vela = join(directory,'vela-native');
       await writeFile(join(home,'config.json'),JSON.stringify({profiles:{local:{controlKey:actor.controlKey,runtimeKey:actor.runtimeKey,apiUrl:cfg.urls.api,linkUrl:cfg.urls.link,user:{id:actor.userId,email:actor.email,name:`ChatPanel ${role}`}}}}),{mode:0o600});
       const config = { mode:'daemon',agentId:'amr',model:'gpt-5.6-sol',onboardingCompleted:true,privacyDecisionAt:Date.now(),telemetry:{metrics:false,content:false,artifactManifest:false},agentModels:{amr:{model:'gpt-5.6-sol'}},agentCliEnv:{amr:{OPEN_DESIGN_AMR_PROFILE:'local',VELA_BIN:vela}} };
