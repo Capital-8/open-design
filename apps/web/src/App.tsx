@@ -74,7 +74,6 @@ import type { ShareLoginReturn } from './components/share/share-login-return';
 import { SignedOutObservedShare } from './components/share/SignedOutObservedShare';
 import { projectsForWorkspaceChrome } from './runtime/workspace-chrome-projects';
 import { AmrArtifactUpgradeGate } from './components/AmrArtifactUpgradeGate';
-import { AmrArtifactUpgradeHomeCard } from './components/AmrArtifactUpgradeHomeCard';
 import { ExperienceSurvey } from './components/ExperienceSurvey';
 import { TooltipLayer } from './components/TooltipLayer';
 import { UpdateDialog } from './components/UpdateDialog';
@@ -197,10 +196,6 @@ import { isMacPlatform } from './utils/platform';
 import { randomUUID } from './utils/uuid';
 import { summarizeProjectNameFromPrompt } from './utils/projectName';
 import { armCompletionFeedbackOnFirstGesture } from './utils/notifications';
-import {
-  amrArtifactUpgradeHomeMockOffer,
-  type AmrArtifactUpgradeHomeOffer,
-} from './runtime/amr-artifact-upgrade';
 import {
   amrBalanceGateScopeForWorkspaceContext,
   amrBalanceGateScopesMatch,
@@ -1118,14 +1113,6 @@ function AppInner() {
     }, completionFeedbackGestureConsumedRef.current);
   }, [config.notifications?.desktopEnabled, config.notifications?.soundEnabled]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [amrArtifactUpgradeHomeMockConfig] = useState<AmrArtifactUpgradeHomeOffer | null>(
-    () => process.env.NODE_ENV === 'development' && typeof window !== 'undefined'
-      ? amrArtifactUpgradeHomeMockOffer(window.location.search)
-      : null,
-  );
-  const amrArtifactUpgradeHomeMock = amrArtifactUpgradeHomeMockConfig !== null;
-  const [amrArtifactUpgradeHomeOffer, setAmrArtifactUpgradeHomeOffer] =
-    useState<AmrArtifactUpgradeHomeOffer | null>(() => amrArtifactUpgradeHomeMockConfig);
   // Surfaced when a Home-picked working dir could not be applied to a freshly
   // created project (expired/invalid desktop token, daemon rejection). Without
   // this the failure was swallowed and the user believed their folder was in
@@ -6134,40 +6121,6 @@ function AppInner() {
         onCompleteOnboarding={handleCompleteOnboarding}
         onSignedOut={handleActiveCloudSignOut}
         onAmrLoginStatusChange={handleAmrLoginStatusChange}
-        artifactUpgradeSlot={
-          amrArtifactUpgradeHomeOffer ? (
-            <AmrArtifactUpgradeHomeCard
-              key={amrArtifactUpgradeHomeOffer.sessionKey}
-              profile={amrLoginStatus?.profile ?? null}
-              workspaceId={amrUpgradeWorkspaceContext?.workspaceId}
-              metricsConsent={config.telemetry?.metrics === true}
-              installationId={config.installationId}
-              onViewArtifact={() => {
-                if (
-                  !amrArtifactUpgradeHomeOffer.projectId
-                  || !amrArtifactUpgradeHomeOffer.conversationId
-                ) {
-                  navigate({ kind: 'home', view: 'projects' });
-                  return;
-                }
-                navigate({
-                  kind: 'project',
-                  projectId: amrArtifactUpgradeHomeOffer.projectId,
-                  conversationId: amrArtifactUpgradeHomeOffer.conversationId,
-                  fileName: amrArtifactUpgradeHomeOffer.fileName,
-                });
-              }}
-              onDismiss={() => {
-                if (amrArtifactUpgradeHomeMock) return;
-                setAmrArtifactUpgradeHomeOffer((current) =>
-                  current?.sessionKey === amrArtifactUpgradeHomeOffer.sessionKey
-                    ? null
-                    : current,
-                );
-              }}
-            />
-          ) : undefined
-        }
       />
     );
   }
@@ -6291,7 +6244,6 @@ function AppInner() {
         activeConversationId={
           route.kind === 'project' ? route.conversationId ?? null : null
         }
-        activeFileName={route.kind === 'project' ? route.fileName : null}
         plan={resolvedAmrPlan}
         planResolved={
           amrLoginStatus !== null
@@ -6301,11 +6253,6 @@ function AppInner() {
         metricsConsent={config.telemetry?.metrics === true}
         workspaceId={amrUpgradeWorkspaceContext?.workspaceId}
         installationId={config.installationId}
-        onHomeOfferChange={
-          amrArtifactUpgradeHomeMock
-            ? undefined
-            : setAmrArtifactUpgradeHomeOffer
-        }
       />
       <AnimatePresence>
       {settingsOpen ? (

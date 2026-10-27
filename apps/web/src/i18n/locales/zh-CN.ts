@@ -180,11 +180,7 @@ export const zhCN: Dict = {
   "chat.amrArtifactUpgrade.promoBanner": "订阅套餐限时低至 3.3 折",
   "chat.amrArtifactUpgrade.countdownLabel": "优惠倒计时",
   "chat.amrArtifactUpgrade.plansCta": "立即升级套餐，低至 3.3 折",
-  "chat.amrArtifactUpgrade.homePlansCta": "3.3 折升级",
   "chat.amrArtifactUpgrade.laterCta": "继续使用 Free 并发送",
-  "chat.amrArtifactUpgrade.homeTitle": "作品已生成，让下一次创作更进一步",
-  "chat.amrArtifactUpgrade.homeMessage": "升级即可解锁高阶模型、更多并发和更高每月积分。",
-  "chat.amrArtifactUpgrade.homeArtifactCta": "查看作品",
   "chat.antigravityError.launchTerminalCta": "在终端中登录",
   "chat.antigravityError.launchSwitchModelCta": "在终端中切换模型",
   "chat.connectionDropped":

@@ -165,7 +165,6 @@ interface Props {
   onCompleteOnboarding: () => void;
   onSignedOut?: () => void | Promise<void>;
   onAmrLoginStatusChange?: (status: VelaLoginStatus | null) => void;
-  artifactUpgradeSlot?: ReactNode;
 }
 
 export function isTrustedConnectorCallbackOrigin(origin: string, currentOrigin?: string): boolean {
@@ -323,7 +322,6 @@ export function EntryView({
   onCompleteOnboarding,
   onSignedOut,
   onAmrLoginStatusChange,
-  artifactUpgradeSlot,
 }: Props) {
   const [connectors, setConnectors] = useState<ConnectorDetail[]>([]);
   const [connectorsLoading, setConnectorsLoading] = useState(false);
@@ -454,7 +452,6 @@ export function EntryView({
       onCompleteOnboarding={onCompleteOnboarding}
       onSignedOut={onSignedOut}
       onAmrLoginStatusChange={onAmrLoginStatusChange}
-      artifactUpgradeSlot={artifactUpgradeSlot}
     />
   );
 }

@@ -110,16 +110,18 @@ async function readHandoffFrames(page: Page): Promise<number> {
 async function holdProjectCreate(page: Page) {
   const release = deferred();
   let requested = false;
+  let requestCount = 0;
   await page.route('**/api/projects', async (route) => {
     if (route.request().method() !== 'POST') {
       await route.fallback();
       return;
     }
     requested = true;
+    requestCount += 1;
     await release.promise;
     await route.continue();
   });
-  return { release: release.resolve, requested: () => requested };
+  return { release: release.resolve, requested: () => requested, requestCount: () => requestCount };
 }
 
 /** Hold any attempted authoritative billing read to expose send serialization. */
@@ -705,9 +707,22 @@ for (const planAvailable of [false, true]) {
       const prompt = 'Use the displayed wallet and plan before entering a project.';
       sending = true;
       await sendFromHome(page, prompt);
+      const submit = page.getByTestId('home-hero-submit');
+      // Preserve the original immediate pre-release checks. A known shortfall
+      // may then open its existing fast-block dialog, independently of loading.
       await expect(page.locator('[data-creation-phase="pending"]')).toHaveCount(0);
       await expect(page.getByTestId('amr-balance-dialog')).toHaveCount(0);
       expect(create.requested()).toBe(false);
+      if (planAvailable) {
+        await expect(submit).toHaveAttribute('aria-busy', 'true');
+        await expect(submit).toHaveAccessibleName('Sending…');
+        await expect(submit).toBeDisabled();
+        await expect(submit.locator('.icon-spin')).toBeVisible();
+        await page.getByTestId('home-hero-input').press('Enter');
+        await testInfo.attach('home-sending-while-funding-pending', {
+          body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png',
+        });
+      }
       const confirmed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/workspace/billing/preflight');
       confirmation.resolve();
       await (await confirmed).finished();
@@ -715,6 +730,8 @@ for (const planAvailable of [false, true]) {
         await expect(page.locator('[data-creation-phase="pending"]')).toBeVisible();
         await expect(page.getByTestId('amr-balance-dialog')).toHaveCount(0);
         await expect.poll(() => create.requested()).toBe(true);
+        expect(create.requestCount()).toBe(1);
+        await expect(page.getByTestId('home-hero-submit')).toHaveCount(0);
       } else {
         const dialog = page.getByTestId('amr-balance-dialog');
         await expect(dialog).toBeVisible();
@@ -725,7 +742,12 @@ for (const planAvailable of [false, true]) {
         await dialog.getByRole('button', { name: /not now|later|暂不|稍后/i }).click();
         await expect(dialog).toBeHidden();
         await expect(page.getByTestId('home-hero-input')).toContainText(prompt);
-        await expect(page.getByTestId('home-hero-submit')).toBeEnabled();
+        await expect(submit).toBeEnabled();
+        await expect(submit).toHaveAttribute('aria-busy', 'false');
+        await expect(submit).toHaveAccessibleName('Run');
+        await expect(submit.locator('.icon-spin')).toHaveCount(0);
+        await expect(submit.locator('svg')).toHaveAttribute('width', '36');
+        expect(create.requestCount()).toBe(0);
         expect(create.requested()).toBe(false);
         await testInfo.attach('home-preserved-draft-after-funding-rejection', { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
       }

@@ -2405,17 +2405,17 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
               disabled={!sendEnabled}
               // No tooltip: the arrow is the composer's only send affordance,
               // and the 运行 bubble landed on the prompt text right above it.
-              // Progress appears in the destination Chat frame, so this action
-              // never flashes a transient loading name/state before unmount.
-              aria-label={t('homeHero.run')}
-              aria-busy={false}
+              // Creation and preflight can outlast this frame. Keep the
+              // existing sending indicator until HomeView settles the submit.
+              aria-label={submitting ? t('chat.comments.sending') : t('homeHero.run')}
+              aria-busy={submitting}
             >
               {/* The supplied send mark: the glyph fills half of its 32 box in
                   the source file, and the icon carries that padding itself, so
                   it renders at the button's full size rather than inset —
                   which is why this tracks the disc (36, see
                   `.home-hero__submit`) instead of the file's own 32. */}
-              <Icon name="arrow-up-fill" size={36} />
+              <Icon name={submitting ? 'spinner' : 'arrow-up-fill'} size={submitting ? 17 : 36} />
             </button>
           </div>
         </div>

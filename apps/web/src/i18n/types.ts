@@ -2988,11 +2988,7 @@ export interface Dict {
   'chat.amrArtifactUpgrade.promoBanner': string;
   'chat.amrArtifactUpgrade.countdownLabel': string;
   'chat.amrArtifactUpgrade.plansCta': string;
-  'chat.amrArtifactUpgrade.homePlansCta': string;
   'chat.amrArtifactUpgrade.laterCta': string;
-  'chat.amrArtifactUpgrade.homeTitle': string;
-  'chat.amrArtifactUpgrade.homeMessage': string;
-  'chat.amrArtifactUpgrade.homeArtifactCta': string;
   'chat.antigravityError.launchTerminalCta': string;
   'chat.antigravityError.launchSwitchModelCta': string;
   'chat.connectionDropped': string;

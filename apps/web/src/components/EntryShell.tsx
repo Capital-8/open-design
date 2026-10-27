@@ -590,7 +590,6 @@ interface Props {
   onCompleteOnboarding: () => void;
   onSignedOut?: () => void | Promise<void>;
   onAmrLoginStatusChange?: (status: VelaLoginStatus | null) => void;
-  artifactUpgradeSlot?: ReactNode;
 }
 
 // Map an EntryNavRail view id to the existing analytics `element` enum on
@@ -701,7 +700,6 @@ export function EntryShell({
   onCompleteOnboarding,
   onSignedOut,
   onAmrLoginStatusChange,
-  artifactUpgradeSlot,
 }: Props) {
   const { t } = useI18n();
   // Each entry sub-view (home / projects / design-systems) is its own
@@ -2147,7 +2145,6 @@ export function EntryShell({
     skillsLoading,
     connectors,
     promptTemplates,
-    artifactUpgradeSlot,
     deepSeekV4FlashCampaignAudience,
     onDeepSeekV4FlashCampaignUseNow: applyDeepSeekCampaignModel,
     deepSeekV4FlashCampaignMetricsConsent: config.telemetry?.metrics === true,

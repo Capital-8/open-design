@@ -317,7 +317,6 @@ interface Props {
   onRecommendationDismiss?: () => void;
   executionSwitcher?: ReactNode;
   inviteSurface?: ReactNode;
-  artifactUpgradeSlot?: ReactNode;
   deepSeekV4FlashCampaignAudience?: DeepSeekV4FlashCampaignAudience;
   /** Real model switch for the campaign modal's paid 立即使用 CTA (D5).
    *  EntryShell owns the agent/model persistence callbacks; HomeView only
@@ -528,7 +527,6 @@ export function HomeView({
   onRecommendationDismiss,
   executionSwitcher,
   inviteSurface,
-  artifactUpgradeSlot,
   deepSeekV4FlashCampaignAudience = 'unknown',
   onDeepSeekV4FlashCampaignUseNow,
   deepSeekV4FlashCampaignMetricsConsent = false,
@@ -3260,7 +3258,6 @@ export function HomeView({
         // third way to say the same thing, wedged between the two. The
         // recommendation engine and `RecommendedStartRegion` are left intact;
         // only this mount point is gone.
-        recommendationSlot={artifactUpgradeSlot}
       />
 
       {/* No 最近项目 grid under the hero on EITHER branch (OPEND-2683, per
