@@ -73,7 +73,9 @@ export async function runPinnedVelaCommand(
           VELA_API_URL: apiUrl,
           VELA_WORKSPACE_ID: workspaceId,
         },
-        timeoutMs: 30_000,
+        // Uploads include blob transfer and can legitimately exceed a control
+        // request's deadline on slower links; still bound the whole child process.
+        timeoutMs: args[0] === 'resource' && args[1] === 'push' ? 300_000 : 30_000,
       });
     } catch (error) {
       commandRejected = true;

@@ -36,6 +36,17 @@ it.each([0, 1, 'SIGTERM', 'SIGKILL'] as const)('propagates the pinned context th
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+it('allows a slow resource upload more time than a control command', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'od-pinned-upload-'));
+  try {
+    const session: VelaControlApiContext = { profile: 'test', apiUrl: 'https://example.test', controlKey: 'synthetic-key', user: null, configMtimeMs: null };
+    const run = vi.fn<typeof runVelaCommand>().mockResolvedValue('{"versionId":"v1"}');
+    await runPinnedVelaCommand({ args: ['resource', 'push', 'file', 'resource', '/fixture', '--json'], session, dataRoot: root, workspaceId: 'workspace' }, run);
+    expect(run.mock.calls[0]?.[1]?.timeoutMs).toBe(300_000);
+    expect(await readdir(root)).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 it.each([false, true])('pins CLI session until settlement and cleans its private config, rejection=%s', async (reject) => {
   const root = await mkdtemp(path.join(tmpdir(), 'od-pinned-cli-'));
   try {
