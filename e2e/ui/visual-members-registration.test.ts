@@ -53,6 +53,18 @@ test('[P1] B01 invitation layout stays usable at Windows scaled and narrow sizes
   expect(inputBox!.height).toBe(48);
   expect(roleBox!.height).toBe(inputBox!.height);
   expect(roleBox!.y).toBe(inputBox!.y);
+  const expectFooterAtBottom = async () => {
+    const footer = host.form.locator('section > footer');
+    const footerBox = await footer.boundingBox();
+    expect(footerBox).not.toBeNull();
+    const bottomGap = page.viewportSize()!.height - footerBox!.y - footerBox!.height;
+    // scrollTop rounds to whole pixels while text geometry can be fractional.
+    expect(bottomGap).toBeGreaterThanOrEqual(23);
+    expect(bottomGap).toBeLessThanOrEqual(41);
+    const skipBox = await host.form.getByRole('button', { name: '暂时跳过' }).boundingBox();
+    expect(footerBox!.y).toBeGreaterThanOrEqual(skipBox!.y + skipBox!.height);
+  };
+  await expectFooterAtBottom();
   await captureRegistration(page, 'B01-scaled');
   await role.click();
   await expect(page.getByRole('option', { name: /管理员/ })).toBeVisible();
@@ -66,6 +78,7 @@ test('[P1] B01 invitation layout stays usable at Windows scaled and narrow sizes
     const lastBox = await host.form.locator('input[type=email]').last().boundingBox();
     return lastBox!.y + lastBox!.height <= rowsBox!.y + rowsBox!.height;
   }).toBe(true);
+  await expectFooterAtBottom();
   await captureRegistration(page, 'B01-scaled-rows');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(host.form.locator('img')).toBeHidden();
@@ -73,6 +86,13 @@ test('[P1] B01 invitation layout stays usable at Windows scaled and narrow sizes
   await host.form.getByRole('button', { name: '暂时跳过' }).scrollIntoViewIfNeeded();
   await expect(host.form.getByRole('button', { name: '暂时跳过' })).toBeInViewport();
   await captureRegistration(page, 'B01-scaled-narrow');
+  await page.setViewportSize({ width: 390, height: 600 });
+  await expect(host.form.locator('section')).toHaveCSS('padding-bottom', '24px');
+  await host.form.locator('section > footer').scrollIntoViewIfNeeded();
+  await host.form.locator('section').evaluate(panel => { panel.scrollTop = panel.scrollHeight; });
+  await expectFooterAtBottom();
+  await expect(host.form.locator('section > footer select')).toBeInViewport();
+  await captureRegistration(page, 'B01-short-narrow-footer');
 });
 
 test('[P1] B04 multiple rows retain independent roles and can be removed', async ({ page }) => {

@@ -82,7 +82,6 @@
 .art img { display:block;width:100%;height:100%;border-radius:8px;object-fit:cover;object-position:center; }
 .onboardingFooter { position:absolute;left:32px;bottom:24px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;color:#999;font-size:11px;line-height:16px; }
 .onboardingFooter > span { opacity:.8; }
-@media(max-height:720px) { .onboarding .panel { justify-content:flex-start; }.onboardingFooter { position:static;margin-top:32px; } }
 @media(max-width:900px) { .onboarding { grid-template-columns:minmax(0,1fr);padding:0; }.art { display:none; }.onboarding .panel { padding:32px 24px 110px; }.onboardingFooter { left:24px;bottom:32px; } }
 
 .languagePicker { display:inline-flex;align-items:center;width:132px;max-width:100%;padding:0 8px;box-sizing:border-box;border:1px solid #e5e5e5;border-radius:100px;background:#f5f5f5;color:#666; }
@@ -215,3 +214,12 @@
 .root:not(.onboarding) .remove:hover:not(:disabled) { background:#f2f2f2;color:#333; }
 
 .root:not(.onboarding) :is(.cancel,.submit) { line-height:19.6px; }
+
+/* Short windows keep the language/copyright footer at the bottom when there
+   is room, and let it follow overflowing content without covering actions. */
+@media(max-height:720px) {
+ .onboarding .panel { min-height:0;justify-content:flex-start; }
+ .onboarding .panel:not(:has(.complete)) { padding-bottom:24px; }
+ .onboarding .panel > header,.onboarding .panel > p,.onboarding form,.onboarding .skip { flex-shrink:0; }
+ .onboarding .panel > .onboardingFooter { position:static;align-self:flex-start;flex-shrink:0;margin-top:auto;padding-top:32px; }
+}
