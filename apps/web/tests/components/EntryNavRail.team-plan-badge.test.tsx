@@ -231,3 +231,19 @@ describe('plan wordmark — the personal ladder is untouched', () => {
     expect(nameplateTier()).toBe(plan);
   });
 });
+describe('OPEND-4440 workspace plan loading', () => {
+  it.each(['owner', 'member'] as const)('keeps an unknown %s workspace neutral until its Max plan arrives', role => {
+    const unknown = context({ workspaceId: 'new-team', workspaceMemberId: 'new-member', role, planId: null });
+    const view = renderRail({ context: unknown, billing: null });
+    const pill = screen.getByTestId('entry-top-right-credits');
+    expect(drawnTier(pill)).toBeNull();
+    expect(pill.getAttribute('aria-busy')).toBe('true');
+    fireEvent.pointerEnter(pill);
+    expect(drawnTier(document.querySelector('.entry-nav-rail__menu-credits'))).toBeNull();
+    expect(document.querySelector('.entry-nav-rail__menu-credits-plan')?.textContent).not.toContain('团队');
+    view.rerender(<I18nProvider initial="zh-CN"><EntryNavRail view="home" onViewChange={() => {}} onNewProject={() => {}} open context={context({ ...unknown, planId: 'max' } as unknown as Partial<WorkspaceCollabContext>)} billing={billing({ membershipTier: 'max' })} balanceUsd="0" /></I18nProvider>);
+    expect(drawnTier(screen.getByTestId('entry-top-right-credits'))).toBe('max');
+    expect(screen.getByTestId('entry-top-right-credits').getAttribute('aria-busy')).not.toBe('true');
+    expect(nameplateTier()).toBe('max');
+  });
+});
