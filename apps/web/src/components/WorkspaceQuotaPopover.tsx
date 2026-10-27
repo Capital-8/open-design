@@ -1,3 +1,5 @@
+import { useWorkspaceJourney } from '../analytics/use-workspace-journey';
+import { workspaceAnalyticsDimensions } from '../analytics/workspace';
 import { useEffect, useId, useRef } from 'react';
 import { isWorkspaceLifecycleReadable, type WorkspaceCollabContext } from '@open-design/contracts';
 import { Button } from '@open-design/components';
@@ -64,6 +66,7 @@ export interface WorkspaceQuotaPopoverProps {
 }
 
 export function WorkspaceQuotaPopover(props: WorkspaceQuotaPopoverProps) {
+  useWorkspaceJourney({ page_name: 'home', area: 'workspace_quota_popover', ...workspaceAnalyticsDimensions(props.context) });
   const workspaceId = props.context?.workspaceId;
   const memberId = props.context?.workspaceMemberId;
   useEffect(() => {

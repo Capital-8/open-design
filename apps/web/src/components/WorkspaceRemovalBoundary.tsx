@@ -1,3 +1,4 @@
+import { useWorkspaceJourney } from '../analytics/use-workspace-journey';
 import { Button } from '@open-design/components';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { WorkspaceActiveResponse } from '@open-design/contracts';
@@ -12,6 +13,7 @@ import styles from './WorkspaceRemovalBoundary.module.css';
 export function WorkspaceRemovalBoundary({ children }: { children: ReactNode }) {
   useWorkspaceContext();
   const notice = useWorkspaceRemoval();
+  const journey = useWorkspaceJourney({ page_name: 'home', area: 'workspace_membership_removed', ...(notice ? { workspace_key: notice.workspaceId } : {}) }, Boolean(notice));
   const t = useT();
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -24,6 +26,7 @@ export function WorkspaceRemovalBoundary({ children }: { children: ReactNode }) 
   if (!notice) return children;
   async function confirm() {
     if (!notice || pending) return;
+    journey.click('return_personal_workspace');
     const captured = notice;
     setPending(true);
     setFailed(false);

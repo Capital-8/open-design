@@ -6296,7 +6296,7 @@ function AppInner() {
       ) : null}
       {homeConcurrencyRejection && route.kind === 'home'
         && homeConcurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration() ? (
-        <AmrConcurrencyDialog branch={homeConcurrencyRejection.branch}
+        <AmrConcurrencyDialog pageName="home" branch={homeConcurrencyRejection.branch}
           workspaceContext={homeConcurrencyRejection.workspaceContext}
           profile={amrLoginStatus?.profile?.trim() || amrProfileForConfig(config)}
           consoleOrigin={amrLoginStatus?.consoleOrigin}

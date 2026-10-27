@@ -1,3 +1,4 @@
+import type { WorkspaceInviteEntry } from '@open-design/contracts/analytics';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { type WorkspaceCollabContext, type WorkspaceInviteRole } from '@open-design/contracts';
@@ -6,7 +7,7 @@ import { useI18n, LOCALES, LOCALE_LABEL, type Locale } from '../i18n';
 import { workspaceInviteErrorMessageKey } from '../collab/invite-error-copy';
 import { workspaceProjectHeaders } from '../collab/workspace-identity';
 import { useAnalytics } from '../analytics/provider';
-import { trackWorkspaceInviteClick, trackWorkspaceInviteResult, trackWorkspaceSurfaceView } from '../analytics/events';
+import { trackWorkspaceInviteClick, trackWorkspaceInviteResult, trackWorkspaceSurfaceView, trackWorkspaceInvitePageView } from '../analytics/events';
 import { countBucket, stableAnalyticsErrorCode, workspaceAnalyticsDimensions } from '../analytics/workspace';
 import styles from './InviteDialog.module.css';
 
@@ -24,7 +25,7 @@ interface Props {
   onUpgrade?: () => void;
   onSubmit?: (rows: InviteRow[]) => void;
   canAssignRoles?: boolean;
-  entryFrom?: 'workspace_switcher' | 'all_projects';
+  entryFrom?: WorkspaceInviteEntry;
 }
 const emptyRow = (): Row => ({ email: '', role: 'member', idempotencyKey: crypto.randomUUID() });
 const validEmail = (value: string) => {
@@ -37,11 +38,15 @@ const validEmail = (value: string) => {
 const canonicalRole = (role: string): WorkspaceInviteRole => role === 'admin' || role === '管理员' ? 'admin' : 'member';
 
 /** The local form retains authoritative per-row results and never retries sent recipients. */
-export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAssignRoles = true, entryFrom = 'workspace_switcher', variant = 'dialog', onFinish }: Props) {
+export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAssignRoles = true, entryFrom: requestedEntry = 'workspace_switcher', variant = 'dialog', onFinish }: Props) {
   const onboarding = variant === 'onboarding';
+  const entryFrom = onboarding ? 'onboarding' : requestedEntry;
+  const area = onboarding ? 'onboarding_invite_step' : 'workspace_invite_dialog';
+  const exposure = useRef<{ key: string; id: string } | null>(null);
+  const surfaceId = useRef('');
   const { t, locale, setLocale } = useI18n();
   const analytics = useAnalytics();
-  const page = entryFrom === 'all_projects' ? 'all_projects' : 'home';
+  const page = onboarding ? 'onboarding' : entryFrom === 'all_projects' ? 'all_projects' : 'home';
   const dimensions = workspaceAnalyticsDimensions(workspaceContext);
   const owner = workspaceContext?.role === 'owner' && canAssignRoles;
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
@@ -110,8 +115,14 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     return () => { if (exitTimer.current) clearTimeout(exitTimer.current); if (finishTimer.current) clearTimeout(finishTimer.current); requestVersion.current += 1; controller.current?.abort(); previous?.focus(); };
   }, [open, identity, onboarding]);
   useEffect(() => {
-    if (open) trackWorkspaceSurfaceView(analytics.track, { page_name: page, area: 'workspace_invite_dialog', entry_from: entryFrom, ...dimensions });
-  }, [open, analytics.track, page, entryFrom, dimensions.workspace_key]);
+    if (!open) { exposure.current = null; return; }
+    const key = `${identity}:${entryFrom}`;
+    if (exposure.current?.key === key) return;
+    surfaceId.current = crypto.randomUUID();
+    exposure.current = { key, id: surfaceId.current };
+    if (onboarding) trackWorkspaceInvitePageView(analytics.track, { page_name: 'onboarding', area: 'onboarding_invite_step', step_name: 'invite_teammates', entry_from: 'onboarding', invite_surface_id: surfaceId.current, ...dimensions });
+    else trackWorkspaceSurfaceView(analytics.track, { page_name: page === 'onboarding' ? 'home' : page, area: 'workspace_invite_dialog', entry_from: entryFrom, invite_surface_id: surfaceId.current, ...dimensions });
+  }, [open, analytics.track, page, entryFrom, identity, onboarding, dimensions.workspace_key]);
   useEffect(() => {
     if (!owner) { setRows(previous => previous.map(row => ({ ...row, role: 'member' }))); setOpenRoleIndex(null); }
   }, [owner]);
@@ -190,8 +201,8 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     }));
     setError(null);
   }
-  function click(element: 'submit' | 'close' | 'add_recipient_row' | 'remove_recipient_row' | 'role_select') {
-    trackWorkspaceInviteClick(analytics.track, { page_name: page, area: 'workspace_invite_dialog', element, entry_from: entryFrom, ...dimensions });
+  function click(element: 'skip_invite' | 'submit' | 'close' | 'add_recipient_row' | 'remove_recipient_row' | 'role_select') {
+    trackWorkspaceInviteClick(analytics.track, { page_name: page, area, invite_surface_id: surfaceId.current, element, entry_from: entryFrom, ...dimensions });
   }
   function close() { if (!onboarding) { click('close'); requestVersion.current += 1; controller.current?.abort(); onClose(); } }
   async function submit() {
@@ -204,14 +215,21 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     const requested = rows.map(row => ({ email: row.email.trim(), role: owner ? canonicalRole(row.role) : 'member' as const, idempotencyKey: row.idempotencyKey }));
     const requestId = analytics.newRequestId();
     const startedAt = performance.now();
-    const result = (succeeded: number, failed: number, code?: string) => trackWorkspaceInviteResult(analytics.track, {
-      page_name: page, area: 'workspace_invite_dialog', entry_from: entryFrom,
-      result: succeeded === requested.length ? 'success' : succeeded > 0 ? 'partial_success' : 'failed',
+    let reported = false;
+    const batchId = crypto.randomUUID();
+    const result = (succeeded: number, failed: number, code?: string, unknown = 0) => {
+      reported = true;
+      return trackWorkspaceInviteResult(analytics.track, {
+      page_name: page, area, invite_surface_id: surfaceId.current, entry_from: entryFrom,
+      invite_batch_id: batchId,
+      unknown_count: unknown,
+      result: unknown > 0 ? 'unknown' : succeeded === requested.length ? 'success' : succeeded > 0 ? 'partial_success' : 'failed',
       requested_count: requested.length, succeeded_count: succeeded, failed_count: failed,
       duration_ms: Math.round(performance.now() - startedAt), ...(code ? { error_code: code } : {}), ...dimensions,
     }, { requestId });
-    trackWorkspaceInviteClick(analytics.track, { page_name: page, area: 'workspace_invite_dialog', element: 'submit',
-      entry_from: entryFrom, invite_count_bucket: countBucket(requested.length), ...dimensions }, { requestId });
+    };
+    trackWorkspaceInviteClick(analytics.track, { page_name: page, area, invite_surface_id: surfaceId.current, element: 'submit',
+      entry_from: entryFrom, invite_batch_id: batchId, invite_count_bucket: countBucket(requested.length), ...dimensions }, { requestId });
     setSubmitting(true); setError(null); setPartialCount(null); setOpenRoleIndex(null);
     const abort = new AbortController(); controller.current = abort;
     let networkFailure = false;
@@ -219,7 +237,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
       const response = await fetch('/api/workspace/invite', { method: 'POST', signal: abort.signal,
         headers: { 'content-type': 'application/json', ...workspaceProjectHeaders(requestContext) }, body: JSON.stringify({ invites: requested }) });
       if (version !== requestVersion.current) return;
-      if (!response.ok) { networkFailure = response.status >= 500; result(0, requested.length, stableAnalyticsErrorCode(response.status)); throw new Error('request_failed'); }
+      if (!response.ok) { networkFailure = response.status >= 500; result(0, networkFailure ? 0 : requested.length, stableAnalyticsErrorCode(response.status), networkFailure ? requested.length : 0); throw new Error('request_failed'); }
       const body = await response.json() as { results?: Array<{ email?: string; ok?: boolean; error?: string | undefined }> };
       if (version !== requestVersion.current) return;
       const results = body.results;
@@ -231,13 +249,13 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
           ?? (results?.length === requested.length && results[index]?.email === undefined ? results[index] : undefined);
         if (match?.ok === true) succeeded.push(row);
         else {
-          if (match?.error === 'create_unreachable') transportFailures += 1;
+          if (!match || match.error === 'create_unreachable') transportFailures += 1;
           const key = workspaceInviteErrorMessageKey(match?.error, onboarding);
           if (!['workspaceInvite.onboardingErrorAlreadyMember', 'workspaceInvite.onboardingErrorPendingInvite', 'workspaceInvite.errorAlreadyMember', 'workspaceInvite.errorPendingInvite', 'workspaceInvite.seatsExhaustedBody'].includes(key)) onlyRowConflicts = false;
           failed.push({ ...row, error: !onboarding && key === 'workspaceInvite.submitFailed' ? undefined : t(key) });
         }
       });
-      result(succeeded.length, failed.length, failed.length ? 'invite_rejected' : undefined);
+      result(succeeded.length, failed.length - transportFailures, failed.length ? transportFailures ? 'network_error' : 'invite_rejected' : undefined, transportFailures);
       if (!onboarding && transportFailures === requested.length) {
         setRows(rows.map(row => ({ ...row, error: undefined }))); setError(t('workspaceInvite.submitFailedPreserved')); return;
       }
@@ -267,7 +285,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
       setError(onboarding ? succeeded.length || onlyRowConflicts ? null : t('workspaceInvite.submitFailedPreserved') : succeeded.length ? t('workspaceInvite.partialSummary').replace('{sent}', String(succeeded.length)).replace('{failed}', String(failed.length)) : onlyRowConflicts ? null : t('workspaceInvite.submitFailedPreserved'));
     } catch (caught) {
       if (version !== requestVersion.current) return;
-      if (caught instanceof TypeError) result(0, requested.length, 'network_error');
+      if (!reported) result(0, 0, caught instanceof TypeError ? 'network_error' : 'invalid_response', requested.length);
       if (!onboarding && (networkFailure || caught instanceof TypeError)) {
         setRows(rows.map(row => ({ ...row, error: undefined }))); setError(t('workspaceInvite.submitFailedPreserved'));
       } else setError(t('workspaceInvite.submitFailedPreserved'));
@@ -329,7 +347,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
         <footer className={styles.footer}>{!onboarding ? <Button className={styles.cancel} onClick={close} disabled={submitting}>{t('workspaceInvite.cancel')}</Button> : null}
           <Button type="submit" className={styles.submit} disabled={submitting}>{batchSuccess !== null ? batchSuccess === 0 ? t('workspaceInvite.sent') : t('workspaceInvite.batchSent').replace('{count}', String(batchSuccess)) : submitting ? t('workspaceInvite.sending') : t('workspaceInvite.confirm')}</Button></footer>
       </form></>}
-      {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => onFinish?.(sentCount, 'skipped')}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}><label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label><span>{`© ${new Date().getFullYear()} OpenDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
+      {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => { click('skip_invite'); onFinish?.(sentCount, 'skipped'); }}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}><label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label><span>{`© ${new Date().getFullYear()} OpenDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
     </section>
     {onboarding ? <div className={styles.art} aria-hidden="true"><img src="/onboarding/registration-invite-art.webp" alt="" /></div> : null}
     {owner && openRoleIndex !== null ? createPortal(<div className={`${styles.menu} ${onboarding ? styles.onboardingMenu : styles.dialogMenu}`} ref={menu} style={menuPos} role="listbox" id={`${id}-roles`}
