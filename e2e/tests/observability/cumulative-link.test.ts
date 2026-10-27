@@ -44,12 +44,18 @@ function parseSse(text: string): Event[] {
 async function writeSdkFixture(directory: string, bindingFile: string) {
   const bin = join(directory, 'codex-controlled.cjs');
   const receiptsPath = join(directory, 'sdk-receipts.safe.json');
+  const invocationsPath = join(directory, 'sdk-invocations.safe.jsonl');
   await mkdir(directory, { recursive: true });
   await writeFile(bin, `#!/usr/bin/env node
 const fs = require('node:fs');
 const readline = require('node:readline');
 const binding = JSON.parse(fs.readFileSync(${JSON.stringify(bindingFile)}, 'utf8'));
 const receiptsPath = ${JSON.stringify(receiptsPath)};
+const invocationsPath = ${JSON.stringify(invocationsPath)};
+fs.appendFileSync(invocationsPath, JSON.stringify({
+  mode: process.argv.includes('app-server') ? 'app-server' : process.argv.includes('--version') ? 'version' : process.argv.includes('exec') ? 'exec-json' : 'other',
+  flags: process.argv.slice(2).filter(arg => arg.startsWith('-')).map(arg => arg.split('=')[0]),
+}) + '\\n');
 const receipts = { threadId: require('node:crypto').randomUUID(), turnId: require('node:crypto').randomUUID(), turnStarts: 0, calls: [], notifications: [] };
 const save = () => fs.writeFileSync(receiptsPath, JSON.stringify(receipts, null, 2));
 const send = frame => { process.stdout.write(JSON.stringify(frame) + '\\n'); };
@@ -111,7 +117,7 @@ rl.on('line', async line => {
 });
 `, 'utf8');
   await chmod(bin, 0o755);
-  return { bin, receiptsPath };
+  return { bin, receiptsPath, invocationsPath };
 }
 
 describe('USE-016 cumulative SDK notifications with real isolated Link calls', () => {
@@ -192,6 +198,10 @@ describe('USE-016 cumulative SDK notifications with real isolated Link calls', (
         expect(receipts.calls.map(call => call.usage.completion_tokens)).toEqual([1, 1, 1]);
         expect(receipts.calls.every(call => call.status === 200)).toBe(true);
         expect(receipts.notifications.map(frame => frame.params.tokenUsage.total.totalTokens)).toEqual([100, 180, 180, 240, 100]);
+        const invocations = (await readFile(sdk.invocationsPath, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+        expect(invocations.filter(item => item.mode === 'app-server')).toHaveLength(1);
+        expect(invocations.filter(item => item.mode === 'exec-json')).toHaveLength(0);
+        await save('sdk-invocations.safe.json', invocations);
         await save('sdk-receipts.safe.json', receipts);
         await save('summary.safe.json', { productionTuple: binding.productionTuple, workspaceId: binding.workspaceId,
           runId, projectId, conversationId: project.conversationId, assistantMessageId, namespace: suite.namespace,
@@ -202,7 +212,7 @@ describe('USE-016 cumulative SDK notifications with real isolated Link calls', (
           productionInputHighWater: run.executionDiagnostics?.cache.inputTokensEffective,
           exactJournalAndCursorReplay: true, assistantRereadIdentical: true, actualModelHttpCalls: receipts.calls.length,
           boundary: 'Controlled SDK and supplier; real Link HTTP and daemon native normalizer/HTTP/SSE/JSONL/SQLite. No new cumulative billing API. No daemon restart or remote analytics acceptance claimed.' });
-      }, { onFailure: async () => {
+      }, { env: { OD_CODEX_TRANSPORT: 'app-server' }, onFailure: async () => {
         await save('failure.safe.json', { receipts: JSON.parse(await readFile(sdk.receiptsPath, 'utf8').catch(() => '{}')), namespace: suite.namespace });
       } });
     });
