@@ -2,9 +2,9 @@ import { expect, test } from '@/playwright/suite';
 import { mockAmrPersonalWorkspace, AMR_PERSONAL_WORKSPACE_CONTEXT } from '../lib/playwright/amr.js';
 import { T } from '@/timeouts';
 for (const nested of [false, true]) for (const forceInline of [false, true])
-    test(`[P0] Owner locates an old H2 again after scrolling away (srcdoc=${forceInline}, nested=${nested})`, async ({ page }) => {
+    test(`[P0] Owner locates an old H2 again after scrolling away (srcdoc=${forceInline}, nested=${nested}, personal=${nested && forceInline})`, async ({ page }) => {
         test.setTimeout(T.xlong * 2);
-        const team = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, workspaceId: 'ws-ui-audit-team', workspaceName: 'UI audit team', workspaceType: 'team' as const, workspaceMemberId: 'mem-ui-audit-team', seatSummary: { seatLimit: 5, usedSeats: 1, availableSeats: 4, isSeatFull: false }, teamId: 'team-ui-audit', teamName: 'UI audit team', role: 'owner' as const };
+        const team = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, workspaceId: 'ws-ui-audit-team', workspaceName: 'UI audit team', workspaceType: nested && forceInline ? 'personal' as const : 'team' as const, workspaceMemberId: 'mem-ui-audit-team', seatSummary: { seatLimit: 5, usedSeats: 1, availableSeats: 4, isSeatFull: false }, teamId: 'team-ui-audit', teamName: 'UI audit team', role: 'owner' as const };
         await page.addInitScript(() => {
             localStorage.setItem('open-design:locale', 'zh-CN');
             localStorage.setItem('open-design:locale-source', 'manual');
@@ -25,7 +25,7 @@ for (const nested of [false, true]) for (const forceInline of [false, true])
         await page.route('**/api/workspace/directory', r => r.fulfill({ json: { items: [team], activeWorkspaceId: team.workspaceId } }));
         await page.route('**/api/workspace/context', r => r.fulfill({ json: { context: team } }));
         const projectId = `ui-audit-team-${Date.now()}`;
-        await page.route('**/api/projects/*/workspace-scope', r => r.fulfill({ json: { scope: { kind: 'team', projectId, workspaceId: team.workspaceId, teamId: team.teamId, visibility: 'private', context: team } } }));
+        await page.route('**/api/projects/*/workspace-scope', r => r.fulfill({ json: { scope: { kind: team.workspaceType === 'personal' ? 'personal' : 'team', projectId, workspaceId: team.workspaceId, teamId: team.teamId, visibility: 'private', context: team } } }));
         const create = await page.request.post('/api/projects', { data: { id: projectId, name: 'Team UI audit local fixture', skillId: null, designSystemId: null, metadata: { kind: 'prototype', nameSource: 'user' } } });
         expect(create.ok(), await create.text()).toBeTruthy();
         const { conversationId } = await create.json() as {
@@ -58,7 +58,7 @@ for (const nested of [false, true]) for (const forceInline of [false, true])
         const localProject = (await projectResponse.json() as {
             project: Record<string, unknown>;
         }).project;
-        const teamProject = { ...localProject, workspaceId: team.workspaceId, workspaceVisibility: 'private' };
+        const teamProject = { ...localProject, workspaceId: team.workspaceId, workspaceVisibility: team.workspaceType === 'personal' ? 'personal' : 'private' };
         await page.route(`**/api/workspaces/${team.workspaceId}/projects?*`, r => r.fulfill({ json: { projects: [{ project: teamProject, workspaceId: team.workspaceId, visibility: 'private', resourceState: 'active', createdByWorkspaceMemberId: team.workspaceMemberId, updatedByWorkspaceMemberId: team.workspaceMemberId, currentUserAccess: { canOpen: true, canRename: true, canDelete: true, canDuplicate: true, canMoveToTeam: false, canMoveToPersonal: true, canExport: true, canSendTo: true, canRestoreVersion: true } }] } }));
         await page.route(`**/api/projects/${projectId}`, r => r.request().method() === 'GET' ? r.fulfill({ json: { project: teamProject } }) : r.fallback());
         await page.route(`**/api/projects/${projectId}/collab/status`, r => r.fulfill({ json: { publishedVersion: 2, materializedVersion: 2, awaitingFirstMaterialization: false, syncState: 'synced', ownerMemberId: team.workspaceMemberId, ownerDisplayName: 'Fixture Owner', ownerRole: 'owner', contentTransferState: null } }));
