@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const fa: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "برخی فایل‌های بارگذاری‌شده موجود نیستند یا بررسی صحت آن‌ها ناموفق بوده است. دوباره تلاش کنید.",
+  "fileViewer.publishFileConflict": "وضعیت انتشار یا بارگذاری تغییر کرده است. پنل اشتراک‌گذاری را تازه‌سازی کنید و دوباره تلاش کنید.",
+  "fileViewer.publishFileWorkspaceLocked": "این فضای کاری قفل است. پیش از انتشار، دسترسی به فضای کاری را بازیابی کنید.",
 
   "collab.contentUpdate.available": "نسخه جدید ابری موجود است",
   "collab.contentUpdate.updating": "در حال به‌روزرسانی…",
@@ -3356,7 +3356,7 @@ export const fa: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'انتشار پیوند عمومی به فضای کاری تیمی نیاز دارد. به یک فضای کاری تیمی بروید یا این فایل را با «استقرار» منتشر کنید.',
   'fileViewer.publishFileRequiresWorkspace': 'ایجاد پیوند اشتراک‌گذاری نیازمند ورود به فضای کاری است. به OpenDesign Cloud وارد شوید یا این فایل را از طریق استقرار به اشتراک بگذارید.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "محتوا از محدودیت اشتراک‌گذاری سرور فراتر رفته است. حجم فایل‌ها را کاهش دهید و دوباره تلاش کنید.",
   'fileViewer.publishFileEntryIndexConflict': "«{from}» به فایل index.html در ریشهٔ پروژه ارجاع می‌دهد که با محل انتشار صفحهٔ اشتراکی تداخل دارد. نام آن index.html را تغییر دهید (مثلاً به {name}) و ارجاع را به‌روزرسانی کنید، یا خود index.html را به اشتراک بگذارید.",
   'fileViewer.copyFixForAgent': "کپی راه‌حل برای عامل",
   'fileViewer.copyFixForAgentFailed': "کپی انجام نشد. دستورالعمل زیر را انتخاب کرده و دستی کپی کنید.",

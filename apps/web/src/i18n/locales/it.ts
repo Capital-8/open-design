@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const it: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Alcuni file caricati sono mancanti o non hanno superato i controlli di integrità. Riprova.",
+  "fileViewer.publishFileConflict": "Lo stato di pubblicazione o caricamento è cambiato. Aggiorna il pannello di condivisione e riprova.",
+  "fileViewer.publishFileWorkspaceLocked": "Questo spazio di lavoro è bloccato. Ripristina l’accesso prima di pubblicare.",
 
   "collab.contentUpdate.available": "Nuova versione cloud",
   "collab.contentUpdate.updating": "Aggiornamento…",
@@ -3345,7 +3345,7 @@ export const it: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'La pubblicazione di un link pubblico richiede uno spazio di lavoro del team. Passa a uno spazio del team o usa Distribuisci per pubblicare questo file.',
   'fileViewer.publishFileRequiresWorkspace': 'Un link di condivisione richiede uno spazio di lavoro con accesso effettuato. Accedi a OpenDesign Cloud oppure condividi questo file tramite un deploy.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "Il contenuto supera il limite di condivisione del server. Riduci le dimensioni dei file e riprova.",
   'fileViewer.publishFileEntryIndexConflict': "“{from}” fa riferimento al file index.html nella radice del progetto, che entra in conflitto con la posizione in cui viene pubblicata la pagina condivisa. Rinomina quel file index.html (ad esempio in {name}) e aggiorna il riferimento, oppure condividi direttamente index.html.",
   'fileViewer.copyFixForAgent': "Copia correzione per l’agente",
   'fileViewer.copyFixForAgentFailed': "Impossibile copiare. Seleziona l’istruzione qui sotto e copiala manualmente.",

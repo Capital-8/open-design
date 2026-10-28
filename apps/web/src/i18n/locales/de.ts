@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const de: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Einige hochgeladene Dateien fehlen oder haben die Integritätsprüfung nicht bestanden. Bitte versuche es erneut.",
+  "fileViewer.publishFileConflict": "Der Veröffentlichungs- oder Uploadstatus hat sich geändert. Aktualisiere das Freigabefenster und versuche es erneut.",
+  "fileViewer.publishFileWorkspaceLocked": "Dieser Arbeitsbereich ist gesperrt. Stelle vor dem Veröffentlichen den Zugriff wieder her.",
 
   "collab.contentUpdate.available": "Neue Cloud-Version",
   "collab.contentUpdate.updating": "Wird aktualisiert…",
@@ -3356,7 +3356,7 @@ export const de: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'Für einen öffentlichen Link wird ein Team-Workspace benötigt. Wechsle zu einem Team-Workspace oder veröffentliche diese Datei über Deploy.',
   'fileViewer.publishFileRequiresWorkspace': 'Für einen Freigabelink ist ein angemeldeter Workspace nötig. Melde dich bei OpenDesign Cloud an oder teile die Datei über eine Deploy-Option.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "Der Inhalt überschreitet das Freigabelimit des Servers. Verkleinere die Dateien und versuche es erneut.",
   'fileViewer.publishFileEntryIndexConflict': "„{from}“ verweist auf die index.html im Stammverzeichnis des Projekts, die mit dem Veröffentlichungsort der geteilten Seite kollidiert. Benenne diese index.html um (zum Beispiel in {name}) und passe den Verweis an, oder teile die index.html selbst.",
   'fileViewer.copyFixForAgent': "Korrektur für Agent kopieren",
   'fileViewer.copyFixForAgentFailed': "Kopieren fehlgeschlagen. Markiere die Anweisung unten und kopiere sie manuell.",

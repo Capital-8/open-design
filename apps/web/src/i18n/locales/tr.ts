@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const tr: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Yüklenen bazı dosyalar eksik veya bütünlük denetimlerinden geçemedi. Tekrar deneyin.",
+  "fileViewer.publishFileConflict": "Yayınlama veya yükleme durumu değişti. Paylaşım panelini yenileyip tekrar deneyin.",
+  "fileViewer.publishFileWorkspaceLocked": "Bu çalışma alanı kilitli. Yayınlamadan önce erişimi yeniden sağlayın.",
 
   "collab.contentUpdate.available": "Bulutta yeni sürüm var",
   "collab.contentUpdate.updating": "Güncelleniyor…",
@@ -3345,7 +3345,7 @@ export const tr: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'Herkese açık bağlantı yayınlamak için ekip çalışma alanı gerekir. Bir ekip çalışma alanına geçin veya bu dosyayı Dağıt ile yayınlayın.',
   'fileViewer.publishFileRequiresWorkspace': 'Paylaşım bağlantısı için oturum açılmış bir çalışma alanı gerekir. OpenDesign Cloud\'da oturum açın veya bu dosyayı bir dağıtımla paylaşın.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "İçerik, sunucunun paylaşım sınırını aşıyor. Dosya boyutlarını küçültüp tekrar deneyin.",
   'fileViewer.publishFileEntryIndexConflict': "“{from}”, projenin kök dizinindeki index.html dosyasına başvuruyor ve bu dosya paylaşılan sayfanın yayınlandığı konumla çakışıyor. Bu index.html dosyasını yeniden adlandırın (örneğin {name}) ve başvuruyu güncelleyin ya da doğrudan index.html dosyasını paylaşın.",
   'fileViewer.copyFixForAgent': "Düzeltmeyi ajan için kopyala",
   'fileViewer.copyFixForAgentFailed': "Kopyalanamadı. Aşağıdaki talimatı seçip elle kopyalayın.",

@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const uk: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Деякі завантажені файли відсутні або не пройшли перевірку цілісності. Спробуйте ще раз.",
+  "fileViewer.publishFileConflict": "Стан публікації або завантаження змінився. Оновіть панель поширення та спробуйте ще раз.",
+  "fileViewer.publishFileWorkspaceLocked": "Цей робочий простір заблоковано. Відновіть доступ перед публікацією.",
 
   "collab.contentUpdate.available": "Нова версія в хмарі",
   "collab.contentUpdate.updating": "Оновлення…",
@@ -3345,7 +3345,7 @@ export const uk: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'Щоб опублікувати загальнодоступне посилання, потрібен командний робочий простір. Перейдіть до командного простору або скористайтеся «Розгорнути».',
   'fileViewer.publishFileRequiresWorkspace': 'Для посилання потрібен вхід у робочий простір. Увійдіть в OpenDesign Cloud або поділіться файлом через деплой.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "Вміст перевищує ліміт поширення на сервері. Зменште розмір файлів і спробуйте ще раз.",
   'fileViewer.publishFileEntryIndexConflict': "«{from}» посилається на index.html у корені проєкту, який конфліктує з адресою публікації спільної сторінки. Перейменуйте цей index.html (наприклад, на {name}) і оновіть посилання або поширте сам index.html.",
   'fileViewer.copyFixForAgent': "Скопіювати виправлення для агента",
   'fileViewer.copyFixForAgentFailed': "Не вдалося скопіювати. Виділіть інструкцію нижче та скопіюйте її вручну.",

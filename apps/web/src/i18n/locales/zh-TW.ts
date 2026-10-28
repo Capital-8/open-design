@@ -1,9 +1,9 @@
 import type { Dict } from "../types";
 
 export const zhTW: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "部分已上傳檔案缺失或未通過完整性檢查，請重試。",
+  "fileViewer.publishFileConflict": "發佈或上傳狀態已變更，請重新整理分享面板後重試。",
+  "fileViewer.publishFileWorkspaceLocked": "此工作區已鎖定，請恢復存取權限後再發佈。",
 
   "collab.contentUpdate.available": "雲端有新版本",
   "collab.contentUpdate.updating": "正在更新…",

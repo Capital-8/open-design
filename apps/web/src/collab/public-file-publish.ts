@@ -104,6 +104,18 @@ export type PublicFilePublishFailureKey =
   | 'fileViewer.publishFileLocalSessionFailed'
   | 'fileViewer.publishFileUnconfirmed';
 
+/** A rejected mutation without an HTTP receipt may already have committed. */
+export function publicFileMutationNeedsReconciliation(error: unknown): boolean {
+  return error instanceof Error && !(error instanceof PublicFilePublishError)
+    && !error.message.includes('WORKSPACE_IDENTITY_REQUIRED')
+    && !(error && typeof error === 'object' && 'failure' in error);
+}
+
+export function publicFileMutationFailureKey(error: unknown): PublicFilePublishFailureKey {
+  return publicFileMutationNeedsReconciliation(error)
+    ? 'fileViewer.publishFileUnconfirmed' : publicFilePublishFailureKey(error);
+}
+
 /** Render only validated failure tokens, never daemon or CLI message text.
  * A snapshot/receipt/cleanup failure may follow a committed remote mutation;
  * its copy must describe an unconfirmed outcome, not a known upload failure.

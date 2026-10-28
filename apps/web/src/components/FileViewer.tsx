@@ -144,6 +144,8 @@ import {
   publicFileEntryIndexConflict,
   publicFileManualRevokePublication,
   publicFilePublishFailureKey,
+  publicFileMutationFailureKey,
+  publicFileMutationNeedsReconciliation,
 } from '../collab/public-file-publish';
 import { moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
 import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
@@ -8022,12 +8024,23 @@ function HtmlViewer({
   }
 
   // The one way a share-state read lands in this viewer's share state.
-  function applyPublicShareStateRead(state: ProjectFilePublicShareResponse) {
+  function applyPublicShareStateRead(state: ProjectFilePublicShareResponse, reconcileMutation = false) {
+    const reconciling = reconcileMutation || publishFailureKey === 'fileViewer.publishFileUnconfirmed';
+    if (reconciling) {
+      const confirmed = !state.stale && (state.status === 'stopped' || state.status === 'none'
+        || (state.status === 'active' && (state.freshness === 'current' || state.freshness === 'outdated')));
+      if (!confirmed) {
+        setPublicQuery({ identity: publicFileReadIdentity, status: 'error' });
+        return;
+      }
+      setPublishFailureKey(null);
+      setFileShareFreshness(state.freshness ?? 'unknown');
+    }
     setPublicQuery({ identity: publicFileReadIdentity, status: 'success' });
     setFileShareStatus(state.status ?? null);
     const knownLink = publicFileShareLinkFromRead(state);
     // Missing local metadata is not proof a live remote link was stopped.
-    if (state.status === 'stopped') {
+    if (state.status === 'stopped' || (reconciling && state.status === 'none')) {
       onObservedPublicShareLink?.(null);
       // A confirmed remote stop outranks a previously known local URL.
       // An unavailable read is not a confirmed stop and keeps the link.
@@ -8136,13 +8149,21 @@ function HtmlViewer({
     setFileShareFreshness('unknown');
     void fetchProjectFilePublicShareFreshness(projectId, file.name, workspaceContext)
       .then(freshness => {
-        if (!cancelled && generation === currentWorkspaceAccountGeneration()) setFileShareFreshness(freshness);
+        if (cancelled || generation !== currentWorkspaceAccountGeneration()) return;
+        setFileShareFreshness(freshness);
+        if (fileShareStatus === 'active' && publishedFileSlug && publishedFileUrl
+          && workspaceContext && sourceAuthorizationScopeKey) {
+          onObservedPublicShareLink?.({ status: 'active', projectId, filePath: file.name,
+            slug: publishedFileSlug, url: publishedFileUrl,
+            workspaceId: workspaceContext.workspaceId, workspaceMemberId: workspaceContext.workspaceMemberId,
+            authorizationScopeKey: sourceAuthorizationScopeKey, freshness });
+        }
       }).catch(() => {
         if (!cancelled && generation === currentWorkspaceAccountGeneration()) setFileShareFreshness('unknown');
       });
     return () => { cancelled = true; };
   }, [deployMenuOpen, unifiedActionTab, sourceSnapshotRefreshKey, liveHtml, streaming, publishingPublicFile,
-    projectId, file.name, workspaceActive, canPublishPublic, viewerOnly, publicFileReadIdentity, publishedFileSlug, loginUpdateRequest]);
+    projectId, file.name, workspaceActive, canPublishPublic, viewerOnly, publicFileReadIdentity, publishedFileSlug, publishedFileUrl, fileShareStatus, loginUpdateRequest]);
 
   // Shared identity fields for the publish-flow events (HtmlViewer copy).
   // `artifactKindToTracking` only recognises HTML through the renderer id — an HTML
@@ -8231,6 +8252,21 @@ function HtmlViewer({
     setPublishedFileUrl(outcome.link.url ?? '');
     setPublishedFileSlug(outcome.link.slug);
     if (reRead) applyPublicShareStateRead(reRead);
+  }
+
+  async function reconcilePublicShareMutation(requestSeq: number, accountGeneration: number): Promise<void> {
+    // Use a fresh authorized read; never reuse a read started before the mutation.
+    publicFileStateReadRef.current = null;
+    const isCurrent = () => requestSeq === publicFileRequestSeqRef.current
+      && accountGeneration === currentWorkspaceAccountGeneration()
+      && publicFileIdentityRef.current.projectId === projectId
+      && publicFileIdentityRef.current.fileName === file.name;
+    try {
+      const state = await readCurrentPublicShareState();
+      if (isCurrent()) applyPublicShareStateRead(state, true);
+    } catch {
+      if (isCurrent()) setPublicQuery({ identity: publicFileReadIdentity, status: 'error' });
+    }
   }
 
   async function publishCurrentFilePublic(mode?: 'resume') {
@@ -8414,8 +8450,8 @@ function HtmlViewer({
         ...daemonErrorCodeProp(error), ...failureDetailProps(error),
       }, requestId);
       if (requestSeq === publicFileRequestSeqRef.current) {
-        setPublishFailureKey(publicFilePublishFailureKey(error));
-
+        setPublishFailureKey(publicFileMutationFailureKey(error));
+        if (publicFileMutationNeedsReconciliation(error)) await reconcilePublicShareMutation(requestSeq, requestAccountGeneration);
       }
     } finally {
       if (requestSeq === publicFileRequestSeqRef.current) {
@@ -8532,10 +8568,11 @@ function HtmlViewer({
       if (publicFileRequestSeqRef.current === requestSeq) {
         // Stopping a link is not a clipboard operation. Keep the URL and copy
         // feedback independent while preserving actionable identity failures.
-        const failureKey = publicFilePublishFailureKey(error);
+        const failureKey = publicFileMutationFailureKey(error);
         setPublishFailureKey(failureKey === 'fileViewer.publishFileFailed'
           ? 'fileViewer.unpublishFileFailed'
           : failureKey);
+        if (publicFileMutationNeedsReconciliation(error)) await reconcilePublicShareMutation(requestSeq, requestAccountGeneration);
       }
     } finally {
       if (publicFileRequestSeqRef.current === requestSeq) {

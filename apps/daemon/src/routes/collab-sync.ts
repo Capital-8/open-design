@@ -268,6 +268,7 @@ export interface RegisterCollabSyncRoutesDeps {
   sharePublishing?: {
     ensureProject?(scope: PublicFilePublicationScope, principal: ResourceHubPrincipal, run: typeof runVelaCommand): Promise<TeamProject>;
     sourceFileId?(scope: PublicFilePublicationScope, project?: TeamProject | null): string;
+    needsCatalogSourceIdentity?(scope: PublicFilePublicationScope): boolean;
     admitFileReceipt?(scope: PublicFilePublicationScope, resourceId: string, versionId: string, entryPath: string, run: typeof runVelaCommand): Promise<void>;
     reservations: ReturnType<typeof createShareAliasReservations>;
     outbox: ShareBindingOutbox;
@@ -1380,6 +1381,9 @@ export function registerCollabSyncRoutes(
       if (!remoteState || remoteState.projectId !== projectId) {
         return fail(503, 'SHARE_STATE_UNAVAILABLE', 'remote_state');
       }
+      const recovered = await sourceIdentityForHistory(scope, remoteState, verifiedContext, principal);
+      if (!recovered.ok) return fail(recovered.status, recovered.error);
+      if (recovered.sourceFileId) scope.sourceFileId = recovered.sourceFileId;
       let candidate: ReturnType<typeof currentFileSharePublication>;
       try { candidate = currentFileSharePublication(remoteState, filePath, scope.sourceFileId); }
       catch (error) {
@@ -1521,6 +1525,8 @@ export function registerCollabSyncRoutes(
       sharedProject = await publisher.ensureProject(scope, principal, prepared.run);
       if (sharedProject.projectId !== projectId || sharedProject.ownerMemberId !== principal.memberId)
         return res.status(403).json({error:'WORKSPACE_PROJECT_PUBLISH_DENIED'});
+      if (publisher.needsCatalogSourceIdentity?.(scope) && publisher.sourceFileId)
+        scope.sourceFileId = publisher.sourceFileId(scope, sharedProject);
     } catch (error) {
       const failure = classifyVelaCommandFailure('push', error);
       return res.status(failure.upstreamStatus ?? 502).json({ error: 'PUBLIC_SHARE_PREPARATION_UNAVAILABLE', failure });
@@ -1723,6 +1729,31 @@ export function registerCollabSyncRoutes(
     }
   }));
 
+  // Only a missing local lifetime with retained cloud history needs recovery.
+  // Normal reads and first publication do not add a catalog dependency.
+  async function sourceIdentityForHistory(
+    scope: PublicFilePublicationScope,
+    history: Awaited<ReturnType<ReadProjectShareState>>,
+    context: WorkspaceCollabContext,
+    principal: ResourceHubPrincipal,
+  ) {
+    const publisher = deps.sharePublishing;
+    let sourceFileId = scope.sourceFileId;
+    let recoveredFromCatalog = false;
+    if (publisher?.needsCatalogSourceIdentity?.(scope)
+      && history.publications.some(item => item.sourceFilePath === scope.filePath && item.sourceFileId)) {
+      const resolved = await resolveSharedProjectForPublicFile(resolveSharedProject, scope.projectId, context, principal);
+      if (!resolved.ok) return { ok: false, status: 503, error: 'WORKSPACE_PROJECT_OWNERSHIP_UNAVAILABLE' } as const;
+      if (resolved.project && (resolved.project.projectId !== scope.projectId || resolved.project.ownerMemberId !== principal.memberId))
+        return { ok: false, status: 403, error: 'WORKSPACE_PROJECT_PUBLISH_DENIED' } as const;
+      sourceFileId = publisher.sourceFileId?.(scope, resolved.project);
+      recoveredFromCatalog = resolved.project !== null;
+    } else {
+      sourceFileId ??= publisher?.sourceFileId?.(scope, null);
+    }
+    return { ok: true, sourceFileId, recoveredFromCatalog } as const;
+  }
+
   app.get('/api/projects/:id/share-state', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const projectId = String(req.params.id);
@@ -1832,7 +1863,9 @@ export function registerCollabSyncRoutes(
       };
       return res.json(response);
     }
-    const sourceFileId = deps.sharePublishing?.sourceFileId?.(scope, null);
+    const recovered = await sourceIdentityForHistory(scope, history, verifiedContext, principal);
+    if (!recovered.ok) return res.status(recovered.status).json({ error: recovered.error });
+    const sourceFileId = recovered.sourceFileId;
     let remote: ReturnType<typeof currentFileSharePublication>;
     try { remote = currentFileSharePublication(history, filePath, sourceFileId); }
     catch (error) {
@@ -1857,7 +1890,10 @@ export function registerCollabSyncRoutes(
       }
     }
     const response: FilePublicShareResponse = {
-      ...(local && live ? present(local, remote?.amrLink ?? local.url) : { publication: null }),
+      ...(local && live ? present(local, remote?.amrLink ?? local.url)
+        : recovered.recoveredFromCatalog && remote?.status === 'active'
+          ? present({ slug: remote.slug, fileName: filePath, url: '' }, remote.amrLink ?? null)
+          : { publication: null }),
       status: remote?.status ?? 'none',
       freshness,
     };

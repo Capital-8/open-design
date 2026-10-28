@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const ar: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "بعض الملفات المرفوعة مفقودة أو لم تجتز فحوص سلامة المحتوى. أعد المحاولة.",
+  "fileViewer.publishFileConflict": "تغيّرت حالة النشر أو الرفع. حدّث لوحة المشاركة ثم أعد المحاولة.",
+  "fileViewer.publishFileWorkspaceLocked": "مساحة العمل مقفلة. استعد إمكانية الوصول إليها قبل النشر.",
 
   "collab.contentUpdate.available": "يتوفر إصدار سحابي جديد",
   "collab.contentUpdate.updating": "جارٍ التحديث…",
@@ -3356,7 +3356,7 @@ export const ar: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'يتطلب نشر رابط عام مساحة عمل جماعية. بدّل إلى مساحة عمل جماعية، أو استخدم النشر لإتاحة هذا الملف.',
   'fileViewer.publishFileRequiresWorkspace': 'يتطلب رابط المشاركة مساحة عمل مسجّلة الدخول. سجّل الدخول إلى OpenDesign Cloud أو شارك هذا الملف عبر النشر.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "يتجاوز المحتوى حد المشاركة على الخادم. قلّل أحجام الملفات ثم أعد المحاولة.",
   'fileViewer.publishFileEntryIndexConflict': "يشير «{from}» إلى ملف index.html في جذر المشروع، وهو يتعارض مع موضع نشر الصفحة المشارَكة. أعد تسمية ملف index.html هذا (مثلًا إلى {name}) وحدّث المرجع، أو شارك index.html نفسه.",
   'fileViewer.copyFixForAgent': "نسخ الإصلاح للوكيل",
   'fileViewer.copyFixForAgentFailed': "تعذّر النسخ. حدّد التعليمات أدناه وانسخها يدويًا.",

@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const hu: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Néhány feltöltött fájl hiányzik, vagy nem felelt meg az integritásellenőrzésen. Próbáld újra.",
+  "fileViewer.publishFileConflict": "A közzététel vagy feltöltés állapota megváltozott. Frissítsd a megosztási panelt, majd próbáld újra.",
+  "fileViewer.publishFileWorkspaceLocked": "Ez a munkaterület zárolva van. Közzététel előtt állítsd helyre a hozzáférést.",
 
   "collab.contentUpdate.available": "Új felhőverzió",
   "collab.contentUpdate.updating": "Frissítés…",
@@ -3345,7 +3345,7 @@ export const hu: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'A nyilvános hivatkozás közzétételéhez csapatmunkaterület szükséges. Válts csapatmunkaterületre, vagy tedd közzé a fájlt a Közzététel funkcióval.',
   'fileViewer.publishFileRequiresWorkspace': 'A megosztási linkhez bejelentkezett munkaterület szükséges. Jelentkezz be az OpenDesign Cloudba, vagy oszd meg a fájlt telepítéssel.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "A tartalom meghaladja a szerver megosztási korlátját. Csökkentsd a fájlok méretét, majd próbáld újra.",
   'fileViewer.publishFileEntryIndexConflict': "A(z) „{from}” a projekt gyökérkönyvtárában lévő index.html fájlra hivatkozik, amely ütközik a megosztott oldal közzétételi helyével. Nevezd át ezt az index.html fájlt (például erre: {name}), és frissítsd a hivatkozást, vagy magát az index.html fájlt oszd meg.",
   'fileViewer.copyFixForAgent': "Javítás másolása az ügynöknek",
   'fileViewer.copyFixForAgentFailed': "A másolás nem sikerült. Jelöld ki az alábbi utasítást, és másold ki kézzel.",
