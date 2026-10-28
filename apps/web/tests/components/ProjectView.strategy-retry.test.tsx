@@ -433,9 +433,23 @@ describe('strategy retry through ProjectView and the real ChatPane', () => {
     await clickRetry();
     await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
     expectOriginalDispatch(originalUser);
+    expect(onTouchProject).not.toHaveBeenCalled();
+    const request = streamViaDaemon.mock.calls[0]![0] as DaemonStreamOptions;
+    await act(async () => request.onUserSubmissionAccepted?.({ id: 'retry',
+      projectId: 'p', conversationId: 'c', acceptedAt: Date.now() }));
     expect(onTouchProject).toHaveBeenCalledTimes(1);
     expect(onTouchProject.mock.calls[0]?.[0]).toBeGreaterThan(originalUser.createdAt!);
     expect(conversationMessages[0]).toEqual(originalUser);
+  });
+
+  it('OPEND-4042 does not record a retry rejected before Run acceptance', async () => {
+    const touch = vi.fn();
+    renderProjectView(cloudConfig, touch);
+    await clickRetry();
+    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
+    const request = streamViaDaemon.mock.calls[0]![0] as DaemonStreamOptions;
+    await act(async () => request.handlers.onError(new Error('FORBIDDEN')));
+    expect(touch).not.toHaveBeenCalled();
   });
 
   it.each(['request', 'production'] as const)(

@@ -259,7 +259,7 @@ export function useConversationChat(
       setStreaming(true);
       setError(null);
       if (!retryTarget) persist(userMsg);
-      ctxRef.current.onTouchProject?.(startedAt);
+      const onSubmissionAccepted = ctxRef.current.onTouchProject;
 
       const controller = new AbortController();
       const cancelController = new AbortController();
@@ -356,6 +356,7 @@ export function useConversationChat(
         },
       };
 
+      const submissionId = randomUUID();
       void streamViaDaemon({
         agentId: cfg.agentId,
         history,
@@ -366,7 +367,8 @@ export function useConversationChat(
         conversationId,
         userMessageId: userMsg.id,
         assistantMessageId: assistantId,
-        clientRequestId: randomUUID(),
+        clientRequestId: submissionId,
+        submission: { id: submissionId, source: 'user' },
         skillId: null,
         skillIds: [],
         designSystemId: cfg.designSystemId ?? null,
@@ -378,6 +380,9 @@ export function useConversationChat(
         serviceTier: choice?.serviceTier ?? null,
         locale: loc,
         sessionMode,
+        onUserSubmissionAccepted: (receipt) => {
+          if (acceptsCallback()) onSubmissionAccepted?.(receipt.acceptedAt);
+        },
         onRunCreated: (runId) => {
           if (!acceptsCallback()) return;
           updateOwnedAssistant((prev) => ({

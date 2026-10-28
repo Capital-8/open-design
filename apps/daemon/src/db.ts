@@ -417,21 +417,32 @@ function migrate(db: SqliteDb): void {
   if (!cols.some((c: DbRow) => c.name === 'custom_instructions')) {
     db.exec(`ALTER TABLE projects ADD COLUMN custom_instructions TEXT`);
   }
-  if (!cols.some((c: DbRow) => c.name === 'last_user_query_at')) {
-    // One migration, not a history scan on each list read. Only timestamps are
-    // read; large message content/event payloads never enter JavaScript.
+  const needsRecencyColumn = !cols.some((c: DbRow) => c.name === 'last_user_query_at');
+  const hasSubmissions = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='project_user_submissions'").get();
+  if (needsRecencyColumn || !hasSubmissions) {
     db.transaction(() => {
-      db.exec(`ALTER TABLE projects ADD COLUMN last_user_query_at INTEGER`);
-      db.exec(`
-        UPDATE projects SET last_user_query_at = history.sent_at
-        FROM (
-          SELECT c.project_id, MAX(m.created_at) AS sent_at
-          FROM conversations c JOIN messages m ON m.conversation_id = c.id
-          WHERE m.role = 'user'
-          GROUP BY c.project_id
-        ) AS history
-        WHERE projects.id = history.project_id
-      `);
+      if (needsRecencyColumn) db.exec('ALTER TABLE projects ADD COLUMN last_user_query_at INTEGER');
+      db.exec(`CREATE TABLE IF NOT EXISTS project_user_submissions (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        accepted_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS project_user_submissions_project ON project_user_submissions(project_id, accepted_at);
+      UPDATE projects SET last_user_query_at = (
+        SELECT MAX(sent_at) FROM (
+          SELECT m.created_at AS sent_at FROM conversations c JOIN messages m ON m.conversation_id = c.id
+          WHERE c.project_id = projects.id AND m.role = 'user'
+            AND m.id NOT GLOB 'routine-user-*' AND m.id NOT GLOB 'orbit-user-*'
+          UNION ALL SELECT accepted_at FROM project_user_submissions WHERE project_id = projects.id
+          UNION ALL SELECT projects.last_user_query_at
+          WHERE projects.last_user_query_at > COALESCE((
+            SELECT MAX(m.created_at) FROM conversations c JOIN messages m ON m.conversation_id = c.id
+            WHERE c.project_id = projects.id AND m.role = 'user'
+              AND (m.id GLOB 'routine-user-*' OR m.id GLOB 'orbit-user-*')
+          ), 0)
+        )
+      );`);
     })();
   }
   const workspaceProjectCols = db.prepare(`PRAGMA table_info(workspace_projects)`).all() as DbRow[];
@@ -2046,6 +2057,35 @@ export function insertProject(db: SqliteDb, p: DbRow) {
     p.updatedAt,
   );
   return getProject(db, p.id);
+}
+
+/** Idempotent acceptance and its ordering projection commit together. */
+export function acceptProjectUserSubmission(
+  db: SqliteDb, input: { id: string; projectId: string; conversationId: string; acceptedAt: number },
+): { id: string; projectId: string; conversationId: string; acceptedAt: number } {
+  return db.transaction(() => {
+    const existing = db.prepare(`SELECT id, project_id AS projectId,
+      conversation_id AS conversationId, accepted_at AS acceptedAt
+      FROM project_user_submissions WHERE id = ?`).get(input.id) as typeof input | undefined;
+    if (existing) {
+      if (existing.projectId !== input.projectId || existing.conversationId !== input.conversationId) {
+        throw new Error('submission identity conflict');
+      }
+      return existing;
+    }
+    db.prepare(`INSERT INTO project_user_submissions(id, project_id, conversation_id, accepted_at)
+      VALUES (?, ?, ?, ?)`).run(input.id, input.projectId, input.conversationId, input.acceptedAt);
+    db.prepare(`UPDATE projects SET last_user_query_at = ?
+      WHERE id = ? AND (last_user_query_at IS NULL OR last_user_query_at < ?)`)
+      .run(input.acceptedAt, input.projectId, input.acceptedAt);
+    return input;
+  })();
+}
+
+export function getProjectUserSubmission(db: SqliteDb, id: string) {
+  return db.prepare(`SELECT id, project_id AS projectId, conversation_id AS conversationId,
+    accepted_at AS acceptedAt FROM project_user_submissions WHERE id = ?`).get(id) as
+    { id: string; projectId: string; conversationId: string; acceptedAt: number } | undefined;
 }
 
 /** Record best-effort ordering metadata without affecting message persistence or content activity. */

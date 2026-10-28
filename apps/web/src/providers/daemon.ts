@@ -1,3 +1,4 @@
+import type { RunSubmission, UserSubmissionReceipt } from "@open-design/contracts";
 /**
  * Daemon provider — fetch-based SSE client for /api/runs. The daemon can
  * emit three event streams depending on the agent's streamFormat:
@@ -475,6 +476,8 @@ function daemonAnsweredWithError(bodyText: string): boolean {
 }
 
 export interface DaemonStreamOptions {
+  submission?: RunSubmission;
+  onUserSubmissionAccepted?: (receipt: UserSubmissionReceipt) => void;
   agentId: string;
   history: ChatMessage[];
   /** Legacy field accepted by older tests/callers. Daemon-owned prompt composition ignores it. */
@@ -984,6 +987,8 @@ export async function streamViaDaemon({
   userMessageId,
   assistantMessageId,
   clientRequestId,
+  submission,
+  onUserSubmissionAccepted,
   skillId,
   skillIds,
   designSystemId,
@@ -1031,6 +1036,7 @@ export async function streamViaDaemon({
     userMessageId: userMessageId ?? null,
     assistantMessageId: assistantMessageId ?? null,
     clientRequestId: clientRequestId ?? null,
+    submission,
     skillId: skillId ?? null,
     skillIds: Array.isArray(skillIds) ? skillIds : [],
     designSystemId: designSystemId ?? null,
@@ -1096,6 +1102,7 @@ export async function streamViaDaemon({
 
     const created = (await createResp.json()) as ChatRunCreateResponse;
     const runId = created.runId;
+    if (created.userSubmission) onUserSubmissionAccepted?.(created.userSubmission);
     if (created.strategyTask) onRunCreated?.(runId, created.strategyTask);
     else onRunCreated?.(runId);
     // Start the stuck-run watchdog. trackRunProgress is called inside the

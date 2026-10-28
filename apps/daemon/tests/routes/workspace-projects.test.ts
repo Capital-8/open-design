@@ -118,12 +118,20 @@ describe('workspace project routes', () => {
     await createProjectInWorkspace(projectId, 'Recency', member);
     const read = () => fetch(`${baseUrl}/api/projects/${projectId}`, { headers: headers(member) });
     const before = await (await read()).json() as import('@open-design/contracts').ProjectResponse;
-    const response = await fetch(`${baseUrl}/api/projects/${projectId}`, {
-      method: 'PATCH', headers: headers(member),
-      body: JSON.stringify({ lastUserQueryAt: 100 }),
+    const conversations = await (await fetch(`${baseUrl}/api/projects/${projectId}/conversations`, {
+      headers: headers(member),
+    })).json() as { conversations: Array<{ id: string }> };
+    const response = await fetch(`${baseUrl}/api/projects/${projectId}/submissions`, {
+      method: 'POST', headers: headers(member),
+      body: JSON.stringify({ id: `submission-${projectId}`, conversationId: conversations.conversations[0]!.id, submittedAt: 100 }),
     });
     expect(response.status).toBe(200);
-    const updated = await response.json() as import('@open-design/contracts').ProjectResponse;
+    const denied = await fetch(`${baseUrl}/api/projects/${projectId}/submissions`, {
+      method: 'POST', headers: workspaceHeaders(`${workspaceId}-wrong`, member),
+      body: JSON.stringify({ id: `denied-${projectId}`, conversationId: conversations.conversations[0]!.id, submittedAt: 200 }),
+    });
+    expect(denied.status).toBe(403);
+    const updated = await (await read()).json() as import('@open-design/contracts').ProjectResponse;
     expect(updated.project).toMatchObject({
       lastUserQueryAt: 100, updatedAt: before.project.updatedAt,
     });

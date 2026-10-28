@@ -219,6 +219,10 @@ describe('G9 side-chat retries preserve the persisted failed turn', () => {
         hook.result.current.onRetry(originalFailure);
       } else hook.result.current.onSend('New side message', [], []);
     });
+    expect(onTouchProject).not.toHaveBeenCalled();
+    const acceptedRequest = mockedStreamViaDaemon.mock.calls[0]![0];
+    await act(async () => acceptedRequest.onUserSubmissionAccepted?.({ id: 'submission',
+      projectId: 'p', conversationId: 'c', acceptedAt: Date.now() }));
     expect(onTouchProject).toHaveBeenCalledOnce();
     const sentAt = onTouchProject.mock.calls[0]![0];
     expect(sentAt).toBeGreaterThanOrEqual(before);

@@ -1,3 +1,4 @@
+import type { ChatRunCreateResponse, ProjectResponse, UserSubmissionReceipt } from '@open-design/contracts';
 import type http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -569,7 +570,59 @@ describe('POST /api/runs headless fallbacks', () => {
     const messages = await fetch(`${started.url}/api/projects/${older.projectId}/conversations/${older.conversationId}/messages`);
     const { messages: transcript } = await messages.json() as import('@open-design/contracts').MessagesResponse;
     expect(transcript.find(message => message.role === 'user')?.createdAt)
-      .toBe(project.lastUserQueryAt);
+      .toBeLessThanOrEqual(project.lastUserQueryAt!);
+    const accepted = await runResponse.json() as import('@open-design/contracts').ChatRunCreateResponse;
+    expect(accepted.userSubmission?.acceptedAt).toBe(project.lastUserQueryAt);
+  });
+
+  it('OPEND-4047/4043 records human acceptance once and never records automatic repair', async () => {
+    started = await startTestServer();
+    const { projectId, conversationId } = await createProject(started.url, 'Submission ownership');
+    const projectTime = async () => ((await (await fetch(`${started!.url}/api/projects/${projectId}`)).json()) as
+      { project: { lastUserQueryAt: number | null } }).project.lastUserQueryAt;
+    const post = async (body: Record<string, unknown>) => fetch(`${started!.url}/api/runs`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const user = { agentId: `missing-${randomUUID()}`, projectId, conversationId,
+      userMessageId: randomUUID(), message: 'human request', clientRequestId: randomUUID(),
+      submission: { id: randomUUID(), source: 'user' } };
+    const first = await post(user);
+    expect(first.status).toBe(202);
+    const receipt = (await first.json() as { userSubmission: UserSubmissionReceipt }).userSubmission;
+    expect(receipt).toMatchObject({ id: user.submission.id, projectId, conversationId });
+    expect(await projectTime()).toBe(receipt.acceptedAt);
+    const replay = await post(user);
+    expect(replay.status).toBe(202);
+    expect((await replay.json() as ChatRunCreateResponse).userSubmission).toEqual(receipt);
+    const automatic = await post({ ...user, userMessageId: randomUUID(), clientRequestId: randomUUID(),
+      message: 'automatic repair', submission: { id: randomUUID(), source: 'system' } });
+    expect(automatic.status).toBe(202);
+    expect((await automatic.json() as ChatRunCreateResponse).userSubmission).toBeUndefined();
+    expect(await projectTime()).toBe(receipt.acceptedAt);
+  });
+
+  it('OPEND-4042 queue registration is idempotent and rejection/drain cannot invent a later send', async () => {
+    started = await startTestServer();
+    const { projectId, conversationId } = await createProject(started.url, 'Queued acceptance');
+    const body = { id: randomUUID(), conversationId, submittedAt: Date.now() - 10000 };
+    const register = () => fetch(`${started!.url}/api/projects/${projectId}/submissions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const first = await register();
+    expect(first.status).toBe(200);
+    const receipt = (await first.json() as { userSubmission: UserSubmissionReceipt }).userSubmission;
+    expect((await (await register()).json() as { userSubmission: UserSubmissionReceipt }).userSubmission).toEqual(receipt);
+    const send = (submission: object) => fetch(`${started!.url}/api/runs`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        agentId: `missing-${randomUUID()}`, projectId, conversationId, message: 'queued request', submission,
+      }),
+    });
+    expect((await send({ id: randomUUID(), source: 'queue' })).status).toBe(409);
+    const drain = await send({ id: body.id, source: 'queue' });
+    expect(drain.status).toBe(202);
+    expect((await drain.json() as ChatRunCreateResponse).userSubmission).toEqual(receipt);
+    const project = await (await fetch(`${started.url}/api/projects/${projectId}`)).json() as ProjectResponse;
+    expect(project.project.lastUserQueryAt).toBe(body.submittedAt);
   });
 
   it('preserves empty currentPrompt for attachments-only omit-pin sends', async () => {

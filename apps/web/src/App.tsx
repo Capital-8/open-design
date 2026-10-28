@@ -1359,7 +1359,6 @@ function AppInner() {
   const projectListMutationVersionRef = useRef(0);
   const pendingProjectRecencyRef = useRef(new Map<string, {
     sentAt: number;
-    settledVersion?: number;
   }>());
   const projectRenameStatesRef = useRef<Map<string, QueuedProjectRenameState>>(new Map());
   const pendingProjectNameProjectionsRef = useRef<Map<string, PendingProjectNameProjection>>(
@@ -1629,9 +1628,8 @@ function AppInner() {
       ]);
       const recency = pendingProjectRecencyRef.current.get(key);
       if (recency) {
-        if (recency.settledVersion !== undefined && request.mutationVersion >= recency.settledVersion) {
-          // A fresh read after the best-effort write settles is authoritative,
-          // including a failed write. Reads issued before/during it stay fenced.
+        if ((project.lastUserQueryAt ?? 0) >= recency.sentAt) {
+          // Retire only when the read observes this durable acceptance or a newer one.
           pendingProjectRecencyRef.current.delete(key);
         } else {
           project = { ...project, lastUserQueryAt: Math.max(project.lastUserQueryAt ?? 0, recency.sentAt) };
@@ -4368,14 +4366,18 @@ function AppInner() {
     void patchProject(projectId, { pendingPrompt: null }, mutationContext);
   }, [route]);
 
+  // Capture the sending principal at render time, never at a delayed completion.
+  const recencyContext = projectRouteWorkspaceContextRef.current ?? workspaceContextRef.current;
+  const recencyGeneration = currentWorkspaceAccountGeneration();
   const handleTouchProject = useCallback((sentAt = Date.now()) => {
+    if (recencyGeneration !== currentWorkspaceAccountGeneration()) return;
     const projectId = route.kind === 'project' ? route.projectId : null;
     if (!projectId) return;
-    const mutationContext = projectRouteWorkspaceContextRef.current ?? workspaceContextRef.current;
+    const mutationContext = recencyContext;
     const key = JSON.stringify([
       currentWorkspaceAccountGeneration(), projectListScopeKey(mutationContext), projectId,
     ]);
-    const pending: { sentAt: number; settledVersion?: number } = {
+    const pending: { sentAt: number } = {
       sentAt: Math.max(pendingProjectRecencyRef.current.get(key)?.sentAt ?? 0, sentAt),
     };
     pendingProjectRecencyRef.current.set(key, pending);
@@ -4391,13 +4393,9 @@ function AppInner() {
         patch: (cachedProjects) => cachedProjects.map(recordSend),
       });
     }
-    // Best effort: no wait or retry on the message send path.
-    const settle = () => {
-      if (pendingProjectRecencyRef.current.get(key) !== pending) return;
-      pending.settledVersion = ++projectListMutationVersionRef.current;
-    };
-    void patchProject(projectId, { lastUserQueryAt: sentAt }, mutationContext).then(settle, settle);
-  }, [route]);
+    if (mutationContext) invalidateWorkspaceProjectLists(mutationContext, recencyGeneration);
+    // Keep this durable receipt projected until a list observes the same or newer time.
+  }, [route, recencyContext, recencyGeneration]);
 
   const handleProjectChange = useCallback((updated: Project) => {
     // ProjectView is pinned to the opened project's persisted Workspace, which
@@ -4432,7 +4430,7 @@ function AppInner() {
     if (routeSnapshotMatches) {
       routeProjectSnapshotRef.current = {
         ...routeSnapshot,
-        project: updated,
+        project: { ...updated, lastUserQueryAt: Math.max(routeSnapshot.project.lastUserQueryAt ?? 0, updated.lastUserQueryAt ?? 0) || null },
       };
       setRouteProjectSnapshotRevision((current) => current + 1);
     }
@@ -4448,14 +4446,16 @@ function AppInner() {
       ) {
         iframeKeepAlivePool.evictProject(updated.id, { includeActive: true });
       }
-      return curr.map((p) => (p.id === updated.id ? updated : p));
+      return curr.map((p) => (p.id === updated.id
+        ? { ...updated, lastUserQueryAt: Math.max(p.lastUserQueryAt ?? 0, updated.lastUserQueryAt ?? 0) || null } : p));
     });
     if (projectContext) {
       patchProjectDisplaySnapshots({
         accountGeneration,
         context: projectContext,
         patch: (cachedProjects) => cachedProjects.map((project) =>
-          project.id === updated.id ? { ...project, ...updated } : project),
+          project.id === updated.id ? { ...project, ...updated,
+            lastUserQueryAt: Math.max(project.lastUserQueryAt ?? 0, updated.lastUserQueryAt ?? 0) || null } : project),
       });
     }
   }, [iframeKeepAlivePool]);

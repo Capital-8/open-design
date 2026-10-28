@@ -104,6 +104,9 @@ import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
 import { isSafeId } from '../../projects.js';
 import {
+  acceptProjectUserSubmission,
+  getProjectUserSubmission,
+  getConversation,
   ensureTeamProjectCommentConversations,
   getFirstProjectConversation,
   SYNC_KEEPS_UPDATED_AT,
@@ -5080,9 +5083,33 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     res.json(body);
   });
 
+  // Queue ownership stays in the client; only acceptance/recency is registered here.
+  app.post('/api/projects/:id/submissions', async (req, res) => {
+    if (!getProject(db, req.params.id)) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+    if (!await enforceWorkspaceProjectMutation(req, res, sendApiError,
+      getWorkspaceProject, getWorkspaceProjectByProjectId, db, req.params.id, 'writeFiles')) return;
+    const { id, conversationId, submittedAt } = req.body ?? {};
+    if (typeof id !== 'string' || !isSafeId(id) || typeof conversationId !== 'string'
+      || getConversation(db, conversationId)?.projectId !== req.params.id
+      || !Number.isSafeInteger(submittedAt) || submittedAt < 0 || submittedAt > Date.now()) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'invalid queued submission');
+    }
+    const existing = getProjectUserSubmission(db, id);
+    if (existing && (existing.projectId !== req.params.id || existing.conversationId !== conversationId)) {
+      return sendApiError(res, 409, 'IDEMPOTENCY_CONFLICT', 'submission belongs to another conversation');
+    }
+    const userSubmission = acceptProjectUserSubmission(db, {
+      id, projectId: req.params.id, conversationId, acceptedAt: submittedAt,
+    });
+    return res.json({ userSubmission });
+  });
+
   app.patch('/api/projects/:id', async (req, res) => {
     try {
       const patch = req.body || {};
+      if ('lastUserQueryAt' in patch) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'recency is owned by accepted submissions');
+      }
       let patchProject = getProject(db, req.params.id);
       if (
         !patchProject
