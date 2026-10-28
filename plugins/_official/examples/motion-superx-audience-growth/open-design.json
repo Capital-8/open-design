@@ -1,0 +1,113 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-superx-audience-growth",
+  "title": "SuperX Audience Growth",
+  "title_i18n": {
+    "en": "SuperX Audience Growth",
+    "zh-CN": "SuperX 受众增长"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "SuperX showcases viral discovery, writing, scheduling and audience growth in a fiery product promo.",
+  "description_i18n": {
+    "en": "SuperX showcases viral discovery, writing, scheduling and audience growth in a fiery product promo.",
+    "zh-CN": "SuperX 以火焰标识、产品卡片和增长数据，展示热门发现、内容写作、智能排期与受众增长。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "产品宣传",
+    "社交媒体",
+    "增长",
+    "黑红",
+    "三维动效"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌",
+        "default": "SuperX"
+      },
+      {
+        "name": "creators",
+        "type": "string",
+        "label": "创作者人数",
+        "default": "11,294"
+      },
+      {
+        "name": "tagline",
+        "type": "string",
+        "label": "收尾主张",
+        "default": "Grow your X audience,"
+      },
+      {
+        "name": "cta",
+        "type": "string",
+        "label": "行动按钮",
+        "default": "Get started free"
+      },
+      {
+        "name": "domain",
+        "type": "string",
+        "label": "网址",
+        "default": "superx.so"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Make a product promo for {{brand}} with {{creators}} creators, ending on “{{tagline}}”, the action “{{cta}}”, and {{domain}}.",
+        "zh-CN": "为 {{brand}} 制作产品宣传片，展示 {{creators}} 位创作者的增长成果，以“{{tagline}}”、“{{cta}}”和 {{domain}} 收尾。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "SuperX Audience Growth"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@robj3d3",
+      "url": "https://x.com/robj3d3/status/2103875898349088830",
+      "note": "原片视觉与演示音轨来源；内部 ODEval 复刻。"
+    }
+  ]
+}

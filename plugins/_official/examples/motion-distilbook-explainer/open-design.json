@@ -1,0 +1,107 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-distilbook-explainer",
+  "title": "DistilBook Explainer",
+  "title_i18n": {
+    "en": "DistilBook Explainer",
+    "zh-CN": "DistilBook 手绘讲解宣传片"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "DistilBook turns source material into illustrated explainer videos through upload, script editing and synchronized drawing.",
+  "description_i18n": {
+    "en": "DistilBook turns source material into illustrated explainer videos through upload, script editing and synchronized drawing.",
+    "zh-CN": "DistilBook 通过上传资料、编辑脚本和同步绘图，将文档变成手绘讲解视频。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "product-demo",
+    "education",
+    "whiteboard",
+    "saas"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌名称",
+        "default": "DistilBook"
+      },
+      {
+        "name": "tagline",
+        "type": "string",
+        "label": "产品描述",
+        "default": "Turn any PDF into a hand-illustrated explainer video."
+      },
+      {
+        "name": "domain",
+        "type": "string",
+        "label": "网址",
+        "default": "distilbook.com"
+      },
+      {
+        "name": "price",
+        "type": "string",
+        "label": "月费",
+        "default": "$15"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create an illustrated product demo for {{brand}} with the message {{tagline}}, a plan from {{price}} per month, and {{domain}} as the call to action.",
+        "zh-CN": "为 {{brand}} 制作手绘讲解产品宣传片，介绍“{{tagline}}”，展示每月 {{price}} 起的方案，并引导访问 {{domain}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "DistilBook Explainer"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "author": "@ajith_io",
+      "url": "https://x.com/ajith_io/status/2103469807375208546",
+      "note": "参考影片来源，仅供内部复刻评测"
+    }
+  ]
+}

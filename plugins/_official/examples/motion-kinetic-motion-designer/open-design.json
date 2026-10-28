@@ -1,0 +1,110 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-kinetic-motion-designer",
+  "title": "Kinetic Motion Designer",
+  "title_i18n": {
+    "en": "Kinetic Motion Designer",
+    "zh-CN": "动效设计师名片"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "CLAUDE demonstrates animation principles in a kinetic designer reel.",
+  "description_i18n": {
+    "en": "CLAUDE demonstrates animation principles in a kinetic designer reel.",
+    "zh-CN": "CLAUDE 通过弹跳、缓动与粒子跟随展示动效设计原理。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "typography",
+    "portfolio"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "name",
+        "type": "string",
+        "label": "设计师姓名",
+        "default": "CLAUDE"
+      },
+      {
+        "name": "role",
+        "type": "string",
+        "label": "职业",
+        "default": "MOTION DESIGNER"
+      },
+      {
+        "name": "headline",
+        "type": "string",
+        "label": "主标题",
+        "default": "I MAKE THINGS"
+      },
+      {
+        "name": "verb",
+        "type": "string",
+        "label": "动效大字",
+        "default": "MOVE"
+      },
+      {
+        "name": "availability",
+        "type": "string",
+        "label": "联系短句",
+        "default": "open to new projects"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a kinetic portfolio reel for {{name}}, a {{role}}, featuring {{headline}} and {{verb}}, ending on {{availability}}.",
+        "zh-CN": "为 {{name}} 制作动效作品展示名片，职业为 {{role}}，以 {{headline}} 和 {{verb}} 为主标题，结尾使用 {{availability}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Kinetic Motion Designer"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@himanshutwtxs",
+      "url": "https://x.com/himanshutwtxs/status/2103495232637882858"
+    }
+  ]
+}

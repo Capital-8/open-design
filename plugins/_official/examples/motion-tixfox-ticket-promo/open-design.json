@@ -1,0 +1,136 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-tixfox-ticket-promo",
+  "title": "TixFox Ticket Promo",
+  "title_i18n": {
+    "en": "TixFox Ticket Promo",
+    "zh-CN": "TixFox 票务宣传片"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "TixFox presents affordable event ticketing, from creating an event to checking in guests.",
+  "description_i18n": {
+    "en": "TixFox presents affordable event ticketing, from creating an event to checking in guests.",
+    "zh-CN": "TixFox 展示低成本售票、活动发布、即时收款与手机检票流程。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "票务",
+    "产品演示",
+    "狐狸",
+    "网点",
+    "动效"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌",
+        "default": "TixFox"
+      },
+      {
+        "name": "domain",
+        "type": "string",
+        "label": "网址",
+        "default": "tixfox.co"
+      },
+      {
+        "name": "fee",
+        "type": "string",
+        "label": "单票费用",
+        "default": "39¢"
+      },
+      {
+        "name": "eventName",
+        "type": "string",
+        "label": "活动名称",
+        "default": "Maple Street Music Fest"
+      },
+      {
+        "name": "logo",
+        "type": "string",
+        "label": "品牌图标",
+        "default": "assets/fox-logo.png"
+      },
+      {
+        "name": "coin",
+        "type": "string",
+        "label": "硬币图案",
+        "default": "assets/fox-coin.png"
+      },
+      {
+        "name": "microphone",
+        "type": "string",
+        "label": "活动图片",
+        "default": "assets/microphone.png"
+      },
+      {
+        "name": "qr",
+        "type": "string",
+        "label": "票面二维码",
+        "default": "assets/ticket-qr.png"
+      },
+      {
+        "name": "tickets",
+        "type": "string",
+        "label": "票根装饰",
+        "default": "assets/fox-tickets.png"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a ticketing promo for {{brand}} and {{eventName}} at {{fee}} per ticket, ending at {{domain}}, using logo {{logo}}, coin {{coin}}, event art {{microphone}}, QR {{qr}} and ticket art {{tickets}}.",
+        "zh-CN": "为 {{brand}} 制作 {{eventName}} 票务宣传，突出每票 {{fee}} 和 {{domain}}，使用标志 {{logo}}、硬币 {{coin}}、活动图 {{microphone}}、二维码 {{qr}} 与票根 {{tickets}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "TixFox Ticket Promo"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@achxvi 原片",
+      "url": "https://x.com/achxvi/status/2108212570096038173"
+    }
+  ]
+}

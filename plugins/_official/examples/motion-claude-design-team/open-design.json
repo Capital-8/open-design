@@ -1,0 +1,106 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-claude-design-team",
+  "title": "Claude Design Team",
+  "title_i18n": {
+    "en": "Claude Design Team",
+    "zh-CN": "Claude 动效设计团队"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "Claude turns one launch-video request into motion graphics with a full design team.",
+  "description_i18n": {
+    "en": "Claude turns one launch-video request into motion graphics with a full design team.",
+    "zh-CN": "Claude 将一句发布视频请求变成多角色协作完成的动效作品。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "typography",
+    "product",
+    "collaboration"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌",
+        "default": "Claude"
+      },
+      {
+        "name": "product",
+        "type": "string",
+        "label": "产品定位",
+        "default": "motion graphics"
+      },
+      {
+        "name": "request",
+        "type": "string",
+        "label": "示例请求",
+        "default": "Make a launch video for my app"
+      },
+      {
+        "name": "launchTitle",
+        "type": "string",
+        "label": "预览标题",
+        "default": "LAUNCH DAY"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Make a promo for {{brand}} for {{product}}, showing the request “{{request}}” and a preview titled {{launchTitle}}.",
+        "zh-CN": "为 {{brand}} 制作 {{product}} 宣传片，展示请求“{{request}}”和标题为 {{launchTitle}} 的预览作品。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Claude Design Team"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "author": "@motion_so",
+      "url": "https://x.com/motion_so/status/2084690374833143893",
+      "note": "参考视频来源，仅用于内部复刻评测。"
+    }
+  ]
+}
