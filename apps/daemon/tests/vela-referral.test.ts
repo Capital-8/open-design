@@ -3,11 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerVelaReferralRoutes } from "../src/routes/vela-referral.js";
 
 afterEach(() => vi.unstubAllGlobals());
-function route(readContext: Parameters<typeof registerVelaReferralRoutes>[1]) {
+function route(readContext: Parameters<typeof registerVelaReferralRoutes>[1], path = "/api/integrations/vela/referral-summary") {
 	let handler: ((req: Request, res: Response) => Promise<void>) | undefined;
 	const app = {
-		get: (_path: string, value: typeof handler) => {
-			handler = value;
+		get: (registeredPath: string, value: typeof handler) => {
+			if (registeredPath === path) handler = value;
 		},
 	} as unknown as Express;
 	registerVelaReferralRoutes(app, readContext);
@@ -85,4 +85,13 @@ it('rejects the response when the active account changes during the read', async
  expect(response.status).toHaveBeenCalledWith(409);
  expect(response.json).toHaveBeenCalledWith({ error: 'referral_identity_changed' });
  expect(response.json).not.toHaveBeenCalledWith(summary);
+});
+
+it('derives only the app-user identity from the existing authenticated me endpoint', async () => {
+ const fetch = vi.fn(async (_input: unknown) => Response.json({ id: 'app-user', authUserId: 'auth-user', email: 'private@example.test' }));
+ vi.stubGlobal('fetch', fetch);
+ const { response, invoke } = route(async () => ({ apiUrl: 'http://localhost:18080', controlKey: 'current' }), '/api/integrations/vela/referral-account');
+ await invoke();
+ expect(String(fetch.mock.calls[0]?.[0])).toBe('http://localhost:18080/api/v1/me');
+ expect(response.json).toHaveBeenCalledWith({ appUserId: 'app-user' });
 });

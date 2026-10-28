@@ -1,8 +1,7 @@
 import { parseReferralSummary } from '@open-design/contracts';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
-import { openExternalUrl } from '../providers/registry';
-import { amrReferralUrlForProfile } from '../runtime/amr-guidance';
+import { openReferralActivity } from '../runtime/referral-navigation';
 import { getReferralEntryCopy } from './referral-entry-copy';
 import styles from './ReferralEntry.module.css';
 
@@ -48,7 +47,7 @@ export function ReferralEntry({ compact = false }: { compact?: boolean }) {
   const [title, subtitle] = getReferralEntryCopy(locale);
   const open = async () => {
     try {
-      const accepted = await openExternalUrl(amrReferralUrlForProfile(profile));
+      const accepted = await openReferralActivity(profile, () => currentScope.current === scopeKey);
       if (currentScope.current === scopeKey) setFailed(!accepted);
     } catch { if (currentScope.current === scopeKey) setFailed(true); }
   };

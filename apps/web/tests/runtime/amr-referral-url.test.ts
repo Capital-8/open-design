@@ -9,3 +9,9 @@ it('uses the established local console and production console origins', () => {
  expect(amrReferralUrlForProfile('local')).toBe('http://localhost:5173/reset?source=open_design');
  expect(amrReferralUrlForProfile('prod')).toBe('https://open-design.ai/cloud/reset?source=open_design');
 });
+
+it('carries a comparison-only app-user identity with no credentials', () => {
+ const url = new URL(amrReferralUrlForProfile('local', 'app-user-id'));
+ expect(url.searchParams.get('expectedAppUserId')).toBe('app-user-id');
+ expect(url.searchParams.has('token')).toBe(false);
+});

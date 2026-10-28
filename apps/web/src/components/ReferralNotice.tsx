@@ -10,10 +10,10 @@ import {
 import { useI18n } from "../i18n";
 import {
 	amrConsoleUrlForProfile,
-	amrReferralUrlForProfile,
 	AMR_CONSOLE_UPGRADE_INTENT,
 } from "../runtime/amr-guidance";
 import { openExternalUrl } from "../providers/registry";
+import { openReferralActivity } from "../runtime/referral-navigation";
 import styles from "./ReferralNotice.module.css";
 
 const dismissed = new Set<string>();
@@ -113,11 +113,14 @@ export function ReferralNotice({
 		setOpening(true);
 		setFailed(false);
 		try {
-			const url = new URL(kind === "exhausted" ? amrReferralUrlForProfile(profile) : amrConsoleUrlForProfile(profile));
+			if (kind === "exhausted") {
+                const accepted = await openReferralActivity(profile, () => currentScope.current === scopeKey);
+                if (!accepted && currentScope.current === scopeKey) setFailed(true);
+                return;
+            }
+            const url = new URL(amrConsoleUrlForProfile(profile));
 			url.searchParams.set("source", "open_design");
-			if (kind !== "exhausted") {
-				url.searchParams.set("billing", AMR_CONSOLE_UPGRADE_INTENT);
-			}
+			url.searchParams.set("billing", AMR_CONSOLE_UPGRADE_INTENT);
 			const accepted = await openExternalUrl(url.toString());
 			if (!accepted && currentScope.current === scopeKey) setFailed(true);
 		} catch {
