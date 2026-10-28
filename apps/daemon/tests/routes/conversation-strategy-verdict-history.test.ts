@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { ChatMessage } from '@open-design/contracts';
 import { strategyPackageHashFromDigests } from '@open-design/plugin-runtime';
 import express, { type Response } from 'express';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeDatabase,
@@ -34,6 +34,7 @@ import {
   createStrategyTaskExecution,
   getStrategyTaskExecution,
 } from '../../src/strategies/task-store.js';
+import { recordStrategyTaskRunLifecycle } from '../../src/strategies/task-display.js';
 import { strategyTaskCreateIdentityFixture, strategyTaskTurnText } from '../strategies/strategy-task-test-fixtures.js';
 
 const PROJECT_ID = 'history-project';
@@ -199,10 +200,40 @@ describe('persisted strategy verdict in conversation history', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     closeDatabase();
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
+<<<<<<< HEAD
+=======
+  it('preserves task verdicts and physical Run metadata in the streamed representation', async () => {
+    seedTaskAndMessage(db, 'blocked');
+    vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const json = await readHistory(db, dataDir);
+    const streamed = await readHistory(db, dataDir, { stream: true });
+    expect(streamed).toEqual(json);
+    expect(streamed[0]).toMatchObject({
+      runId: RUN_ID,
+      runStatus: 'succeeded',
+      strategyTaskExecutionId: TASK_ID,
+      strategyTaskRunIndex: 0,
+      strategyTaskBlocked: true,
+      strategyTaskBlockedText: REPLY,
+    });
+  });
+
+  it.each([false, true])('preserves canceled task timing in history (stream: %s)', async (stream) => {
+    seedTaskAndMessage(db, 'canceled');
+    recordStrategyTaskRunLifecycle(db, { runId: RUN_ID, phase: 'start', at: 100, status: 'running' });
+    recordStrategyTaskRunLifecycle(db, { runId: RUN_ID, phase: 'end', at: 200, status: 'canceled' });
+    const messages = await readHistory(db, dataDir, { stream });
+    expect(messages[0]?.taskDisplay).toMatchObject({
+      id: TASK_ID, currentRunId: RUN_ID, state: 'canceled', ticking: false, elapsedMs: 100,
+    });
+  });
+
+>>>>>>> 046d5e496b ([OPEND-3885] feat(chat): 将自动规划与制作合并为一轮展示 (#8735))
   it('clears retired blocked verdicts on restart without rewriting physical success', async () => {
     seedTaskAndMessage(db, 'blocked');
     const persisted = db.prepare(`
