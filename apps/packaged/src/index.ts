@@ -29,6 +29,8 @@ import {
   applyOsLocaleSwitch,
   createSplashWindow,
   setSplashStage,
+  createDesktopStartupTiming,
+  type StartupTiming,
   type DesktopMainHandle,
 } from "@open-design/desktop/main";
 import { releaseChannelFromNamespace, releaseChannelFromVersion } from "@open-design/release";
@@ -78,11 +80,12 @@ import {
 import { findPackagedDeeplinkArg, launchPackagedPayloadDesktop } from "./payload-desktop-launch.js";
 import { packagedEntryUrl, registerOdProtocol } from "./protocol.js";
 import { resolvePackagedElectronNodeCommand, startPackagedSidecars } from "./sidecars.js";
-import { reportStartupFailure, resolveStartupDistinctId } from "./startup-telemetry.js";
+import { classifyStartupFailure, reportLaunchEvent, reportStartupFailure, resolveStartupDistinctId } from "./startup-telemetry.js";
 import { resolvePackagedWindowTitle } from "./window-title.js";
 import { syncWindowsUninstallDisplayVersion } from "./windows-lifecycle.js";
 
 let packagedLogger: PackagedDesktopLogger | null = null;
+let packagedStartupTiming: StartupTiming | null = null;
 const secondInstanceHandoff = createPackagedSecondInstanceHandoff();
 
 // Telemetry context for the fatal-exit path. Populated once config + launcher
@@ -99,8 +102,14 @@ let startupTelemetryContext:
       source: string;
       installationRoot: string;
       nativeModulePath: string | null;
+      channel: string;
+      dataRoot: string;
     }
   | null = null;
+
+async function reportPackagedLaunch(event: Parameters<typeof reportLaunchEvent>[0]["event"], properties: Record<string, unknown>) {
+  if (startupTelemetryContext) await reportLaunchEvent({ ...startupTelemetryContext, event, properties });
+}
 
 function applyPackagedUpdaterEnv(updateMetadataUrl: string | null): void {
   if (updateMetadataUrl == null) return;
@@ -277,6 +286,8 @@ async function main(): Promise<void> {
   // startPackagedSidecars call below is THE failure this covers (daemon/web
   // dying before reporting status, e.g. issue #4638's missing better-sqlite3).
   startupTelemetryContext = {
+    dataRoot: paths.dataRoot,
+    channel: launchStamp.channel,
     posthogKey: activeConfig.posthogKey,
     posthogHost: activeConfig.posthogHost,
     appVersion: activeConfig.appVersion,
@@ -298,6 +309,14 @@ async function main(): Promise<void> {
       "better_sqlite3.node",
     ),
   };
+
+  // Helper/delegating/headless-only processes are excluded. Node's origin
+  // includes ESM/config work in this process, but not an earlier OS click or
+  // a separate installed launcher process. Early events wait for identity.
+  if (!deferredHeadless) {
+    packagedStartupTiming = createDesktopStartupTiming({ appVersion: activeConfig.appVersion, startupType: "cold" });
+    packagedStartupTiming.mark("runtime_resolved");
+  }
 
   await ensurePackagedNamespacePaths(paths);
   const convergedStamp = launchStamp;
@@ -342,6 +361,8 @@ async function main(): Promise<void> {
     return;
   }
   await app.whenReady();
+const electronReadyAtMs = performance.now();
+  packagedStartupTiming?.mark("electron_ready");
   // Preserve a user's Dock/Finder open while daemon/web startup is pending.
   if (deferredHeadless && launcherHost != null) watchUserDesktopIntent(app, requestDeferredDesktop);
 
@@ -368,6 +389,7 @@ async function main(): Promise<void> {
   const sidecarRuntime: SidecarRuntimeContext<SidecarStamp> = { ...runtime, mode: convergedStamp.mode };
 
   const sidecars = await startPackagedSidecars(sidecarRuntime, paths, {
+    launchContext: packagedStartupTiming?.context(),
     appVersion: activeConfig.appVersion,
     amrProfile: activeConfig.amrProfile,
     daemonCliEntry: activeConfig.daemonCliEntry,
@@ -396,6 +418,12 @@ async function main(): Promise<void> {
     // Both the "spawning" and "ready" edges are mapped so the step counter
     // advances the instant each long native wait clears.
     onPhase(phase) {
+      // Launch events stay buffered on the tracker until desktop main arms the
+      // daemon-backed reporter, so attempt/ready/result share one delivery path
+      // and one installation identity (OPEND-4220). The direct packaged
+      // reporter is reserved for the fatal path below, where no daemon exists.
+      packagedStartupTiming?.mark(phase === "daemon-spawning" ? "daemon_spawning"
+        : phase === "daemon-ready" ? "daemon_ready" : phase === "web-spawning" ? "web_spawning" : "web_ready");
       const stage =
         phase === "daemon-spawning"
           ? "engine"
@@ -431,6 +459,8 @@ async function main(): Promise<void> {
     return await desktopHandle.invoke(action, input);
   };
   const launchDesktop = async (): Promise<DesktopMainHandle> => await runDesktopMain(runtime, {
+    electronReadyAtMs,
+    startupTiming: deferredHeadless ? null : packagedStartupTiming ?? undefined,
     splashWindow: splash?.window,
     splashStartedAt: splash?.startedAt,
     async beforeShutdown(record) {
@@ -570,6 +600,10 @@ async function main(): Promise<void> {
 
 void main().catch(async (error: unknown) => {
   const isPathAccess = error instanceof PackagedPathAccessError;
+  if (packagedStartupTiming != null) {
+    packagedStartupTiming.setReporter(reportPackagedLaunch);
+    packagedStartupTiming.finish("failed", classifyStartupFailure(error, isPathAccess).failureKind);
+  }
   if (isPathAccess) {
     try {
       dialog.showErrorBox(error.title, error.message);
@@ -588,6 +622,8 @@ void main().catch(async (error: unknown) => {
     await reportStartupFailure({
       error,
       isPathAccess,
+      dataRoot: startupTelemetryContext.dataRoot,
+      launchContext: packagedStartupTiming?.context(),
       posthogKey: startupTelemetryContext.posthogKey,
       posthogHost: startupTelemetryContext.posthogHost,
       distinctId: resolveStartupDistinctId(
