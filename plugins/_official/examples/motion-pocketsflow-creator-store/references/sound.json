@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "music": {
+    "role": "bed",
+    "description": "轻快的短篇节奏配乐，流动旋律与短促击打；风格与乐器为画面节奏推定，未完成听辨。",
+    "bpm": null,
+    "beatConfidence": "none",
+    "cutOnBeat": false,
+    "sections": [
+      {
+        "scene": "hook",
+        "energy": "mid"
+      },
+      {
+        "scene": "anything",
+        "energy": "high"
+      },
+      {
+        "scene": "store",
+        "energy": "high"
+      },
+      {
+        "scene": "checkout-zoom",
+        "energy": "high"
+      },
+      {
+        "scene": "handled",
+        "energy": "high"
+      },
+      {
+        "scene": "flow",
+        "energy": "high"
+      },
+      {
+        "scene": "close",
+        "energy": "mid"
+      }
+    ]
+  },
+  "effects": [],
+  "effectsPer10s": 0,
+  "voice": {
+    "present": false
+  },
+  "demoTrack": {
+    "file": "assets/soundtrack.mp3",
+    "origin": "reference"
+  }
+}

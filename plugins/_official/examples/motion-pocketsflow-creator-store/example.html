@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[{"id":"brand","type":"string","label":"品牌","default":"Pocketsflow","maxLength":16},{"id":"hookLine","type":"string","label":"开场主句","default":"Got something","maxLength":18},{"id":"hookPrefix","type":"string","label":"开场介词","default":"to","maxLength":4},{"id":"hookWord","type":"string","label":"开场斜体","default":"sell?","maxLength":10},{"id":"course","type":"string","label":"课程类别","default":"Courses","maxLength":12},{"id":"ebook","type":"string","label":"电子书类别","default":"Ebooks","maxLength":12},{"id":"app","type":"string","label":"应用类别","default":"Apps","maxLength":12},{"id":"coursePrice","type":"string","label":"课程价格","default":"$149","maxLength":9},{"id":"ebookPrice","type":"string","label":"电子书价格","default":"$29","maxLength":9},{"id":"appPrice","type":"string","label":"应用价格","default":"$4.99/mo","maxLength":12},{"id":"courseTitle","type":"string","label":"课程名称","default":"Design Course","maxLength":20},{"id":"ebookTitle","type":"string","label":"电子书名称","default":"Creator Ebook","maxLength":20},{"id":"appTitle","type":"string","label":"应用名称","default":"Focus App","maxLength":20},{"id":"storePrefix","type":"string","label":"商店介绍","default":"turns it into","maxLength":18},{"id":"storeLine","type":"string","label":"商店主句","default":"a store","maxLength":12},{"id":"storeEnd","type":"string","label":"时间介词","default":"in","maxLength":4},{"id":"storeAccent","type":"string","label":"时间斜体","default":"minutes.","maxLength":12},{"id":"storeName","type":"string","label":"店铺名称","default":"Your Store","maxLength":18},{"id":"handled","type":"string","label":"印章文字","default":"Handled.","maxLength":14},{"id":"flowYou","type":"string","label":"创作主语","default":"You","maxLength":8},{"id":"flowCreate","type":"string","label":"创作斜体","default":"create.","maxLength":12},{"id":"flowWe","type":"string","label":"支付承接句","default":"We handle the","maxLength":20},{"id":"flowWord","type":"string","label":"支付斜体","default":"flow.","maxLength":12},{"id":"tagline","type":"string","label":"品牌副句","default":"The payment infrastructure that","maxLength":44},{"id":"tagAccent","type":"string","label":"品牌斜体","default":"you deserve.","maxLength":20},{"id":"cta","type":"string","label":"行动按钮","default":"Start selling","maxLength":18},{"id":"domain","type":"string","label":"品牌域名","default":"pocketsflow.com","maxLength":26},{"id":"footer","type":"string","label":"底部数据","default":"65,000+ creators  ·  160+ countries  ·  no monthly fee","maxLength":64},{"id":"workbookTitle","type":"string","label":"加购名称","default":"Add the workbook","maxLength":24},{"id":"monthly","type":"number","label":"每月费用","default":9,"min":1,"max":99},{"id":"primary","type":"color","label":"强调色","default":"#245EEA"},{"id":"headingFont","type":"font","label":"标题字体","default":"Inter"},{"id":"bodyFont","type":"font","label":"正文字体","default":"Inter"},{"id":"courseImage","type":"image","label":"课程图片","default":"assets/course.png"},{"id":"ebookImage","type":"image","label":"电子书图片","default":"assets/ebook.png"},{"id":"appImage","type":"image","label":"应用图片","default":"assets/app.png"},{"id":"workbookImage","type":"image","label":"加购图片","default":"assets/workbook.png"},{"id":"logoImage","type":"image","label":"品牌字图片","default":"assets/logo.png"}]'>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="od-motion-output" content="video"><title>Pocketsflow 创作者商店</title>
+<style>
+@font-face{font-family:Inter;src:url(assets/inter-regular.ttf);font-weight:100 900}
+@font-face{font-family:"Instrument Serif";src:url(assets/instrumentserif-italic.ttf);font-style:italic}
+@font-face{font-family:Fraunces;src:url(assets/fraunces-bold.ttf);font-weight:100 900}
+@font-face{font-family:"JetBrains Mono";src:url(assets/jetbrainsmono-regular.ttf);font-weight:100 900}
+:root{--od-font-heading:"Inter","Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;--od-font-body:"Inter","Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;--od-font-accent:"Instrument Serif","Noto Serif SC","Songti SC","SimSun",serif;--od-font-brand:"Fraunces","Noto Serif SC","Songti SC","SimSun",serif;--od-font-mono:"JetBrains Mono","Noto Sans SC","PingFang SC","Microsoft YaHei",monospace}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#fff;overflow:hidden}body{display:grid;place-items:center;font-family:var(--od-font-body)}.od-heading{font-family:var(--od-font-heading)}#main{width:100vw;aspect-ratio:16/9;max-height:100vh;position:relative}canvas{width:100%;height:100%;display:block}#controls{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:12px;background:#fff9;border-radius:10px;opacity:0;transition:opacity .2s;font-size:12px}#controls:hover,#controls:focus-within{opacity:1}#controls input{width:260px}button{font-family:var(--od-font-body)}html.od-export body{display:block}html.od-export #main{width:1920px;height:1080px;max-height:none}html.od-export #controls{display:none}
+</style><style data-od-preview-chrome>
+#controls{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:100;display:flex;align-items:center;gap:14px;width:min(900px,92vw);box-sizing:border-box;padding:12px 18px;border-radius:14px;background:#101214dd;color:#fff;font:600 13px ui-monospace,Menlo,monospace;opacity:0;transition:opacity .2s}
+#controls:hover,#controls:focus-within{opacity:1}
+#controls button{font:inherit;letter-spacing:.06em;background:var(--accent,#3b6cf6);color:#fff;border:0;border-radius:999px;padding:9px 16px;cursor:pointer;min-width:88px;white-space:nowrap}
+#controls input[type=range]{flex:1;width:auto;min-width:0;accent-color:var(--accent,#3b6cf6)}
+#controls span,#controls output{white-space:nowrap;font-variant-numeric:tabular-nums}
+html.od-export #controls{display:none!important}
+</style>
+</head><body><main id="main" data-composition-id="main" data-start="0" data-duration="15.061333" data-width="1920" data-height="1080">
+<audio id="soundtrack" src="assets/soundtrack.mp3" data-start="0" data-duration="15.061" data-track-index="2" data-volume="1" preload="auto"></audio><canvas id="film" width="1920" height="1080" data-od-id="film"></canvas></main><div id="controls"><button id="play">PLAY</button><input id="seek" type="range" min="0" step="0.01"><span id="time"></span></div>
+<script src="assets/gsap.min.js"></script><script>
+const VARS=(window.__hyperframes && window.__hyperframes.getVariables?.()) || {};
+const CFG = {
+  "duration": 15.061333,
+  "scenes": [
+    {
+      "id": "hook",
+      "name": "开场提问",
+      "dur": 2.35,
+      "minDur": 2.35,
+      "maxDur": 3.5
+    },
+    {
+      "id": "anything",
+      "name": "三类商品",
+      "dur": 2.1,
+      "minDur": 2.1,
+      "maxDur": 3.2
+    },
+    {
+      "id": "store",
+      "name": "手机商店",
+      "dur": 2.65,
+      "minDur": 2.65,
+      "maxDur": 4.1
+    },
+    {
+      "id": "checkout-zoom",
+      "name": "支付推镜",
+      "dur": 0.15,
+      "minDur": 0.15,
+      "maxDur": 0.15
+    },
+    {
+      "id": "handled",
+      "name": "结账功能",
+      "dur": 3.85,
+      "minDur": 3.85,
+      "maxDur": 5.5
+    },
+    {
+      "id": "flow",
+      "name": "创作与支付",
+      "dur": 2.3,
+      "minDur": 2.3,
+      "maxDur": 3.5
+    },
+    {
+      "id": "close",
+      "name": "品牌收尾",
+      "dur": 1.661333,
+      "minDur": 1.661333,
+      "maxDur": 2.5
+    }
+  ],
+  "cues": [
+    {"id":"create-word","scene":"flow","at":0.48},
+    {"id":"handle-word","scene":"flow","at":1.62},
+    {"id":"the-word","scene":"flow","at":0.32,"from":"end"},
+    {"id":"boy-enter","scene":"hook","at":0},
+    {"id":"hook-prefix","scene":"hook","at":1.64},
+    {"id":"hook-underline","scene":"hook","at":1.86},
+    {
+      "id": "whisper",
+      "scene": "hook",
+      "at": 0.45
+    },
+    {
+      "id": "hook-copy",
+      "scene": "hook",
+      "at": 1.2
+    },
+    {
+      "id": "sell-word",
+      "scene": "hook",
+      "at": 1.77
+    },
+    {
+      "id": "blue-wipe",
+      "scene": "hook",
+      "at": 0.13,
+      "from": "end"
+    },
+    {
+      "id": "course-in",
+      "scene": "anything",
+      "at": 0.35
+    },
+    {
+      "id": "ebook-in",
+      "scene": "anything",
+      "at": 0.85
+    },
+    {
+      "id": "app-in",
+      "scene": "anything",
+      "at": 1.3
+    },
+    {
+      "id": "cards-out",
+      "scene": "anything",
+      "at": 0.12,
+      "from": "end"
+    },
+    {
+      "id": "phone-in",
+      "scene": "store",
+      "at": 0.04
+    },
+    {
+      "id": "store-copy",
+      "scene": "store",
+      "at": 0.65
+    },
+    {
+      "id": "store-items",
+      "scene": "store",
+      "at": 0.5
+    },
+    {
+      "id": "store-line",
+      "scene": "store",
+      "at": 1.1
+    },
+    {
+      "id": "minutes-in",
+      "scene": "store",
+      "at": 1.65
+    },
+    {
+      "id": "buy-click",
+      "scene": "store",
+      "at": 0.28,
+      "from": "end"
+    },
+    {
+      "id": "phone-zoom",
+      "scene": "store",
+      "at": 0.17,
+      "from": "end"
+    },
+    {
+      "id": "zoom-out",
+      "scene": "checkout-zoom",
+      "at": 0.1,
+      "from": "end"
+    },
+    {
+      "id": "board-in",
+      "scene": "handled",
+      "at": 0
+    },
+    {
+      "id": "card-type",
+      "scene": "handled",
+      "at": 0.1
+    },
+    {
+      "id": "subscription-rise",
+      "scene": "handled",
+      "at": 0.35
+    },
+    {
+      "id": "upsell-in",
+      "scene": "handled",
+      "at": 0.9
+    },
+    {
+      "id": "tax-in",
+      "scene": "handled",
+      "at": 1.4
+    },
+    {
+      "id": "payout-in",
+      "scene": "handled",
+      "at": 2.45
+    },
+    {
+      "id": "paid",
+      "scene": "handled",
+      "at": 0.45,
+      "from": "end"
+    },
+    {
+      "id": "stamp",
+      "scene": "handled",
+      "at": 0.44,
+      "from": "end"
+    },
+    {
+      "id": "board-out",
+      "scene": "handled",
+      "at": 0.1,
+      "from": "end"
+    },
+    {
+      "id": "you-create",
+      "scene": "flow",
+      "at": 0.16
+    },
+    {
+      "id": "we-handle",
+      "scene": "flow",
+      "at": 1.16
+    },
+    {
+      "id": "flow-word",
+      "scene": "flow",
+      "at": 0.12,
+      "from": "end"
+    },
+    {
+      "id": "flow-out",
+      "scene": "flow",
+      "at": 0.08,
+      "from": "end"
+    },
+    {
+      "id": "brand-drop",
+      "scene": "close",
+      "at": 0.1
+    },
+    {
+      "id": "head-peek",
+      "scene": "close",
+      "at": 0.46
+    },
+    {
+      "id": "tagline-in",
+      "scene": "close",
+      "at": 0.55
+    },
+    {
+      "id": "close-cta",
+      "scene": "close",
+      "at": 0.8
+    },
+    {
+      "id": "close-settle",
+      "scene": "close",
+      "at": 0.12,
+      "from": "end"
+    }
+  ],
+  "brand": "Pocketsflow",
+  "hookLine": "Got something",
+  "hookPrefix": "to",
+  "hookWord": "sell?",
+  "course": "Courses",
+  "ebook": "Ebooks",
+  "app": "Apps",
+  "coursePrice": "$149",
+  "ebookPrice": "$29",
+  "appPrice": "$4.99/mo",
+  "courseTitle": "Design Course",
+  "ebookTitle": "Creator Ebook",
+  "appTitle": "Focus App",
+  "storePrefix": "turns it into",
+  "storeLine": "a store",
+  "storeEnd": "in",
+  "storeAccent": "minutes.",
+  "storeName": "Your Store",
+  "handled": "Handled.",
+  "flowYou": "You",
+  "flowCreate": "create.",
+  "flowWe": "We handle the",
+  "flowWord": "flow.",
+  "tagline": "The payment infrastructure that",
+  "tagAccent": "you deserve.",
+  "cta": "Start selling",
+  "domain": "pocketsflow.com",
+  "footer": "65,000+ creators  ·  160+ countries  ·  no monthly fee",
+  "workbookTitle": "Add the workbook",
+  "monthly": 9,
+  "primary": "#245EEA",
+  "headingFont": "Inter",
+  "bodyFont": "Inter",
+  "courseImage": "assets/course.png",
+  "ebookImage": "assets/ebook.png",
+  "appImage": "assets/app.png",
+  "workbookImage": "assets/workbook.png",
+  "logoImage": "assets/logo.png"
+,...VARS};
+const SCENE_START={};CFG.scenes.reduce((t,s)=>(SCENE_START[s.id]=t,t+s.dur),0);
+const cueTime=id=>{const c=CFG.cues.find(c=>c.id===id),s=CFG.scenes.find(s=>s.id===c.scene);return SCENE_START[c.scene]+(c.from==='end'?s.dur-c.at:c.at)};
+const CUE_TIMES={"create-word":cueTime("create-word"),"handle-word":cueTime("handle-word"),"the-word":cueTime("the-word"),"boy-enter":cueTime("boy-enter"),"hook-prefix":cueTime("hook-prefix"),"hook-underline":cueTime("hook-underline"),"whisper":cueTime("whisper"),"hook-copy":cueTime("hook-copy"),"sell-word":cueTime("sell-word"),"blue-wipe":cueTime("blue-wipe"),"course-in":cueTime("course-in"),"ebook-in":cueTime("ebook-in"),"app-in":cueTime("app-in"),"cards-out":cueTime("cards-out"),"phone-in":cueTime("phone-in"),"store-copy":cueTime("store-copy"),"store-items":cueTime("store-items"),"store-line":cueTime("store-line"),"minutes-in":cueTime("minutes-in"),"buy-click":cueTime("buy-click"),"phone-zoom":cueTime("phone-zoom"),"zoom-out":cueTime("zoom-out"),"board-in":cueTime("board-in"),"card-type":cueTime("card-type"),"subscription-rise":cueTime("subscription-rise"),"upsell-in":cueTime("upsell-in"),"tax-in":cueTime("tax-in"),"payout-in":cueTime("payout-in"),"paid":cueTime("paid"),"stamp":cueTime("stamp"),"board-out":cueTime("board-out"),"you-create":cueTime("you-create"),"we-handle":cueTime("we-handle"),"flow-word":cueTime("flow-word"),"flow-out":cueTime("flow-out"),"brand-drop":cueTime("brand-drop"),"head-peek":cueTime("head-peek"),"tagline-in":cueTime("tagline-in"),"close-cta":cueTime("close-cta"),"close-settle":cueTime("close-settle")};
+const canvas=document.getElementById('film'),ctx=canvas.getContext('2d');
+document.documentElement.style.setProperty('--od-font-heading',`"${CFG.headingFont}","Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif`);document.documentElement.style.setProperty('--od-font-body',`"${CFG.bodyFont}","Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif`);const css=getComputedStyle(document.documentElement);const F={h:css.getPropertyValue('--od-font-heading'),b:css.getPropertyValue('--od-font-body'),a:css.getPropertyValue('--od-font-accent'),logo:css.getPropertyValue('--od-font-brand'),mono:css.getPropertyValue('--od-font-mono')};
+const pics={};for(const k of ['courseImage','ebookImage','appImage','workbookImage','logoImage']){pics[k]=new Image();pics[k].src=CFG[k]}
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));const E=x=>1-Math.pow(1-clamp(x),3);const io=x=>{x=clamp(x);return x*x*(3-2*x)};const pop=x=>{x=clamp(x);return 1-Math.exp(-8*x)*Math.cos(12*x)};const prog=(t,c,d=.4)=>clamp((t-CUE_TIMES[c])/d);
+function box(x,y,w,h,r=0,fill='#fff',stroke=null,lw=2){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke()}}
+function line(x,y,X,Y,col='#ddd',w=2){ctx.strokeStyle=col;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(X,Y);ctx.stroke()}
+function txt(s,x,y,size=32,col='#171717',weight=500,role='b',align='left'){ctx.font=`${role==='a'?'italic ':''}${weight} ${size}px ${F[role]}`;ctx.fillStyle=col;ctx.textAlign=align;ctx.textBaseline='alphabetic';ctx.fillText(String(s),x,y)}
+function width(s,size,weight=500,role='b'){ctx.font=`${role==='a'?'italic ':''}${weight} ${size}px ${F[role]}`;return ctx.measureText(s).width}
+function image(k,x,y,w,h){if(pics[k]?.complete&&pics[k].naturalWidth)ctx.drawImage(pics[k],x,y,w,h)}
+function reveal(s,x,y,size,t,c,role='b',col='#171717',weight=600,d=.35){const p=E(prog(t,c,d));ctx.save();ctx.beginPath();ctx.rect(x-10,y-size*1.1,1800,size*1.35);ctx.clip();txt(s,x,y+(1-p)*size*1.25,size,col,weight,role);ctx.restore()}
+function check(x,y,r=19,col=CFG.primary){ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=r*.2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x-r*.4,y);ctx.lineTo(x-r*.07,y+r*.3);ctx.lineTo(x+r*.43,y-r*.3);ctx.stroke();ctx.lineCap='butt'}
+// The performing boy is rebuilt in grayscale, then quantised to the source's square halftone.
+const boyCanvas=document.createElement('canvas');boyCanvas.width=300;boyCanvas.height=350;const b=boyCanvas.getContext('2d',{willReadFrequently:true});
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+function ellipse(x,y,rx,ry,fill,rot=0){b.beginPath();b.ellipse(x,y,rx,ry,rot,0,Math.PI*2);b.fillStyle=fill;b.fill()}
+function shade(x,y,r,light=240,dark=45){const g=b.createRadialGradient(x-r*.35,y-r*.45,r*.1,x,y,r);g.addColorStop(0,`rgb(${light},${light},${light})`);g.addColorStop(1,`rgb(${dark},${dark},${dark})`);return g}
+// Smooth measured poses, with time-based breathing between gestures; no frame history.
+function pose(t,keys){for(let i=1;i<keys.length;i++)if(t<keys[i][0]){const [a,v]=keys[i-1],[z,n]=keys[i];return v+(n-v)*io((t-a)/(z-a))}return keys.at(-1)[1]}
+function drawBoy(t,x,y,w,headOnly=false,phase=0,opening=false,acting=null){
+ b.clearRect(0,0,300,350);const local=t-SCENE_START.anything;
+ const turn=acting?acting.turn:opening?(t<SCENE_START.anything?pose(t,[[0,-13],[.3,-4],[.5,-10],[.9,-4],[1.1,-4],[1.4,2],[2.1,1],[2.35,0]]):pose(local,[[0,-4],[.25,0],[.45,7],[.65,18],[1,5],[1.5,-2],[2.1,2]]))+Math.sin(t*5)*1.6:Math.sin(t*2.6+phase)*2.6;
+ const bob=acting?acting.bob:Math.sin(t*3.8+phase)*(opening?3.8:2.3);
+ const tilt=acting?acting.tilt:opening?(t<SCENE_START.anything?pose(t,[[0,-.21],[.3,.09],[.5,.02],[.9,-.025],[1.1,-.025],[1.3,-.18],[1.65,-.16],[2.15,-.035],[2.35,0]]):pose(local,[[0,0],[.22,.04],[.4,-.07],[.6,.13],[1,.04],[1.5,-.04],[2.1,0]]))+Math.sin(t*3)*.012:Math.sin(t*2.2+phase)*.025;
+ if(!headOnly){
+  b.fillStyle=opening?shade(95,282,198,248,12):shade(135,296,168,235,65);b.beginPath();b.moveTo(13,350);b.bezierCurveTo(5,310,53,254,92,231);b.bezierCurveTo(117,218,178,218,202,231);b.bezierCurveTo(256,267,291,308,294,350);b.closePath();b.fill();
+  ellipse(151,216,31,25,shade(140,209,33,opening?100:160,opening?8:15));ellipse(149,236,54,17,shade(141,226,61,205,opening?12:35));
+  b.strokeStyle='#222';b.lineWidth=4;b.beginPath();b.ellipse(149,236,41,10,0,.1,3.1);b.stroke();
+  b.fillStyle='#777';b.fillRect(203,302,39,42);b.strokeStyle='#111';b.lineWidth=5;b.strokeRect(203,302,39,42);b.lineWidth=2;b.beginPath();b.moveTo(206,305);b.lineTo(222,316);b.lineTo(240,305);b.stroke();
+ }
+ b.save();b.translate(150+turn*(acting?.65:1),133+bob);b.scale(acting?.94:1.05,acting?.84:.93);b.translate(0,acting?-26:-14);b.rotate(tilt);b.translate(-150,-133);
+ if(!opening){ellipse(65,162,17,28,shade(62,155,30,220,60));ellipse(237,164,16,28,shade(230,160,30,190,60));}
+ const faceLight=b.createRadialGradient(100,127,38,153,152,112);faceLight.addColorStop(0,'#fff');faceLight.addColorStop(.4,'#fff');faceLight.addColorStop(.67,'#b6b6b6');faceLight.addColorStop(1,'#494949');b.fillStyle=(opening||acting)?faceLight:shade(131,144,116,255,125);b.beginPath();b.moveTo(60,118);b.bezierCurveTo(60,78,91,64,150,66);b.bezierCurveTo(215,64,241,99,243,143);b.bezierCurveTo(259,209,211,242,158,241);b.bezierCurveTo(105,240,51,215,57,162);b.closePath();b.fill();
+ // Curled hair: overlapping shaded lobes, asymmetrical silhouette and short sideburns.
+ ellipse(150,77,93,38,'#111');
+ const curls=(opening||acting)?[[67,100,26,31],[84,68,31,34],[111,49,33,31],[154,41,31,30],[190,54,30,31],[216,77,26,32],[228,110,20,29],[105,88,31,30],[148,76,31,31],[185,88,27,31]]:[[70,101,24,29],[85,70,30,30],[115,49,30,29],[148,39,29,26],[179,48,31,30],[207,66,26,28],[225,92,22,29],[100,87,30,28],[139,77,32,28],[180,77,28,29]];
+ for(const [hx,hy,rx,ry] of curls)ellipse(hx,hy,rx,ry,shade(hx-3,hy-6,Math.max(rx,ry)*1.3,(opening||acting)?85:128,5),opening?-.38:-.2);
+ b.fillStyle='#141414';b.beginPath();b.moveTo(60,100);b.lineTo(61,148);b.lineTo(76,113);b.moveTo(229,108);b.lineTo(241,150);b.lineTo(240,113);b.fill();
+ const eyeY=155+Math.sin(t*4+phase),blink=acting?acting.blink:opening?Math.max(Math.exp(-Math.pow((t-.49)/.065,2)),Math.exp(-Math.pow((t-2.72)/.065,2)),Math.exp(-Math.pow((t-3.75)/.07,2))):Math.pow(Math.max(0,Math.cos((t+phase)*3.9)),34);const wink=(opening||acting)?0:(Math.sin(t*1.6+phase)>.94?1:0);
+ if(opening){b.save();b.translate(turn*.8,0);b.scale(1-Math.abs(turn)*.0015,1)}
+ b.strokeStyle='#101010';b.lineWidth=opening?8:6;b.lineCap='round';b.beginPath();b.moveTo(99,127);b.lineTo(119,124);b.moveTo(183,124);b.lineTo(204,128);b.stroke();
+ for(const [ex,ey,isWink] of [[110,eyeY,false],[194,eyeY-3,wink]]){
+  if(blink>.7||isWink){b.lineWidth=3;b.beginPath();b.arc(ex,ey+4,9,Math.PI*1.1,Math.PI*1.9);b.stroke()}else{ellipse(ex,ey,12,18*(1-blink*.8),'#080808');ellipse(ex-3,ey-6,3.7,4.6,'#fff')}
+ }
+ ellipse(151,174,13,10,shade(147,169,20,250,115));
+ const op=acting?acting.mouth:opening?(t<SCENE_START.anything?pose(t,[[0,.1],[.3,.06],[.49,.7],[.7,.6],[.9,.03],[1.1,.03],[1.3,1],[1.7,.9],[2.1,.65],[2.35,.3]]):.5+.42*Math.sin(local*5)):.5+.5*Math.sin(t*7.6+phase);b.fillStyle='#080808';b.beginPath();b.moveTo(132,193);b.quadraticCurveTo(151,202,174,190);b.quadraticCurveTo(159,acting?199+op*40:opening?201+op*31:224+op*6,139,acting?195+op*21:opening?196+op*14:210);b.closePath();b.fill();b.fillStyle='#fff';b.beginPath();b.moveTo(134,194);b.lineTo(171,192);b.quadraticCurveTo(151,201,134,197);b.fill();
+ if(opening){if(op<.15){b.strokeStyle='#080808';b.lineWidth=3;b.beginPath();b.moveTo(133,195);b.quadraticCurveTo(152,206,174,193);b.stroke()}b.restore();}
+ b.restore();const pixels=b.getImageData(0,0,300,350),d=pixels.data;
+ for(let yy=0;yy<350;yy++)for(let xx=0;xx<300;xx++){const i=(yy*300+xx)*4;if(!d[i+3])continue;const val=d[i]>(BAYER[(yy%4)*4+xx%4]+.5)*16?255:8;d[i]=d[i+1]=d[i+2]=val;d[i+3]=255}
+ b.putImageData(pixels,0,0);ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(boyCanvas,x,y,w,w*350/300);ctx.restore();
+}
+// Reference-led performance keys, with a continuing gesture loop in stretched holds.
+function reviewedPose(a){
+ const q=a<2.45?a:1.3+(a-2.45)%1.15;
+ return {turn:pose(q,[[0,-3],[.18,0],[.4,8],[.6,16],[.85,-6],[1.05,-11],[1.2,0],[1.4,15],[1.6,18],[1.8,2],[2.05,10],[2.3,4],[2.45,-2]]),
+ bob:pose(q,[[0,0],[.2,-3],[.5,4],[.8,-3],[1.05,1],[1.4,6],[1.7,-3],[2.1,3],[2.45,0]]),
+ tilt:pose(q,[[0,-.03],[.4,-.07],[.65,.05],[.9,.07],[1.2,-.055],[1.5,.035],[1.8,-.04],[2.2,.025],[2.45,-.03]]),
+ blink:Math.max(Math.exp(-Math.pow((q-.17)/.048,2)),Math.exp(-Math.pow((q-1.02)/.055,2)),Math.exp(-Math.pow((q-2.2)/.05,2))),
+ mouth:pose(q,[[0,.05],[.2,.2],[.4,.85],[.6,.1],[.8,.8],[1,.04],[1.2,.1],[1.4,.95],[1.6,.25],[1.8,.7],[2,.2],[2.2,.1],[2.45,.05]])};
+}
+function flowBoy(t){const a=t-SCENE_START.flow;drawBoy(t,1355+Math.sin(a*3)*4,365+Math.sin(a*3)*3,610,false,.8,false,reviewedPose(a));}
+// A growing stippled circle connects the dashboard to the black declaration.
+function boardWipe(t){const p=prog(t,'board-out',.17);if(p<=0)return;const r=1500*io(p);ctx.save();ctx.beginPath();ctx.arc(960,640,r,0,Math.PI*2);ctx.fillStyle='#080808';ctx.fill();ctx.clip();flowBoy(t);ctx.restore();
+ ctx.fillStyle='#080808';for(let y=Math.max(0,640-r-80);y<Math.min(1080,640+r+80);y+=5)for(let x=Math.max(0,960-r-80);x<Math.min(1920,960+r+80);x+=5){const dist=Math.hypot(x-960,y-640)-r;if(dist>0&&dist<80&&BAYER[(Math.floor(y/5)%4)*4+Math.floor(x/5)%4]/16<1-dist/80)ctx.fillRect(x,y,3,3)}
+}
+function hud(t,scene){const i=CFG.scenes.findIndex(s=>s.id===scene);const n=scene==='checkout-zoom'?3:scene==='handled'?3:scene==='flow'?4:i;txt(`// 0${n+1} — ${scene==='anything'?'anything':scene==='handled'||scene==='checkout-zoom'?'handled':scene}`,48,58,20,scene==='anything'?'#1746a4':'#999',400,'mono');const ss=Math.floor(t);txt(`${CFG.brand.toUpperCase()}  00:00:${String(ss).padStart(2,'0')}:${String(Math.floor((t-ss)*60)).padStart(2,'0')}`,1872,58,20,scene==='anything'?'#1746a4':'#999',400,'mono','right')}
+function hook(t){
+ const enter=t-cueTime('boy-enter');
+ const x=pose(enter,[[0,2010],[.1,1620],[.3,1085],[.5,960],[.7,1015],[.9,1075],[1.1,1075],[1.4,1070],[2.35,1075]]);
+ const y=pose(enter,[[0,365],[.1,325],[.3,220],[.5,238],[.9,228],[1.2,228],[2.35,228]]);
+ drawBoy(t,x,y,790,false,.1,true);
+ const whisper=E(prog(t,'whisper',.16))*(1-prog(t,'hook-copy',.08));
+ if(whisper>0){ctx.save();ctx.globalAlpha=whisper;const bx=x-195,by=520+Math.sin(t*4)*2;const bubble=io(prog(t,'whisper',.25));ctx.translate(bx+271,by+71);ctx.scale(bubble,bubble);ctx.translate(-bx-271,-by-71);ctx.beginPath();ctx.moveTo(bx+78,by);ctx.lineTo(bx+161,by);ctx.bezierCurveTo(bx+211,by,bx+234,by+30,bx+230,by+43);ctx.quadraticCurveTo(bx+239,by+61,bx+271,by+71);ctx.quadraticCurveTo(bx+236,by+71,bx+218,by+61);ctx.quadraticCurveTo(bx+210,by+77,bx+176,by+77);ctx.lineTo(bx+78,by+77);ctx.bezierCurveTo(bx+12,by+77,bx+12,by,bx+78,by);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#555';ctx.lineWidth=2;ctx.stroke();txt('psst…'.slice(0,Math.ceil(prog(t,'whisper',.4)*5)),bx+49,by+52,34,'#171717',500,'mono');ctx.restore()}
+ if(t>=cueTime('hook-copy')-.14)txt('// for creators',140,285,26,'#888',400,'mono');
+ const words=CFG.hookLine.split(/\s+/);let wx=130;
+ for(let i=0;i<words.length;i++){const q=E(clamp((t-cueTime('hook-copy')-i*.18)/.12));if(q>0){ctx.save();ctx.globalAlpha=q;txt(words[i],wx,450+(1-q)*28,140,'#171717',650,'h');ctx.restore()}wx+=width(words[i]+' ',140,650,'h')}
+ reveal(CFG.hookPrefix,130,720,140,t,'hook-prefix','h','#171717',650,.16);
+ reveal(CFG.hookWord,290,700,240,t,'sell-word','a',CFG.primary,400,.19);
+ const u=E(prog(t,'hook-underline',.24));if(u>0){ctx.save();ctx.beginPath();ctx.rect(290,760,330*u,40);ctx.clip();ctx.strokeStyle=CFG.primary;ctx.lineWidth=10;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(300,778);ctx.bezierCurveTo(400,805,505,772,615,785);ctx.stroke();ctx.restore()}
+ const wipe=prog(t,'blue-wipe',.13);if(wipe>0){ctx.fillStyle=CFG.primary;ctx.beginPath();ctx.arc(625,710,2000*wipe*wipe,0,Math.PI*2);ctx.fill()}
+}
+function productCard(t,c,x,kind,label,price,index){const arriving=t<SCENE_START.store;const p=arriving?E(prog(t,c,.7)):pop(prog(t,c,.55));if(p<=0)return;ctx.save();ctx.translate(x+182,520+(arriving?220*(1-E(prog(t,c,.8))):0)+Math.sin(t*2.6+index)*3);ctx.scale(p,p);ctx.rotate((1-clamp(prog(t,c,arriving?.9:.5)))*(arriving?-.19:(.15-index*.08)));box(-182,-307,364,612,30);txt('// '+kind,-152,-250,23,'#888',400,'mono');txt('0'+index,152,-250,23,'#888',400,'mono','right');const k=['courseImage','ebookImage','appImage'][index-1];image(k,-174,-147,348,300);txt(label,-152,223,59,'#171717',650,'h');txt(price,-152,268,28,'#666',400,'mono');ctx.restore()}
+function anything(t){const a=t-SCENE_START.anything;drawBoy(t,43+Math.sin(a*4.5)*5,pose(a,[[0,255],[.2,270],[.4,320],[.65,330],[1.2,310],[2.1,310]]),660,false,1,true);productCard(t,'course-in',712,'course',CFG.course,CFG.coursePrice,1);productCard(t,'ebook-in',1098,'ebook',CFG.ebook,CFG.ebookPrice,2);productCard(t,'app-in',1484,'app',CFG.app,CFG.appPrice,3);const p=prog(t,'cards-out',.12);if(p>0){ctx.fillStyle=`rgba(255,255,255,${p})`;ctx.fillRect(0,0,1920,1080)}}
+function phone(t){const p=E(prog(t,'phone-in',.17));ctx.save();ctx.translate(1310+400*(1-p),70);box(0,0,480,940,75,'#090909');box(13,13,454,914,63,'#fff');ctx.save();ctx.beginPath();ctx.roundRect(13,13,454,914,63);ctx.clip();box(13,13,454,340,0,CFG.primary);txt('9:41',58,55,20,'white',600);box(184,27,112,34,18,'#090909');box(390,39,34,17,4,null,'#fff');box(393,42,25,11,1,'#fff');box(35,80,410,49,25,'#ffffff25');txt('● '+(t<cueTime('store-items')?'':`yourname.${CFG.domain}`),45,112,21,'#fff',400,'mono');box(368,88,70,30,16,'white');txt('LIVE',402,110,16,CFG.primary,600,'mono','center');
+ if(t>=cueTime('store-items')){ctx.save();ctx.beginPath();ctx.arc(240,220,57,0,7);ctx.clip();ctx.fillStyle='white';ctx.fillRect(180,160,120,120);drawBoy(t,148,153,178,true,.4);ctx.restore();ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(240,220,57,0,7);ctx.stroke();txt(CFG.storeName,240,320,32,'white',650,'b','center')}
+ txt('Products',38,408,28,'#171717',650);txt('3 items',439,408,18,'#999',400,'mono','right');const labels=[CFG.courseTitle,CFG.ebookTitle,CFG.appTitle],prices=[CFG.coursePrice+'.00',CFG.ebookPrice+'.00',CFG.appPrice];
+ for(let i=0;i<3;i++){const a=E(clamp((t-cueTime('store-items')-i*.12)/.3));if(a<=0)continue;ctx.save();ctx.globalAlpha=a;const yy=438+i*156+20*(1-a);box(38,yy,116,116,18,'#fafafa','#e2e2e2');image(['courseImage','ebookImage','appImage'][i],42,yy+15,108,92);txt(labels[i],178,yy+38,24,'#171717',650);txt(prices[i],178,yy+66,19,'#666',400,'mono');box(178,yy+79,136,39,22,'#090909');txt('Get it now',246,yy+105,18,'white',600,'b','center');ctx.restore()}
+ ctx.restore();ctx.restore();
+ if(t>cueTime('buy-click')-.2){const q=E(clamp((t-cueTime('buy-click')+.2)/.3));const x=1610-50*q,y=750-145*q;ctx.save();ctx.translate(x,y);ctx.fillStyle='#080808';ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,42);ctx.lineTo(12,30);ctx.lineTo(23,50);ctx.lineTo(31,45);ctx.lineTo(21,26);ctx.lineTo(37,26);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
+}
+function store(t){
+ const q=prog(t,'store-copy',.85);if(t>SCENE_START.store+.04){const brandW=CFG.brand==='Pocketsflow'?326:width(CFG.brand,58,700,'logo');if(CFG.brand==='Pocketsflow')image('logoImage',100,236,326,45);else txt(CFG.brand,100,280,58,'#171717',700,'logo');txt(CFG.storePrefix.slice(0,Math.ceil(CFG.storePrefix.length*E(q))),112+brandW,280,56,'#666',500);reveal(CFG.storeLine,100,445,132,t,'store-line','h','#171717',650,.5);reveal(CFG.storeEnd,100,650,132,t,'minutes-in','h','#171717',650,.35);reveal(CFG.storeAccent,235,655,205,t,'minutes-in','a',CFG.primary,400,.5)}
+ phone(t);const sweep=E(clamp((t-SCENE_START.store)/.28));if(sweep<1){ctx.save();ctx.translate(1920*sweep,0);box(0,0,1920,1080,0,CFG.primary);productCard(t,'course-in',712,'course',CFG.course,CFG.coursePrice,1);productCard(t,'ebook-in',1098,'ebook',CFG.ebook,CFG.ebookPrice,2);productCard(t,'app-in',1484,'app',CFG.app,CFG.appPrice,3);ctx.restore()}drawBoy(t,43+767*sweep,310+310*sweep,660-220*sweep,false,.5);
+ const z=prog(t,'phone-zoom',.17);if(z>0){ctx.save();ctx.globalAlpha=z;ctx.translate(960,540);ctx.scale(1+z*2.2,1+z*2.2);box(-500,-130,1000,260,40,'#090909');txt('Apple Pay',0,30,112,'#fff',600,'b','center');ctx.restore()}
+}
+function zoom(t){ctx.fillStyle='#090909';ctx.fillRect(0,0,1920,1080);const q=prog(t,'zoom-out',.1);ctx.save();ctx.translate(960,540);ctx.scale(1+q*3,1+q*3);txt('Apple Pay',0,45,150,'#fff',600,'b','center');ctx.restore();if(q>.8){ctx.fillStyle=`rgba(250,250,250,${(q-.8)*5})`;ctx.fillRect(0,0,1920,1080)}}
+function panel(x,y,w,h,label,dash=false){ctx.save();if(dash)ctx.setLineDash([10,10]);box(x,y,w,h,25,dash?'#fafafa':'#fff','#dedede',2);ctx.restore();if(label)txt('// '+label,x+28,y+50,23,'#888',400,'mono')}
+function handled(t){
+ const cam=E(prog(t,'board-in',.4));ctx.save();ctx.translate(960+(380-960)*cam,450+(396-450)*cam);ctx.scale(1+3*(1-cam),1+3*(1-cam));ctx.translate(-380,-396);
+ const u=E(prog(t,'upsell-in',.35)),tax=E(prog(t,'tax-in',.3)),pay=prog(t,'payout-in',.8),paid=prog(t,'paid',.1),st=pop(prog(t,'stamp',.24));
+ ctx.fillStyle='#fafafa';ctx.fillRect(0,0,1920,1080);for(const x of [100,660,680,1240,1260,1820])line(x,0,x,1080,'#eee',1);for(const y of [90,530,550,990])line(0,y,1920,y,'#eee',1);
+ panel(100,90,560,900,'checkout');panel(680,90,560,440,'on air');ctx.fillStyle=CFG.primary;ctx.beginPath();ctx.arc(715,133,7,0,7);ctx.fill();
+ ctx.save();ctx.beginPath();ctx.roundRect(682,159,556,369,20);ctx.clip();drawBoy(t,781,145,t>=cueTime('payout-in')?370:358,false,.6,false,t>=cueTime('payout-in')?reviewedPose(t-cueTime('payout-in')):null);ctx.restore();
+ panel(1260,90,560,440,'subscriptions');ctx.save();ctx.translate(1775,132);if(t>=cueTime('payout-in'))ctx.rotate((t-cueTime('payout-in'))*7);txt('⟳',0,16,58,'#111',500,'b','center');ctx.restore();
+ const sub=Math.round(CFG.monthly*io(prog(t,'subscription-rise',1.1)));txt('$'+sub,1288,340,150,'#171717',650,'h');txt('/ month',1480,340,40,'#666',500);
+ const months=['OCT','NOV','DEC','JAN','FEB','MAR'],s=prog(t,'subscription-rise',1.6);line(1305,440,1775,440,'#ddd',3);line(1305,440,1305+470*s,440,CFG.primary,5);for(let i=0;i<6;i++){ctx.fillStyle=s>=i/5?CFG.primary:'#fff';ctx.strokeStyle=s>=i/5?CFG.primary:'#ccc';ctx.beginPath();ctx.arc(1305+i*94,440,s>=i/5?13:9,0,7);ctx.fill();ctx.stroke();txt(months[i],1305+i*94,486,18,'#171717',400,'mono','center')}
+ panel(680,550,560,440,u>0?'upsells':'',!u);panel(1260,550,560,210,tax>0?'taxes':'',!tax);panel(1260,780,560,210,pay>0?'payouts':'',!pay);
+ box(128,170,120,120,20,'#fafafa','#ddd');image('courseImage',132,188,112,90);txt(CFG.courseTitle,274,222,32,'#171717',650);txt(CFG.coursePrice+'.00',632,222,30,'#171717',500,'mono','right');txt('lifetime access',274,257,21,'#999',400,'mono');line(128,321,632,321,'#e5e5e5');box(128,356,504,80,18,'#090909');txt('Apple Pay',380,408,32,'#fff',600,'b','center');line(128,482,632,482,'#ddd');box(288,461,185,40,0,'#fff');txt('or pay by card',380,490,20,'#888',400,'mono','center');
+ const tp=E(prog(t,'card-type',.65));box(128,518,504,77,15,'#fff',tp<1?CFG.primary:'#ddd');txt('4242 4242 4242 4242'.slice(0,Math.ceil(tp*19)),152,567,27,'#171717',500,'mono');if(tp>=1)txt('12/28',608,567,24,'#999',400,'mono','right');
+ txt('Subtotal',128,649,24,'#666');txt(CFG.coursePrice+'.00',632,649,24,'#666',500,'mono','right');let total=parseFloat(CFG.coursePrice.replace(/[^\d.]/g,''))||149;
+ if(u){ctx.save();ctx.globalAlpha=u;txt('Workbook upsell',128,692,24,'#666');txt('+$19.00',632,692,24,CFG.primary,500,'mono','right');box(708,634,504,150,20,'#f5f7ff',CFG.primary);image('workbookImage',728,655,112,112);txt(CFG.workbookTitle,860,699,30,'#171717',650);txt('one click, same checkout',860,732,21,'#999');txt('+$19',860,767,24,CFG.primary,600);box(1152,691,38,38,9,CFG.primary);line(1160,708,1169,718,'#fff',5);line(1169,718,1184,700,'#fff',5);box(708,804,504,110,20,'#fff','#e3e3e3');txt('1:1',742,869,25,'#666',500,'mono');txt('1:1 coaching call',819,854,26,'#666',600);txt('+$99',819,887,23,'#999');box(1152,840,38,38,8,'#fff','#ccc');ctx.restore();total+=19*u}
+ if(tax){ctx.save();ctx.globalAlpha=tax;txt('Tax · VAT 20%',128,736,24,'#666');txt('$33.60',632,736,24,CFG.primary,500,'mono','right');txt('We are your merchant of record.',1288,650,27,'#171717',550);for(const [i,s] of ['EU VAT','UK VAT','US sales tax'].entries()){const x=1288+i*151;box(x,680,i===2?202:139,44,23,'#fff','#e5e5e5');txt(s,x+18,709,20,'#171717',400,'mono');txt('✓',x+(i===2?174:112),709,23,CFG.primary,700)}ctx.restore();total+=33.6*tax}
+ line(128,761,632,761,'#e5e5e5');txt('Total',128,808,32,'#171717',650);txt('$'+total.toFixed(2),632,808,30,'#171717',600,'mono','right');box(128,850,504,90,18,CFG.primary);txt(paid?'✓  Paid':'Pay $'+total.toFixed(2),380,908,32,'#fff',600,'b','center');
+ if(pay>0){ctx.save();ctx.globalAlpha=E(pay);txt('$'+(12480*E(pay)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),1288,908,47,'#171717',500,'mono');txt('to bank ···· 4821',1288,955,20,'#999',400,'mono');for(let i=0;i<7;i++)box(1624+i*24,958-(30+i*10)*E(pay)+Math.sin(t*4+i)*3,15,(30+i*10)*E(pay),4,i===6?CFG.primary:'#bacbf3');ctx.restore()}
+ if(paid){for(const [i,[x,y,r]] of [[620,133,23],[1201,133,23],[1778,133,20]].entries()){const q=pop(clamp((t-cueTime('paid')-i*.035)/.16));ctx.save();ctx.translate(x,y);ctx.scale(q,q);check(0,0,r);ctx.restore()}}
+ if(st>0){const a=t-cueTime('stamp');ctx.save();ctx.translate(960,710);ctx.strokeStyle=CFG.primary;ctx.lineWidth=7*(1-prog(t,'stamp',.5)*.7);ctx.globalAlpha=1-prog(t,'stamp',.7)*.6;ctx.beginPath();ctx.arc(0,0,850*E(prog(t,'stamp',.42)),0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.rotate(-.105);ctx.scale(st,st);box(-435,-120,870,240,32,'#fff',CFG.primary,12);txt(CFG.handled,0,72,232,CFG.primary,400,'a','center');ctx.restore()}
+ ctx.restore();boardWipe(t);
+}
+
+function flow(t){
+ if(prog(t,'board-out',.17)<1)handled(t);else flowBoy(t);
+ reveal(CFG.flowYou,120,455,205,t,'you-create','h','#eee',650,.22);
+ const x=120+width(CFG.flowYou,205,650,'h')+40;
+ reveal(CFG.flowCreate,x,455,250,t,'create-word','a','#eee',400,.24);
+ const words=CFG.flowWe.split(/\s+/),cues=['we-handle','handle-word','the-word'];let wx=120;
+ for(let i=0;i<words.length;i++){const c=cues[Math.min(i,2)];reveal(words[i],wx,700,147,t,c,'h','#999',650,.18);wx+=width(words[i]+' ',147,650,'h')}
+ const p=prog(t,'flow-out',.08);if(p>0){ctx.save();ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=38;ctx.beginPath();ctx.arc(1280,735,p*p*2300,0,7);ctx.fill();ctx.restore()}
+ reveal(CFG.flowWord,1100,780,200,t,'flow-word','a',CFG.primary,400,.1);
+}
+
+function close(t){const p=pop(prog(t,'brand-drop',.5));const peek=E(prog(t,'head-peek',.4));if(peek>0){ctx.save();ctx.beginPath();ctx.rect(0,0,1920,510);ctx.clip();drawBoy(t,918,200+(1-peek)*270,355,true,.9);ctx.restore()}const settle=prog(t,'close-settle',.12);const s=1+.006*Math.sin(t*4)*(1-settle*.4);ctx.save();ctx.translate(960,600+Math.sin(t*3)*2);ctx.scale(s,s);const bw=width(CFG.brand,190,750,'logo'),start=-bw/2;if(CFG.brand==='Pocketsflow'){const slices=[[3,111],[122,217],[225,307],[317,426],[435,521],[528,593],[604,677],[691,814],[825,920],[928,1075]];ctx.save();ctx.beginPath();ctx.rect(-580,-300,1160,320);ctx.clip();slices.forEach(([a,b],i)=>{const tail=i>=7;const v=pop(clamp((t-cueTime('brand-drop')-(tail?-.04:i*.035))/.35));if(v>0&&pics.logoImage.complete)ctx.drawImage(pics.logoImage,a,0,b-a,153,-540+a*1080/1082,-135+(1-v)*(tail?-350:330),(b-a)*1080/1082,151)});ctx.restore()}else for(let i=0;i<CFG.brand.length;i++){const letter=CFG.brand[i],prev=CFG.brand.slice(0,i),a=pop(clamp((t-cueTime('brand-drop')-i*.023)/.38));if(a>0)txt(letter,start+width(prev,190,750,'logo'),12+(1-a)*-180,190,'#171717',750,'logo')}ctx.restore();const q=E(prog(t,'tagline-in',.3));if(q>0){ctx.save();ctx.globalAlpha=q;const tw=width(CFG.tagline,46,500)+width(CFG.tagAccent,64,400,'a')+16;const xx=(1920-tw)/2;txt(CFG.tagline,xx,700+(1-q)*25,46,'#666',500);txt(CFG.tagAccent,xx+width(CFG.tagline,46,500)+16,700+(1-q)*25,64,'#171717',400,'a');ctx.restore()}const c=E(prog(t,'close-cta',.3));if(c>0){ctx.save();ctx.globalAlpha=c;box(695,775+(1-c)*20,250,72,40,CFG.primary);txt(CFG.cta,820,822+(1-c)*20,30,'#fff',600,'b','center');txt(CFG.domain,975,820,28,'#666',500,'mono');txt(CFG.footer,960,1010,23,'#999',400,'mono','center');ctx.restore()}}
+function render(t){t=clamp(t,0,CFG.duration);let scene=CFG.scenes[0];for(const s of CFG.scenes)if(t>=SCENE_START[s.id])scene=s;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,1920,1080);ctx.fillStyle=scene.id==='anything'?CFG.primary:scene.id==='flow'?'#080808':'#fff';ctx.fillRect(0,0,1920,1080);({hook,anything,store,'checkout-zoom':zoom,handled,flow,close})[scene.id](t);if(scene.id!=='close')hud(t,scene.id)}
+const root=document.getElementById('main');root.dataset.duration=CFG.duration;document.getElementById('seek').max=CFG.duration;
+const clock={t:0};const timeline=gsap.timeline({paused:true}).to(clock,{t:CFG.duration,duration:CFG.duration,ease:'none',onUpdate:()=>{render(clock.t);ui()}});
+function ui(){document.getElementById('seek').value=clock.t;document.getElementById('time').textContent=clock.t.toFixed(2)+' / '+CFG.duration.toFixed(2);document.getElementById('play').textContent=timeline.paused()?'PLAY':'PAUSE'}
+window.__odRenderAt=t=>{timeline.pause(t);clock.t=t;render(t);ui()};
+document.getElementById('play').onclick=()=>{if(timeline.time()>=CFG.duration)timeline.pause(0);timeline.paused(!timeline.paused());ui()};document.getElementById('seek').oninput=e=>window.__odRenderAt(+e.target.value);
+(async()=>{await Promise.all([document.fonts.ready,...Object.values(pics).map(im=>im.decode().catch(()=>{}))]);await document.fonts.load('650 140px Inter');await document.fonts.load('italic 200px "Instrument Serif"');await document.fonts.load('750 190px Fraunces');await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));window.__odRenderAt(0);window.__timelines={main:timeline};window.__odPreviewReady=true})();
+</script><script data-od-preview-audio>
+(function(){var a=document.getElementById('soundtrack');if(!a||document.documentElement.classList.contains('od-export'))return;
+function tick(){if(window.__odMotionSourcePlayer||window.__odMotionRender)return;var tl=window.__timelines&&window.__timelines.main;
+if(tl){var t=tl.time(),on=tl.isActive();if(on){if(a.paused)a.play().catch(function(){});if(Math.abs(a.currentTime-t)>0.2)a.currentTime=t;}else{if(!a.paused)a.pause();if(Math.abs(a.currentTime-t)>0.05)a.currentTime=t;}}
+requestAnimationFrame(tick);}requestAnimationFrame(tick);})();
+</script>
+</body></html>

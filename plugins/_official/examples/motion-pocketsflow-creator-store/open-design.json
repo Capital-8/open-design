@@ -1,0 +1,311 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-pocketsflow-creator-store",
+  "title": "Pocketsflow Creator Store",
+  "title_i18n": {
+    "en": "Pocketsflow Creator Store",
+    "zh-CN": "Pocketsflow 创作者商店"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-24T00:00:00Z",
+  "description": "A Pocketsflow promo moving from creator products to a mobile store, checkout automation and a halftone brand close.",
+  "description_i18n": {
+    "en": "A Pocketsflow promo moving from creator products to a mobile store, checkout automation and a halftone brand close.",
+    "zh-CN": "Pocketsflow 用网点男孩串联课程、电子书与应用商品、手机商店、自动结账和品牌收尾。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "product-promo",
+    "creator-commerce",
+    "halftone",
+    "ui-motion"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌",
+        "default": "Pocketsflow"
+      },
+      {
+        "name": "hookLine",
+        "type": "string",
+        "label": "开场主句",
+        "default": "Got something"
+      },
+      {
+        "name": "hookPrefix",
+        "type": "string",
+        "label": "开场介词",
+        "default": "to"
+      },
+      {
+        "name": "hookWord",
+        "type": "string",
+        "label": "开场斜体",
+        "default": "sell?"
+      },
+      {
+        "name": "course",
+        "type": "string",
+        "label": "课程类别",
+        "default": "Courses"
+      },
+      {
+        "name": "ebook",
+        "type": "string",
+        "label": "电子书类别",
+        "default": "Ebooks"
+      },
+      {
+        "name": "app",
+        "type": "string",
+        "label": "应用类别",
+        "default": "Apps"
+      },
+      {
+        "name": "coursePrice",
+        "type": "string",
+        "label": "课程价格",
+        "default": "$149"
+      },
+      {
+        "name": "ebookPrice",
+        "type": "string",
+        "label": "电子书价格",
+        "default": "$29"
+      },
+      {
+        "name": "appPrice",
+        "type": "string",
+        "label": "应用价格",
+        "default": "$4.99/mo"
+      },
+      {
+        "name": "courseTitle",
+        "type": "string",
+        "label": "课程名称",
+        "default": "Design Course"
+      },
+      {
+        "name": "ebookTitle",
+        "type": "string",
+        "label": "电子书名称",
+        "default": "Creator Ebook"
+      },
+      {
+        "name": "appTitle",
+        "type": "string",
+        "label": "应用名称",
+        "default": "Focus App"
+      },
+      {
+        "name": "storePrefix",
+        "type": "string",
+        "label": "商店介绍",
+        "default": "turns it into"
+      },
+      {
+        "name": "storeLine",
+        "type": "string",
+        "label": "商店主句",
+        "default": "a store"
+      },
+      {
+        "name": "storeEnd",
+        "type": "string",
+        "label": "时间介词",
+        "default": "in"
+      },
+      {
+        "name": "storeAccent",
+        "type": "string",
+        "label": "时间斜体",
+        "default": "minutes."
+      },
+      {
+        "name": "storeName",
+        "type": "string",
+        "label": "店铺名称",
+        "default": "Your Store"
+      },
+      {
+        "name": "handled",
+        "type": "string",
+        "label": "印章文字",
+        "default": "Handled."
+      },
+      {
+        "name": "flowYou",
+        "type": "string",
+        "label": "创作主语",
+        "default": "You"
+      },
+      {
+        "name": "flowCreate",
+        "type": "string",
+        "label": "创作斜体",
+        "default": "create."
+      },
+      {
+        "name": "flowWe",
+        "type": "string",
+        "label": "支付承接句",
+        "default": "We handle the"
+      },
+      {
+        "name": "flowWord",
+        "type": "string",
+        "label": "支付斜体",
+        "default": "flow."
+      },
+      {
+        "name": "tagline",
+        "type": "string",
+        "label": "品牌副句",
+        "default": "The payment infrastructure that"
+      },
+      {
+        "name": "tagAccent",
+        "type": "string",
+        "label": "品牌斜体",
+        "default": "you deserve."
+      },
+      {
+        "name": "cta",
+        "type": "string",
+        "label": "行动按钮",
+        "default": "Start selling"
+      },
+      {
+        "name": "domain",
+        "type": "string",
+        "label": "品牌域名",
+        "default": "pocketsflow.com"
+      },
+      {
+        "name": "footer",
+        "type": "string",
+        "label": "底部数据",
+        "default": "65,000+ creators  ·  160+ countries  ·  no monthly fee"
+      },
+      {
+        "name": "workbookTitle",
+        "type": "string",
+        "label": "加购名称",
+        "default": "Add the workbook"
+      },
+      {
+        "name": "monthly",
+        "type": "number",
+        "label": "每月费用",
+        "default": 9
+      },
+      {
+        "name": "primary",
+        "type": "string",
+        "label": "强调色",
+        "default": "#245EEA"
+      },
+      {
+        "name": "headingFont",
+        "type": "string",
+        "label": "标题字体",
+        "default": "Inter"
+      },
+      {
+        "name": "bodyFont",
+        "type": "string",
+        "label": "正文字体",
+        "default": "Inter"
+      },
+      {
+        "name": "courseImage",
+        "type": "string",
+        "label": "课程图片",
+        "default": "assets/course.png"
+      },
+      {
+        "name": "ebookImage",
+        "type": "string",
+        "label": "电子书图片",
+        "default": "assets/ebook.png"
+      },
+      {
+        "name": "appImage",
+        "type": "string",
+        "label": "应用图片",
+        "default": "assets/app.png"
+      },
+      {
+        "name": "workbookImage",
+        "type": "string",
+        "label": "加购图片",
+        "default": "assets/workbook.png"
+      },
+      {
+        "name": "logoImage",
+        "type": "string",
+        "label": "品牌字图片",
+        "default": "assets/logo.png"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Make a 15-second creator-commerce promo for {{brand}}. On white, a curly-haired halftone boy whispers “psst…” while {{hookLine}} appears above {{hookPrefix}} and the blue italic {{hookWord}}; the dot expands into blue. Three tall white cards stagger beside the boy: {{course}} at {{coursePrice}} with {{courseImage}}, {{ebook}} at {{ebookPrice}} with {{ebookImage}}, and {{app}} at {{appPrice}} with {{appImage}}. Sweep back to white: {{brand}} {{storePrefix}} / {{storeLine}} / {{storeEnd}} {{storeAccent}} appears at left; a black-framed phone at right fills a blue {{storeName}} page with {{courseTitle}}, {{ebookTitle}}, and {{appTitle}}. A pointer clicks Get it now and the camera pushes through Apple Pay. Pull out into a checkout grid: a card number types in, a ${{monthly}} monthly subscription fills its month markers, {{workbookTitle}} appears with {{workbookImage}}, taxes are checked, payouts count up, Paid lands, and a blue outlined {{handled}} stamp covers the board. On black, the boy keeps performing beside {{flowYou}} {{flowCreate}} and {{flowWe}} {{flowWord}}, mixing large sans lettering with italic accents. A circular wipe returns to white; {{logoImage}} builds the {{brand}} wordmark, the boy peeks above it, {{tagline}} {{tagAccent}} appears, then {{cta}}, {{domain}}, and {{footer}} close the film. Use {{primary}} for blue accents, {{headingFont}} for headings and {{bodyFont}} for running text.",
+        "zh-CN": "为 {{brand}} 制作约 15 秒的创作者商品宣传片。白底上，卷发网点男孩以“psst…”气泡开场，依次出现 {{hookLine}}、{{hookPrefix}} 与蓝色斜体 {{hookWord}}，问号圆点扩张成蓝底。男孩旁三张白色长卡错峰弹入，分别为 {{course}}、{{coursePrice}}、图片 {{courseImage}}；{{ebook}}、{{ebookPrice}}、图片 {{ebookImage}}；{{app}}、{{appPrice}}、图片 {{appImage}}。画面扫回白底，左侧显示 {{brand}} {{storePrefix}}、{{storeLine}}、{{storeEnd}} {{storeAccent}}，右侧黑框手机填入蓝色 {{storeName}} 页面及 {{courseTitle}}、{{ebookTitle}}、{{appTitle}} 三项商品。光标点击 Get it now，镜头推进 Apple Pay，再拉远展开结账网格：输入卡号，${{monthly}} 月费和月份节点逐个点亮，带 {{workbookImage}} 的 {{workbookTitle}} 加购卡出现，税项打勾，到账数字上涨，按钮变为 Paid，蓝框斜体 {{handled}} 大印章落下。黑底上男孩继续眨眼、点头，旁边大字先显示 {{flowYou}} {{flowCreate}}，再显示 {{flowWe}} {{flowWord}}，无衬线与斜体穿插。圆形白色擦除后，用 {{logoImage}} 组成 {{brand}} 品牌字，男孩从上方探头，依次显示 {{tagline}} {{tagAccent}}、{{cta}}、{{domain}} 及 {{footer}}。蓝色强调使用 {{primary}}，标题使用 {{headingFont}}，正文使用 {{bodyFont}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Pocketsflow Creator Store"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "title": "团队上传的参考视频",
+      "url": "reference.mp4",
+      "author": "团队成员，未提供姓名",
+      "note": "内部 ODEval 复刻；未提供公开来源链接。"
+    }
+  ]
+}
