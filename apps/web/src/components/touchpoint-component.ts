@@ -566,7 +566,7 @@ export function resolveWebTouchpointLocale(
 ): string | undefined {
 	const normalized = requestedLocale.replace(/_/g, "-");
 	const baseLanguage = normalized.split("-")[0] ?? normalized;
-	const candidates = [normalized, baseLanguage, "en-US"];
+	const candidates = [normalized, baseLanguage, "en", "en-US"];
 	return candidates.find((candidate) => placementLocales.includes(candidate));
 }
 
@@ -665,35 +665,7 @@ function composedActiveElement(): Element | null {
 	return active;
 }
 
-const modalScrollLocks = new WeakMap<
-	HTMLElement,
-	{ count: number; overflow: string }
->();
-
-/** Keeps a concurrent CMS modal from releasing the host scroll lock owned by another modal. */
-export function lockWebTouchpointModalScroll(
-	body: HTMLElement = document.body,
-): () => void {
-	const existing = modalScrollLocks.get(body);
-	if (existing) {
-		existing.count += 1;
-	} else {
-		modalScrollLocks.set(body, { count: 1, overflow: body.style.overflow });
-		body.style.overflow = "hidden";
-	}
-	let released = false;
-	return () => {
-		if (released) return;
-		released = true;
-		const lock = modalScrollLocks.get(body);
-		if (!lock) return;
-		lock.count -= 1;
-		if (lock.count === 0) {
-			body.style.overflow = lock.overflow;
-			modalScrollLocks.delete(body);
-		}
-	};
-}
+export { lockWebModalScroll as lockWebTouchpointModalScroll } from "./modal-scroll-lock";
 
 /**
  * Gives a host-owned modal its initial focus in composed-tree order, so the
@@ -706,10 +678,10 @@ export function focusWebTouchpointModal(modal: HTMLElement | null) {
 	// A control can still refuse focus (a style this check cannot see); the
 	// next one is tried, and the container keeps focus inside the modal last.
 	for (const candidate of composedFocusableElements(modal)) {
-		candidate.focus();
+		candidate.focus({ preventScroll: true });
 		if (composedActiveElement() === candidate) return;
 	}
-	modal.focus();
+	modal.focus({ preventScroll: true });
 }
 
 /** Keeps keyboard focus inside a host-owned modal without exposing host DOM to content. */

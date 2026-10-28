@@ -25,6 +25,7 @@ vi.mock("@open-design/host", () => ({
 vi.mock("../../src/providers/registry", () => ({
 	openExternalUrl: openExternalUrlMock,
 }));
+import { UseEverywhereModal } from "../../src/components/UseEverywhereModal";
 import { ProductionCampaignModal } from "../../src/components/ProductionCampaignModal";
 import { internalActionNavigationUrl } from "../../src/components/touchpoint-navigation";
 import { ProductionCampaignBadge } from "../../src/components/ProductionCampaignBadge";
@@ -171,11 +172,42 @@ const modalHostStyles = readFileSync(
 );
 
 describe("ProductionCampaignModal", () => {
-	it("keeps generic modal chrome content-sized without asymmetric host padding", () => {
+	it.each([
+		[false, "campaign-first"], [false, "other-first"],
+		[true, "campaign-first"], [true, "other-first"],
+	] as const)("keeps actual modal hosts locked (other opens first: %s, closes: %s)", async (otherFirst, order) => {
+		(globalThis as CampaignHostGlobal).__openDesignCampaignTestHost = {
+			client: { osLocale: "en-US", type: "desktop" },
+		};
+		vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(decision()), { status: 200 })));
+		const openOther = () => render(<UseEverywhereModal onClose={() => {}} />);
+		let other = otherFirst ? openOther() : undefined;
+		const campaign = render(<ProductionCampaignModal authenticated sessionSubject="interleaved-user" />);
+		try {
+			await screen.findByRole("dialog", { name: "Campaign" });
+			other ??= openOther();
+			const [first, last] = order === "campaign-first" ? [campaign, other] : [other, campaign];
+			first.unmount();
+			expect(document.body.style.overflow).toBe("hidden");
+			expect(document.documentElement.style.overflow).toBe("hidden");
+			last.unmount();
+			expect(document.body.style.overflow).toBe("");
+			expect(document.documentElement.style.overflow).toBe("");
+			expect(document.body.style.position).toBe("");
+		} finally {
+			campaign.unmount();
+			other?.unmount();
+			document.body.style.overflow = "";
+			document.documentElement.style.overflow = "";
+		}
+	});
+
+	it("provides a bounded viewport for generated content without host padding", () => {
 		const modalRule = modalHostStyles.match(/\.modal\s*\{[^}]*\}/)?.[0];
-		expect(modalRule).toContain("max-width: calc(100vw - 32px)");
+		expect(modalRule).toContain("max-width: calc(100vw - 32px - var(--web-modal-scrollbar-width, 0px))");
 		expect(modalRule).toContain("background: transparent");
-		expect(modalRule).not.toMatch(/(?:^|[;{]\s*)width:/);
+		expect(modalRule).toContain("width: 800px");
+		expect(modalRule).toContain("height: 800px");
 		expect(modalRule).not.toMatch(/(?:^|[;{]\s*)padding:/);
 	});
 	it("keeps the opend-touchpoint host background transparent inside the modal (OPEND-3478)", () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useI18n } from "../i18n";
 import { getOpenDesignHost } from "@open-design/host";
 import { openExternalUrl } from "../providers/registry";
@@ -612,7 +612,7 @@ export function ProductionCampaignModal({
 	useEffect(() => {
 		presentedMount?.record();
 	}, [presentedMount]);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!decision || !productionPresented) return;
 		restoreFocus.current =
 			document.activeElement instanceof HTMLElement
@@ -628,7 +628,7 @@ export function ProductionCampaignModal({
 		return () => {
 			document.removeEventListener("keydown", key);
 			releaseScrollLock();
-			restoreFocus.current?.focus();
+			restoreFocus.current?.focus({ preventScroll: true });
 		};
 	}, [closeProductionModal, decision, productionPresented]);
 	useEffect(() => {
@@ -640,7 +640,7 @@ export function ProductionCampaignModal({
 	useEffect(() => {
 		if (!testDecision || testClosed || !authenticated) setTestPresented(false);
 	}, [authenticated, testClosed, testDecision]);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!testDecision || testClosed || !authenticated || !testPresented) return;
 		const previous =
 			document.activeElement instanceof HTMLElement
@@ -656,7 +656,7 @@ export function ProductionCampaignModal({
 		return () => {
 			document.removeEventListener("keydown", onKeyDown);
 			releaseScrollLock();
-			previous?.focus();
+			previous?.focus({ preventScroll: true });
 		};
 	}, [authenticated, testClosed, testDecision, testPresented, closeTestModal]);
 	const onTestVisible = useCallback(

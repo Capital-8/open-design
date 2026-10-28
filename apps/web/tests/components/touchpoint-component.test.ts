@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
 	hasWebTouchpointCloseControl,
+	lockWebTouchpointModalScroll,
+	resolveWebTouchpointLocale,
 	trapWebTouchpointModalFocus,
 	OpenDesignTouchpointElement,
 	verifyWebTouchpoint,
@@ -314,4 +316,121 @@ describe("modal tab traversal", () => {
       modal.remove();
     }
   });
+});
+
+describe("lockWebTouchpointModalScroll", () => {
+	const root = () => document.documentElement;
+
+	afterEach(() => {
+		document.body.style.overflow = "";
+		root().style.overflow = "";
+		vi.restoreAllMocks();
+	});
+
+	it("locks the viewport root, not just the body the fixed backdrop cannot cover", () => {
+		const release = lockWebTouchpointModalScroll();
+		expect(document.body.style.overflow).toBe("hidden");
+		expect(root().style.overflow).toBe("hidden");
+		release();
+		expect(document.body.style.overflow).toBe("");
+		expect(root().style.overflow).toBe("");
+	});
+
+	it("keeps the root locked until every concurrent modal releases, and ignores a double release", () => {
+		const first = lockWebTouchpointModalScroll();
+		const second = lockWebTouchpointModalScroll();
+		expect(root().style.overflow).toBe("hidden");
+		first();
+		first();
+		expect(document.body.style.overflow).toBe("hidden");
+		expect(root().style.overflow).toBe("hidden");
+		second();
+		expect(document.body.style.overflow).toBe("");
+		expect(root().style.overflow).toBe("");
+	});
+
+	it("restores inline overflow the page already had before the modal opened", () => {
+		document.body.style.overflow = "auto";
+		root().style.overflow = "clip";
+		const release = lockWebTouchpointModalScroll();
+		expect(document.body.style.overflow).toBe("hidden");
+		expect(root().style.overflow).toBe("hidden");
+		release();
+		expect(document.body.style.overflow).toBe("auto");
+		expect(root().style.overflow).toBe("clip");
+	});
+
+	it("pins a scrolled background in place and restores only owned styles", () => {
+		const scrolling = document.scrollingElement ?? document.documentElement;
+		scrolling.scrollTop = 17;
+		document.body.style.color = "red";
+		document.body.style.position = "relative";
+		const release = lockWebTouchpointModalScroll();
+		try {
+			expect(document.body.style.position).toBe("fixed");
+			expect(document.body.style.top).toBe("-17px");
+			expect(document.body.hasAttribute("data-web-modal-scroll-lock")).toBe(true);
+			document.body.style.color = "blue";
+		} finally {
+			release();
+		}
+		expect(document.body.style.position).toBe("relative");
+		expect(document.body.style.top).toBe("");
+		expect(document.body.style.color).toBe("blue");
+		expect(document.body.hasAttribute("data-web-modal-scroll-lock")).toBe(false);
+		expect(scrolling.scrollTop).toBe(17);
+		document.body.style.position = "";
+		document.body.style.color = "";
+		scrolling.scrollTop = 0;
+	});
+
+	it("restores independent overflow axes and inline priorities", () => {
+		document.body.style.setProperty("overflow-x", "clip", "important");
+		document.body.style.setProperty("overflow-y", "auto");
+		root().style.setProperty("overflow-x", "hidden");
+		root().style.setProperty("overflow-y", "scroll", "important");
+		const release = lockWebTouchpointModalScroll();
+		release();
+		expect(document.body.style.overflowX).toBe("clip");
+		expect(document.body.style.overflowY).toBe("auto");
+		expect(document.body.style.getPropertyPriority("overflow-x")).toBe("important");
+		expect(root().style.overflowY).toBe("scroll");
+		expect(root().style.getPropertyPriority("overflow-y")).toBe("important");
+	});
+
+	it.each([0, 15])("keeps locked width viewport-relative with a %ipx scrollbar and restores its inline priority", (gutter) => {
+		vi.spyOn(window, "innerWidth", "get").mockReturnValue(1280);
+		vi.spyOn(root(), "clientWidth", "get").mockReturnValue(1280 - gutter);
+		vi.spyOn(document.body, "getBoundingClientRect").mockReturnValue({ width: 1280 - gutter } as DOMRect);
+		document.body.style.setProperty("width", "100%", "important");
+		const first = lockWebTouchpointModalScroll();
+		const second = lockWebTouchpointModalScroll();
+		try {
+			// jsdom checks the CSS contract; the browser reproduction checks layout on resize.
+			expect(document.body.style.width).toBe(`calc(100vw - ${gutter}px)`);
+			expect(document.body.style.getPropertyValue("--web-modal-scrollbar-width")).toBe(`${gutter}px`);
+			first();
+			expect(document.body.style.width).toBe(`calc(100vw - ${gutter}px)`);
+		} finally {
+			first();
+			second();
+		}
+		expect(document.body.style.width).toBe("100%");
+		expect(document.body.style.getPropertyPriority("width")).toBe("important");
+		document.body.style.removeProperty("width");
+	});
+
+	it("leaves no lock behind across repeated open and close cycles", () => {
+		for (let cycle = 0; cycle < 3; cycle += 1) {
+			const release = lockWebTouchpointModalScroll();
+			expect(root().style.overflow).toBe("hidden");
+			release();
+			expect(document.body.style.overflow).toBe("");
+			expect(root().style.overflow).toBe("");
+		}
+	});
+});
+
+it("falls back to generated en material for a different client locale", () => {
+ expect(resolveWebTouchpointLocale("fr-FR", ["en"])).toBe("en");
 });

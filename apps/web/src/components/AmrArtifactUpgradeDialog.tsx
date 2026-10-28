@@ -1,3 +1,4 @@
+import { lockWebModalScroll } from './modal-scroll-lock';
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Dialog, VisuallyHidden } from '@open-design/components';
@@ -96,12 +97,11 @@ export function AmrArtifactUpgradeDialog({
 
     const previouslyFocused =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousBodyOverflow = document.body.style.overflow;
+    const releaseScrollLock = lockWebModalScroll();
     const inertSiblings = Array.from(document.body.children).filter(
       (element) => element !== backdrop && !element.hasAttribute('inert'),
     );
     for (const element of inertSiblings) element.setAttribute('inert', '');
-    document.body.style.overflow = 'hidden';
 
     panel.tabIndex = -1;
     panel.focus({ preventScroll: true });
@@ -137,7 +137,7 @@ export function AmrArtifactUpgradeDialog({
     return () => {
       document.removeEventListener('keydown', handleTab);
       for (const element of inertSiblings) element.removeAttribute('inert');
-      document.body.style.overflow = previousBodyOverflow;
+      releaseScrollLock();
       if (previouslyFocused?.isConnected) previouslyFocused.focus();
     };
   }, [dialogId]);
