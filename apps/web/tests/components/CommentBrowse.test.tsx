@@ -6,7 +6,7 @@ import { CommentAvatarRail, CommentHoverPreview, useCommentHoverPreview } from '
 import type { PreviewComment } from '../../src/types';
 const comment = (i: number): PreviewComment => ({ id: String(i), projectId:'p', conversationId:'c', filePath:'index.html', elementId:'hero', selector:'#hero', label:'Hero', text:'', htmlHint:'', position:{ x:0,y:0,width:10,height:10 }, note:`Note ${i}`, status:'open', authorDisplayName:'Alice', createdAt:i, updatedAt:i });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-function Rail({ count, onExpand = vi.fn(), onOpen = vi.fn(), suppressed = false }: { count: number; onExpand?: () => void; onOpen?: (comment: PreviewComment) => void; suppressed?: boolean }) {
+function Rail({ count, onExpand = vi.fn(), onOpen = vi.fn(), suppressed = false }: { count: number; onExpand?: () => void; onOpen?: (comment: PreviewComment, opener?: HTMLElement) => void; suppressed?: boolean }) {
   const hover = useCommentHoverPreview(suppressed);
   const ref = useRef<HTMLButtonElement>(null);
   return <><CommentAvatarRail comments={Array.from({ length:count }, (_,i)=>comment(i))} activeId={null} unreadIds={new Set(['5'])} toggleRef={ref} hover={hover} label={c=>c.note} moreLabel={n=>`Remaining ${n}`} renderAvatar={()=>'A'} onExpand={onExpand} onOpen={onOpen}/><CommentHoverPreview state={hover} author="Alice" /></>;
@@ -21,7 +21,8 @@ it.each([[0,1,null],[1,2,null],[5,6,null],[6,6,'+1'],[15,6,'+10'],[105,6,'+99']]
 it('H05/H12: only the toggle expands; avatar opens its comment and count is inert', () => {
   const onExpand=vi.fn(), onOpen=vi.fn(); render(<Rail count={15} onExpand={onExpand} onOpen={onOpen}/>);
   fireEvent.click(screen.getByText('+10')); expect(onExpand).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button',{name:'Note 0'})); expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({id:'0'})); expect(onExpand).not.toHaveBeenCalled();
+  const opener = screen.getByRole('button',{name:'Note 0'});
+  fireEvent.click(opener); expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({id:'0'}), opener); expect(onExpand).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:'Show comments'})); expect(onExpand).toHaveBeenCalledOnce();
 });
 it('H11: draft suppresses preview; hover has 200ms leave grace and 100ms fade', () => {
@@ -59,7 +60,7 @@ it('CV14: clicking a pin clears pending entry and old leave timers', () => {
   expect(screen.queryByRole('tooltip')).toBeNull();
   fireEvent.mouseEnter(first); act(()=>vi.advanceTimersByTime(150)); fireEvent.mouseLeave(first);
   fireEvent.click(second); act(()=>vi.advanceTimersByTime(500));
-  expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({id:'1'}));
+  expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({id:'1'}), second);
   expect(screen.queryByRole('tooltip')).toBeNull();
 });
 it('CV27: reduced motion displays and hides directly', () => {

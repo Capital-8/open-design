@@ -121,3 +121,28 @@ Viewer同版本目标不可用，保留既有虚线兜底头像和明确提示�
 ![Viewer位置说明](../assets/opend-4408/eight-gaps-viewer-cv19-same-version-missing-target.png)
 
 ![Viewer关闭后回图钉](../assets/opend-4408/eight-gaps-viewer-cv27-pin-focus-return.png)
+
+## 评论 suite 适配与 CI 接入（2026-10-28）
+
+本轮只改测试、测试夹具、既有 CI 选择和本记录，无产品代码改动，CV05不动。
+
+- `CommentBrowse` 原2条失败断言补上准确 opener 参数，评论ID、数量不可点击和旧hover计时器断言全部保留；11/11通过。
+- 新 `e2e/ui/comment-interaction-rules.test.ts` 四个独立P0场景：D05可见160×96图片/native菜单两次Esc；B08真实键盘resizer、长姓名title、省略、日期换行、局部RTL及D06准确回焦；CV04 host/活动iframe的菜单/dialog/handled/input/IME保护；CV19协作版本与真实DOM的reanchored/stale列表→详情。
+- 四场景在fullyParallel=1、2 workers下4/4通过（52.7秒）。CV19使用真实daemon和既有fake Vela hub产生的权威发布状态，不手工伪造DOM定位回包；仍不是生产Vela/真实账号验收。先前CV19详情实屏缺口在这个受控协作场景中补齐。
+- B08精确验证外层面板240px，内部dock=外层宽度−边框（当前239px）；这是shell.css既有1px边框模型，不用宽松误差范围。姓名/日期只是受控展示元数据，不代表真实身份同步。
+- 客户端新文件注册到现有project-workspace P0 group，原app与多客户端套件保留；相关拓扑2项通过。新夹具显式success标记保留失败证据，使用parent watchdog并清理本次进程。
+- Viewer固定蓝色预期改为明确作者key的颜色契约，CSP/28px/热点/恢复/安全断言保留；非空草稿单测只改名称，401=true保护保留。
+- Viewer现有Share CI步骤保留原3文件，再加入cursor、stage1-input/draft、stage2-geometry、stage3-hover-text、eight-gaps、input-lock共7文件。同CI文件集合、默认workers合跑38/38（27.6秒），unit2/2通过。工作流解析与10个唯一文件存在检查通过。
+- 客户端根guard/typecheck及最终独立e2e typecheck通过；Vela根lint（含workspace typecheck）通过。没有跑全量本地测试，没有删除或弱化发布/同步/权限/精确一次请求等断言。
+
+设计对比沿用B08/D05/D06原始状态及Viewer原有皮肤。以下为实际产品截图：正文、画布和合成身份与原稿不同，仅核验评论组件结构/交互；不宣称像素全等。行为截图不自动成为视觉快照基线。
+
+![可见图片及Esc后保留](../assets/opend-4408/suite-D05-first-escape.png)
+
+![实际240px面板与日期换行](../assets/opend-4408/suite-B08-narrow-mixed-list.png)
+
+![协作旧版本详情](../assets/opend-4408/suite-CV19-reanchored-detail.png)
+
+![协作锚点变化详情](../assets/opend-4408/suite-CV19-stale-detail.png)
+
+另保留首轮聊天展开导致预览工具栏被隐藏时的回焦失败证据，标准设计布局通过不能覆盖这个额外窄布局边界；本轮未扩展产品修复。远端CI以新提交SHA单独检查；未合并、未部署。
