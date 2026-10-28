@@ -85,6 +85,20 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
     await expect(b.getByText(syncHint, { exact: true }).first()).toBeVisible();
     await expect(composer).toHaveAttribute('contenteditable', 'false');
     await expect(send).toBeDisabled();
+    // The sync gate must look like the app's existing disabled controls,
+    // rather than retaining the bright idle send mark.
+    const disabledAppearance = await b.evaluate(() => {
+      const reference = document.createElement('button');
+      reference.disabled = true;
+      document.body.appendChild(reference);
+      try {
+        const style = getComputedStyle(reference);
+        return { background: style.backgroundColor, color: style.color, cursor: style.cursor };
+      } finally { reference.remove(); }
+    });
+    await expect(send).toHaveCSS('background-color', disabledAppearance.background);
+    await expect(send).toHaveCSS('color', disabledAppearance.color);
+    await expect(send).toHaveCSS('cursor', disabledAppearance.cursor);
     await b.screenshot({ path: testInfo.outputPath('initial-project-sync-hint.png'), animations: 'disabled' });
     await testInfo.attach('Product-confirmed first-open synchronization hint', { path: testInfo.outputPath('initial-project-sync-hint.png'), contentType: 'image/png' });
     holdInitialPull = false;
@@ -101,6 +115,7 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
     const draft = 'Keep this draft while the cloud version replaces the files';
     await composer.fill(draft);
     await expect(send).toBeEnabled();
+    await expect(send).not.toHaveCSS('background-color', disabledAppearance.background);
     const runs: string[] = [];
     b.on('request', request => {
       if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs') runs.push(request.url());
@@ -135,6 +150,8 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
     await expect(composer).toHaveAttribute('contenteditable', 'false');
     await expect(composer).toHaveAttribute('aria-placeholder', syncHint);
     await expect(composer).toHaveText(draft);
+    await expect(send).toHaveCSS('background-color', disabledAppearance.background);
+    await expect(send).toHaveCSS('color', disabledAppearance.color);
     await b.screenshot({ path: testInfo.outputPath('owner-sync-send-blocked.png'), animations: 'disabled' });
     await testInfo.attach('Sync holds send and preserves draft', { path: testInfo.outputPath('owner-sync-send-blocked.png'), contentType: 'image/png' });
     holdPull = false;
@@ -144,6 +161,7 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
     await testInfo.attach('Accepted content head response', { body: JSON.stringify({ status: acceptedResponse.status(), request: acceptedResponse.request().postData(), response: await acceptedResponse.json() }, null, 2), contentType: 'application/json' });
     await expect(send).toBeEnabled({ timeout: T.long });
     await expect(composer).toHaveText(draft);
+    await expect(send).not.toHaveCSS('background-color', disabledAppearance.background);
     const content = await b.request.get(`/api/projects/${id}/raw/index.html`, { headers });
     expect(await content.text()).toContain('Replacement content');
     expect(runs).toEqual([]);
