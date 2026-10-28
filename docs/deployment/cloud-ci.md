@@ -1,7 +1,5 @@
 # Cloud CI/CD
 
-完整上下文、交接分支、EKS/Cloudflare 操作顺序及待补齐事项见[云端部署交接](cloud-handoff.md)。
-
 入口为 `.github/workflows/cloud-release.yml`（Actions → Cloud release → Run workflow）。
 目前仅手动触发，`target` 可选 `web` / `backend` / `resources` / `all`，
 `publish` 默认 `false`。所有组件使用触发运行的同一 Git SHA。

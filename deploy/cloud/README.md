@@ -1,7 +1,5 @@
 # Cloud / renderer 进程守护
 
-接手部署请先阅读[云端部署交接](../../docs/deployment/cloud-handoff.md)，其中记录实际分支、前后端产物、已验证范围与发布缺口。
-
 本目录的 chart 从 POC 仓库 `deploy/chart` 迁入应用 Deployment、Service、探针、Ingress 和 renderer NetworkPolicy，适配主仓库 `apps/cloud` 的两个入口。它只提供可审核的工作负载配置，当前未部署；实际环境参数和发布仍由既有基础设施仓库维护。
 
 本机验证使用独立业务数据库容器，runtime 连接云端，见 [local 配置](local/README.md)。
