@@ -171,7 +171,12 @@ function loadOrAdoptInstallation(installation: Installation, environment: Launch
     // Validate the selected code before changing any migration journals.
     const selected = selectLauncherRuntimeTarget({ runtime, attempted: attempt });
     if (selected.selected && compareLauncherVersions(selected.pointer.version, version) > 0) {
-      resolvePayload(paths, selected.pointer.version, environment);
+      try {
+        resolvePayload(paths, selected.pointer.version, environment);
+      } catch {
+        // Complete adoption so selectApplication can record the failed target
+        // and recover to compatible code without deleting the payload bytes.
+      }
     }
     let lastSuccessful = baselinePointer;
     if (runtime.lastSuccessful != null && compareLauncherVersions(runtime.lastSuccessful.version, version) > 0) {

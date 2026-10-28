@@ -979,8 +979,8 @@ macDescribe('packaged mac runtime smoke', () => {
       }
       expect(headless?.state).toBe('running');
       const pid = headless!.pid;
-      const physical = await execFileAsync('/bin/ps', ['-p', String(pid), '-o', 'comm=']);
-      expectPathInside(physical.stdout.trim(), install.installedAppPath);
+      expect(pid).toBeTypeOf('number');
+      expectPathInside(await readPhysicalExecutablePath(pid!), install.installedAppPath);
       expect(headless?.windowVisible).not.toBe(true);
       await execFileAsync('/usr/bin/open', [install.installedAppPath]);
       let restored: DesktopStatus | null = null;
@@ -2783,6 +2783,12 @@ async function waitForUpdaterPopupMatching(
   throw new Error(`${label}: updater popup timed out: ${formatUnknown(lastResult)}`);
 }
 
+async function readPhysicalExecutablePath(pid: number): Promise<string> {
+  const physical = await execFileAsync('/bin/ps', ['-ww', '-p', String(pid), '-o', 'command=']);
+  // Electron switches follow the executable; preserve spaces in the app path.
+  return physical.stdout.trim().split(' --', 1)[0]!;
+}
+
 async function readDesktopIdentityMarker(): Promise<DesktopIdentityMarker> {
   const status = (await runToolsPackJson<MacInspectResult>('inspect')).status;
   if (typeof status?.executablePath !== 'string' || typeof status.pid !== 'number') {
@@ -2791,8 +2797,8 @@ async function readDesktopIdentityMarker(): Promise<DesktopIdentityMarker> {
   const marker = '/Contents/MacOS/';
   const markerIndex = status.executablePath.indexOf(marker);
   const appPath = markerIndex < 0 ? status.executablePath : status.executablePath.slice(0, markerIndex);
-  const physical = await execFileAsync('/bin/ps', ['-p', String(status.pid), '-o', 'comm=']);
-  return { appPath, executablePath: status.executablePath, physicalExecutablePath: physical.stdout.trim(), pid: status.pid, version: 1 };
+  const physicalExecutablePath = await readPhysicalExecutablePath(status.pid);
+  return { appPath, executablePath: status.executablePath, physicalExecutablePath, pid: status.pid, version: 1 };
 }
 
 function assertPayloadDesktopIdentity(

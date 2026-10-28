@@ -144,3 +144,30 @@ it.each([false, true])("preserves a failed newer generation and compatible fallb
   expect(JSON.parse(await readFile(attemptPath, "utf8"))).toMatchObject(active);
   expect((await boot(f)).running.version).toBe("1.1.0");
 });
+
+it.each(["legacy", "incompatible", "missing"] as const)("recovers from a %s selected payload during adoption without discarding failure evidence", async failure => {
+  for (const compatibleFallback of [false, true]) {
+    const f = await fixture();
+    if (compatibleFallback) await addPayload(f, "1.1.0");
+    const selected = await addPayload(f, "1.2.0", failure === "legacy"
+      ? { host: undefined } : { host: { ...environment, electronVersion: "42.0.0" } });
+    const manifestPath = join(selected.versionRoot, "manifest.json");
+    const manifest = await readFile(manifestPath, "utf8");
+    if (failure === "missing") await rm(selected.versionRoot, { recursive: true });
+    await mkdir(join(f.launcher, "state"), { recursive: true });
+    const active = { version: "1.2.0", generation: 4 };
+    const lastSuccessful = { version: "1.1.0", generation: 3 };
+    await writeFile(join(f.launcher, "runtime.json"), JSON.stringify({ schemaVersion: 1, channel: "stable", namespace: "default", active, lastSuccessful }));
+
+    const host = await boot(f);
+    expect(host.running.version).toBe(compatibleFallback ? "1.1.0" : "1.0.0");
+    expect(host.rolledBackFromVersion).toBe("1.2.0");
+    await host.reportReady();
+    expect(host.snapshot().active).toEqual(active);
+    expect(host.snapshot().lastSuccessful).toEqual(compatibleFallback ? lastSuccessful : { version: "1.0.0", generation: 0 });
+    expect(JSON.parse(await readFile(join(f.launcher, "state", "attempt.json"), "utf8"))).toMatchObject(active);
+    expect(JSON.parse(await readFile(join(f.launcher, "state", "hosted.json"), "utf8"))).toMatchObject({ outerVersion: "1.0.0" });
+    if (failure !== "missing") expect(await readFile(manifestPath, "utf8")).toBe(manifest);
+    expect((await boot(f)).running.version).toBe(host.running.version);
+  }
+});
