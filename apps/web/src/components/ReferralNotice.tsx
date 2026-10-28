@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	referralCountdown,
+	parseReferralSummary,
 	referralNoticeKind,
 	type ReferralSummary,
 	type WorkspaceBillingResponse,
@@ -9,6 +10,7 @@ import {
 import { useI18n } from "../i18n";
 import {
 	amrConsoleUrlForProfile,
+	amrReferralUrlForProfile,
 	AMR_CONSOLE_UPGRADE_INTENT,
 } from "../runtime/amr-guidance";
 import { openExternalUrl } from "../providers/registry";
@@ -54,7 +56,8 @@ export function ReferralNotice({
 					{ cache: "no-store", signal: controller.signal },
 				);
 				if (!response.ok) throw new Error("unavailable");
-				const data = (await response.json()) as ReferralSummary;
+				const data = parseReferralSummary(await response.json());
+				if (!data) throw new Error("invalid summary");
 				if (current && request === generation)
 					setSnapshot({ scopeKey, data, received: Date.now() });
 			} catch {
@@ -103,17 +106,16 @@ export function ReferralNotice({
 		);
 	const kind = referralNoticeKind(data, exhausted, serverNow);
 	const key = `${profile}:${accountId}:${kind}`;
+	const hidden = kind !== "pending" && dismissed.has(key);
 	if (!active || !accountId || !kind) return null;
 	const open = async () => {
 		if (opening) return;
 		setOpening(true);
 		setFailed(false);
 		try {
-			const url = new URL(amrConsoleUrlForProfile(profile));
-			if (kind === "exhausted") {
-				url.pathname = url.pathname.replace(/\/dashboard\/?$/, "/reset");
-				url.searchParams.delete("billing");
-			} else {
+			const url = new URL(kind === "exhausted" ? amrReferralUrlForProfile(profile) : amrConsoleUrlForProfile(profile));
+			url.searchParams.set("source", "open_design");
+			if (kind !== "exhausted") {
 				url.searchParams.set("billing", AMR_CONSOLE_UPGRADE_INTENT);
 			}
 			const accepted = await openExternalUrl(url.toString());
@@ -127,8 +129,8 @@ export function ReferralNotice({
 	return (
 		<div className={styles.slot}>
 			<section
-				className={`${styles.notice} ${dismissed.has(key) ? styles.dismissed : ""}`}
-				aria-hidden={dismissed.has(key) || undefined}
+				className={`${styles.notice} ${hidden ? styles.dismissed : ""}`}
+				aria-hidden={hidden || undefined}
 				aria-label={t("referral.notice.label")}
 				data-testid="referral-notice"
 				data-state={kind}
@@ -160,7 +162,7 @@ export function ReferralNotice({
 						)}
 					</button>
 				) : null}
-				<button
+				{kind !== "pending" ? <button
 					type="button"
 					className={styles.close}
 					aria-label={t("referral.notice.dismiss")}
@@ -181,7 +183,7 @@ export function ReferralNotice({
 					>
 						<path d="m4.5 4.5 7 7m0-7-7 7" />
 					</svg>
-				</button>
+				</button> : null}
 			</section>
 			{failed ? (
 				<p className={styles.error} role="alert">

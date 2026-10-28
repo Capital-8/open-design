@@ -31,7 +31,7 @@ describe("referral summary read boundary", () => {
 		expect(fetch).not.toHaveBeenCalled();
 	});
 	it("uses the selected environment and bearer identity for the one read endpoint", async () => {
-		const summary = { campaignStatus: "active", invitee: null };
+		const summary = { serverTime: new Date().toISOString(), campaignStatus: "active", canShare: false, shareBlockReason: "free", inviteUrl: null, inviterIssuedCount: 0, inviterRewardLimit: 5, inviteeIssuedCount: 0, availableCardCount: 0, invitee: null };
 		const fetch = vi.fn().mockResolvedValue(Response.json(summary));
 		vi.stubGlobal("fetch", fetch);
 		const { response, invoke } = route(async () => ({
@@ -67,4 +67,22 @@ describe("referral summary read boundary", () => {
 			error: "referral_summary_unavailable",
 		});
 	});
+});
+
+
+it('rejects incomplete upstream data instead of inventing an active entry', async () => {
+ vi.stubGlobal('fetch', vi.fn(async () => Response.json({ campaignStatus: 'active' })));
+ const { response, invoke } = route(async () => ({ apiUrl: 'http://localhost:18080', controlKey: 'current' }));
+ await invoke();
+ expect(response.status).toHaveBeenCalledWith(502);
+});
+it('rejects the response when the active account changes during the read', async () => {
+ const summary = { serverTime: new Date().toISOString(), campaignStatus: 'active', canShare: false, shareBlockReason: 'free', inviteUrl: null, inviterIssuedCount: 0, inviterRewardLimit: 5, inviteeIssuedCount: 0, availableCardCount: 0, invitee: null };
+ let current = 'first';
+ vi.stubGlobal('fetch', vi.fn(async () => { current = 'second'; return Response.json(summary); }));
+ const { response, invoke } = route(async () => ({ apiUrl: 'http://localhost:18080', controlKey: current }));
+ await invoke();
+ expect(response.status).toHaveBeenCalledWith(409);
+ expect(response.json).toHaveBeenCalledWith({ error: 'referral_identity_changed' });
+ expect(response.json).not.toHaveBeenCalledWith(summary);
 });

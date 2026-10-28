@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import type { ReferralSummary } from "@open-design/contracts";
+import { parseReferralSummary } from "@open-design/contracts";
 
 export function registerVelaReferralRoutes(
 	app: Express,
@@ -30,7 +30,16 @@ export function registerVelaReferralRoutes(
 					.json({ error: "referral_summary_unavailable" });
 				return;
 			}
-			const summary = (await response.json()) as ReferralSummary;
+			const summary = parseReferralSummary(await response.json());
+			const current = await readContext();
+			if (current?.apiUrl !== context.apiUrl || current?.controlKey !== context.controlKey) {
+				res.status(409).json({ error: "referral_identity_changed" });
+				return;
+			}
+			if (!summary) {
+				res.status(502).json({ error: "referral_summary_unavailable" });
+				return;
+			}
 			res.json(summary);
 		} catch {
 			res.status(502).json({ error: "referral_summary_unavailable" });
