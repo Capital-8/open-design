@@ -1,4 +1,5 @@
 import type { TeamProject } from '@open-design/contracts';
+import { ensurePublicShareProject } from '../src/collab/public-share-project-bootstrap.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as deployPlanner from '../src/deploy.js';
 import express from 'express';
@@ -5510,6 +5511,7 @@ it.each(['update', 'resume'] as const)('reuses the recovered cloud lifetime and 
   const dir = await mkdtemp(path.join(tmpdir(), 'od-recover-lifetime-'));
   tempDirs.push(dir);
   await writeFile(path.join(dir, 'index.html'), '<h1>Recovered file</h1>');
+  const cloudSlug = 'recovered-cloud-alias-22222222';
   const remoteId = '22222222-2222-4222-8222-222222222222';
   const catalog: TeamProject = { projectId: 'p1', ownerMemberId: 'wm-1', sharedAt: '2026-01-01T00:00:00.000Z',
     metadata: { kind: 'prototype', _commentFiles: { schemaVersion: 1, revision: 1, files: [{
@@ -5520,14 +5522,19 @@ it.each(['update', 'resume'] as const)('reuses the recovered cloud lifetime and 
   const fixture = await publicShareFixture({ run: async args => {
     commands.push(args);
     if (args[0] === 'resource') return JSON.stringify({ id: 'v1', version: 1 });
-    if (args[1] === 'resume-existing') return JSON.stringify({ status: 'active', projectId: 'p1', slug: fixtureSlug,
+    if (args[1] === 'resume-existing') return JSON.stringify({ status: 'active', projectId: 'p1', slug: cloudSlug,
       resourceId: resumeResourceId,
       versionId: 'old', version: 1, entryPath: 'index.html', publishedAt: 1234 });
     return confirmedShareOutput(args);
   } });
   fixture.readProjectShareState.mockResolvedValue({ projectId: 'p1', bindingExists: true, hasEverShared: true,
-    publications: [{ sourceFilePath: 'index.html', sourceFileId: remoteId, slug: fixtureSlug, status: operation === 'resume' ? 'stopped' : 'active' }] });
-  const ensureProject = vi.fn(async () => catalog);
+    publications: [{ sourceFilePath: 'index.html', sourceFileId: remoteId, slug: cloudSlug, status: operation === 'resume' ? 'stopped' : 'active' }] });
+  const ensureProject = vi.fn(async (scope: import('../src/collab/public-file-publication-store.js').PublicFilePublicationScope, principal: import('../src/collab/resource-principal.js').ResourceHubPrincipal) =>
+    ensurePublicShareProject({ projectId: scope.projectId, principal,
+      describeProject: () => ({ metadata: { kind: 'prototype' } }),
+      run: async () => JSON.stringify({ projectId: scope.projectId, workspaceId: principal.teamId,
+        ownerMemberId: principal.memberId, resourceId: 'root', visibility: 'private', createdAt: catalog.sharedAt }),
+    }));
   const lookup = vi.fn(async () => catalog);
   const publisher = { ...fixture.sharePublishing, needsCatalogSourceIdentity: () => true, ensureProject,
     prepare: async (scope: import('../src/collab/public-file-publication-store.js').PublicFilePublicationScope, slug: string) => {
@@ -5541,14 +5548,59 @@ it.each(['update', 'resume'] as const)('reuses the recovered cloud lifetime and 
   const response = await api.json('/api/projects/p1/files/index.html/publish-public', { method: 'POST',
     ...(operation === 'resume' ? { body: { mode: 'resume' } } : {}) });
   expect(response.status, JSON.stringify({ body: response.body, commands })).toBe(200);
-  expect(response.body.receipt.slug).toBe(fixtureSlug);
+  expect(response.body.receipt.slug).toBe(cloudSlug);
   expect(fixture.readProjectShareState).toHaveBeenLastCalledWith(expect.objectContaining({ sourceFileId: remoteId }));
   if (operation === 'update') {
     expect(ensureProject).toHaveBeenCalledOnce();
-    expect(lookup).not.toHaveBeenCalled();
+    expect(await ensureProject.mock.results[0]?.value).not.toHaveProperty('metadata');
+    expect(lookup).toHaveBeenCalledOnce();
   } else {
     expect(lookup).toHaveBeenCalledOnce();
     expect(commands.some(args => args[0] === 'resource')).toBe(false);
     expect(commands.some(args => args[1] === 'publish')).toBe(false);
   }
+});
+
+it.each(['unavailable', 'missing-project', 'missing-identity', 'different-owner'] as const)('does not reserve or upload when update identity recovery is %s', async reason => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'od-update-recovery-denied-'));
+  tempDirs.push(dir);
+  await writeFile(path.join(dir, 'index.html'), '<h1>Existing share</h1>');
+  const fixture = await publicShareFixture();
+  fixture.readProjectShareState.mockResolvedValue({ projectId: 'p1', bindingExists: true, hasEverShared: true,
+    publications: [{ sourceFilePath: 'index.html', sourceFileId: '22222222-2222-4222-8222-222222222222', slug: 'existing-cloud-alias-22222222', status: 'active' }] });
+  const reserve = vi.spyOn(fixture.sharePublishing.reservations, 'reserve');
+  const restore = vi.spyOn(fixture.sharePublishing.reservations, 'restore');
+  const complete = vi.spyOn(fixture.sharePublishing, 'complete');
+  const resource = vi.mocked(runVelaResourceCommand);
+  const lookup = vi.fn(async () => {
+    if (reason === 'unavailable') throw new Error('catalog unavailable');
+    if (reason === 'missing-project') return null;
+    return { projectId: 'p1', ownerMemberId: reason === 'different-owner' ? 'another-owner' : 'wm-1', sharedAt: '2026-01-01T00:00:00.000Z' };
+  });
+  const api = await startSyncServer(fixedShareContextProvider(true), { ...fixture,
+    resolveProjectDir: () => dir, resolveSharedProject: lookup,
+    sharePublishing: { ...fixture.sharePublishing, needsCatalogSourceIdentity: () => true } });
+  const response = await api.json('/api/projects/p1/files/index.html/publish-public', { method: 'POST' });
+  expect(response.status).toBe(reason === 'different-owner' ? 403 : reason === 'missing-identity' ? 409 : 503);
+  expect(lookup).toHaveBeenCalledOnce();
+  expect(reserve).not.toHaveBeenCalled();
+  expect(restore).not.toHaveBeenCalled();
+  expect(complete).not.toHaveBeenCalled();
+  expect(resource).not.toHaveBeenCalled();
+});
+
+it.each(['known-local', 'first-publish'] as const)('keeps %s publishing independent of catalog recovery', async scenario => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'od-no-recovery-'));
+  tempDirs.push(dir);
+  await writeFile(path.join(dir, 'index.html'), '<h1>Normal publish</h1>');
+  const fixture = await publicShareFixture({ run: async args => args[0] === 'resource'
+    ? JSON.stringify({ id: 'v1', version: 1 }) : confirmedShareOutput(args) });
+  const lookup = vi.fn(async () => { throw new Error('must not add a catalog lookup'); });
+  if (scenario === 'first-publish') fixture.readProjectShareState.mockResolvedValue({ projectId: 'p1', bindingExists: false, hasEverShared: false, publications: [] });
+  const api = await startSyncServer(fixedShareContextProvider(true), { ...fixture,
+    resolveProjectDir: () => dir, resolveSharedProject: lookup,
+    sharePublishing: { ...fixture.sharePublishing, needsCatalogSourceIdentity: () => scenario === 'first-publish' } });
+  const response = await api.json('/api/projects/p1/files/index.html/publish-public', { method: 'POST' });
+  expect(response.status).toBe(200);
+  expect(lookup).not.toHaveBeenCalled();
 });

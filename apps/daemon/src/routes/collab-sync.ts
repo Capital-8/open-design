@@ -1,3 +1,4 @@
+import { parseCommentFileState } from '../collab/comment-file-facts.js';
 import { createHash } from 'node:crypto';
 import { fingerprintSharePayload } from '../collab/share-content-fingerprint.js';
 import { resolveOptionalLocalWorkspaceRequestAuthority } from '../collab/workspace-resource-mutation.js';
@@ -1525,8 +1526,6 @@ export function registerCollabSyncRoutes(
       sharedProject = await publisher.ensureProject(scope, principal, prepared.run);
       if (sharedProject.projectId !== projectId || sharedProject.ownerMemberId !== principal.memberId)
         return res.status(403).json({error:'WORKSPACE_PROJECT_PUBLISH_DENIED'});
-      if (publisher.needsCatalogSourceIdentity?.(scope) && publisher.sourceFileId)
-        scope.sourceFileId = publisher.sourceFileId(scope, sharedProject);
     } catch (error) {
       const failure = classifyVelaCommandFailure('push', error);
       return res.status(failure.upstreamStatus ?? 502).json({ error: 'PUBLIC_SHARE_PREPARATION_UNAVAILABLE', failure });
@@ -1538,6 +1537,9 @@ export function registerCollabSyncRoutes(
     if (!previousState || previousState.projectId !== projectId) {
       return res.status(503).json({ error: 'SHARE_STATE_UNAVAILABLE' });
     }
+    const recovered = await sourceIdentityForHistory(scope, previousState, verifiedContext, principal);
+    if (!recovered.ok) return res.status(recovered.status).json({ error: recovered.error });
+    if (recovered.sourceFileId) scope.sourceFileId = recovered.sourceFileId;
     let reservation: ReturnType<typeof publisher.reservations.reserve>;
     try {
       reservation = reserveFileShareAlias({ scope, history: previousState, reservations: publisher.reservations,
@@ -1743,11 +1745,16 @@ export function registerCollabSyncRoutes(
     if (publisher?.needsCatalogSourceIdentity?.(scope)
       && history.publications.some(item => item.sourceFilePath === scope.filePath && item.sourceFileId)) {
       const resolved = await resolveSharedProjectForPublicFile(resolveSharedProject, scope.projectId, context, principal);
-      if (!resolved.ok) return { ok: false, status: 503, error: 'WORKSPACE_PROJECT_OWNERSHIP_UNAVAILABLE' } as const;
+      if (!resolved.ok || !resolved.project) return { ok: false, status: 503, error: 'WORKSPACE_PROJECT_OWNERSHIP_UNAVAILABLE' } as const;
       if (resolved.project && (resolved.project.projectId !== scope.projectId || resolved.project.ownerMemberId !== principal.memberId))
         return { ok: false, status: 403, error: 'WORKSPACE_PROJECT_PUBLISH_DENIED' } as const;
+      const fact = parseCommentFileState(resolved.project.metadata?._commentFiles)?.files
+        .find(item => !item.retired && item.sourceFilePath === scope.filePath);
+      if (!fact) return { ok: false, status: 409, error: 'SHARE_FILE_IDENTITY_UNAVAILABLE' } as const;
       sourceFileId = publisher.sourceFileId?.(scope, resolved.project);
-      recoveredFromCatalog = resolved.project !== null;
+      if (sourceFileId !== fact.sourceFileId)
+        return { ok: false, status: 409, error: 'SHARE_FILE_IDENTITY_UNAVAILABLE' } as const;
+      recoveredFromCatalog = true;
     } else {
       sourceFileId ??= publisher?.sourceFileId?.(scope, null);
     }
