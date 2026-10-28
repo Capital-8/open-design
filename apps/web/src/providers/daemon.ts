@@ -2197,6 +2197,7 @@ async function consumeDaemonPhysicalRun({
 
           if (event.event === 'start') {
             const data = event.data as ChatSseStartPayload;
+            if (data.strategyTask) onStrategyTaskSettled?.(data.strategyTask);
             onRunStatus?.('running');
             handlers.onAgentEvent({
               kind: 'status',
