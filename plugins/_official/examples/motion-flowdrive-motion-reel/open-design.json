@@ -1,0 +1,129 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-flowdrive-motion-reel",
+  "title": "Flowdrive Motion Reel",
+  "title_i18n": {
+    "en": "Flowdrive Motion Reel",
+    "zh-CN": "Flowdrive 动效展示"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "Flowdrive 的文件上传、流播、全球交付与 Webflow 托管宣传片。",
+  "description_i18n": {
+    "en": "A Flowdrive showcase of uploads, streaming, global delivery and Webflow hosting.",
+    "zh-CN": "Flowdrive 的文件上传、流播、全球交付与 Webflow 托管宣传片。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "hosting",
+    "particles",
+    "product"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌",
+        "default": "Flowdrive"
+      },
+      {
+        "name": "tagline",
+        "type": "string",
+        "label": "标语",
+        "default": "The easiest way to host videos and files on Webflow."
+      },
+      {
+        "name": "domain",
+        "type": "string",
+        "label": "域名",
+        "default": "youragency"
+      },
+      {
+        "name": "headerImage",
+        "type": "string",
+        "label": "演示页头",
+        "default": "assets/showcase-header.png"
+      },
+      {
+        "name": "timelineImage",
+        "type": "string",
+        "label": "时间线面板",
+        "default": "assets/timeline-panel.png"
+      },
+      {
+        "name": "logoImage",
+        "type": "string",
+        "label": "品牌图标",
+        "default": "assets/flowdrive-logo.png"
+      },
+      {
+        "name": "siteImage",
+        "type": "string",
+        "label": "产品网页",
+        "default": "assets/agency-site.png"
+      },
+      {
+        "name": "footerImage",
+        "type": "string",
+        "label": "页脚",
+        "default": "assets/footer.png"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a hosting promo for {{brand}} with {{tagline}} and domain {{domain}}. Use {{headerImage}}, {{timelineImage}}, {{logoImage}}, {{siteImage}} and {{footerImage}} as the showcase assets.",
+        "zh-CN": "为 {{brand}} 制作托管宣传片，使用标语 {{tagline}}、域名 {{domain}}，展示素材为 {{headerImage}}、{{timelineImage}}、{{logoImage}}、{{siteImage}}、{{footerImage}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Flowdrive Motion Reel"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@beamnxw",
+      "url": "https://x.com/beamnxw/status/2110039251681218763"
+    }
+  ]
+}
