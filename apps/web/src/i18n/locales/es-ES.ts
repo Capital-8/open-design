@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const esES: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Faltan algunos archivos subidos o no han superado las comprobaciones de integridad. Inténtalo de nuevo.",
+  "fileViewer.publishFileConflict": "El estado de publicación o subida ha cambiado. Actualiza el panel de uso compartido e inténtalo de nuevo.",
+  "fileViewer.publishFileWorkspaceLocked": "Este espacio de trabajo está bloqueado. Restablece el acceso antes de publicar.",
 
   "collab.contentUpdate.available": "Nueva versión en la nube",
   "collab.contentUpdate.updating": "Actualizando…",
@@ -3358,7 +3358,7 @@ export const esES: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'Publicar un enlace público requiere un espacio de trabajo de equipo. Cambia a un espacio de equipo o usa Desplegar para publicar este archivo.',
   'fileViewer.publishFileRequiresWorkspace': 'Un enlace para compartir requiere un espacio de trabajo con sesión iniciada. Inicia sesión en OpenDesign Cloud o comparte este archivo mediante un despliegue.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "El contenido supera el límite de uso compartido del servidor. Reduce el tamaño de los archivos e inténtalo de nuevo.",
   'fileViewer.publishFileEntryIndexConflict': "«{from}» hace referencia al index.html de la raíz del proyecto, que entra en conflicto con el lugar donde se publica la página compartida. Cambia el nombre de ese index.html (por ejemplo, a {name}) y actualiza la referencia, o comparte el propio index.html.",
   'fileViewer.copyFixForAgent': "Copiar corrección para el agente",
   'fileViewer.copyFixForAgentFailed': "No se pudo copiar. Selecciona la instrucción de abajo y cópiala manualmente.",
@@ -4248,6 +4248,9 @@ export const esES: Dict = {
   'notify.failureTitle': 'La tarea falló',
   'notify.successBody': 'Un turno ha terminado.',
   'notify.failureBody': 'La tarea terminó con un error.',
+  'notify.needsReplyBody': "Necesita tu respuesta",
+  'notify.runFailedBody': "Ejecución fallida",
+  'notify.newReplyBody': "Nueva respuesta",
   'updater.available': 'Actualización disponible',
   'updater.activeRunsTitle': 'OpenDesign sigue trabajando',
   'updater.activeRunsBody': 'Aún hay {count} tareas activas. Reiniciar ahora las interrumpirá.',
@@ -5483,6 +5486,10 @@ export const esES: Dict = {
   'chat.record.thinkingTokens': "{count} tokens",
   'chat.record.thoughts': "Razonamiento",
   'chat.record.done': "Hecho",
+  'chat.record.turnElapsed': "Duración",
+  'chat.record.elapsedSeconds': "{n}s",
+  'chat.record.elapsedMinutes': "{m}m {s}s",
+  'chat.record.turnStopped': "Detenido",
   'chat.record.failedTurn': "Ejecución fallida",
   'chat.record.plan': "Plan · {count} pasos",
   'chat.record.planStep': "Paso {current} de {total}",

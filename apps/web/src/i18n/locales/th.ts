@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const th: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "ไฟล์ที่อัปโหลดบางไฟล์หายไปหรือไม่ผ่านการตรวจสอบความสมบูรณ์ โปรดลองอีกครั้ง",
+  "fileViewer.publishFileConflict": "สถานะการเผยแพร่หรือการอัปโหลดเปลี่ยนไป โปรดรีเฟรชแผงการแชร์แล้วลองอีกครั้ง",
+  "fileViewer.publishFileWorkspaceLocked": "พื้นที่ทำงานนี้ถูกล็อก โปรดกู้คืนสิทธิ์เข้าถึงก่อนเผยแพร่",
 
   "collab.contentUpdate.available": "มีเวอร์ชันใหม่บนคลาวด์",
   "collab.contentUpdate.updating": "กำลังอัปเดต…",
@@ -3347,7 +3347,7 @@ export const th: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'การเผยแพร่ลิงก์สาธารณะต้องใช้พื้นที่ทำงานแบบทีม สลับไปยังพื้นที่ทำงานแบบทีม หรือใช้ Deploy เพื่อเผยแพร่ไฟล์นี้',
   'fileViewer.publishFileRequiresWorkspace': 'การสร้างลิงก์แชร์ต้องเข้าสู่ระบบเวิร์กสเปซ เข้าสู่ระบบ OpenDesign Cloud หรือแชร์ไฟล์นี้ผ่านการดีพลอย',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "เนื้อหาเกินขีดจำกัดการแชร์ของเซิร์ฟเวอร์ โปรดลดขนาดไฟล์แล้วลองอีกครั้ง",
   'fileViewer.publishFileEntryIndexConflict': "“{from}” อ้างอิงไฟล์ index.html ที่รูทของโปรเจกต์ ซึ่งชนกับตำแหน่งที่หน้าแชร์ถูกเผยแพร่ โปรดเปลี่ยนชื่อ index.html นั้น (เช่น เป็น {name}) แล้วอัปเดตการอ้างอิง หรือแชร์ index.html โดยตรง",
   'fileViewer.copyFixForAgent': "คัดลอกวิธีแก้ให้เอเจนต์",
   'fileViewer.copyFixForAgentFailed': "คัดลอกไม่สำเร็จ โปรดเลือกคำสั่งด้านล่างแล้วคัดลอกด้วยตนเอง",
@@ -4299,6 +4299,9 @@ export const th: Dict = {
   'notify.failureTitle': 'ข้อมูลการงานล้มเหลว',
   'notify.successBody': 'แชทตอบบทสนทนาเรียบร้อย',
   'notify.failureBody': 'หน้าที่ทำผิดพลาด',
+  'notify.needsReplyBody': "รอคำตอบจากคุณ",
+  'notify.runFailedBody': "รันไม่สำเร็จ",
+  'notify.newReplyBody': "มีคำตอบใหม่",
   'updater.available': 'มีอัปเดตใหม่',
   'updater.activeRunsTitle': 'OpenDesign ยังทำงานอยู่',
   'updater.activeRunsBody': 'ยังมีงานที่กำลังทำอยู่ {count} งาน การรีสตาร์ตตอนนี้จะหยุดงานเหล่านั้น',
@@ -5472,6 +5475,10 @@ export const th: Dict = {
   'chat.record.thinkingTokens': "{count} โทเคน",
   'chat.record.thoughts': "กระบวนการคิด",
   'chat.record.done': "เสร็จแล้ว",
+  'chat.record.turnElapsed': "ใช้เวลา",
+  'chat.record.elapsedSeconds': "{n}s",
+  'chat.record.elapsedMinutes': "{m}m {s}s",
+  'chat.record.turnStopped': "หยุดแล้ว",
   'chat.record.failedTurn': "รันไม่สำเร็จ",
   'chat.record.plan': "แผน · {count} ขั้น",
   'chat.record.planStep': "ขั้นตอนที่ {current} จาก {total}",

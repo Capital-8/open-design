@@ -2143,9 +2143,12 @@ export async function unpublishProjectFilePublic(
         : typeof payload?.error === 'string'
           ? payload.error
           : payload?.message;
-    throw withDaemonFailure(new Error(errorMessage || `Unpublish failed (${resp.status})`), {
+    const rawCode = typeof payload?.error === 'object' ? payload.error.code : payload?.error;
+    const code = typeof rawCode === 'string' ? rawCode : undefined;
+    // An HTTP refusal is distinct from fetch rejecting without any response.
+    throw withDaemonFailure(new PublicFilePublishError(errorMessage || `Unpublish failed (${resp.status})`, resp.status, code), {
       failure: payload?.failure,
-      daemonErrorCode: typeof payload?.error === 'object' ? payload.error.code : payload?.error,
+      daemonErrorCode: rawCode,
     });
   }
   return (await resp.json()) as ShareUnpublishResponse;

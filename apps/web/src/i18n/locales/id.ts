@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const id: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Beberapa file yang diunggah hilang atau gagal dalam pemeriksaan integritas. Coba lagi.",
+  "fileViewer.publishFileConflict": "Status publikasi atau unggahan telah berubah. Segarkan panel berbagi dan coba lagi.",
+  "fileViewer.publishFileWorkspaceLocked": "Ruang kerja ini terkunci. Pulihkan akses ruang kerja sebelum menerbitkan.",
 
   "collab.contentUpdate.available": "Versi cloud baru tersedia",
   "collab.contentUpdate.updating": "Memperbarui…",
@@ -3347,7 +3347,7 @@ export const id: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'Menerbitkan tautan publik memerlukan ruang kerja tim. Beralihlah ke ruang kerja tim, atau gunakan Deploy untuk menerbitkan berkas ini.',
   'fileViewer.publishFileRequiresWorkspace': 'Tautan berbagi memerlukan workspace yang masuk. Masuk ke OpenDesign Cloud atau bagikan file ini lewat deploy.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "Konten melebihi batas berbagi server. Kurangi ukuran file dan coba lagi.",
   'fileViewer.publishFileEntryIndexConflict': "“{from}” merujuk ke index.html di root proyek, yang bertabrakan dengan lokasi halaman yang dibagikan dipublikasikan. Ganti nama index.html tersebut (misalnya menjadi {name}) dan perbarui rujukannya, atau bagikan index.html itu sendiri.",
   'fileViewer.copyFixForAgent': "Salin perbaikan untuk agen",
   'fileViewer.copyFixForAgentFailed': "Gagal menyalin. Pilih instruksi di bawah dan salin secara manual.",
@@ -4299,6 +4299,9 @@ export const id: Dict = {
   'notify.failureTitle': 'Pembuatan gagal',
   'notify.successBody': 'Artifact siap dilihat.',
   'notify.failureBody': 'Cek chat untuk detail error.',
+  'notify.needsReplyBody': "Perlu balasanmu",
+  'notify.runFailedBody': "Gagal dijalankan",
+  'notify.newReplyBody': "Balasan baru",
   'updater.available': 'Update tersedia',
   'updater.activeRunsTitle': 'OpenDesign masih bekerja',
   'updater.activeRunsBody': '{count} tugas aktif masih berjalan. Memulai ulang sekarang akan menghentikannya.',
@@ -5472,6 +5475,10 @@ export const id: Dict = {
   'chat.record.thinkingTokens': "{count} token",
   'chat.record.thoughts': "Proses berpikir",
   'chat.record.done': "Selesai",
+  'chat.record.turnElapsed': "Durasi",
+  'chat.record.elapsedSeconds': "{n}s",
+  'chat.record.elapsedMinutes': "{m}m {s}s",
+  'chat.record.turnStopped': "Dihentikan",
   'chat.record.failedTurn': "Gagal dijalankan",
   'chat.record.plan': "Rencana · {count} langkah",
   'chat.record.planStep': "Langkah {current} dari {total}",

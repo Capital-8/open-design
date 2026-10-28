@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const ja: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "アップロードした一部のファイルが見つからないか、整合性チェックに失敗しました。再試行してください。",
+  "fileViewer.publishFileConflict": "公開またはアップロードの状態が変わりました。共有パネルを更新して再試行してください。",
+  "fileViewer.publishFileWorkspaceLocked": "このワークスペースはロックされています。アクセスを復旧してから公開してください。",
 
   "collab.contentUpdate.available": "クラウドに新しいバージョンがあります",
   "collab.contentUpdate.updating": "更新中…",
@@ -3347,7 +3347,7 @@ export const ja: Dict = {
 
   'fileViewer.publishFileRequiresTeam': '公開リンクの発行にはチームワークスペースが必要です。チームワークスペースに切り替えるか、デプロイでこのファイルを公開してください。',
   'fileViewer.publishFileRequiresWorkspace': '共有リンクの作成にはサインイン済みのワークスペースが必要です。OpenDesign Cloud にサインインするか、デプロイでこのファイルを共有してください。',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "コンテンツがサーバーの共有容量の上限を超えています。ファイルサイズを減らして再試行してください。",
   'fileViewer.publishFileEntryIndexConflict': "「{from}」がプロジェクト直下の index.html を参照しており、共有ページの公開先と衝突しています。その index.html の名前を変更し（例: {name}）参照を更新するか、index.html 自体を共有してください。",
   'fileViewer.copyFixForAgent': "エージェント用に修正内容をコピー",
   'fileViewer.copyFixForAgentFailed': "コピーできませんでした。下の指示を選択して手動でコピーしてください。",
@@ -4237,6 +4237,9 @@ export const ja: Dict = {
   'notify.failureTitle': 'タスクが失敗しました',
   'notify.successBody': '1ターンが終了しました。',
   'notify.failureBody': 'タスクはエラーで終了しました。',
+  'notify.needsReplyBody': "返信が必要です",
+  'notify.runFailedBody': "実行失敗",
+  'notify.newReplyBody': "新しい返信があります",
   'updater.available': 'アップデートがあります',
   'updater.activeRunsTitle': 'OpenDesign はまだ作業中です',
   'updater.activeRunsBody': '{count} 件のアクティブなタスクが実行中です。今すぐ再起動すると中断されます。',
@@ -5472,6 +5475,10 @@ export const ja: Dict = {
   'chat.record.thinkingTokens': "{count} トークン",
   'chat.record.thoughts': "思考プロセス",
   'chat.record.done': "完了",
+  'chat.record.turnElapsed': "所要時間",
+  'chat.record.elapsedSeconds': "{n}s",
+  'chat.record.elapsedMinutes': "{m}m {s}s",
+  'chat.record.turnStopped': "停止済み",
   'chat.record.failedTurn': "実行失敗",
   'chat.record.plan': "実行計画 · {count} ステップ",
   'chat.record.planStep': "ステップ {current} / {total}",

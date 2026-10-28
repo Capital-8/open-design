@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const fr: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Certains fichiers importés sont manquants ou ont échoué aux contrôles d’intégrité. Réessayez.",
+  "fileViewer.publishFileConflict": "L’état de publication ou d’importation a changé. Actualisez le panneau de partage et réessayez.",
+  "fileViewer.publishFileWorkspaceLocked": "Cet espace de travail est verrouillé. Rétablissez l’accès avant de publier.",
 
   "collab.contentUpdate.available": "Nouvelle version cloud",
   "collab.contentUpdate.updating": "Mise à jour…",
@@ -3347,7 +3347,7 @@ export const fr: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'La publication d’un lien public nécessite un espace de travail d’équipe. Passez à un espace d’équipe ou utilisez Déployer pour publier ce fichier.',
   'fileViewer.publishFileRequiresWorkspace': 'Un lien de partage nécessite un espace de travail connecté. Connectez-vous à OpenDesign Cloud ou partagez ce fichier via un déploiement.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "Le contenu dépasse la limite de partage du serveur. Réduisez la taille des fichiers et réessayez.",
   'fileViewer.publishFileEntryIndexConflict': "« {from} » référence le fichier index.html à la racine du projet, qui entre en conflit avec l’emplacement de publication de la page partagée. Renommez ce fichier index.html (par exemple en {name}) et mettez à jour la référence, ou partagez index.html lui-même.",
   'fileViewer.copyFixForAgent': "Copier le correctif pour l’agent",
   'fileViewer.copyFixForAgentFailed': "Copie impossible. Sélectionnez l’instruction ci-dessous et copiez-la manuellement.",
@@ -4299,6 +4299,9 @@ export const fr: Dict = {
   'notify.failureTitle': 'Tâche échouée',
   'notify.successBody': 'Un tour est terminé.',
   'notify.failureBody': 'La tâche s\'est terminée avec une erreur.',
+  'notify.needsReplyBody': "Votre réponse est attendue",
+  'notify.runFailedBody': "Exécution échouée",
+  'notify.newReplyBody': "Nouvelle réponse",
   'updater.available': 'Mise à jour disponible',
   'updater.activeRunsTitle': 'OpenDesign travaille encore',
   'updater.activeRunsBody': '{count} tâches actives sont toujours en cours. Redémarrer maintenant les interrompra.',
@@ -5472,6 +5475,10 @@ export const fr: Dict = {
   'chat.record.thinkingTokens': "{count} tokens",
   'chat.record.thoughts': "Raisonnement",
   'chat.record.done': "Terminé",
+  'chat.record.turnElapsed': "Durée",
+  'chat.record.elapsedSeconds': "{n}s",
+  'chat.record.elapsedMinutes': "{m}m {s}s",
+  'chat.record.turnStopped': "Arrêté",
   'chat.record.failedTurn': "Exécution échouée",
   'chat.record.plan': "Plan · {count} étapes",
   'chat.record.planStep': "Étape {current} sur {total}",

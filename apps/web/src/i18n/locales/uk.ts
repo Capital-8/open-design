@@ -1,9 +1,9 @@
 import type { Dict } from '../types';
 
 export const uk: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "Деякі завантажені файли відсутні або не пройшли перевірку цілісності. Спробуйте ще раз.",
+  "fileViewer.publishFileConflict": "Стан публікації або завантаження змінився. Оновіть панель поширення та спробуйте ще раз.",
+  "fileViewer.publishFileWorkspaceLocked": "Цей робочий простір заблоковано. Відновіть доступ перед публікацією.",
 
   "collab.contentUpdate.available": "Нова версія в хмарі",
   "collab.contentUpdate.updating": "Оновлення…",
@@ -3347,7 +3347,7 @@ export const uk: Dict = {
 
   'fileViewer.publishFileRequiresTeam': 'Щоб опублікувати загальнодоступне посилання, потрібен командний робочий простір. Перейдіть до командного простору або скористайтеся «Розгорнути».',
   'fileViewer.publishFileRequiresWorkspace': 'Для посилання потрібен вхід у робочий простір. Увійдіть в OpenDesign Cloud або поділіться файлом через деплой.',
-  'fileViewer.publishFileTooLarge': "Content exceeds the server sharing limit. Reduce the file sizes and retry.",
+  "fileViewer.publishFileTooLarge": "Вміст перевищує ліміт поширення на сервері. Зменште розмір файлів і спробуйте ще раз.",
   'fileViewer.publishFileEntryIndexConflict': "«{from}» посилається на index.html у корені проєкту, який конфліктує з адресою публікації спільної сторінки. Перейменуйте цей index.html (наприклад, на {name}) і оновіть посилання або поширте сам index.html.",
   'fileViewer.copyFixForAgent': "Скопіювати виправлення для агента",
   'fileViewer.copyFixForAgentFailed': "Не вдалося скопіювати. Виділіть інструкцію нижче та скопіюйте її вручну.",
@@ -4189,6 +4189,9 @@ export const uk: Dict = {
   'notify.failureTitle': 'Завдання не вдалося',
   'notify.successBody': 'Черга завершена.',
   'notify.failureBody': 'Завдання завершилось помилкою.',
+  'notify.needsReplyBody': "Потрібна ваша відповідь",
+  'notify.runFailedBody': "Запуск не вдався",
+  'notify.newReplyBody': "Нова відповідь",
   'updater.available': 'Доступне оновлення',
   'updater.activeRunsTitle': 'OpenDesign ще працює',
   'updater.activeRunsBody': 'Ще виконуються активні завдання: {count}. Перезапуск перерве їх.',
@@ -5472,6 +5475,10 @@ export const uk: Dict = {
   'chat.record.thinkingTokens': "{count} токенів",
   'chat.record.thoughts': "Хід думок",
   'chat.record.done': "Готово",
+  'chat.record.turnElapsed': "Тривалість",
+  'chat.record.elapsedSeconds': "{n}s",
+  'chat.record.elapsedMinutes': "{m}m {s}s",
+  'chat.record.turnStopped': "Зупинено",
   'chat.record.failedTurn': "Запуск не вдався",
   'chat.record.plan': "План · {count} кроків",
   'chat.record.planStep': "Крок {current} з {total}",

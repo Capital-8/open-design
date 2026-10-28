@@ -1,9 +1,9 @@
 import type { Dict } from "../types";
 
 export const zhTW: Dict = {
-  'fileViewer.publishFileContentUnavailable': 'Some uploaded files are missing or failed integrity checks. Please retry.',
-  'fileViewer.publishFileConflict': 'The publication or upload state has changed. Refresh the share panel and try again.',
-  'fileViewer.publishFileWorkspaceLocked': 'This workspace is locked. Restore workspace access before publishing.',
+  "fileViewer.publishFileContentUnavailable": "部分已上傳檔案缺失或未通過完整性檢查，請重試。",
+  "fileViewer.publishFileConflict": "發佈或上傳狀態已變更，請重新整理分享面板後重試。",
+  "fileViewer.publishFileWorkspaceLocked": "此工作區已鎖定，請恢復存取權限後再發佈。",
 
   "collab.contentUpdate.available": "雲端有新版本",
   "collab.contentUpdate.updating": "正在更新…",
@@ -2106,7 +2106,7 @@ export const zhTW: Dict = {
   "designs.status.notStarted": "未開始",
   "designs.status.queued": "等待中",
   "designs.status.running": "執行中",
-  "designs.status.awaitingInput": "等待回覆",
+  "designs.status.awaitingInput": "需要你回覆",
   "designs.status.incomplete": "未完成",
   "designs.status.succeeded": "已完成",
   "designs.status.published": "已發佈",
@@ -4477,6 +4477,9 @@ export const zhTW: Dict = {
   "notify.failureTitle": "任務失敗",
   "notify.successBody": "一輪回答已經寫完。",
   "notify.failureBody": "本輪任務出錯，請查看錯誤訊息。",
+  'notify.needsReplyBody': "需要你回覆",
+  'notify.runFailedBody': "執行失敗",
+  'notify.newReplyBody': "有新回覆",
   "updater.available": "有可用更新",
   "updater.activeRunsTitle": "OpenDesign 仍在執行任務",
   "updater.activeRunsBody": "仍有 {count} 個任務正在執行。現在重新啟動會中斷這些任務。",
@@ -5923,6 +5926,10 @@ export const zhTW: Dict = {
   'chat.record.thinkingTokens': "{count} tokens",
   'chat.record.thoughts': "思考過程",
   'chat.record.done': "已完成",
+  'chat.record.turnElapsed': "用時",
+  'chat.record.elapsedSeconds': "{n} 秒",
+  'chat.record.elapsedMinutes': "{m} 分 {s} 秒",
+  'chat.record.turnStopped': "已停止",
   'chat.record.failedTurn': "執行失敗",
   'chat.record.plan': "執行計畫 · {count} 步",
   'chat.record.planStep': "第 {current} / {total} 步",
