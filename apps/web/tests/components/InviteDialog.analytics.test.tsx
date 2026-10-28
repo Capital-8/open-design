@@ -49,10 +49,10 @@ describe('InviteDialog analytics', () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText(/email/i), {
+    fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'private@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /确认并邀请|confirm.*invite/i }));
+    fireEvent.click(screen.getByRole('button', { name: /发送邀请|send invitations|确认并邀请|confirm.*invite/i }));
 
     await waitFor(() => {
       expect(analytics.track).toHaveBeenCalledWith(

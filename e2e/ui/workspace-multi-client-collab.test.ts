@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
 import type { Page, Request, Response } from '@playwright/test';
@@ -753,6 +754,195 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
       body: JSON.stringify({
         commands: hub.commandLog,
         events: hub.eventLog,
+      }, null, 2),
+      contentType: 'application/json',
+    });
+    throw error;
+  } finally {
+    await cluster?.close({ preserve: failed });
+    await hub.close();
+  }
+});
+
+test('[P0] removing a team member transfers their team project and leaves their Personal project intact', async ({
+  browser,
+}, testInfo) => {
+  const hubRoot = testInfo.outputPath('fake-member-removal-hub');
+  await mkdir(hubRoot, { recursive: true });
+  const hub = await startFakeCollabHub({
+    root: hubRoot,
+    workspaceId: WORKSPACE_ID,
+    workspaceName: 'Multi-client team',
+    clients: [OWNER, MEMBER],
+    includePersonalWorkspace: true,
+  });
+  const velaBin = await hub.writeVelaBin(testInfo.outputPath('fake-vela-member-removal'));
+  const commonEnv = {
+    OD_COLLAB_TRANSPORT: 'vela-cli',
+    OD_RESOURCE_TRANSPORT: 'vela-cli',
+    OD_TEAM_PROJECTS_TRANSPORT: 'vela-cli',
+    OD_WORKSPACE_CONTEXT_SOURCE: 'vela',
+    VELA_API_URL: hub.url,
+    VELA_BIN: velaBin,
+  };
+  let cluster: CollabCluster | undefined;
+  let failed = false;
+  try {
+    cluster = await createCollabCluster(browser, testInfo, [
+      { id: 'removal-owner', env: { ...commonEnv, VELA_CONTROL_KEY: OWNER.controlKey } },
+      { id: 'removal-member', env: { ...commonEnv, VELA_CONTROL_KEY: MEMBER.controlKey } },
+    ]);
+    const ownerPage = cluster.clients['removal-owner']!.page;
+    const memberPage = cluster.clients['removal-member']!.page;
+    await Promise.all([applyStandardMocks(ownerPage), applyStandardMocks(memberPage)]);
+
+    const personalWorkspaceId = `personal-${MEMBER.memberId}`;
+    const personalMemberId = `personal-member-${MEMBER.memberId}`;
+    const personalProjectId = randomUUID();
+    const teamProjectId = randomUUID();
+    const personalProjectName = `Private Personal project ${personalProjectId.slice(0, 8)}`;
+    const teamProjectName = `Transferred team project ${teamProjectId.slice(0, 8)}`;
+    const personalActive = await memberPage.request.put('/api/workspace/active', {
+      data: { workspaceId: personalWorkspaceId, workspaceMemberId: personalMemberId },
+      timeout: T.long,
+    });
+    expect(personalActive.ok(), await personalActive.text()).toBe(true);
+    const personalCreated = await memberPage.request.post('/api/projects', {
+      headers: {
+        ...workspaceHeaders(MEMBER),
+        'x-od-workspace-id': personalWorkspaceId,
+        'x-od-workspace-type': 'personal',
+        'x-od-workspace-member-id': personalMemberId,
+        'x-od-workspace-role': 'owner',
+      },
+      data: {
+        id: personalProjectId,
+        name: personalProjectName,
+        skillId: null,
+        designSystemId: null,
+        metadata: { kind: 'prototype', nameSource: 'user' },
+      },
+      timeout: T.long,
+    });
+    expect(personalCreated.ok(), await personalCreated.text()).toBe(true);
+
+    await Promise.all([
+      pinWorkspace(ownerPage, OWNER.memberId),
+      pinWorkspace(memberPage, MEMBER.memberId),
+    ]);
+    const teamCreated = await memberPage.request.post('/api/projects', {
+      headers: workspaceHeaders(MEMBER),
+      data: {
+        id: teamProjectId,
+        name: teamProjectName,
+        skillId: null,
+        designSystemId: null,
+        metadata: { kind: 'prototype', nameSource: 'user' },
+      },
+      timeout: T.long,
+    });
+    expect(teamCreated.ok(), await teamCreated.text()).toBe(true);
+    const teamFile = await memberPage.request.post(`/api/projects/${teamProjectId}/files`, {
+      headers: workspaceHeaders(MEMBER),
+      data: {
+        name: 'index.html',
+        content: '<!doctype html><h1>Transferred team content</h1>',
+        artifactManifest: {
+          version: 1,
+          kind: 'html',
+          title: teamProjectName,
+          entry: 'index.html',
+          renderer: 'html',
+          exports: ['html'],
+        },
+      },
+      timeout: T.long,
+    });
+    expect(teamFile.ok(), await teamFile.text()).toBe(true);
+
+    await memberPage.goto('/projects', { waitUntil: 'domcontentloaded' });
+    await ensureRailOpen(memberPage);
+    await memberPage.getByTestId('entry-nav-drafts').click();
+    await memberPage.getByTestId('recent-projects-collection-personalProjects').click();
+    const memberCard = memberPage.locator(
+      `.recent-projects__card[data-project-id="${teamProjectId}"]`,
+    );
+    await expect(memberCard).toBeVisible({ timeout: T.long });
+    await memberCard.getByRole('button', { name: 'More actions' }).click();
+    await memberCard.getByRole('menuitem', { name: 'Move to team space' }).click();
+    const shareResponse = memberPage.waitForResponse((response) =>
+      response.request().method() === 'POST'
+        && new URL(response.url()).pathname.endsWith(`/projects/${teamProjectId}/move`));
+    await memberPage.getByRole('alertdialog', { name: 'Move to team space' })
+      .getByRole('button', { name: 'Confirm move' }).click();
+    const shared = await shareResponse;
+    expect(shared.ok(), `share ${shared.status()}: ${await shared.text()}`).toBe(true);
+
+    await memberPage.goto(`/projects/${teamProjectId}`, { waitUntil: 'domcontentloaded' });
+    await expect(memberPage.getByTestId('file-workspace')).toBeVisible({ timeout: T.long });
+    await expect.poll(() => hub.eventSubscriberCount(MEMBER.memberId), { timeout: T.long })
+      .toBeGreaterThan(0);
+
+    // The fake AMR performs the durable Team resource transfer and emits the
+    // terminal revoke; Chromium exercises the real OD reaction on both sides.
+    hub.removeMember(MEMBER.memberId);
+    const removalNotice = memberPage.getByRole('alertdialog', {
+      name: /removed from Multi-client team/i,
+    });
+    await expect(removalNotice).toBeVisible({ timeout: T.long });
+    await expect(memberPage.getByTestId('file-workspace')).toHaveCount(0);
+    const revokedTeamCatalog = await memberPage.request.get('/api/workspace/projects/team', {
+      headers: workspaceHeaders(MEMBER),
+    });
+    expect(revokedTeamCatalog.status()).toBe(403);
+
+    await expect.poll(async () => {
+      const response = await ownerPage.request.get('/api/workspace/projects/team', {
+        headers: workspaceHeaders(OWNER),
+      });
+      if (!response.ok()) throw new Error(`owner Team catalog ${response.status()}: ${await response.text()}`);
+      const body = await response.json() as { projects?: Array<{
+        projectId?: string; ownerMemberId?: string;
+      }> };
+      expect(body.projects?.some((project) => project.projectId === personalProjectId)).toBe(false);
+      return body.projects?.find((project) => project.projectId === teamProjectId)?.ownerMemberId;
+    }, { timeout: T.long }).toBe(OWNER.memberId);
+
+    await removalNotice.getByRole('button', { name: 'Confirm' }).click();
+    await expect(removalNotice).toHaveCount(0, { timeout: T.long });
+    await expect.poll(async () => {
+      const response = await memberPage.request.get('/api/workspace/directory');
+      if (!response.ok()) throw new Error(`member directory ${response.status()}: ${await response.text()}`);
+      const body = await response.json() as { activeWorkspaceId?: string | null };
+      return body.activeWorkspaceId;
+    }, { timeout: T.long }).toBe(personalWorkspaceId);
+
+    await memberPage.goto('/projects', { waitUntil: 'domcontentloaded' });
+    await ensureRailOpen(memberPage);
+    await memberPage.getByTestId('entry-nav-drafts').click();
+    await memberPage.getByTestId('recent-projects-collection-personalProjects').click();
+    await expect(memberPage.locator(
+      `.recent-projects__card[data-project-id="${personalProjectId}"]`,
+    )).toBeVisible({ timeout: T.long });
+
+    await ownerPage.goto('/projects', { waitUntil: 'domcontentloaded' });
+    await ensureRailOpen(ownerPage);
+    await openTeamProjectsTab(ownerPage);
+    const ownerCard = ownerPage.locator(
+      `.recent-projects__card[data-project-id="${teamProjectId}"]:visible`,
+    );
+    await expect(ownerCard).toContainText(teamProjectName, { timeout: T.long });
+    await ownerCard.locator('.recent-projects__card-main').click();
+    await expect(ownerPage.frameLocator(PREVIEW_SELECTOR).getByRole('heading', {
+      name: 'Transferred team content',
+    })).toBeVisible({ timeout: T.long });
+  } catch (error) {
+    failed = true;
+    await testInfo.attach('fake-member-removal-hub-log', {
+      body: JSON.stringify({
+        commands: hub.commandLog,
+        events: hub.eventLog,
+        requests: hub.requestLog,
       }, null, 2),
       contentType: 'application/json',
     });
