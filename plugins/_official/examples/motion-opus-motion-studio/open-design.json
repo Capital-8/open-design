@@ -1,0 +1,167 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-opus-motion-studio",
+  "title": "Opus Motion Studio",
+  "title_i18n": {
+    "en": "Opus Motion Studio",
+    "zh-CN": "Opus 动效工作室"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-27T00:00:00Z",
+  "description": "A 15-second Opus 5.5 motion-design studio reel where six live controls reshape spacing, typography, blur, easing, follow-through and anticipation before the final title renders.",
+  "description_i18n": {
+    "en": "A 15-second Opus 5.5 motion-design studio reel where six live controls reshape spacing, typography, blur, easing, follow-through and anticipation before the final title renders.",
+    "zh-CN": "一支 15 秒的 Opus 5.5 动效工作室短片：六个实时控制依次调整间距、排版、动态模糊、缓动、跟随与预备动作，最后渲染完整标题。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "studio",
+    "kinetic-typography",
+    "creative-coding",
+    "remotion",
+    "ui-motion",
+    "education"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": "Top headline",
+        "default": "OPUS 5.5 / YOUR OWN F*CKING"
+      },
+      {
+        "name": "sub",
+        "type": "string",
+        "label": "Orange sub",
+        "default": "MOTION DESIGN STUDIO"
+      },
+      {
+        "name": "line1",
+        "type": "string",
+        "label": "Final line one",
+        "default": "MOTION STUDIO"
+      },
+      {
+        "name": "line2",
+        "type": "string",
+        "label": "Final line two",
+        "default": "RUN BY CLAUDE."
+      },
+      {
+        "name": "prompt",
+        "type": "text",
+        "label": "Prompt line",
+        "default": "turn this reference into six controls. put every value in one config."
+      },
+      {
+        "name": "paper",
+        "type": "string",
+        "label": "Paper colour",
+        "default": "#F4F0EA"
+      },
+      {
+        "name": "ink",
+        "type": "string",
+        "label": "Ink colour",
+        "default": "#171717"
+      },
+      {
+        "name": "accent",
+        "type": "string",
+        "label": "Orange accent",
+        "default": "#D86F50"
+      },
+      {
+        "name": "blue",
+        "type": "string",
+        "label": "Demo blue",
+        "default": "#2F70FF"
+      },
+      {
+        "name": "face",
+        "type": "string",
+        "label": "Brand font",
+        "default": "Archivo Black"
+      },
+      {
+        "name": "head",
+        "type": "string",
+        "label": "Heading font",
+        "default": "Anton"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "label": "Interface font",
+        "default": "IBM Plex Mono"
+      },
+      {
+        "name": "logo1",
+        "type": "file",
+        "label": "Opus badge",
+        "default": "assets/opus-badge.png"
+      },
+      {
+        "name": "logo2",
+        "type": "file",
+        "label": "Remotion badge",
+        "default": "assets/remotion-badge.png"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a motion design studio reel for {{title}} and {{sub}}, closing with {{line1}} and {{line2}}. Use {{prompt}}, {{paper}}, {{ink}}, {{accent}}, {{blue}}, {{face}}, {{head}}, {{body}}, {{logo1}} and {{logo2}}.",
+        "zh-CN": "制作 {{title}} {{sub}} 动效片，结尾 {{line1}} {{line2}}；使用 {{prompt}} {{paper}} {{ink}} {{accent}} {{blue}} {{face}} {{head}} {{body}} {{logo1}} {{logo2}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Opus Motion Studio"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "Source motion by @Asteri_eth",
+      "url": "https://x.com/Asteri_eth/status/2112506017887948960"
+    }
+  ]
+}
