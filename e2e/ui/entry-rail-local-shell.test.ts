@@ -167,8 +167,23 @@ test('[P1] A01 keeps its sign-in footer without the extra local identity and bel
   await expect(page.getByTestId('entry-nav-rail-social')).toBeVisible();
   await expect(page.getByTestId('entry-settings-button')).toBeVisible();
 
+  const card = page.getByTestId('entry-cloud-signin-tip');
+  const social = page.getByTestId('entry-nav-rail-social');
+  async function expectCardAboveSocial() {
+    await expect.poll(async () => {
+      const cardBox = await card.boundingBox();
+      const socialBox = await social.boundingBox();
+      return cardBox !== null && socialBox !== null
+        && cardBox.y + cardBox.height <= socialBox.y;
+    }, { message: 'The sign-in invitation card must precede the social icon row visually' }).toBe(true);
+  }
+  await expectCardAboveSocial();
+
   await page.getByTestId('entry-rail-collapse').click();
   await expect(page.locator('.entry')).not.toHaveClass(/entry--rail-open/);
   await expect(page.getByTestId('entry-nav-local-account')).toHaveCount(0);
   await expect(page.getByTestId('entry-nav-message-center')).toHaveCount(0);
+
+  await ensureRailOpen(page);
+  await expectCardAboveSocial();
 });
