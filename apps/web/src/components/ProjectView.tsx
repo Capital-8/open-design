@@ -2755,6 +2755,8 @@ export function ProjectView({
   const previewCommentsIdentityRef = useRef('');
   const previewCommentsReadSeq = useRef(0);
   const currentCommentsIdentity = `${project.id}\u0000${activeConversationId}\u0000${projectRunAuthorityKey}`;
+  const currentCommentsIdentityRef = useRef(currentCommentsIdentity);
+  currentCommentsIdentityRef.current = currentCommentsIdentity;
   const visiblePreviewComments = previewCommentsIdentityRef.current === currentCommentsIdentity ? previewComments : [];
   const visiblePreviewCommentsState = previewCommentsIdentityRef.current === currentCommentsIdentity ? previewCommentsState : 'loading';
   // Every local comment commit invalidates older in-flight list reads. The
@@ -6445,7 +6447,8 @@ export function ProjectView({
   // do not suppress it.
   const [runPreviewCommentsRead] = useState(createSingleflightRunner);
   const readPreviewCommentsOnce = useCallback(async () => {
-    if (!activeConversationId) return;
+    // A queued trailing read can outlive the project/conversation that queued it.
+    if (!activeConversationId || currentCommentsIdentityRef.current !== currentCommentsIdentity) return;
     const commentsGeneration = ++previewCommentsGenerationRef.current;
     const commentsReadSeq = ++previewCommentsReadSeq.current;
     // Poll/SSE refreshes keep the committed list visible and eligible for
@@ -6453,21 +6456,23 @@ export function ProjectView({
     setPreviewCommentsState(current => current === 'success' ? current : 'loading');
     try {
       const next = await fetchPreviewComments(project.id, activeConversationId, projectRunWorkspaceContext, true);
-      if (previewCommentsReadSeq.current !== commentsReadSeq) return;
+      if (currentCommentsIdentityRef.current !== currentCommentsIdentity
+        || previewCommentsReadSeq.current !== commentsReadSeq) return;
       setPreviewCommentsState('success');
       if (previewCommentsGenerationRef.current !== commentsGeneration) return;
       setPreviewComments((current) => reconcilePreviewComments(current, next));
       setAttachedComments((current) => reconcileAttachedComments(current, next));
     } catch {
-      if (previewCommentsReadSeq.current === commentsReadSeq) setPreviewCommentsState('error');
+      if (currentCommentsIdentityRef.current === currentCommentsIdentity
+        && previewCommentsReadSeq.current === commentsReadSeq) setPreviewCommentsState('error');
     }
-  }, [project.id, activeConversationId, projectRunWorkspaceContext]);
+  }, [project.id, activeConversationId, projectRunWorkspaceContext, currentCommentsIdentity]);
   const refreshPreviewComments = useCallback(
     () => runPreviewCommentsRead(
-      `${project.id}\u0000${activeConversationId ?? ''}`,
+      currentCommentsIdentity,
       readPreviewCommentsOnce,
     ),
-    [runPreviewCommentsRead, project.id, activeConversationId, readPreviewCommentsOnce],
+    [runPreviewCommentsRead, currentCommentsIdentity, readPreviewCommentsOnce],
   );
 
   // Expose the latest refresher to the SSE handler (defined earlier) so a

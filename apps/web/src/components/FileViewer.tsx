@@ -5041,7 +5041,7 @@ export function CommentSidePanel({
         {loadState === 'loading' ? <div role="status">{t('common.loading')}</div> : null}
         {loadState === 'error' ? <div role="alert">
           {t('chat.comments.loadFailed')}
-          {onRetry ? <button type="button" onClick={onRetry}>{t('preview.retry')}</button> : null}
+          {onRetry ? <Button variant="ghost" onClick={onRetry}>{t('preview.retry')}</Button> : null}
         </div> : null}
         {sorted.length === 0 && loadState === 'success' ? (
           <div className="comment-side-empty">

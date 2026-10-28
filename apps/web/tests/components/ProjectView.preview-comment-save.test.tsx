@@ -266,7 +266,11 @@ it('OPEND-3894 retains same-scope rows on failed refresh and accepts a successfu
   fetchPreviewComments.mockImplementationOnce(() => new Promise(resolve => { finishOldRead = resolve; }));
   let oldRead!: Promise<void>;
   act(() => { oldRead = preview().onRetryPreviewComments(); });
-  fetchPreviewComments.mockResolvedValue([{ ...comment, id: 'new-project-comment' }]);
+  // A second trigger queues a trailing read with the old project's closure.
+  act(() => { void preview().onRetryPreviewComments(); });
+  fetchPreviewComments.mockImplementation(async (id) => id === 'other-project'
+    ? [{ ...comment, id: 'new-project-comment' }]
+    : [comment]);
   view.rerender(cloneElement(tree, { project: { ...tree.props.project, id: 'other-project' } }));
   expect(preview().previewComments).toEqual([]);
   await waitFor(() => expect(preview().previewComments).toEqual([{ ...comment, id: 'new-project-comment' }]));
