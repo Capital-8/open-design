@@ -146,3 +146,11 @@ Viewer同版本目标不可用，保留既有虚线兜底头像和明确提示�
 ![协作锚点变化详情](../assets/opend-4408/suite-CV19-stale-detail.png)
 
 另保留首轮聊天展开导致预览工具栏被隐藏时的回焦失败证据，标准设计布局通过不能覆盖这个额外窄布局边界；本轮未扩展产品修复。远端CI以新提交SHA单独检查；未合并、未部署。
+
+### CV05 scoped follow-up: real bounds and clipping (2026-10-28)
+
+The user subsequently authorized only real-element bounds, small targets and canvas-intersection feedback. Target selection priority and region/free-pin fallback remain unchanged. Client single-element clipping already satisfied this geometry rule; the change adds a real iframe browser witness to the existing P0 suite. Vela now clips hover/selected feedback to its viewport while retaining the original element rectangle and fractional anchor in submission. Its bridge runtime revision advances to invalidate old injected variants.
+
+Controlled browser evidence covers a 4×4 target and left/right/top/bottom intersections, hover without creation, and selected feedback. Client `comment-interaction-rules` passes 5/5; client canvas geometry passes 11/11. Viewer `shared-artifact-stage2-geometry` passes 10/10, including five independent CV05 cases that assert the submitted full rectangle and original u/v. Existing suites already route through PR CI; no CI topology or prior assertions were relaxed. Screenshot comparison is local at `.tmp/collab-lanes/evidence/cv05/index.html`; fixtures are controlled product renders, not production data or original design screenshots. Geometry criteria correspond to CV05 and design states F05/F10; existing client/Viewer skins remain intact.
+
+Region protocol audit: Viewer `share:target` strictly requires elementId/selector/htmlHint/rect, with optional u/v; no region discriminator exists. The public create API requires nonempty elementId/selector/htmlHint and optionally accepts position. Storage can carry geometry, but that is not an independent region-anchor contract; subsequent resolution uses the element selector. Client free-pin's synthetic selector is not evidence of a Viewer region workflow. No protocol, service endpoint, storage or region capability was added. No merge or deployment.

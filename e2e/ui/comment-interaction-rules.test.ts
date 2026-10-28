@@ -11,7 +11,7 @@ const LONG_NAME = 'Alexandria Catherine Montgomery-Wellington';
 const NOTE = 'يرجى تحديث Target 42 — 中文反馈';
 test.use({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai', colorScheme: 'light', deviceScaleFactor: 1 });
 
-async function seed(page: Page, controls = false) {
+async function seed(page: Page, controls = false, extraHtml = '') {
   await applyStandardMocks(page);
   await page.clock.setFixedTime(NOW);
   await page.addInitScript(() => {
@@ -22,7 +22,7 @@ async function seed(page: Page, controls = false) {
   const created = await page.request.post('/api/projects', { data: { id, name: '评论交互规则', skillId: null, designSystemId: null, metadata: { kind: 'prototype', nameSource: 'user' } } });
   expect(created.ok(), await created.text()).toBeTruthy();
   const { conversationId } = await created.json() as { conversationId: string };
-  const written = await page.request.post(`/api/projects/${id}/files`, { data: { name: 'index.html', content: '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><body style="margin:0;padding:80px;font-family:system-ui;background:#faf9f6"><h1 data-od-id="hero">让反馈成为下一步行动</h1><p>保留每一条还没处理的建议</p>' + (controls ? '<div role="menu"><button id="frame-menu">Frame menu</button></div><dialog open style="position:static"><button id="frame-dialog">Frame dialog</button></dialog><button id="frame-handled" onkeydown="event.preventDefault()">Frame handled</button><input id="frame-input"><button id="frame-plain">Frame plain</button>' : '') + '</body></html>', artifactManifest: { version: 1, kind: 'html', title: '评论规则', entry: 'index.html', renderer: 'html', exports: ['html'] } } });
+  const written = await page.request.post(`/api/projects/${id}/files`, { data: { name: 'index.html', content: '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><body style="margin:0;padding:80px;font-family:system-ui;background:#faf9f6"><h1 data-od-id="hero">让反馈成为下一步行动</h1><p>保留每一条还没处理的建议</p>' + (controls ? '<div role="menu"><button id="frame-menu">Frame menu</button></div><dialog open style="position:static"><button id="frame-dialog">Frame dialog</button></dialog><button id="frame-handled" onkeydown="event.preventDefault()">Frame handled</button><input id="frame-input"><button id="frame-plain">Frame plain</button>' : '') + extraHtml + '</body></html>', artifactManifest: { version: 1, kind: 'html', title: '评论规则', entry: 'index.html', renderer: 'html', exports: ['html'] } } });
   expect(written.ok(), await written.text()).toBeTruthy();
   return { id, conversationId };
 }
@@ -258,4 +258,49 @@ test('[P0] CV04 host and active preview respect native shortcut guards before ac
     await expect(tool).toHaveAttribute('aria-pressed', 'true');
     await page.screenshot({ path: testInfo.outputPath('CV04-host-frame-controls.png') });
   } finally { await page.evaluate(() => document.getElementById('comment-shortcut-host-controls')?.remove()); }
+});
+
+
+test('[P0] CV05 real small-element bounds and canvas intersections preserve selected geometry', async ({ page }, info) => {
+  const { id } = await seed(page, false, `<style>
+    .cv05 { position:absolute; background:#e6b85c; padding:0; margin:0; }
+    #tiny { left:80px; top:180px; width:4px; height:4px; }
+    #left-edge { left:-20px; top:240px; width:120px; height:80px; }
+    #right-edge { left:calc(100% - 60px); top:360px; width:120px; height:80px; }
+    #top-edge { left:400px; top:-20px; width:100px; height:80px; }
+    #bottom-edge { left:400px; top:calc(100vh - 40px); width:100px; height:80px; }
+    </style><button class="cv05" id="tiny" style="border:0" aria-label="Tiny target"></button>
+    <div class="cv05" id="left-edge" data-od-id="left-edge">Left edge</div>
+    <div class="cv05" id="right-edge" data-od-id="right-edge">Right edge</div>
+    <div class="cv05" id="top-edge" data-od-id="top-edge">Top edge</div>
+    <div class="cv05" id="bottom-edge" data-od-id="bottom-edge">Bottom edge</div>`);
+  await open(page, id);
+  const posts: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/comments')) posts.push(request.url()); });
+  await page.getByTestId('board-mode-toggle').click();
+  await page.evaluate(async () => { await Promise.all(document.getAnimations().filter(animation => animation.effect?.getTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {}))); });
+  const frame = page.frameLocator('iframe:visible');
+  const outline = page.getByTestId('comment-target-overlay');
+  for (const name of ['tiny', 'left-edge', 'right-edge', 'top-edge', 'bottom-edge']) {
+    const target = frame.locator(`#${name}`);
+    const rect = await target.boundingBox();
+    const canvas = await page.locator('iframe:visible').boundingBox();
+    if (!rect || !canvas) throw new Error('Missing CV05 geometry');
+    const expected = { x: Math.max(rect.x, canvas.x), y: Math.max(rect.y, canvas.y),
+      width: Math.min(rect.x + rect.width, canvas.x + canvas.width) - Math.max(rect.x, canvas.x), height: Math.min(rect.y + rect.height, canvas.y + canvas.height) - Math.max(rect.y, canvas.y) };
+    await page.mouse.move(expected.x + expected.width / 2, expected.y + expected.height / 2);
+    await expect(outline).toBeVisible();
+    await expect.poll(() => outline.boundingBox()).toEqual(expected);
+    await expect(page.getByTestId('comment-popover')).toHaveCount(0);
+    expect(posts).toEqual([]);
+    await page.screenshot({ path: info.outputPath(`CV05-${name}-hover.png`) });
+    await page.mouse.click(expected.x + expected.width / 2, expected.y + expected.height / 2);
+    await expect(page.getByTestId('comment-popover')).toBeVisible();
+    await expect.poll(() => outline.boundingBox()).toEqual(expected);
+    await page.screenshot({ path: info.outputPath(`CV05-${name}-selected.png`) });
+    expect(posts).toEqual([]);
+    await page.getByTestId('comment-popover-input').focus();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('comment-popover')).toHaveCount(0);
+  }
 });
