@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { buildWorkspacePermissions, buildWorkspaceSeatSummary } from '@open-design/contracts';
 import { CollabProvider, type CollabContextValue } from '../../src/collab/collab-context';
-import { FileViewer, commentAuthorAvatarColor } from '../../src/components/FileViewer';
+import { FileViewer, CommentSidePanel, commentAuthorAvatarColor } from '../../src/components/FileViewer';
 import { AMR_LOGIN_STATUS_EVENT } from '../../src/components/amrLoginPolling';
 import { advanceWorkspaceAccountGeneration, resetWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 import type { PreviewComment, ProjectFile } from '../../src/types';
@@ -149,4 +149,46 @@ it('uses the known current member display seed for a draft pin and target', asyn
   const swatch=commentAuthorAvatarColor(comment.authorKey!);
   expect(screen.getByTestId('comment-active-pin')).toHaveStyle({background:swatch.bg,color:swatch.fg});
   expect(screen.getByTestId('comment-active-pin')).toHaveTextContent('S');
+});
+
+
+it.each([
+  ['member', 'Self Member'],
+  ['user', 'comment.unknownAuthor'],
+] as const)('keeps a %s rail label consistent with its resolved author when the stored name is absent', async (authorKind, expectedName) => {
+  stubAccount(async () => account('self'));
+  const props = {
+    comments: [{ ...comment, authorKind, authorMemberId: 'self-member', authorDisplayName: undefined }],
+    selectedIds: new Set<string>(), activeCommentId: null, collapsed: true,
+    currentUser: { memberId: 'self-member', displayName: 'Self Member', role: 'owner' as const },
+    onCollapsedChange: vi.fn(), onToggleSelect: vi.fn(), onSelectAll: vi.fn(),
+    onClearSelection: vi.fn(), onReply: vi.fn(), onSendSelected: vi.fn(), sending: false,
+    t: (key: string) => key,
+  };
+  const view = render(<CommentSidePanel {...props} />);
+  const avatar = screen.getByRole('button', { name: `${expectedName}: ${comment.note}` });
+  expect(avatar).toHaveTextContent(authorKind === 'member' ? 'S' : '?');
+  view.rerender(<CommentSidePanel {...props} collapsed={false} />);
+  expect(screen.getByTestId('comment-side-item')).toHaveTextContent(expectedName);
+});
+
+
+it.each(['Enter', ' '])('keeps %s on a comment checkbox from opening the detail', key => {
+  stubAccount(async () => account('other'));
+  const onReply = vi.fn();
+  const onToggleSelect = vi.fn();
+  render(<CommentSidePanel comments={[comment]} selectedIds={new Set()} activeCommentId={null}
+    collapsed={false} onCollapsedChange={vi.fn()} onToggleSelect={onToggleSelect}
+    onSelectAll={vi.fn()} onClearSelection={vi.fn()} onReply={onReply}
+    onSendSelected={vi.fn()} sending={false} t={key => key} />);
+  const checkbox = screen.getByRole('button', { name: 'chat.comments.select' });
+  checkbox.focus();
+  // jsdom has no native button keyboard activation. Verify the key remains
+  // uncancelled, then dispatch the click that the browser would synthesize.
+  expect(fireEvent.keyDown(checkbox, { key })).toBe(true);
+  expect(onReply).not.toHaveBeenCalled();
+  fireEvent.keyUp(checkbox, { key });
+  fireEvent.click(checkbox);
+  expect(onToggleSelect).toHaveBeenCalledExactlyOnceWith(comment.id);
+  expect(onReply).not.toHaveBeenCalled();
 });

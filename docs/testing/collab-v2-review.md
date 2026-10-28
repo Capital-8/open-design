@@ -50,3 +50,11 @@ Nine new CSS weight declarations now follow the existing typography ladder. A Sh
 - Root guard/typecheck, e2e typecheck and diff whitespace checks passed.
 - The unrelated Pi process-close failure passed all five local cases and the same-commit CI job rerun; its runtime and tests were left unchanged.
 - Vela companion #655 adds only ES2022.Intl to the Web type libraries to typecheck the approved grapheme counter; root lint/typecheck and 95 focused tests passed, and all remote checks passed on 183041dc1.
+
+## Visual recheck after review feedback
+
+The earlier lane B fixture omitted all author fields and placed every comment at the same anchor. Its unknown-author screenshots do not establish named-author fidelity. Rechecked with complete synthetic author snapshots: names and stable palette render in list, pin, detail and the five-avatar rail (+10). A development hot update reproduced a white Share button because the CSS Module rules disappeared; a full reload restores the existing dark Share style. No Share/publication/sync production code was changed.
+
+Two bounded client fixes: the collapsed rail now uses the same existing member-directory name fallback as the list (without borrowing member identity for public users); Enter/Space on a selection button no longer bubble to the comment row and open details. Native browser keyboard selection, rail labels and read-only details passed; 46 focused identity, browse, mainline and canvas tests, root guard/typecheck and diff checks passed locally.
+
+Remaining differences are explicit: existing desktop zoom expands iframe layout before scaling, unlike the reference's half-width artboard; first-comment draft color can change when its authoritative author key first becomes available. Neither was redesigned here. At 50% and 75%, the saved pin measured 28×28 CSS px. The selected target uses its author color; the reference hover target is a different state. These results are not a claim of complete pixel parity. New repair CI is separate from the prior green CI, and no merge/deployment was performed.

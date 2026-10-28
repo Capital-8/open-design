@@ -4639,6 +4639,15 @@ function CommentAuthorIdentity({
   );
 }
 
+function commentAuthorDisplayName(
+  comment: PreviewComment,
+  directoryAuthor?: CollabCloudMemberDirectoryEntry | null,
+): string {
+  return comment.authorDisplayName?.trim()
+    || (comment.authorKind !== 'user' ? directoryAuthor?.displayName?.trim() : '')
+    || '';
+}
+
 function MemberCommentAuthorIdentity({
   comment,
   currentUser,
@@ -4657,7 +4666,7 @@ function MemberCommentAuthorIdentity({
   return (
     <CommentAuthorIdentityContent
       comment={comment}
-      displayName={comment.authorDisplayName?.trim() || directoryAuthor?.displayName?.trim() || ''}
+      displayName={commentAuthorDisplayName(comment, directoryAuthor)}
       displayNumber={displayNumber}
       role={directoryAuthor?.role}
       initialOnly={initialOnly}
@@ -4844,6 +4853,7 @@ export function CommentSidePanel({
   deckSlideCount?: number;
 }) {
   const { workspaceContext } = useProjectCollabContext();
+  const { resolve: resolveCommentAuthor } = useTeamMembers(currentUser);
   const [newCommentDraft, setNewCommentDraft] = useState('');
   const [dragState, setDragState] = useState<CommentSideDragState | null>(null);
   const [commentClock, setCommentClock] = useState(() => Date.now());
@@ -4969,7 +4979,7 @@ export function CommentSidePanel({
   if (collapsed) {
     return <CommentAvatarRail comments={comments} activeId={activeCommentId} unreadIds={unreadIds}
       toggleRef={collapsedRailRef} hover={hover} expandLabel={t('preview.showSidebar', { label: commentsLabel })}
-      label={comment => `${comment.authorDisplayName?.trim() || t('comment.unknownAuthor')}: ${comment.note}`}
+      label={comment => `${commentAuthorDisplayName(comment, resolveCommentAuthor(comment.authorMemberId)) || t('comment.unknownAuthor')}: ${comment.note}`}
       moreLabel={n => t('comment.moreCount', { n })}
       onExpand={() => handleCollapsedChange(false, 'expanded')} onOpen={onReply}
       renderAvatar={comment => <span className="comment-side-avatar" style={{ background: commentAuthorAvatarColor(comment.authorKey ?? '').bg, color: commentAuthorAvatarColor(comment.authorKey ?? '').fg }}>
@@ -5091,6 +5101,7 @@ export function CommentSidePanel({
                     className={`comment-side-check${selected ? ' checked' : ''}`}
                     aria-label={selected ? t('chat.comments.deselect') : t('chat.comments.select')}
                     aria-pressed={selected}
+                    onKeyDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
                       onToggleSelect(comment.id);
