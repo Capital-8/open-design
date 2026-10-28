@@ -1,3 +1,4 @@
+import { startPublicShareFixture } from './public-share-fixture.js';
 import { chmod, cp, lstat, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import type { CommentFileFact, CommentFileMutation, CommentFileState } from '@open-design/contracts';
 import { createServer, type Server, type ServerResponse } from 'node:http';
@@ -112,6 +113,7 @@ export type FakeCollabHub = {
   setAccountMembershipTier: (memberId: string, membershipTier: string) => void;
   setWorkspacePlan: (planId: string, billingState?: string) => void;
   setWorkspaceBalance: (memberId: string, balanceUsd: string) => void;
+  publicOrigin?: string;
   close: () => Promise<void>;
 };
 
@@ -123,6 +125,7 @@ export async function startFakeCollabHub(options: {
   includePersonalWorkspace?: boolean;
   /** Opt into the producer-health contract used by authority-cache E2E. */
   strictAuthorityEvents?: boolean;
+  publicShares?: boolean;
 }): Promise<FakeCollabHub> {
   const resourcesRoot = join(options.root, 'resources');
   await mkdir(resourcesRoot, { recursive: true });
@@ -130,6 +133,11 @@ export async function startFakeCollabHub(options: {
   const identities = new Map(options.clients.map((client) => [client.controlKey, client]));
   const projects = new Map<string, TeamProjectRecord>();
   const resources = new Map<string, ResourceRecord>();
+  const registeredResources = new Set<string>();
+  const publicShares = options.publicShares ? await startPublicShareFixture({
+    resource: id => resources.get(workspaceResourceKey(options.workspaceId, id)),
+    project: id => projects.get(id),
+  }) : undefined;
   const comments = new Map<string, Array<Record<string, unknown>>>();
   const presence = new Map<string, Map<string, Record<string, unknown>>>();
   const subscribers = new Set<Subscriber>();
@@ -316,7 +324,10 @@ export async function startFakeCollabHub(options: {
           : [];
         const stdin = typeof body.stdin === 'string' ? body.stdin : '';
         commandLog.push({ args, memberId: identity.memberId, workspaceId });
+        const shareOutput = publicShares?.command(args, identity.memberId);
+        if (shareOutput !== undefined) return json(response, 200, { stdout: shareOutput });
         const stdout = await handleCommand({
+          registeredResources,
           args,
           stdin,
           identity,
@@ -371,6 +382,7 @@ export async function startFakeCollabHub(options: {
   const url = `http://127.0.0.1:${address.port}`;
 
   return {
+    ...(publicShares ? { publicOrigin: publicShares.origin } : {}),
     url,
     workspaceId: options.workspaceId,
     commandLog,
@@ -478,6 +490,7 @@ export async function startFakeCollabHub(options: {
     close: async () => {
       for (const subscriber of [...subscribers]) closeSubscriber(subscriber);
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      await publicShares?.close();
       await rm(resourcesRoot, { force: true, recursive: true });
     },
   };
@@ -490,6 +503,7 @@ async function handleCommand(input: {
   workspaceId: string;
   options: { workspaceId: string; workspaceName: string; clients: readonly ClientIdentity[] };
   projects: Map<string, TeamProjectRecord>;
+  registeredResources: Set<string>;
   resources: Map<string, ResourceRecord>;
   resourcesRoot: string;
   comments: Map<string, Array<Record<string, unknown>>>;
@@ -571,6 +585,7 @@ async function handleTeamProjectsCommand(input: {
   identity: ClientIdentity;
   workspaceId: string;
   projects: Map<string, TeamProjectRecord>;
+  registeredResources: Set<string>;
   resources: Map<string, ResourceRecord>;
   emit: (event: HubEvent) => void;
 }): Promise<string> {
@@ -602,7 +617,7 @@ async function handleTeamProjectsCommand(input: {
   if ((command === 'visibility' || command === 'register-resource') && projectId) {
     const project = input.projects.get(projectId);
     if (!project || project.ownerMemberId !== input.identity.memberId) throw new Error('team_project_not_found');
-    if (command === 'register-resource') return jsonLine({ ok: true });
+    if (command === 'register-resource') { input.registeredResources.add(`${projectId}\0${input.args[3]}`); return jsonLine({ ok: true }); }
     const visibility = input.args[3];
     if (visibility !== 'private' && visibility !== 'team') throw new Error('invalid visibility');
     project.visibility = visibility;
@@ -703,12 +718,12 @@ async function handleTeamProjectsCommand(input: {
   throw new Error(`unsupported team-projects command: ${input.args.join(' ')}`);
 }
 
-/** This hub models root receipts only, backed by its actual copied snapshots.
+/** This hub models root and explicitly registered selected-file receipts, backed by copied snapshots.
  * Mutation proposals become server state; replaying response state is rejected.
- * Selected/mixed-receipt authority remains covered by the Vela-owned tests.
+ * Full selected/mixed-receipt server authority remains covered by Vela-owned tests.
  */
 async function admitRootCommentFiles(
-  input: { workspaceId: string; identity: ClientIdentity; resources: Map<string, ResourceRecord> },
+  input: { workspaceId: string; identity: ClientIdentity; resources: Map<string, ResourceRecord>; registeredResources: Set<string> },
   previous: TeamProjectRecord | undefined,
   metadata: Record<string, unknown> | null,
 ): Promise<Record<string, unknown> | null> {
@@ -723,7 +738,7 @@ async function admitRootCommentFiles(
     || mutation.baseRevision !== (old?.revision ?? 0)) throw new Error('comment_file_mutation_rejected');
   const resource = input.resources.get(workspaceResourceKey(input.workspaceId, mutation.resourceId));
   if (!resource || resource.projectId !== previous.projectId || resource.ownerMemberId !== input.identity.memberId
-    || resource.resourceId !== previous.resourceId || mutation.versionId !== `v${resource.version}`) {
+    || (resource.resourceId !== previous.resourceId && !input.registeredResources.has(`${previous.projectId}\0${resource.resourceId}`)) || mutation.versionId !== `v${resource.version}`) {
     throw new Error('comment_file_receipt_rejected');
   }
   const snapshot = resource.versions.get(resource.version);
@@ -766,6 +781,7 @@ async function handleResourceCommand(input: {
   identity: ClientIdentity;
   workspaceId: string;
   projects: Map<string, TeamProjectRecord>;
+  registeredResources: Set<string>;
   resources: Map<string, ResourceRecord>;
   resourcesRoot: string;
   emit: (event: HubEvent) => void;
@@ -823,7 +839,7 @@ async function handleResourceCommand(input: {
         resourceStatus: 'shared',
       });
     }
-    return jsonLine({ version, versionId: `v${version}` });
+    return jsonLine({ id: `v${version}`, version, versionId: `v${version}` });
   }
   if (command === 'head') {
     const resourceId = input.args[2];
