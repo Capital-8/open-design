@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -129,8 +129,30 @@ const action = process.argv[2];
 if (action === 'prepare') writeFileSync(join(directory, 'official-resource-meta.json'), JSON.stringify({ source: process.env.OD_CLOUD_RESOURCE_SOURCE }));
 appendFileSync(join(directory, 'calls.txt'), action + '\\n');
 `);
+      // Corepack bootstraps pnpm from the network outside the workspace. Stub
+      // that boundary while still executing the real CLI and fixture scripts.
+      const bin = join(directory, 'bin');
+      await mkdir(bin);
+      const corepack = join(bin, 'corepack');
+      await writeFile(corepack, `#!/usr/bin/env node
+const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const { readFileSync } = require('node:fs');
+const { join, resolve } = require('node:path');
+const argv = process.argv.slice(2);
+assert.equal(argv.length, 5);
+assert.deepEqual(argv.slice(0, 4), ['pnpm', '--dir', 'apps/cloud', 'run']);
+const cwd = resolve(argv[2]);
+const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
+const [command, ...args] = pkg.scripts[argv[4]].split(' ');
+assert.equal(command, 'node');
+execFileSync(process.execPath, args, { cwd, stdio: 'inherit' });
+`);
+      await chmod(corepack, 0o755);
       const script = join(root, '.github/scripts/cloud/release.ts');
       const env = { ...process.env, OD_CLOUD_RESOURCE_DIR: bundle, GITHUB_SHA: revision,
+        PATH: [bin, process.env.PATH].join(delimiter),
+        COREPACK_HOME: join(directory, 'corepack-cache'), COREPACK_ENABLE_NETWORK: '0',
         GITHUB_DEFAULT_BRANCH: 'main', GITHUB_REF: 'refs/heads/main',
         FILESYS_PUBLISH_URL: 'https://filesys.invalid', FILESYS_PUBLISH_TOKEN: 'test-only' };
       await exec(process.execPath, [script, 'prepare-resources'], { cwd: directory, env });
