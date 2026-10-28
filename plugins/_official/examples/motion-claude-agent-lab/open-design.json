@@ -1,0 +1,294 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-claude-agent-lab",
+  "title": "Claude Agent Lab",
+  "title_i18n": {
+    "en": "Claude Agent Lab",
+    "zh-CN": "Claude 代理实验室"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-27T00:00:00Z",
+  "description": "A continuous Claude Agent Lab workflow moves from reference analysis through data, story, motion and direction to delivery.",
+  "description_i18n": {
+    "en": "A continuous Claude Agent Lab workflow moves from reference analysis through data, story, motion and direction to delivery.",
+    "zh-CN": "Claude 代理实验室以旋转索引、橙色代理队列和实时诊断面板演示从参考分析到数据、叙事、动效、指导与交付的流程。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "agent-workflow",
+    "data-visualization",
+    "claude",
+    "diagram",
+    "dashboard"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "实验室名称",
+        "default": "CLAUDE / AGENT LAB"
+      },
+      {
+        "name": "tagline",
+        "type": "string",
+        "label": "实验室说明",
+        "default": "6 ROOMS · AGENTS CARRY EVERY FILE OUT"
+      },
+      {
+        "name": "referenceTitle",
+        "type": "string",
+        "label": "参考阶段标题",
+        "default": "REFERENCE"
+      },
+      {
+        "name": "dataTitle",
+        "type": "string",
+        "label": "数据阶段标题",
+        "default": "DATA"
+      },
+      {
+        "name": "storyTitle",
+        "type": "string",
+        "label": "叙事阶段标题",
+        "default": "STORY"
+      },
+      {
+        "name": "motionTitle",
+        "type": "string",
+        "label": "动效阶段标题",
+        "default": "MOTION"
+      },
+      {
+        "name": "directTitle",
+        "type": "string",
+        "label": "指导阶段标题",
+        "default": "DIRECT"
+      },
+      {
+        "name": "shipTitle",
+        "type": "string",
+        "label": "交付阶段标题",
+        "default": "SHIP"
+      },
+      {
+        "name": "referenceCopy",
+        "type": "string",
+        "label": "参考阶段说明",
+        "default": "show it a video you love"
+      },
+      {
+        "name": "dataCopy",
+        "type": "string",
+        "label": "数据阶段说明",
+        "default": "real numbers before motion"
+      },
+      {
+        "name": "storyCopy",
+        "type": "string",
+        "label": "叙事阶段说明",
+        "default": "one point, one hero number"
+      },
+      {
+        "name": "motionCopy",
+        "type": "string",
+        "label": "动效阶段说明",
+        "default": "every frame written as code"
+      },
+      {
+        "name": "directCopy",
+        "type": "string",
+        "label": "指导阶段说明",
+        "default": "notes in words, 1-line diffs"
+      },
+      {
+        "name": "shipCopy",
+        "type": "string",
+        "label": "交付阶段说明",
+        "default": "checked, then you approve"
+      },
+      {
+        "name": "agentImage",
+        "type": "string",
+        "label": "橙色代理角色",
+        "default": "assets/agent.png"
+      },
+      {
+        "name": "creditImage",
+        "type": "string",
+        "label": "原作者署名",
+        "default": "assets/credit.png"
+      },
+      {
+        "name": "paper",
+        "type": "string",
+        "label": "纸面颜色",
+        "default": "#F0F2E9"
+      },
+      {
+        "name": "ink",
+        "type": "string",
+        "label": "线条颜色",
+        "default": "#1C211A"
+      },
+      {
+        "name": "referenceFile",
+        "type": "string",
+        "label": "阶段文件",
+        "default": "spec.md"
+      },
+      {
+        "name": "referenceDetail",
+        "type": "string",
+        "label": "焦点说明",
+        "default": "cut → 60/128 → 1 s"
+      },
+      {
+        "name": "dataFile",
+        "type": "string",
+        "label": "阶段文件",
+        "default": "data.json"
+      },
+      {
+        "name": "dataDetail",
+        "type": "string",
+        "label": "焦点说明",
+        "default": "71% · data.json : query_04"
+      },
+      {
+        "name": "storyFile",
+        "type": "string",
+        "label": "阶段文件",
+        "default": "story.md"
+      },
+      {
+        "name": "storyDetail",
+        "type": "string",
+        "label": "焦点说明",
+        "default": "1 point · 1 hero · 3 beats"
+      },
+      {
+        "name": "motionFile",
+        "type": "string",
+        "label": "阶段文件",
+        "default": "Scene.tsx"
+      },
+      {
+        "name": "motionDetail",
+        "type": "string",
+        "label": "焦点说明",
+        "default": "e(t) = 1 - (1 - t)³"
+      },
+      {
+        "name": "directFile",
+        "type": "string",
+        "label": "阶段文件",
+        "default": "timing.ts"
+      },
+      {
+        "name": "directDetail",
+        "type": "string",
+        "label": "焦点说明",
+        "default": "titleIn: 0.2 → 0.0  (-1 ln)"
+      },
+      {
+        "name": "shipFile",
+        "type": "string",
+        "label": "阶段文件",
+        "default": "final.mp4"
+      },
+      {
+        "name": "shipDetail",
+        "type": "string",
+        "label": "焦点说明",
+        "default": "match 0.91 ≥ 0.85 · approved"
+      },
+      {
+        "name": "referenceCount",
+        "type": "number",
+        "label": "参考数",
+        "default": 24
+      },
+      {
+        "name": "roomCount",
+        "type": "number",
+        "label": "房间数",
+        "default": 6
+      },
+      {
+        "name": "skillCount",
+        "type": "number",
+        "label": "技能数",
+        "default": 10
+      },
+      {
+        "name": "sceneCount",
+        "type": "number",
+        "label": "场景数",
+        "default": 18
+      },
+      {
+        "name": "rerollCount",
+        "type": "number",
+        "label": "重试数",
+        "default": 0
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Make a vertical 24-second agent-workflow film for {{brand}}, with the header {{tagline}}, on {{paper}} paper with {{ink}} lines. Keep a huge cropped circular index rotating behind tangled connection lines; hundreds of {{agentImage}} orange agents travel along radial lanes, and {{creditImage}} remains at bottom right. The header counters read {{referenceCount}} references, {{roomCount}} rooms, {{skillCount}} skills, {{sceneCount}} scenes and {{rerollCount}} re-rolls. From 0 to 4 seconds, the upper-left card reveals {{referenceTitle}} and “{{referenceCopy}}”, the selected black node routes {{referenceFile}} to its orange queue, and the connected annotation reads “{{referenceDetail}}”. From 4 to 8 seconds, the upper-left card reveals {{dataTitle}} and “{{dataCopy}}”, the selected black node routes {{dataFile}} to its orange queue, and the connected annotation reads “{{dataDetail}}”. From 8 to 12 seconds, the upper-left card reveals {{storyTitle}} and “{{storyCopy}}”, the selected black node routes {{storyFile}} to its orange queue, and the connected annotation reads “{{storyDetail}}”. From 12 to 16 seconds, the upper-left card reveals {{motionTitle}} and “{{motionCopy}}”, the selected black node routes {{motionFile}} to its orange queue, and the connected annotation reads “{{motionDetail}}”. From 16 to 20 seconds, the upper-left card reveals {{directTitle}} and “{{directCopy}}”, the selected black node routes {{directFile}} to its orange queue, and the connected annotation reads “{{directDetail}}”. From 20 to 24 seconds, the upper-left card reveals {{shipTitle}} and “{{shipCopy}}”, the selected black node routes {{shipFile}} to its orange queue, and the connected annotation reads “{{shipDetail}}”. At each boundary the card briefly fades and replaces its text while the diagram keeps moving. Across all six stages, eight lower panels show a growing direction feed, moving solver marks, typed code, paired render matrices, extraction routes, animated timing curves, room progress bars and a changing skill matrix; end inside the live interface.",
+        "zh-CN": "为 {{brand}} 制作一支约 24 秒的竖版代理工作流演示，顶栏显示 {{tagline}}，使用 {{paper}} 纸色与 {{ink}} 线条。巨大的弧形索引在左侧关系线间连续旋转，右侧沿放射轨道排列数百个 {{agentImage}} 橙色代理，右下保留 {{creditImage}} 署名。顶部统计为 {{referenceCount}} 个参考、{{roomCount}} 个房间、{{skillCount}} 个技能、{{sceneCount}} 个场景、{{rerollCount}} 次重试。第 1 阶段（0—4 秒），左上标题卡显示 {{referenceTitle}} 和「{{referenceCopy}}」，黑色焦点节点将 {{referenceFile}} 分发给橙色队列，连线注释显示「{{referenceDetail}}」。第 2 阶段（4—8 秒），左上标题卡显示 {{dataTitle}} 和「{{dataCopy}}」，黑色焦点节点将 {{dataFile}} 分发给橙色队列，连线注释显示「{{dataDetail}}」。第 3 阶段（8—12 秒），左上标题卡显示 {{storyTitle}} 和「{{storyCopy}}」，黑色焦点节点将 {{storyFile}} 分发给橙色队列，连线注释显示「{{storyDetail}}」。第 4 阶段（12—16 秒），左上标题卡显示 {{motionTitle}} 和「{{motionCopy}}」，黑色焦点节点将 {{motionFile}} 分发给橙色队列，连线注释显示「{{motionDetail}}」。第 5 阶段（16—20 秒），左上标题卡显示 {{directTitle}} 和「{{directCopy}}」，黑色焦点节点将 {{directFile}} 分发给橙色队列，连线注释显示「{{directDetail}}」。第 6 阶段（20—24 秒），左上标题卡显示 {{shipTitle}} 和「{{shipCopy}}」，黑色焦点节点将 {{shipFile}} 分发给橙色队列，连线注释显示「{{shipDetail}}」。阶段交界时标题文字短暂淡出再替换，主图保持连续运动。底部八块面板始终展示逐行增长的指导日志、动态求解标记、打字代码、参考与渲染矩阵、提取路线、缓动曲线、房间进度和技能矩阵；结尾仍停留在运行中的界面。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Claude Agent Lab"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@francescoinweb3",
+      "url": "https://x.com/francescoinweb3/status/2111393917899808880",
+      "note": "参考片来源；仅用于署名，未访问原链接。"
+    }
+  ]
+}
