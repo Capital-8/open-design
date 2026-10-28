@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "music": {
+    "role": "lead",
+    "description": "dramatic Japanese cinematic pulse with plucked strings, low percussion and rising orchestral accents",
+    "bpm": null,
+    "beatConfidence": "none",
+    "cutOnBeat": false,
+    "sections": [
+      {
+        "scene": "resume",
+        "energy": "mid"
+      },
+      {
+        "scene": "fold",
+        "energy": "high"
+      },
+      {
+        "scene": "title",
+        "energy": "high"
+      }
+    ]
+  },
+  "effects": [
+    {
+      "cue": "write-begins",
+      "kind": "typing",
+      "sync": "contact"
+    },
+    {
+      "cue": "resume-reveal",
+      "kind": "whoosh",
+      "sync": "motion-peak"
+    },
+    {
+      "cue": "fold-title-appears",
+      "kind": "riser",
+      "sync": "riser-into-impact"
+    },
+    {
+      "cue": "title-settles",
+      "kind": "impact",
+      "sync": "contact"
+    }
+  ],
+  "effectsPer10s": 2.6,
+  "voice": {
+    "present": false
+  },
+  "demoTrack": {
+    "file": "assets/soundtrack.mp3",
+    "origin": "reference"
+  }
+}

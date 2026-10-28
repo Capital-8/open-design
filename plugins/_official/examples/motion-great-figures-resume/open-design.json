@@ -1,0 +1,126 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-great-figures-resume",
+  "title": "Great Figures Résumé",
+  "title_i18n": {
+    "en": "Great Figures Résumé",
+    "zh-CN": "伟人履历书片头"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-26T00:00:00Z",
+  "description": "A 15.53-second period-document opener in which Oda Nobunaga's name is written onto a résumé, the camera reveals his career history, and the paper folds into the Japanese title artwork.",
+  "description_i18n": {
+    "en": "A 15.53-second period-document opener in which Oda Nobunaga's name is written onto a résumé, the camera reveals his career history, and the paper folds into the Japanese title artwork.",
+    "zh-CN": "一支 15.53 秒的古典文书片头：钢笔在织田信长的履历书上落名，镜头拉远展示其经历，纸张随后折叠并显出日文节目标题。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "title-sequence",
+    "historical",
+    "resume",
+    "japanese",
+    "paper",
+    "cinematic"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "subjectName",
+        "type": "string",
+        "label": "Historical figure name",
+        "default": "織田 信長",
+        "required": false
+      },
+      {
+        "name": "subjectKana",
+        "type": "string",
+        "label": "Name reading",
+        "default": "おだ のぶなが",
+        "required": false
+      },
+      {
+        "name": "portraitImage",
+        "type": "string",
+        "label": "Portrait image",
+        "default": "assets/oda-portrait.png",
+        "required": false
+      },
+      {
+        "name": "penImage",
+        "type": "string",
+        "label": "Fountain pen image",
+        "default": "assets/fountain-pen.png",
+        "required": false
+      },
+      {
+        "name": "titleImage",
+        "type": "string",
+        "label": "Final title artwork",
+        "default": "assets/title-lockup.png",
+        "required": false
+      },
+      {
+        "name": "paperColor",
+        "type": "string",
+        "label": "Paper colour",
+        "default": "#CAC6BA",
+        "required": false
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a 15.53-second period-document opener on warm {{paperColor}} paper. In the first scene, {{penImage}} moves over a Japanese résumé while the surname in {{subjectName}} is progressively written beneath the reading {{subjectKana}}; then pull the camera back through the document, reveal the historical portrait {{portraitImage}}, and pass rows of dated career history, qualifications and personal details with restrained paper drift. In the second scene, fold the two-page résumé inward over a dark wooden desk, compress it into one centered sheet and let the first small version of {{titleImage}} appear as the fold finishes. In the final scene, enlarge {{titleImage}} until its illustrated figures, gold and red lettering, résumé placard and pen fill the warm paper field, then hold the lockup with only subtle breathing, dust and vignette movement.",
+        "zh-CN": "制作一支 15.53 秒、以暖调 {{paperColor}} 纸张为底的古典文书片头。第一幕让 {{penImage}} 在日式履历书上移动，在读音 {{subjectKana}} 下逐步写出 {{subjectName}} 的姓氏；随后镜头沿文书连续拉远，显出历史人物肖像 {{portraitImage}}，并掠过带年代的履历、资格与个人信息表格，纸面只保留克制的漂移。第二幕让双页履历在深色木桌上向内折叠，压缩成居中的单张纸，并在折页结束时显出较小的 {{titleImage}}。最后一幕放大 {{titleImage}}，直到其中的人物、金红标题字、履历书牌与钢笔占据暖色纸面，再以轻微呼吸、尘点和暗角运动保持定格。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Great Figures Résumé"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@Wakuwakukucx",
+      "url": "https://x.com/Wakuwakukucx/status/2088804332783435958",
+      "role": "Reference motion"
+    }
+  ]
+}

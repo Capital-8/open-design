@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en" data-od-preview-ready="false" data-composition-variables='[
+  {"id":"subjectName","type":"string","label":"Historical figure name","default":"織田 信長","maxLength":8,"brandToken":"subject.name"},
+  {"id":"subjectKana","type":"string","label":"Name reading","default":"おだ のぶなが","maxLength":18},
+  {"id":"portraitImage","type":"image","label":"Portrait image","default":"assets/oda-portrait.png"},
+  {"id":"penImage","type":"image","label":"Fountain pen image","default":"assets/fountain-pen.png"},
+  {"id":"titleImage","type":"image","label":"Final title artwork","default":"assets/title-lockup.png","brandToken":"brand.logo"},
+  {"id":"paperColor","type":"color","label":"Paper colour","default":"#CAC6BA","brandToken":"brand.primary"}
+]'>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="od-motion-output" content="video">
+<title>If Great Figures Wrote Résumés</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+@font-face{font-family:"Lato OD";src:url("assets/lato-400.ttf") format("truetype");font-style:normal;font-weight:400;font-display:block}
+:root{
+  --od-font-heading:"Lato OD","Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --od-font-body:"Lato OD","Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-synthesis:none}
+html,body{width:100%;height:100%;overflow:hidden;background:#17130f;font-family:var(--od-font-body)}
+.od-heading{font-family:var(--od-font-heading)}
+#viewport{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden;background:#17130f}
+#main{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center;overflow:hidden;background:#d8d4c8}
+#stage{display:block;width:1280px;height:720px}
+html.od-export #controls{display:none!important}
+html.od-export #main{left:0!important;top:0!important;transform:none!important}
+</style>
+<style data-od-preview-chrome>
+#controls{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:100;display:flex;align-items:center;gap:14px;width:min(900px,92vw);box-sizing:border-box;padding:12px 18px;border-radius:14px;background:#101214dd;color:#fff;font:600 13px ui-monospace,Menlo,monospace;opacity:0;transition:opacity .2s}
+#controls:hover,#controls:focus-within{opacity:1}
+#controls button{font:inherit;letter-spacing:.06em;background:var(--accent,#3b6cf6);color:#fff;border:0;border-radius:999px;padding:9px 16px;cursor:pointer;min-width:88px;white-space:nowrap}
+#controls input[type=range]{flex:1;width:auto;min-width:0;accent-color:var(--accent,#3b6cf6)}
+#controls span,#controls output{white-space:nowrap;font-variant-numeric:tabular-nums}
+html.od-export #controls{display:none!important}
+</style>
+</head>
+<body>
+<div id="viewport">
+  <div id="main" data-composition-id="main" data-start="0" data-duration="15.534667" data-width="1280" data-height="720">
+<audio id="soundtrack" src="assets/soundtrack.mp3" data-start="0" data-duration="15.535" data-track-index="2" data-volume="1" preload="auto"></audio>
+    <canvas id="stage" width="1280" height="720"></canvas>
+  </div>
+</div>
+<div id="controls">
+  <button id="playBtn" type="button" aria-label="Play or pause">PLAY</button>
+  <input id="scrub" type="range" min="0" step="0.01" value="0" aria-label="Timeline position">
+  <span id="tc">0.00 / 15.53</span>
+</div>
+<script>
+const VARS = (window.__hyperframes && window.__hyperframes.getVariables?.()) || {};
+const CFG = {
+  duration: 15.534667,
+  w: 1280,
+  h: 720,
+  scenes: [
+    { id: 'resume', name: 'The résumé is written and revealed', dur: 10.85, minDur: 9.2, maxDur: 14.0 },
+    { id: 'fold', name: 'The résumé folds into a title card', dur: 2.35, minDur: 2.35, maxDur: 2.35 },
+    { id: 'title', name: 'Great figures title lockup', dur: 2.334667, minDur: 1.8, maxDur: 4.0 }
+  ],
+  cues: [
+    { id: 'write-begins', scene: 'resume', at: 0.02 },
+    { id: 'resume-pan-begins', scene: 'resume', at: 4.8 },
+    { id: 'surname-complete', scene: 'resume', at: 6.35 },
+    { id: 'resume-reveal', scene: 'resume', at: 4.4, from: 'end' },
+    { id: 'resume-out', scene: 'resume', at: 0, from: 'end' },
+    { id: 'fold-title-appears', scene: 'fold', at: 0.55 },
+    { id: 'fold-out', scene: 'fold', at: 0, from: 'end' },
+    { id: 'title-settles', scene: 'title', at: 0.85 },
+    { id: 'title-end', scene: 'title', at: 0, from: 'end' }
+  ],
+  subjectName: '織田 信長',
+  subjectKana: 'おだ のぶなが',
+  portraitImage: 'assets/oda-portrait.png',
+  penImage: 'assets/fountain-pen.png',
+  titleImage: 'assets/title-lockup.png',
+  paperColor: '#CAC6BA',
+  ink: '#17263A',
+  rule: '#60635E',
+  wood: '#2B1810',
+  ...VARS
+};
+
+const SCENE_START = {};
+CFG.scenes.reduce((t, s) => (SCENE_START[s.id] = t, t + s.dur), 0);
+const cueTime = id => {
+  const c = CFG.cues.find(c => c.id === id);
+  const scene = CFG.scenes.find(s => s.id === c.scene);
+  return SCENE_START[c.scene] + (c.from === 'end' ? scene.dur - c.at : c.at);
+};
+const cv = document.getElementById('stage');
+const ctx = cv.getContext('2d');
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const seg = (t, a, b) => clamp((t - a) / Math.max(0.0001, b - a));
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const expo = p => p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+const hash = n => Math.abs(Math.sin(n * 128.17 + 43.71) * 43758.5453) % 1;
+
+const headingFace = getComputedStyle(document.documentElement).getPropertyValue('--od-font-heading').trim();
+const bodyFace = getComputedStyle(document.documentElement).getPropertyValue('--od-font-body').trim();
+const assets = {};
+function loadImage(key, src) {
+  return new Promise(resolve => {
+    const im = new Image();
+    im.onload = () => { assets[key] = im; resolve(); };
+    im.onerror = () => resolve();
+    im.src = src;
+  });
+}
+const ready = Promise.all([
+  document.fonts.ready,
+  loadImage('portrait', CFG.portraitImage),
+  loadImage('pen', CFG.penImage),
+  loadImage('title', CFG.titleImage)
+]).then(() => {
+  document.documentElement.dataset.odPreviewReady = 'true';
+  render(0);
+});
+
+function text(s, x, y, size, color = '#30332f', align = 'left', family = bodyFace, alpha = 1) {
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.font = `400 ${size}px ${family}`; ctx.fillText(s, x, y); ctx.restore();
+}
+function line(x1, y1, x2, y2, width = 1, color = CFG.rule, alpha = .62) {
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+}
+function paperNoise(t, opacity = .055) {
+  ctx.save(); ctx.globalAlpha *= opacity; ctx.fillStyle = '#554b3f';
+  for (let i = 0; i < 95; i++) {
+    const x = hash(i * 3.1) * CFG.w, y = (hash(i * 7.7) * CFG.h + t * (1.4 + hash(i) * 2.5)) % CFG.h;
+    ctx.fillRect(x, y, .7 + hash(i + 2) * 1.6, .7 + hash(i + 5) * 1.6);
+  }
+  ctx.restore();
+}
+function titleZoom(t) {
+  const p = Math.pow(seg(t, cueTime('fold-title-appears'), cueTime('title-settles')), 1.16);
+  return { p, w: lerp(230, 1030, p) };
+}
+function vignette(alpha = .48) {
+  const g = ctx.createRadialGradient(640, 350, 120, 640, 350, 760);
+  g.addColorStop(.34, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(20,13,8,${alpha})`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, CFG.w, CFG.h);
+}
+function wood(t) {
+  ctx.fillStyle = CFG.wood; ctx.fillRect(0, 0, CFG.w, CFG.h);
+  for (let y = -30; y < 760; y += 18) {
+    const wob = Math.sin(y * .05 + t * .18) * 6;
+    line(0, y + wob, CFG.w, y - wob * .35, 2, '#6d4127', .18);
+  }
+}
+
+function drawCloseWriting(t) {
+  ctx.fillStyle = CFG.paperColor; ctx.fillRect(0, 0, CFG.w, CFG.h);
+  const drift = Math.sin(t * .73) * 1.7;
+  const cameraStep = seg(t, cueTime('resume-pan-begins'), cueTime('resume-reveal'));
+  const camera = 1 - Math.pow(1 - cameraStep, 2);
+  ctx.save(); ctx.translate(drift - camera * 470, Math.cos(t * .51) * 1.2 - camera * 270);
+  line(8, 96, 1280, 96, 3, '#68706e', .74); line(8, 270, 1280, 270, 2, '#6d7470', .58); line(8, 690, 1280, 690, 2, '#6d7470', .58);
+  line(8, 96, 8, 690, 3, '#68706e', .74); line(430, 96, 430, 690, 2, '#6d7470', .58);
+  text('ふりがな', 115, 183, 44, '#555a58'); text(CFG.subjectKana, 495, 183, 44, '#555a58');
+  text('氏　名', 78, 482, 58, '#555a58');
+  const surname = CFG.subjectName.replace(/\s/g, '').slice(0, 2) || '織田';
+  const writeStart = cueTime('write-begins');
+  const writeEnd = cueTime('surname-complete');
+  const charOne = seg(t, writeStart, writeStart + (writeEnd - writeStart) * .76);
+  const charTwo = seg(t, writeStart + (writeEnd - writeStart) * .76, writeEnd);
+  const charOneInk = charOne * (.55 + .45 * charOne);
+  const charTwoInk = charTwo * (.65 + .35 * charTwo);
+  ctx.save(); ctx.fillStyle = CFG.ink; ctx.textBaseline = 'middle'; ctx.font = `400 184px "Noto Serif SC","Songti SC","STSong","SimSun",serif`;
+  ctx.save(); ctx.beginPath(); ctx.rect(508, 304, 186 * charOneInk, 246); ctx.clip(); ctx.fillText(surname[0] || '織', 508, 433); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.rect(744, 304, 186 * charTwoInk, 246); ctx.clip(); ctx.fillText(surname[1] || '田', 744, 433); ctx.restore();
+  ctx.restore();
+  if (assets.pen && t < writeEnd + .24) {
+    const p = seg(t, writeStart, writeEnd);
+    const x = 390 + p * 455 + Math.sin(p * Math.PI * 12) * 38 + Math.sin(p * Math.PI * 30) * 10;
+    const y = -5 + p * 30 + Math.sin(p * Math.PI * 16) * 22 + Math.cos(p * Math.PI * 36) * 6;
+    ctx.save(); ctx.globalAlpha = clamp(seg(t, 0, .12) * (1 - seg(t, writeEnd, writeEnd + .24)));
+    ctx.translate(x + 440, y + 260); ctx.rotate(Math.sin(p * Math.PI * 10) * .018); ctx.drawImage(assets.pen, -440, -260, 880, 520); ctx.restore();
+  }
+  ctx.restore();
+  paperNoise(t, .034); vignette(.48);
+}
+
+function drawRows(x, y, w, rows, rowH, labels) {
+  ctx.save(); ctx.strokeStyle = CFG.rule; ctx.globalAlpha = .62; ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, rows * rowH); line(x + w * .18, y, x + w * .18, y + rows * rowH); line(x + w * .29, y, x + w * .29, y + rows * rowH);
+  for (let i = 1; i < rows; i++) line(x, y + i * rowH, x + w, y + i * rowH);
+  ctx.restore();
+  labels.forEach((s, i) => text(s, x + 18, y + rowH * (i + .5), 13, '#3d403b'));
+}
+function drawResumeSpread(t, alpha = 1) {
+  const revealAt = cueTime('resume-reveal');
+  const outAt = cueTime('resume-out');
+  const p = ease(seg(t, revealAt, outAt));
+  wood(t);
+  ctx.save(); ctx.globalAlpha = alpha;
+  const cameraP = ease(p);
+  const scale = lerp(2.24, 1.12, cameraP);
+  const sweep = Math.sin(Math.PI * p);
+  const camX = lerp(460, 640, cameraP) + 230 * sweep, camY = lerp(240, 375, Math.pow(p, 2.2));
+  ctx.translate(640, 360); ctx.scale(scale, scale); ctx.translate(-camX, -camY);
+  ctx.save(); ctx.translate(20, -25); ctx.rotate(lerp(0, -.014, p));
+  ctx.shadowColor = 'rgba(0,0,0,.38)'; ctx.shadowBlur = 16; ctx.shadowOffsetX = 7; ctx.fillStyle = CFG.paperColor; ctx.fillRect(0, 0, 600, 820); ctx.shadowColor = 'transparent';
+  text('履歴書', 22, 35, 31, CFG.ink, 'left', headingFace); text('天正十八年　八月　日現在', 342, 38, 12, '#4b4d49');
+  line(16, 58, 584, 58); line(16, 148, 584, 148); line(16, 212, 584, 212); line(16, 284, 584, 284); line(16, 362, 584, 362);
+  line(392, 58, 392, 212); line(520, 148, 520, 212);
+  text('ふりがな', 28, 76, 12); text(CFG.subjectKana, 142, 76, 13);
+  text('氏　名', 28, 119, 17); text(CFG.subjectName, 132, 120, 31, CFG.ink, 'left', `"Noto Serif SC","Songti SC","STSong","SimSun",serif`);
+  text('天文三年 五月十二日生（満四十八歳）', 30, 179, 13); text('性 別　男', 485, 179, 13);
+  text('ふりがな　あづちやま', 28, 232, 11); text('安土山 天主六階', 28, 261, 16);
+  text('電話　（のろし）', 28, 307, 14); text('nobunaga@tenka-fubu.jp', 28, 337, 13);
+  if (assets.portrait) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3; ctx.drawImage(assets.portrait, 410, 64, 146, 192); ctx.restore(); }
+  drawRows(20, 390, 560, 6, 47, ['天文十五', '天文二十', '永禄三', '永禄十一', '元亀二', '天正三']);
+  text('年　 月　　　　　　　　　学 歴 ・ 職 歴', 130, 378, 12, '#4b4d49');
+  const jobs = ['那古野城 城主に就任', '織田家 家督を相続（先代急逝）', '桶狭間にて今川義元を撃破', '足利義昭を奉じ 上洛', '比叡山にて組織改革を断行', '長篠にて鉄砲三段撃ちを導入'];
+  jobs.forEach((s, i) => text(s, 190, 414 + i * 47, 13));
+  text('志望動機・特技・アピールポイント', 28, 695, 11); text('天下布武。天下を統一いたしたく存じます。', 32, 738, 15);
+  ctx.restore();
+  ctx.save(); ctx.translate(660, -17); ctx.rotate(lerp(0, .012, p));
+  ctx.shadowColor = 'rgba(0,0,0,.36)'; ctx.shadowBlur = 16; ctx.shadowOffsetX = -6; ctx.fillStyle = CFG.paperColor; ctx.fillRect(0, 0, 600, 820); ctx.shadowColor = 'transparent';
+  text('学　歴 ・ 職　歴', 300, 42, 15, '#454943', 'center');
+  drawRows(22, 62, 556, 7, 62, ['天文十五', '天文二十', '永禄三', '永禄十一', '元亀二', '天正三', '天正十']);
+  const history = ['那古野城 城主に就任', '織田家 家督を相続（先代急逝のため）', '桶狭間にて今川義元を撃破　※全社成績一位', '足利義昭を奉じ 上洛', '比叡山にて全社的な組織改革を断行', '長篠にて鉄砲三段撃ちを導入（工程改善）', '本能寺にて退職（自己都合）'];
+  history.forEach((s, i) => text(s, 190, 93 + i * 62, 14));
+  text('免　許 ・ 資　格', 300, 535, 15, '#454943', 'center');
+  drawRows(22, 555, 556, 3, 58, ['天文十八', '永禄十', '天正四']);
+  ['鉄砲 取扱（三段撃ち 可）', '楽市楽座 運営管理', '茶道（名物 収集）'].forEach((s, i) => text(s, 190, 584 + i * 58, 14));
+  ctx.restore();
+  ctx.restore();
+  paperNoise(t, .03); vignette(.43);
+}
+
+function drawFold(t) {
+  const st = SCENE_START.fold;
+  const u = t - st;
+  const appear = cueTime('fold-title-appears') - st;
+  const transition = ease(seg(u, .28, .58));
+  drawResumeSpread(t, 1);
+  if (transition <= 0) return;
+  ctx.save(); ctx.globalAlpha = transition;
+  wood(t);
+  const pageP = ease(seg(u, .28, .68));
+  const pageZoom = lerp(1, 1.92, Math.pow(seg(t, cueTime('fold-title-appears'), cueTime('fold-out')), 1.22));
+  const pageW = lerp(1160, 700, pageP) * pageZoom, pageH = lerp(680, 720, pageP) * pageZoom;
+  ctx.save(); ctx.translate(640, 360); ctx.transform(1, 0, lerp(-.05, 0, pageP), 1, 0, 0);
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 28; ctx.fillStyle = CFG.paperColor; ctx.fillRect(-pageW / 2, -pageH / 2, pageW, pageH); ctx.restore();
+  if (assets.title) {
+    const zoom = titleZoom(t);
+    const w = zoom.w, h = w * (690 / 980);
+    ctx.save(); ctx.globalAlpha *= seg(u, appear, appear + .16); ctx.translate(640, 360); ctx.rotate(lerp(-.055, 0, zoom.p)); ctx.drawImage(assets.title, -w / 2, -h / 2, w, h); ctx.restore();
+  }
+  ctx.restore();
+  paperNoise(t, .04); vignette(.4);
+}
+
+function drawTitle(t) {
+  const st = SCENE_START.title;
+  const settle = cueTime('title-settles') - st;
+  const end = cueTime('title-end') - st;
+  const u = t - st;
+  ctx.fillStyle = CFG.paperColor; ctx.fillRect(0, 0, CFG.w, CFG.h);
+  if (assets.title) {
+    const zoom = titleZoom(t);
+    const hold = seg(u, settle, Math.max(settle + .01, end));
+    const breathe = 1 + .009 * Math.sin((u + hold) * 2.2);
+    const w = zoom.w * breathe, h = w * (690 / 980);
+    ctx.save(); ctx.translate(640 + Math.sin(u * 1.05) * 2.5, 360 + Math.cos(u * .92) * 2); ctx.drawImage(assets.title, -w / 2, -h / 2, w, h); ctx.restore();
+  }
+  paperNoise(t, .046); vignette(.52);
+}
+
+function render(t) {
+  t = clamp(Number(t) || 0, 0, CFG.duration);
+  ctx.clearRect(0, 0, CFG.w, CFG.h);
+  const revealAt = cueTime('resume-reveal');
+  const outAt = cueTime('resume-out');
+  if (t < outAt) {
+    const mix = seg(t, revealAt, revealAt + .42);
+    if (mix < 1) drawCloseWriting(t);
+    if (mix > 0) { ctx.save(); ctx.globalAlpha = ease(mix); drawResumeSpread(t, 1); ctx.restore(); }
+  } else if (t < cueTime('fold-out')) drawFold(t);
+  else drawTitle(t);
+}
+
+const clock = { t: 0 };
+const master = gsap.timeline({ paused: true, defaults: { ease: 'none' }, onUpdate: () => {
+  render(clock.t); scrub.value = clock.t; tc.textContent = `${clock.t.toFixed(2)} / ${CFG.duration.toFixed(2)}`;
+}});
+master.to(clock, { t: CFG.duration, duration: CFG.duration, ease: 'none' }, 0);
+window.__timelines = { main: master };
+window.__odRenderAt = t => { master.pause(); master.time(clamp(Number(t) || 0, 0, CFG.duration), false); clock.t = clamp(Number(t) || 0, 0, CFG.duration); render(clock.t); };
+
+const playBtn = document.getElementById('playBtn');
+const scrub = document.getElementById('scrub');
+const tc = document.getElementById('tc');
+scrub.max = CFG.duration;
+playBtn.addEventListener('click', () => {
+  if (master.progress() >= 1) master.restart(); else master.paused() ? master.play() : master.pause();
+  playBtn.textContent = master.paused() ? 'PLAY' : 'PAUSE';
+});
+scrub.addEventListener('input', () => { window.__odRenderAt(Number(scrub.value)); playBtn.textContent = 'PLAY'; });
+window.addEventListener('resize', () => {
+  if (document.documentElement.classList.contains('od-export')) return;
+  const s = Math.min(innerWidth / CFG.w, innerHeight / CFG.h); const main = document.getElementById('main');
+  main.style.transform = `translate(-50%,-50%) scale(${s})`;
+});
+window.dispatchEvent(new Event('resize'));
+ready.then(() => render(0));
+</script>
+<script data-od-preview-audio>
+(function(){var a=document.getElementById('soundtrack');if(!a||document.documentElement.classList.contains('od-export'))return;
+function tick(){if(window.__odMotionSourcePlayer||window.__odMotionRender)return;var tl=window.__timelines&&window.__timelines.main;
+if(tl){var t=tl.time(),on=tl.isActive();if(on){if(a.paused)a.play().catch(function(){});if(Math.abs(a.currentTime-t)>0.2)a.currentTime=t;}else{if(!a.paused)a.pause();if(Math.abs(a.currentTime-t)>0.05)a.currentTime=t;}}
+requestAnimationFrame(tick);}requestAnimationFrame(tick);})();
+</script>
+</body>
+</html>
