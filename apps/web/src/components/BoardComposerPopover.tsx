@@ -861,6 +861,7 @@ export function BoardComposerPopover({
                   !event.altKey
                 ) {
                   event.preventDefault();
+                  if (event.repeat) return;
                   // Enter triggers the primary CTA: comment (save) for element
                   // selections, send-to-chat for pod selections. Respect the same
                   // permission gates as the visible buttons so Enter can't perform

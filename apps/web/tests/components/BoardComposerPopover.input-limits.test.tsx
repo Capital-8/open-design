@@ -11,6 +11,17 @@ function mount(draft:string, extra:Partial<React.ComponentProps<typeof BoardComp
  return {onSaveComment,onSendBatch};
 }
 afterEach(cleanup);
+it.each(['element', 'pod'] as const)('CV22: ignores repeated Enter for %s while preserving normal Enter', (selectionKind) => {
+ const {onSaveComment,onSendBatch}=mount('Keep my note',{target:{...target,selectionKind}});
+ const input=screen.getByTestId('comment-popover-input');
+ fireEvent.keyDown(input,{key:'Enter',repeat:true});
+ expect(onSaveComment).not.toHaveBeenCalled();
+ expect(onSendBatch).not.toHaveBeenCalled();
+ fireEvent.keyDown(input,{key:'Enter'});
+ fireEvent.keyDown(input,{key:'Enter',repeat:true});
+ expect(onSaveComment).toHaveBeenCalledTimes(selectionKind === 'element' ? 1 : 0);
+ expect(onSendBatch).toHaveBeenCalledTimes(selectionKind === 'pod' ? 1 : 0);
+});
 it('D10: permits 400 trimmed graphemes including composed emoji without a counter',()=>{
  const {onSaveComment}=mount(`  ${'👨‍👩‍👧‍👦'.repeat(400)}  `); expect(screen.queryByRole('alert')).toBeNull();
  fireEvent.keyDown(screen.getByTestId('comment-popover-input'),{key:'Enter'}); expect(onSaveComment).toHaveBeenCalledOnce();
