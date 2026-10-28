@@ -3015,6 +3015,7 @@ export function ProjectView({
       failureAuthorityKey?: string;
       fundingRunKey?: string;
       fundingSource?: 'preflight' | 'gateway';
+      stage: 'before_run' | 'mid_run';
       workspaceContext?: WorkspaceCollabContext | null;
     } | null
   >(null);
@@ -3762,7 +3763,7 @@ export function ProjectView({
     const key = `${input.accountGeneration}:${input.conversationId}:${input.runKey}`;
     if (shownFundingFailuresRef.current.has(key)) {
       if (source === 'gateway') setAmrBalanceGateBlock((previous) =>
-        previous?.fundingRunKey === input.runKey ? { ...previous, fundingSource: source } : previous);
+        previous?.fundingRunKey === input.runKey ? { ...previous, fundingSource: source, stage: 'mid_run' } : previous);
       return;
     }
     shownFundingFailuresRef.current.add(key);
@@ -3784,6 +3785,7 @@ export function ProjectView({
       failureAuthorityKey: input.authorityKey,
       fundingRunKey: input.runKey,
       fundingSource: source,
+      stage: source === 'preflight' ? 'before_run' : 'mid_run',
     });
   }, [project.id, requireManualStartAfterFundingRefusal]);
   useEffect(() => {
@@ -9457,6 +9459,7 @@ export function ProjectView({
             const blockedBranch = amrBalanceBranchRef.current;
             setAmrBalanceGateBlock({
               reason: gate.reason,
+              stage: 'before_run',
               dialog:
                 gate.reason === 'signed_out'
                   ? 'upgrade'
@@ -15114,6 +15117,9 @@ export function ProjectView({
          * 可以直接发给所有者的话 —— 在此之前这一档只有一颗「暂不需要」(§6.Y)。
          */
         <AmrOwnerTopUpDialog
+          stage={amrBalanceGateBlock?.stage ?? 'unknown'}
+          workspaceContext={amrBalanceGateBlock?.workspaceContext === undefined
+            ? projectRunBillingAuthorityContext : amrBalanceGateBlock.workspaceContext}
           onClose={() => {
             setAmrOwnerTopUpFromCard(false);
             // 和现有弹窗的「暂不需要」同义:任务留在队列里,只是不再是唯一选项。
@@ -15124,6 +15130,7 @@ export function ProjectView({
       {amrBalanceGateBlock?.dialog === 'upgrade' ? (
         <AmrBalanceDialog
           reason={amrBalanceGateBlock.reason}
+          stage={amrBalanceGateBlock.stage}
           manualSendOnRecovery={amrBalanceGateBlock.reason === 'insufficient'}
           modelId={amrBalanceGateBlock.modelId}
           fundingScope={amrBalanceGateBlock.fundingScope}
