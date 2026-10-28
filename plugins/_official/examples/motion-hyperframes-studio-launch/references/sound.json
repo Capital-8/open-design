@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "music": {
+    "role": "bed",
+    "description": "电子合成器铺底、轻快节奏与渐强氛围；风格为画面推断，未完成听觉核验。",
+    "bpm": null,
+    "beatConfidence": "none",
+    "cutOnBeat": false,
+    "sections": [
+      {
+        "scene": "office",
+        "energy": "low"
+      },
+      {
+        "scene": "notification",
+        "energy": "low"
+      },
+      {
+        "scene": "request",
+        "energy": "mid"
+      },
+      {
+        "scene": "mascot",
+        "energy": "mid"
+      },
+      {
+        "scene": "launch",
+        "energy": "mid"
+      },
+      {
+        "scene": "tracks",
+        "energy": "mid"
+      },
+      {
+        "scene": "introducing",
+        "energy": "mid"
+      },
+      {
+        "scene": "editor",
+        "energy": "mid"
+      },
+      {
+        "scene": "draw",
+        "energy": "mid"
+      },
+      {
+        "scene": "comment",
+        "energy": "mid"
+      },
+      {
+        "scene": "aroll",
+        "energy": "mid"
+      },
+      {
+        "scene": "gallery",
+        "energy": "mid"
+      },
+      {
+        "scene": "prompts",
+        "energy": "mid"
+      },
+      {
+        "scene": "social",
+        "energy": "mid"
+      },
+      {
+        "scene": "export",
+        "energy": "mid"
+      },
+      {
+        "scene": "platform-x",
+        "energy": "mid"
+      },
+      {
+        "scene": "platform-instagram",
+        "energy": "mid"
+      },
+      {
+        "scene": "platform-tiktok",
+        "energy": "mid"
+      },
+      {
+        "scene": "platform-youtube",
+        "energy": "mid"
+      },
+      {
+        "scene": "end",
+        "energy": "low"
+      }
+    ]
+  },
+  "effects": [
+    {
+      "cue": "notification-enter",
+      "kind": "pop",
+      "sync": "contact"
+    },
+    {
+      "cue": "request-enter",
+      "kind": "typing",
+      "sync": "motion-peak"
+    },
+    {
+      "cue": "draw-enter",
+      "kind": "click",
+      "sync": "contact"
+    },
+    {
+      "cue": "export-out",
+      "kind": "whoosh",
+      "sync": "motion-peak"
+    },
+    {
+      "cue": "platform-x-enter",
+      "kind": "impact",
+      "sync": "contact"
+    }
+  ],
+  "effectsPer10s": 0.62,
+  "voice": {
+    "present": true
+  },
+  "captions": {
+    "position": "bottom",
+    "grouping": "phrase",
+    "highlight": "none",
+    "box": "none",
+    "case": "as-is",
+    "font": {
+      "role": "body",
+      "weight": "regular",
+      "size": "small"
+    }
+  },
+  "demoTrack": {
+    "file": "assets/soundtrack.mp3",
+    "origin": "reference"
+  }
+}

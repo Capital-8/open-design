@@ -1,0 +1,258 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-hyperframes-studio-launch",
+  "title": "HyperFrames Studio Launch",
+  "title_i18n": {
+    "en": "HyperFrames Studio Launch",
+    "zh-CN": "HyperFrames Studio 发布片"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-27T00:00:00Z",
+  "description": "A HyperFrames Studio launch film moving from a late-night brief to collaborative editing and mechanical social publishing.",
+  "description_i18n": {
+    "en": "A HyperFrames Studio launch film moving from a late-night brief to collaborative editing and mechanical social publishing.",
+    "zh-CN": "HyperFrames Studio 发布片，从深夜创作指令、协作剪辑演示走向立体社交平台发布装置。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "product-launch",
+    "editor",
+    "social-media"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌",
+        "default": "HyperFrames"
+      },
+      {
+        "name": "product",
+        "type": "string",
+        "label": "产品",
+        "default": "HyperFrames Studio"
+      },
+      {
+        "name": "parentBrand",
+        "type": "string",
+        "label": "母品牌",
+        "default": "HeyGen"
+      },
+      {
+        "name": "headline",
+        "type": "string",
+        "label": "核心文案",
+        "default": "the video editor\nfor agents and humans"
+      },
+      {
+        "name": "launchRequest",
+        "type": "string",
+        "label": "发布片指令",
+        "default": "Let’s make a launch video for HyperFrames Desktop app - introduce the studio as the video editor for agents and humans, with humans mint in the title."
+      },
+      {
+        "name": "socialRequest",
+        "type": "string",
+        "label": "社交短片指令",
+        "default": "Edit these videos for social media"
+      },
+      {
+        "name": "primary",
+        "type": "string",
+        "label": "强调色",
+        "default": "#30f3ac"
+      },
+      {
+        "name": "book",
+        "type": "string",
+        "label": "画面素材 book",
+        "default": "assets/book.png"
+      },
+      {
+        "name": "gallery_purple",
+        "type": "string",
+        "label": "画面素材 gallery-purple",
+        "default": "assets/gallery-purple.png"
+      },
+      {
+        "name": "office_person",
+        "type": "string",
+        "label": "画面素材 office-person",
+        "default": "assets/office-person.png"
+      },
+      {
+        "name": "platform_youtube",
+        "type": "string",
+        "label": "画面素材 platform-youtube",
+        "default": "assets/platform-youtube.png"
+      },
+      {
+        "name": "gallery_desktop",
+        "type": "string",
+        "label": "画面素材 gallery-desktop",
+        "default": "assets/gallery-desktop.png"
+      },
+      {
+        "name": "man",
+        "type": "string",
+        "label": "画面素材 man",
+        "default": "assets/man.png"
+      },
+      {
+        "name": "gallery_terminal",
+        "type": "string",
+        "label": "画面素材 gallery-terminal",
+        "default": "assets/gallery-terminal.png"
+      },
+      {
+        "name": "platform_instagram",
+        "type": "string",
+        "label": "画面素材 platform-instagram",
+        "default": "assets/platform-instagram.png"
+      },
+      {
+        "name": "intro_card",
+        "type": "string",
+        "label": "画面素材 intro-card",
+        "default": "assets/intro-card.png"
+      },
+      {
+        "name": "office_monitor",
+        "type": "string",
+        "label": "画面素材 office-monitor",
+        "default": "assets/office-monitor.png"
+      },
+      {
+        "name": "woman",
+        "type": "string",
+        "label": "画面素材 woman",
+        "default": "assets/woman.png"
+      },
+      {
+        "name": "office_screen",
+        "type": "string",
+        "label": "画面素材 office-screen",
+        "default": "assets/office-screen.png"
+      },
+      {
+        "name": "launch_card",
+        "type": "string",
+        "label": "画面素材 launch-card",
+        "default": "assets/launch-card.png"
+      },
+      {
+        "name": "platform_x",
+        "type": "string",
+        "label": "画面素材 platform-x",
+        "default": "assets/platform-x.png"
+      },
+      {
+        "name": "platform_tiktok",
+        "type": "string",
+        "label": "画面素材 platform-tiktok",
+        "default": "assets/platform-tiktok.png"
+      },
+      {
+        "name": "gallery_trees",
+        "type": "string",
+        "label": "画面素材 gallery-trees",
+        "default": "assets/gallery-trees.png"
+      },
+      {
+        "name": "gallery_calendar",
+        "type": "string",
+        "label": "画面素材 gallery-calendar",
+        "default": "assets/gallery-calendar.png"
+      },
+      {
+        "name": "building",
+        "type": "string",
+        "label": "画面素材 building",
+        "default": "assets/building.png"
+      },
+      {
+        "name": "gallery_vision",
+        "type": "string",
+        "label": "画面素材 gallery-vision",
+        "default": "assets/gallery-vision.png"
+      },
+      {
+        "name": "slack_avatar",
+        "type": "string",
+        "label": "slack_avatar",
+        "default": "assets/slack_avatar.png",
+        "required": false
+      },
+      {
+        "name": "dock_settings",
+        "type": "string",
+        "label": "dock_settings",
+        "default": "assets/dock_settings.png",
+        "required": false
+      },
+      {
+        "name": "dock_slack",
+        "type": "string",
+        "label": "dock_slack",
+        "default": "assets/dock_slack.png",
+        "required": false
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create an 80.81-second product launch film. Open behind a developer in a late-night studio with a San Francisco 11:54 PM PST label. A desktop notification from Bin Liu says we need to launch studio tomorrow, followed by a Slack reply, sounds good!, and a dock click opening the app. Type {{launchRequest}}. On an ivory stage, the mint-green Nib mascot wears round glasses and reads a yellow Launch Videos for Dummies book; a lightbulb flashes before a floating launch card spins into a multitrack timeline with voiceover, clicks, whooshes and keys. Reveal Introducing {{product}}, then the multicolored halftone preview reading {{headline}}. Draw a mint ellipse around the type, enter make this bigger, then comment make humans mint; the last word changes to {{primary}}. Add an A-roll of the bespectacled man in a grassy field to the editor. Slide the preview upward into a moving gallery of project tiles with Set the vision and Watch it become video. Type a succession of podcast clipping, interview captions, vertical reframing, color grading and music editing requests, ending with {{socialRequest}}. A vertical portrait of the woman in a white blazer resolves from colorful particles, then appears above a timeline with graphics, B-roll and caption tracks. The Export pill collapses into a glossy black ball. Follow it through beige mechanical X, Instagram, TikTok and YouTube stations, each with a portrait upload screen, progress bar, publishing button and moving rails. Finish with an illuminated beige wall bearing the black {{parentBrand}}, {{brand}} and Studio wordmark and mint icon. Use the following swappable reference picture elements: book {{book}}; gallery_purple {{gallery_purple}}; office_person {{office_person}}; platform_youtube {{platform_youtube}}; gallery_desktop {{gallery_desktop}}; man {{man}}; gallery_terminal {{gallery_terminal}}; platform_instagram {{platform_instagram}}; intro_card {{intro_card}}; office_monitor {{office_monitor}}; woman {{woman}}; office_screen {{office_screen}}; launch_card {{launch_card}}; platform_x {{platform_x}}; platform_tiktok {{platform_tiktok}}; gallery_trees {{gallery_trees}};  gallery-calendar image {{gallery_calendar}}; building image {{building}}; gallery-vision image {{gallery_vision}}; Use {{slack_avatar}} for the chat avatar and {{dock_settings}} / {{dock_slack}} for Dock icons.",
+        "zh-CN": "为 {{product}} 制作 80.81 秒产品发布片：先从深夜工作室背影和 11:54 PM PST 的时间标记推入，桌面收到 Bin Liu 的发布通知，Slack 对话回复 sounds good!，点击应用后逐字输入 {{launchRequest}}。白底上戴圆眼镜的薄荷绿 Nib 翻看黄色 Launch Videos for Dummies，灯泡亮起，再托起发布片卡片。卡片旋转进入多轨时间线，依次添加 Voiceover、Clicks、Whoosh 和 Keys。黑色卡片显示 Introducing {{product}}，然后展示 {{headline}} 的彩色网点预览；光标圈出标题，输入 make this bigger，再评论 make humans mint，humans 变为 {{primary}}。插入田野里戴眼镜男子的 A-roll，在编辑器里播放，然后让作品墙向上翻动，出现 Set the vision / Watch it become video。白底逐条打出播客剪辑、采访字幕、竖屏重构、调色与配乐请求，最后输入 {{socialRequest}}。长发白外套女性竖屏素材由彩色粒子聚合出现，底部时间线添加图形、B-roll 和字幕轨。Export 按钮收缩成黑色弹珠，弹珠依次经过 X、Instagram、TikTok、YouTube 米色立体机械装置；手机屏显示上传、进度和发布状态。最后镜头收束到暖米色墙面的 {{parentBrand}} / {{brand}} / Studio 黑色立体品牌字与薄荷绿图标。 保留以下可替换原片素材：画面素材 book {{book}}；画面素材 gallery-purple {{gallery_purple}}；画面素材 office-person {{office_person}}；画面素材 platform-youtube {{platform_youtube}}；画面素材 gallery-desktop {{gallery_desktop}}；画面素材 man {{man}}；画面素材 gallery-terminal {{gallery_terminal}}；画面素材 platform-instagram {{platform_instagram}}；画面素材 intro-card {{intro_card}}；画面素材 office-monitor {{office_monitor}}；画面素材 woman {{woman}}；画面素材 office-screen {{office_screen}}；画面素材 launch-card {{launch_card}}；画面素材 platform-x {{platform_x}}；画面素材 platform-tiktok {{platform_tiktok}}；画面素材 gallery-trees {{gallery_trees}}； 画面素材 gallery-calendar {{gallery_calendar}}; 画面素材 building {{building}}; 画面素材 gallery-vision {{gallery_vision}}; 聊天头像使用 {{slack_avatar}}，Dock 图标使用 {{dock_settings}} / {{dock_slack}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "HyperFrames Studio Launch"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@HyperFrames_",
+      "url": "https://x.com/HyperFrames_/status/2107149824189698558",
+      "note": "参考视频来源；内部 ODEval 复刻。"
+    }
+  ]
+}
