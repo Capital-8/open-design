@@ -321,9 +321,19 @@ test('[P0] AMR Home confirms fresh funding before creating without waiting for d
   await wireSignedInAmrHome(page);
   const funding = deferred();
   let fundingRequested = false;
+  let sending = false;
+  let sendFundingReads = 0;
   await page.route('**/api/workspace/billing/preflight?**', async (route) => {
-    fundingRequested = true;
-    await funding.promise;
+    if (sending) {
+      fundingRequested = true;
+      sendFundingReads++;
+      await funding.promise;
+      // Publish while every same-click response is in flight. The old cache
+      // fence exhausts all three retries even though each response is valid.
+      await page.evaluate(() => {
+        for (let i = 0; i < 99; i++) window.dispatchEvent(new Event('od:workspace-billing-refresh'));
+      });
+    }
     await route.fallback();
   });
   const billing = await holdAmrBillingGate(page);
@@ -331,12 +341,17 @@ test('[P0] AMR Home confirms fresh funding before creating without waiting for d
   const runBodies: Array<Record<string, unknown>> = [];
   const runRequests = await routeSuccessfulRuns(page, { bodies: runBodies, runId: 'home-amr-pending-run' });
   try {
+    const warmed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspace/billing/preflight'
+      && new URL(response.url()).searchParams.get('modelId') === 'glm-5');
     await gotoEntryHome(page);
+    await (await warmed).finished();
+    sending = true;
     await sendFromHome(page, 'Draft a landing page for a coffee subscription.');
     await expect.poll(() => fundingRequested).toBe(true);
     const pending = page.locator('[data-creation-phase="pending"]');
     await expect(pending).toHaveCount(0);
     expect(create.requested()).toBe(false);
+    expect(sendFundingReads, 'this click starts its own fresh proof before creating').toBe(1);
     funding.resolve();
     await expect(pending).toBeVisible({ timeout: T.medium });
     await expect.poll(() => create.requested(), { timeout: T.medium }).toBe(true);
@@ -345,6 +360,7 @@ test('[P0] AMR Home confirms fresh funding before creating without waiting for d
     await runRequests.expectCount(1);
     expect(runBodies[0]).toMatchObject({ agentId: 'amr' });
     expect(billing.held()).toBe(false);
+    expect(create.requestCount()).toBe(1);
     await expect(pending).toBeHidden({ timeout: T.medium });
     await expect(page.getByTestId('chat-composer')).toBeVisible({ timeout: T.medium });
   } finally {

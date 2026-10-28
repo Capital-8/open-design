@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceBillingPreflight } from '@open-design/contracts';
-import { cachedHomeAmrFundingBlock, invalidateAmrFundingFeedback, checkAmrFundingFeedback, checkAmrFundingEvidence, noteHomeAmrFundingBlockPresented, readFreshAmrFundingEvidence, recentHomeAmrFundingInsufficiency, retireHomeAmrFundingBlock, takeHomeAmrFundingFastBlock } from '../../src/runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, invalidateAmrFundingFeedback, checkAmrFundingFeedback, checkAmrFundingEvidence, noteHomeAmrFundingBlockPresented, readFreshAmrFundingEvidence, readSendTimeAmrFundingEvidence, recentHomeAmrFundingInsufficiency, retireHomeAmrFundingBlock, takeHomeAmrFundingFastBlock } from '../../src/runtime/amr-funding-feedback';
 import { advanceWorkspaceAccountGeneration, resetWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
 
 let sequence = 0;
@@ -356,5 +356,56 @@ describe('same funding observation also explains the plan', () => {
     expect(await old).toEqual({ kind: 'unknown', preflight: null });
     expect(await checkAmrFundingEvidence(scope, 'model')).toEqual({ kind: 'available', preflight });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe('explicit Send funding observations', () => {
+  it.each([1, 8, 99])('accepts its own fresh server proof after %s display invalidations', async (invalidations) => {
+    const { scope, preflight, fetchMock } = fixture('available');
+    let finish!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const result = readSendTimeAmrFundingEvidence(scope, 'model');
+    for (let i = 0; i < invalidations; i++) invalidateAmrFundingFeedback();
+    finish(new Response(JSON.stringify({ preflight })));
+    expect(await result).toEqual({ kind: 'available', preflight });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it('uses a new server read for every Send even when a warm positive is cached', async () => {
+    const { scope, preflight, fetchMock } = fixture('available');
+    await checkAmrFundingEvidence(scope, 'model');
+    await readSendTimeAmrFundingEvidence(scope, 'model');
+    preflight.fundingCheck = 'insufficient';
+    expect(await readSendTimeAmrFundingEvidence(scope, 'model')).toEqual({ kind: 'insufficient', preflight });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+  it.each(['workspace', 'member', 'model', 'stale', 'future', 'missing', 'forbidden', 'timeout', 'offline', 'unknown'] as const)(
+    'cannot authorize Send using %s evidence despite display invalidation', async (change) => {
+      const { scope, preflight, fetchMock } = fixture('available');
+      if (change === 'workspace') preflight.workspaceId = 'other-space';
+      if (change === 'member') preflight.workspaceMemberId = 'other-member';
+      if (change === 'model') preflight.modelId = 'other-model';
+      if (change === 'stale') preflight.generatedAt = new Date(Date.now() - 31_000).toISOString();
+      if (change === 'future') preflight.generatedAt = new Date(Date.now() + 6_000).toISOString();
+      if (change === 'missing') fetchMock.mockResolvedValue(new Response('{}'));
+      if (change === 'forbidden') fetchMock.mockResolvedValue(new Response(null, { status: 403 }));
+      if (change === 'timeout') fetchMock.mockRejectedValue(new DOMException('timeout', 'TimeoutError'));
+      if (change === 'offline') fetchMock.mockRejectedValue(new Error('offline'));
+      if (change === 'unknown') preflight.fundingCheck = 'unknown';
+      const result = readSendTimeAmrFundingEvidence(scope, 'model');
+      invalidateAmrFundingFeedback();
+      expect(await result).toEqual({ kind: 'unknown', preflight: null });
+    },
+  );
+  it.each(['account', 'route-or-model'] as const)('discards Send after its %s identity changes', async (change) => {
+    const { scope, preflight, fetchMock } = fixture('available');
+    let finish!: (response: Response) => void;
+    let current = true;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const result = readSendTimeAmrFundingEvidence(scope, 'model', () => current);
+    if (change === 'account') advanceWorkspaceAccountGeneration('new-send-account');
+    else current = false;
+    finish(new Response(JSON.stringify({ preflight })));
+    expect(await result).toEqual({ kind: 'unknown', preflight: null });
   });
 });
