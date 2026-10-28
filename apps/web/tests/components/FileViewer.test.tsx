@@ -8826,6 +8826,10 @@ describe('FileViewer tweaks toolbar', () => {
     const original = HTMLElement.prototype.getBoundingClientRect;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       if (this.matches('.viewer-body, .comment-preview-canvas')) return testRect(0, 0, 900, 700);
+      if (this.matches('.comment-saved-marker, .comment-active-pin')) {
+        // The popover anchors to the displayed avatar's DOM rectangle, not its saved target box.
+        return testRect(Number.parseFloat(this.style.left), Number.parseFloat(this.style.top), 28, 28);
+      }
       return original.call(this);
     });
   });
@@ -11243,12 +11247,51 @@ describe('FileViewer tweaks toolbar', () => {
     await act(async () => firstRead.resolve(new Response('{}', { status: 500 })));
     expect(screen.getByTestId('comment-unread-dot')).toBeVisible();
     fireEvent.click(screen.getByTestId('comment-panel-toggle'));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Comment: external' }), { key: 'Escape' });
     fireEvent.click(screen.getByTestId('comment-side-item'));
     await waitFor(() => expect(readWrites).toBe(2));
     await act(async () => { await Promise.resolve(); });
     fireEvent.click(screen.getByTestId('comment-panel-toggle'));
     expect(screen.queryByTestId('comment-unread-dot')).toBeNull();
+  });
+
+  it('keeps one pending read acknowledgment across target updates and comment refreshes', async () => {
+    const pendingRead = deferredResponse();
+    const readWrites = vi.fn(() => pendingRead.promise);
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).includes('/comments/read')) return Response.json({});
+      if (init?.method === 'PUT') return readWrites();
+      return Response.json({ projectId: 'project-read-rerender', filePath: 'preview.html', seenCommentIds: [] });
+    }));
+    const comment: PreviewComment = {
+      id: 'pending-read', projectId: 'project-read-rerender', conversationId: 'conversation-1',
+      filePath: 'preview.html', elementId: 'pin-pending-read', selector: '[data-od-pin="pin-pending-read"]',
+      label: 'Pending read', text: '', htmlHint: '', position: { x: 40, y: 52, width: 18, height: 18 },
+      note: 'Read this once', status: 'open', createdAt: 103, updatedAt: 103,
+    };
+    const viewer = (comments: PreviewComment[]) => <FileViewer projectId="project-read-rerender"
+      projectKind="prototype" file={htmlPreviewFile()} liveHtml="<html><body /></html>" previewComments={comments} />;
+    const view = render(viewer([comment]));
+    fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+    fireEvent.click(screen.getByTestId('comment-side-item'));
+    expect(await screen.findByRole('dialog', { name: 'Comment: Pending read' })).toBeVisible();
+    await waitFor(() => expect(readWrites).toHaveBeenCalledTimes(1));
+
+    const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, data: {
+      type: 'od:comment-targets', targets: [{ ...comment, position: { x: 60, y: 72, width: 18, height: 18 } }],
+    } })));
+    view.rerender(viewer([{ ...comment }]));
+    // Let the layout and the next read-effect animation frame settle while the PUT remains pending.
+    await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
+    expect(readWrites).toHaveBeenCalledTimes(1);
+
+    await act(async () => pendingRead.resolve(Response.json({
+      projectId: 'project-read-rerender', filePath: 'preview.html', seenCommentIds: [comment.id],
+    })));
+    fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+    await waitFor(() => expect(screen.queryByTestId('comment-unread-dot')).toBeNull());
+    expect(readWrites).toHaveBeenCalledTimes(1);
   });
 
   it('keeps browsing independent while creating an annotation', () => {
@@ -11965,7 +12008,7 @@ describe('FileViewer tweaks toolbar', () => {
 
     fireEvent.click(within(screen.getByTestId('comment-saved-marker-pin-newer')).getByRole('button'));
     await waitFor(() => {
-      const activeItem = document.querySelector('[data-comment-id="comment-newer"]');
+      const activeItem = document.querySelector('.comment-side-item[data-comment-id="comment-newer"]');
       expect(activeItem?.className).toContain('active');
       expect(activeItem?.getAttribute('aria-current')).toBe('true');
     });
@@ -11973,7 +12016,7 @@ describe('FileViewer tweaks toolbar', () => {
     expect(screen.getByTestId('comment-popover-detail')).toHaveTextContent('Newer comment');
     expect(screen.queryByTestId('comment-active-pin')).toBeNull();
     expect(screen.getByTestId('comment-saved-marker-pin-newer').querySelector('button')).toHaveStyle({ background: newerColor.bg, color: newerColor.fg });
-    expect(document.querySelector('[data-comment-id="comment-older"]')?.className).not.toContain('active');
+    expect(document.querySelector('.comment-side-item[data-comment-id="comment-older"]')?.className).not.toContain('active');
   });
 
   it('uses the next comment number when adding another comment on the same element', async () => {
@@ -12044,7 +12087,7 @@ describe('FileViewer tweaks toolbar', () => {
 
     fireEvent.click(within(screen.getByTestId('comment-saved-marker-hero')).getByRole('button'));
     await waitFor(() => {
-      expect(document.querySelector('[data-comment-id="comment-saved"]')?.className).toContain('active');
+      expect(document.querySelector('.comment-side-item[data-comment-id="comment-saved"]')?.className).toContain('active');
     });
     expect(screen.queryByTestId('comment-active-pin')).toBeNull();
     expect(screen.getByTestId('comment-saved-marker-hero')).toHaveAttribute('data-pin-number', '1');

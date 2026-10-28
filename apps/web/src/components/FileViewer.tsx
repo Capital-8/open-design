@@ -8690,6 +8690,7 @@ function HtmlViewer({
   // A late response from a previous account must never become this viewer's state.
   const commentReadScopeKey = `${projectId}\u0000${file.name}\u0000${workspaceAccountScopedCacheKey(workspaceContext)}`;
   const commentReadScopeRef = useRef(commentReadScopeKey);
+  const pendingCommentReadsRef = useRef(new Set<string>());
   const commentPanelToggleRef = useRef<HTMLButtonElement | null>(null);
   const commentPanelReturnFocusRef = useRef<HTMLElement | null>(null);
   const pendingCommentPanelFocusRef = useRef<HTMLElement | null>(null);
@@ -16550,22 +16551,25 @@ function HtmlViewer({
   useEffect(() => {
     if (!activePreviewCommentId || !activeCommentTarget || previewCommentsState !== 'success') return;
     const scopeKey = commentReadScopeKey;
-    let cancelled = false;
     // A rendered detail acknowledges only that comment; expanding the list does not.
     const ids = unreadSideComments.filter(comment => comment.id === activePreviewCommentId && !commentReadState?.seenCommentIds?.includes(comment.id)).map(comment => comment.id);
     if (!ids.length) return;
+    const requestKey = `${scopeKey}\u0000${activePreviewCommentId}`;
     const frame = requestAnimationFrame(() => {
-      if (document.visibilityState === 'hidden') return;
+      if (document.visibilityState === 'hidden' || pendingCommentReadsRef.current.has(requestKey)) return;
+      pendingCommentReadsRef.current.add(requestKey);
       void fetch(`/api/projects/${encodeURIComponent(projectId)}/comments/read`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', ...(workspaceContext ? workspaceProjectHeaders(workspaceContext) : {}) },
         body: JSON.stringify({ readAt: latestVisibleSideCommentCreatedAt, filePath: file.name, commentIds: ids }),
       }).then(async (response) => {
-        if (!response.ok || cancelled) return;
+        if (!response.ok) return;
+        // Anchor/data rerenders do not invalidate an already dispatched read.
+        // mergeReadState still rejects responses from a different account/file.
         mergeReadState(scopeKey, await response.json() as ProjectCommentReadState);
-      }).catch(() => undefined);
+      }).catch(() => undefined).finally(() => { pendingCommentReadsRef.current.delete(requestKey); });
     });
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
+    return () => { cancelAnimationFrame(frame); };
   }, [unreadSideComments, commentReadState, file.name, previewCommentsState, activePreviewCommentId, activeCommentTarget, commentReadScopeKey, latestVisibleSideCommentCreatedAt, mergeReadState, projectId, workspaceContext]);
   // Trusted current member/app-account identities are filtered above. Never
   // fabricate an authorKey from names, colors, or either identity namespace.

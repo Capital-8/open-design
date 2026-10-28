@@ -372,7 +372,8 @@ test('[P0] sending preview comments opens the refreshed follow-up artifact', asy
   const floatingComposer = page.getByTestId('comment-popover');
   const note = floatingComposer.getByTestId('comment-popover-input');
   await expect(floatingComposer).toBeVisible();
-  await expect(floatingComposer.locator('.comment-popover-title')).toHaveAttribute('title', longCommentTag);
+  await expect(floatingComposer).toHaveAttribute('aria-label', `Comment: ${longCommentTag}`);
+  await expect(floatingComposer.locator('.comment-popover-titlebar, .comment-popover-title')).toHaveCount(0);
   await captureLane4CommentState(page, '05-input-element-selected');
   // Browsing is independent from the active comment creation tool.
   await sidePanel.getByRole('button', { name: 'Hide Comments', exact: true }).click();
@@ -390,20 +391,20 @@ test('[P0] sending preview comments opens the refreshed follow-up artifact', asy
       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64'),
     }));
     await floatingComposer.locator('input[type="file"]').setInputFiles(imageFiles);
-    await expect(floatingComposer.locator('.comment-popover-image')).toHaveCount(2);
+    await expect(floatingComposer.locator('button img')).toHaveCount(2);
     const removedImage = floatingComposer.getByRole('button', { name: removedImageName, exact: true });
-    await floatingComposer.locator('.comment-popover-image').filter({ has: page.getByRole('button', { name: removedImageName, exact: true }) }).locator('.comment-popover-image-remove').click();
+    await floatingComposer.getByRole('button', { name: 'Remove last image', exact: true }).first().click();
     await expect(removedImage).toHaveCount(0);
-    await expect(floatingComposer.locator('.comment-popover-image')).toHaveCount(1);
+    await expect(floatingComposer.locator('button img')).toHaveCount(1);
     const imagePreview = floatingComposer.getByRole('button', { name: imageName, exact: true });
     await expect(imagePreview).toBeVisible();
     await expect(note).toHaveValue('');
-    await floatingComposer.locator('.comment-popover-image-remove').click();
-    await expect(floatingComposer.locator('.comment-popover-images')).toHaveCount(0);
+    await floatingComposer.getByRole('button', { name: 'Remove last image', exact: true }).click();
+    await expect(floatingComposer.locator('button img')).toHaveCount(0);
     await expect(page.getByTestId('comment-popover-save')).toBeDisabled();
     await expect(page.getByTestId('comment-add-send')).toBeDisabled();
     await floatingComposer.locator('input[type="file"]').setInputFiles(imageFiles.slice(1));
-    await expect(floatingComposer.locator('.comment-popover-image')).toHaveCount(1);
+    await expect(floatingComposer.locator('button img')).toHaveCount(1);
     await expect(imagePreview).toBeVisible();
     await expect(page.getByTestId('comment-popover-save')).toBeEnabled();
     await expect(page.getByTestId('comment-add-send')).toBeEnabled();
@@ -428,15 +429,16 @@ test('[P0] sending preview comments opens the refreshed follow-up artifact', asy
     await clickCommentTargetInPreview(page, '[data-od-id="hero-title"]');
     await expect(floatingComposer).toBeVisible();
     await expect(note).toHaveValue('');
-    await expect(floatingComposer.locator('.comment-popover-images')).toHaveCount(0);
+    await expect(floatingComposer.locator('button img')).toHaveCount(0);
     await expect(page.getByTestId('comment-popover-save')).toBeDisabled();
-    await expect(floatingComposer.locator('.comment-popover-title')).toHaveAttribute('title', longCommentTag);
+    await expect(floatingComposer).toHaveAttribute('aria-label', `Comment: ${longCommentTag}`);
+    await expect(floatingComposer.locator('.comment-popover-titlebar, .comment-popover-title')).toHaveCount(0);
   }
   // The mainline limit counts graphemes and blocks both save and send.
   const oversizedDraft = '界'.repeat(401);
   await note.fill(oversizedDraft);
   await expect(note).toHaveValue(oversizedDraft);
-  await expect(floatingComposer.getByRole('alert')).toContainText('401/400');
+  await expect(floatingComposer.getByRole('alert')).toContainText(/401\s*\/\s*400/);
   await expect(page.getByTestId('comment-popover-save')).toBeDisabled();
   await expect(page.getByTestId('comment-add-send')).toBeDisabled();
   await note.fill('');
@@ -477,7 +479,7 @@ test('[P0] sending preview comments opens the refreshed follow-up artifact', asy
   await expect(sidePanel.getByTestId('comment-side-item').filter({ hasText: 'Make the headline more specific.' }).first()).toBeVisible();
   await page.getByTestId('comment-saved-marker-hero-title').getByRole('button').click();
   await expect(floatingComposer).toBeVisible();
-  await expect(floatingComposer.getByTestId('comment-popover-detail')).toHaveText(multilineComment);
+  await expect(floatingComposer.getByTestId('comment-popover-detail').locator('p')).toHaveText(multilineComment);
   await expect(note).toHaveCount(0);
   await expect(saveComment).toHaveCount(0);
   await floatingComposer.getByRole('button', { name: 'Close', exact: true }).click();
@@ -502,7 +504,7 @@ test('[P0] sending preview comments opens the refreshed follow-up artifact', asy
   await expect(item).toHaveCount(1);
   await expect(item).toContainText(multilineComment);
   await item.click();
-  await expect(floatingComposer.getByTestId('comment-popover-detail')).toHaveText(multilineComment);
+  await expect(floatingComposer.getByTestId('comment-popover-detail').locator('p')).toHaveText(multilineComment);
   await expect(note).toHaveCount(0);
   await expect(saveComment).toHaveCount(0);
   await floatingComposer.getByRole('button', { name: 'Close', exact: true }).click();

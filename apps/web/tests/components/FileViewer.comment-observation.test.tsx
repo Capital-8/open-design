@@ -18,10 +18,18 @@ function comment(id: string): PreviewComment {
   };
 }
 beforeEach(() => {
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if (this.matches('.viewer-body, .comment-preview-canvas')) return new DOMRect(0, 0, 900, 700);
+    if (this.matches('.comment-saved-marker, .comment-active-pin')) {
+      return new DOMRect(Number.parseFloat(this.style.left), Number.parseFloat(this.style.top), 28, 28);
+    }
+    return original.call(this);
+  });
   measurement.track.mockReset();
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ deployments: [] })));
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('real saved-comment selection observer', () => {
   it.each(['disabled', 'enabled', 'throws', 'pending'] as const)(

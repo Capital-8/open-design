@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FileViewer } from '../../src/components/FileViewer';
 import type { ProjectFile } from '../../src/types';
 vi.mock('../../src/comments/validate-save-target',()=>({validateCommentSaveTarget:async(_frame:unknown,target:unknown)=>target}));
-afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.restoreAllMocks();});
+beforeEach(() => {
+ const original = HTMLElement.prototype.getBoundingClientRect;
+ vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+  if (this.matches('.viewer-body, .comment-preview-canvas')) return new DOMRect(0, 0, 900, 700);
+  if (this.matches('.comment-saved-marker, .comment-active-pin')) {
+   return new DOMRect(Number.parseFloat(this.style.left), Number.parseFloat(this.style.top), 28, 28);
+  }
+  return original.call(this);
+ });
+});
 const file:ProjectFile={name:'browse.html',path:'browse.html',type:'file',size:10,mtime:1,kind:'html',mime:'text/html'};
 it('A01/D05/H11: browsing preserves the draft, C skips inputs and closing the picker reuses two-click protection',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({})));

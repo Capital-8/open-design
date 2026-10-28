@@ -29,7 +29,7 @@
 .menuItems .deleteAction { color:#f04142; }
 .error { display:flex; align-items:baseline; justify-content:space-between; gap:8px; color:#d63c35; font-size:12px; margin:6px 14px 8px; }
 .error button { background:none; border:0; color:inherit; cursor:pointer; text-decoration:underline; }
-.limitError { margin:0 14px 8px; color:#f04142; font-size:11px; line-height:18px; font-weight:400; }
+.limitError { margin:0 14px 8px; color:#f04142; font-size:11px; line-height:18px; font-weight:500; }
 .counter { flex-shrink:0; white-space:nowrap; font-size:11px; }
 .detail p { font-weight:500; font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; margin:0; }
 .clamped { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
