@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "music": {
+    "role": "lead",
+    "description": "节奏鲜明的电子器乐，明亮合成器、规律低频脉冲和紧凑打击节奏，气氛轻快而利落。",
+    "bpm": 128,
+    "beatConfidence": "steady",
+    "cutOnBeat": true,
+    "sections": [
+      {
+        "scene": "seed",
+        "energy": "mid"
+      },
+      {
+        "scene": "identity",
+        "energy": "mid"
+      },
+      {
+        "scene": "easing",
+        "energy": "mid"
+      },
+      {
+        "scene": "morph",
+        "energy": "high"
+      },
+      {
+        "scene": "systems",
+        "energy": "high"
+      },
+      {
+        "scene": "depth",
+        "energy": "high"
+      },
+      {
+        "scene": "kinetic",
+        "energy": "high"
+      },
+      {
+        "scene": "final",
+        "energy": "mid"
+      }
+    ]
+  },
+  "effects": [],
+  "effectsPer10s": 0,
+  "voice": {
+    "present": false
+  },
+  "demoTrack": {
+    "file": "assets/soundtrack.mp3",
+    "origin": "reference"
+  }
+}

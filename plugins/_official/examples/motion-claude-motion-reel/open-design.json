@@ -1,0 +1,197 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-claude-motion-reel",
+  "title": "Claude Motion Reel",
+  "title_i18n": {
+    "en": "Claude Motion Reel",
+    "zh-CN": "Claude 动态设计作品集"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-24T00:00:00Z",
+  "description": "A Claude motion design showreel with kinetic typography, easing experiments, geometric morphs, Truchet patterns and a rotating vertex mesh.",
+  "description_i18n": {
+    "en": "A Claude motion design showreel with kinetic typography, easing experiments, geometric morphs, Truchet patterns and a rotating vertex mesh.",
+    "zh-CN": "Claude 动态设计作品集，用字形伸缩、六种缓动、几何变形、弧线纹样与旋转网格展示动效能力。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "showreel",
+    "kinetic-type",
+    "geometric",
+    "truchet",
+    "creative-portfolio"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "品牌名称",
+        "default": "CLAUDE"
+      },
+      {
+        "name": "role",
+        "type": "string",
+        "label": "职业描述",
+        "default": "motion designer"
+      },
+      {
+        "name": "reelLabel",
+        "type": "string",
+        "label": "作品集眉题",
+        "default": "MOTION REEL — 2026"
+      },
+      {
+        "name": "reelYear",
+        "type": "string",
+        "label": "作品集年份",
+        "default": "2026"
+      },
+      {
+        "name": "orbitText",
+        "type": "string",
+        "label": "环绕文字",
+        "default": "SHOWREEL 2026 · CLAUDE · MOTION DESIGN · "
+      },
+      {
+        "name": "easingTitle",
+        "type": "string",
+        "label": "缓动标题",
+        "default": "Six ways to get from A to B."
+      },
+      {
+        "name": "easeWord",
+        "type": "string",
+        "label": "第一段动态文字",
+        "default": "EASE"
+      },
+      {
+        "name": "inWord",
+        "type": "string",
+        "label": "加速动态文字",
+        "default": "IN"
+      },
+      {
+        "name": "outWord",
+        "type": "string",
+        "label": "减速动态文字",
+        "default": "OUT"
+      },
+      {
+        "name": "neverWord",
+        "type": "string",
+        "label": "重复动态文字",
+        "default": "NEVER"
+      },
+      {
+        "name": "linearWord",
+        "type": "string",
+        "label": "末段动态文字",
+        "default": "LINEAR"
+      },
+      {
+        "name": "footer",
+        "type": "string",
+        "label": "片尾说明",
+        "default": "SHOWREEL 2026  ·  15 SECONDS  ·  EVERY FRAME WRITTEN IN CODE"
+      },
+      {
+        "name": "availability",
+        "type": "string",
+        "label": "合作状态",
+        "default": "AVAILABLE FOR NEW PROJECTS"
+      },
+      {
+        "name": "wordmark",
+        "type": "string",
+        "label": "片尾字标",
+        "default": "assets/claude-wordmark.png"
+      },
+      {
+        "name": "coral",
+        "type": "string",
+        "label": "珊瑚红",
+        "default": "#f04a39"
+      },
+      {
+        "name": "blue",
+        "type": "string",
+        "label": "电光蓝",
+        "default": "#2f2ef5"
+      },
+      {
+        "name": "paper",
+        "type": "string",
+        "label": "暖纸白",
+        "default": "#f2eee6"
+      },
+      {
+        "name": "ink",
+        "type": "string",
+        "label": "墨黑",
+        "default": "#0f0f11"
+      },
+      {
+        "name": "lime",
+        "type": "string",
+        "label": "荧光黄",
+        "default": "#e3ff46"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a 15-second motion design showreel for {{brand}}, with the descriptor {{role}} and the small fixed top label {{reelLabel}}, dated {{reelYear}}. Use {{coral}} coral, {{blue}} electric blue, {{paper}} warm paper, {{ink}} near black and {{lime}} neon yellow. Start on black: a red point expands into twelve unequal rounded rays with concentric circles, a dotted drafting grid and the orbiting text {{orbitText}}. Cut to coral, a thin numbered rule above a huge {{brand}}; each letter stretches horizontally in sequence, then the italic {{role}} appears below. On warm paper introduce “{{easingTitle}}”, six numbered lanes labelled linear, ease-in-out, expo-out, back-out, elastic and bounce; black, blue and red dots traverse identical distances with their curve thumbnails, ticks, squash and trails. Switch to blue: a warm white circle morphs into a triangle, a five-point star and a square while twelve smaller shapes orbit and coral outlines trail the rotation. On black spread a dense field of quarter-circle Truchet tiles, transforming connected cream loops into disconnected coral arcs in three waves. Pull those tiles away to reveal a perspective grid of 576 white and red vertices, rolling into a sphere and then a rotating torus. Rapidly cut across the words {{easeWord}}, {{inWord}}, {{easeWord}}, {{outWord}}, {{neverWord}}, a five-row repeating {{neverWord}} wall, and finally {{linearWord}} with a coral period; vary the backgrounds and use stretched glyphs and motion trails, then zoom through the last letter. Finish on coral: the black asterisk bursts and moves left, the image {{wordmark}} reveals as the final brand wordmark, {{role}} sits underneath in italic, then a thin rule, {{footer}}, a pulsing availability dot and {{availability}}. Keep the four corner registration marks, tiny chapter names, 60 FPS timecode, 128 BPM beat squares, eight-bar counter and lower progress line throughout.",
+        "zh-CN": "为 {{brand}} 制作约 15 秒的动态设计作品集，职业描述为 {{role}}，固定左上眉题为 {{reelLabel}}，年份为 {{reelYear}}。使用 {{coral}} 珊瑚红、{{blue}} 电光蓝、{{paper}} 暖纸白、{{ink}} 墨黑和 {{lime}} 荧光黄。黑底开场，红点伸成十二根不等长圆头射线，环线与点阵制图网格向外扩散，{{orbitText}} 环绕星芒旋转；切入珊瑚红，编号横线下的巨幅 {{brand}} 逐字横向伸缩，下方浮现斜体 {{role}}。接着在暖白底显示“{{easingTitle}}”，六行分别标注 linear、ease-in-out、expo-out、back-out、elastic、bounce，黑蓝红圆点按各自曲线穿过相同长度的跑道，附曲线缩略图、刻度、挤压和残影。切到蓝底，米白圆形依次变成三角、五角星与方形，十二个小形状绕行，红色轮廓追随旋转。黑底随后铺满四分之一圆弧拼接的 Truchet 纹样，三次波动让连贯的米白环线转为散开的红弧；纹样退开，576 个白红顶点构成透视网格，卷成球体并转为旋转环面。连续快切 {{easeWord}}、{{inWord}}、{{easeWord}}、{{outWord}}、{{neverWord}}、五行重复的 {{neverWord}} 字墙，以及带红色句点的 {{linearWord}}，配合换底色、字形拉伸和运动拖影，最后穿过放大的末字。结尾回到红底，黑色星芒爆开移向左侧，图片 {{wordmark}} 揭示为片尾品牌字标，下方是斜体 {{role}}、细横线、{{footer}}、呼吸状态灯和 {{availability}}。全片保留四角定位线、小号章节名、60 FPS 时码、128 BPM 节拍方格、八小节计数和底部进度线。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Claude Motion Reel"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "团队成员上传的参考作品；原作者及外部链接未提供",
+      "url": "reference.mp4",
+      "note": "内部 ODEval 复刻来源，保留画面内 CLAUDE 品牌。"
+    }
+  ]
+}
