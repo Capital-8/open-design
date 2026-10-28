@@ -3,6 +3,7 @@ import { workspaceAnalyticsDimensions } from '../analytics/workspace';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Dialog } from '@open-design/components';
+import type { WorkspaceJourneySurfaceProps } from '@open-design/contracts/analytics';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import { useT } from '../i18n';
 import { useAnalytics } from '../analytics/provider';
@@ -34,6 +35,8 @@ interface Props {
   reason: 'insufficient' | 'signed_out';
   /** Funding recovery may dismiss the prompt without authorizing a send. */
   manualSendOnRecovery?: boolean;
+  /** When the caller observed the funding refusal, independent of recovery behavior. */
+  stage?: WorkspaceJourneySurfaceProps['stage'];
   modelId?: string | null;
   fundingScope?: AmrBalanceGateScope;
   /**
@@ -99,6 +102,7 @@ interface Props {
 export function AmrBalanceDialog({
   reason,
   manualSendOnRecovery = false,
+  stage = 'unknown',
   modelId,
   fundingScope,
   profile,
@@ -136,7 +140,7 @@ export function AmrBalanceDialog({
   const workspaceContextLoading =
     workspaceContextOverride !== undefined ? false : ambientWorkspaceContextLoading;
   const workspaceBilling = useWorkspaceBilling();
-  const journey = useWorkspaceJourney({ page_name: entrySource === 'home_balance_gate_upgrade' ? 'home' : 'chat_panel', area: 'credit_exhausted_dialog', reason: 'credit_exhausted', stage: manualSendOnRecovery ? 'mid_run' : 'before_run', ...workspaceAnalyticsDimensions(workspaceContext) }, !signedOut && !workspaceContextLoading);
+  const journey = useWorkspaceJourney({ page_name: entrySource === 'home_balance_gate_upgrade' ? 'home' : 'chat_panel', area: 'credit_exhausted_dialog', reason: 'credit_exhausted', stage, ...workspaceAnalyticsDimensions(workspaceContext) }, !signedOut && !workspaceContextLoading);
   const close = () => { journey.click('close'); onClose(); };
   // A Max classification cannot fall back to selling the same plan. The
   // frozen funding dialog has no auto-recharge shortcut for any Owner.
@@ -200,7 +204,7 @@ export function AmrBalanceDialog({
     // the consent-gated device id, and open the console for the profile.
     const attribution = recordAmrEntry(analytics.track, entrySource, new Date(), {
       metricsConsent,
-      blockContext: { block_id: journey.id, ...(workspaceContext ? { workspace_key: workspaceContext.workspaceId } : {}), reason: 'credit_exhausted', stage: manualSendOnRecovery ? 'mid_run' : 'before_run' },
+      blockContext: { block_id: journey.id, ...(workspaceContext ? { workspace_key: workspaceContext.workspaceId } : {}), reason: 'credit_exhausted', stage },
     });
     const deviceId = amrHandoffDeviceId({
       metricsConsent,
