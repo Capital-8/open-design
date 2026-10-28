@@ -8,8 +8,8 @@ export function effectiveTurnRunStatus(
 ): NonNullable<ChatMessage['runStatus']> {
   if (streaming) return 'running';
   if (message.runStatus === 'canceled') return 'canceled';
-  if (message.resultDeliveryState === 'no_result' || message.resultDeliveryState === 'delivery_failed'
-    || (!message.runStatus && legacyTurnFailed(events, message.endedAt))) return 'failed';
+  // Delivery has its own feedback; it does not change the Run's verdict (P0-24).
+  if (!message.runStatus && legacyTurnFailed(events, message.endedAt)) return 'failed';
   return message.runStatus ?? 'succeeded';
 }
 

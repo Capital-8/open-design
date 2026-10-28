@@ -112,7 +112,7 @@ it.each(['failed', 'canceled'] as const)('keeps the existing %s header and foldi
   const view = render(chat(productionTurn()));
   view.rerender(chat(productionTurn(state)));
   const outer = record(view.container);
-  expect(outer.querySelector('summary')).toHaveTextContent(state === 'failed' ? 'Run failed' : 'Canceled');
+  expect(outer.querySelector('summary')).toHaveTextContent(state === 'failed' ? 'Run failed' : 'Stopped');
   expect(outer.querySelector('summary')).toHaveTextContent('26s');
   expect(outer.hasAttribute('open')).toBe(state === 'canceled');
   expect(outer.querySelector('summary [data-orb]')).toBeNull();
@@ -153,7 +153,7 @@ it.each([false, true])('freezes thoughts and both clocks immediately on Stop (ca
   const stopped = finalizeActiveAssistantMessagesOnStop([active], Date.now()).messages[0]!;
   presented = withTaskPresentation([stopped], presented);
   view.rerender(draw(stopped, false));
-  expect(record(view.container).querySelector('summary')).toHaveTextContent('Canceled28s');
+  expect(record(view.container).querySelector('summary')).toHaveTextContent('Stopped28s');
   expect(screen.queryByText('Thinking')).toBeNull();
   expect(view.container.querySelector('[data-orb]')).toBeNull();
   const frozen = view.container.textContent;
@@ -161,7 +161,7 @@ it.each([false, true])('freezes thoughts and both clocks immediately on Stop (ca
   expect(view.container.textContent).toBe(frozen);
   view.unmount();
   const reopened = render(draw(stopped, false));
-  expect(record(reopened.container).querySelector('summary')).toHaveTextContent('Canceled28s');
+  expect(record(reopened.container).querySelector('summary')).toHaveTextContent('Stopped28s');
   expect(screen.queryByText('Thinking')).toBeNull();
 });
 

@@ -73,14 +73,14 @@ it('keeps a formal conclusion outside the record when the same Run continues wit
   expect(taskRecordParts([message]).some(part => 'text' in part && part.text.includes('confirm'))).toBe(false);
 });
 
-it.each(['no_result', 'delivery_failed'] as const)('preserves %s as failure in the aggregated process', resultDeliveryState => {
+it.each(['no_result', 'delivery_failed'] as const)('keeps the Run verdict independent of %s in the aggregated process', resultDeliveryState => {
   const message: ChatMessage = { id: 'result', role: 'assistant', runId: 'answer-run', runStatus: 'succeeded',
     taskDisplay: { ...projection, state: 'completed', ticking: false },
     resultDeliveryState, content: '', events: [{ kind: 'thinking', text: 'Checking the page' }] };
   const shells = taskRecordParts([message]).flatMap(part => 'shell' in part ? [part.shell] : []);
   expect(shells).toHaveLength(1);
-  expect(shells[0]!.status).toBe('failed');
-  expect(withTaskPresentation([message])[0]!.taskPresentation!.display.state).toBe('failed');
+  expect(shells[0]!.status).toBe('done');
+  expect(withTaskPresentation([message])[0]!.taskPresentation!.display.state).toBe('completed');
 });
 
 it('keeps the current Run active until its new delivery verdict arrives', () => {

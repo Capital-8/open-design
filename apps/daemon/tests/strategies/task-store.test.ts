@@ -1084,7 +1084,9 @@ describe('durable strategy task store', () => {
   });
 
   it.each([
-    ['running', 'completed'],
+    // P0-24 Q5: a Run still running when the daemon died is recorded as
+    // stopped on restart, so its task ends the way a stopped Run's does.
+    ['running', 'canceled'],
     ['canceled', 'canceled'],
   ] as const)(
     'reconciles a persisted %s physical Run after a real SQLite restart to %s',
@@ -1139,7 +1141,9 @@ describe('durable strategy task store', () => {
     },
   );
 
-  it('ends the task while retaining the physical failure when startup interrupts a Run', async () => {
+  // P0-24 Q5: the restart stops the Run rather than failing it; the task ends
+  // the way a stopped Run's does and keeps that physical fact.
+  it('ends the task as stopped when startup interrupts a Run', async () => {
     const task = createTask(db, snapshot, 'run-interrupted');
     vi.spyOn(Date, 'now').mockReturnValue(20_000);
     recordStrategyTaskRunLifecycle(db, {runId:'run-interrupted',phase:'start',status:'running',at:1_000});
@@ -1155,7 +1159,7 @@ describe('durable strategy task store', () => {
       agentId: AGENT_ID,
       status: 'running',
       createdAt: 100,
-      updatedAt: 200,
+      updatedAt: 5_000,
       langfuseCompletedAt: 200,
     }));
 
@@ -1169,14 +1173,14 @@ describe('durable strategy task store', () => {
     });
 
     const persisted = getStrategyTaskExecution(db, task.taskExecutionId);
-    expect(persisted?.outcome).toBe('completed');
+    expect(persisted?.outcome).toBe('canceled');
     expect(persisted?.blockedContext).toBeUndefined();
-    expect(persisted?.runs.at(-1)).toMatchObject({ settlementReason: 'ended', settlementFacts: { physicalStatus: 'failed' } });
-    expect(JSON.parse(fs.readFileSync(path.join(runDir, 'state.json'), 'utf8')).status).toBe('failed');
+    expect(persisted?.runs.at(-1)).toMatchObject({ settlementReason: 'ended', settlementFacts: { physicalStatus: 'canceled' } });
+    expect(JSON.parse(fs.readFileSync(path.join(runDir, 'state.json'), 'utf8')).status).toBe('canceled');
     expect(projectStrategyTaskByRunId(db, 'run-interrupted')?.display).toMatchObject({
-      state:'failed',elapsedMs:19_000,ticking:false,
+      state:'canceled',elapsedMs:4_000,ticking:false,
     });
     vi.mocked(Date.now).mockReturnValue(120_000);
-    expect(projectStrategyTaskByRunId(db, 'run-interrupted')?.display?.elapsedMs).toBe(19_000);
+    expect(projectStrategyTaskByRunId(db, 'run-interrupted')?.display?.elapsedMs).toBe(4_000);
   });
 });

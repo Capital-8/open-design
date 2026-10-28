@@ -79,7 +79,7 @@ test('[P1] stopping an automatic task freezes its thinking and elapsed clocks', 
   await stop.click();
   await expect(stop).toHaveCount(0);
   await expect(flow.getByText('Thinking', { exact: true })).toHaveCount(0);
-  await expect(header).toContainText('Canceled');
+  await expect(header).toContainText('Stopped');
   const stopped = await flow.innerText();
   // Observe multiple real one-second UI clock ticks after Stop.
   await page.waitForTimeout(15_000);
