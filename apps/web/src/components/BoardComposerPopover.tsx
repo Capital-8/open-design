@@ -842,6 +842,7 @@ export function BoardComposerPopover({
               value={draft}
               autoFocus={canEditComment}
               readOnly={!canEditComment || sending}
+              aria-invalid={overLimit || undefined}
               aria-label={t('chat.comments.placeholder')}
               placeholder={t('chat.comments.placeholder')}
               onChange={(event) => onDraft(event.target.value)}
@@ -872,7 +873,7 @@ export function BoardComposerPopover({
                 }
               }}
             />}
-            {overLimit ? <p role="alert" className={browseStyles.error}><span>{t('comment.overLimit', { count: characterCount, max: COMMENT_MAX_CHARACTERS })}</span><span className={browseStyles.counter}>{characterCount}/{COMMENT_MAX_CHARACTERS}</span></p> : null}
+            {overLimit ? <p role="alert" className={`${browseStyles.error} ${browseStyles.limitError}`}><span>{t('comment.overLimit', { count: characterCount - COMMENT_MAX_CHARACTERS, max: COMMENT_MAX_CHARACTERS })}</span><span className={browseStyles.counter}>{characterCount} / {COMMENT_MAX_CHARACTERS}</span></p> : null}
             {!existing && saveError ? <p role="alert" className={browseStyles.error}>{t('comment.saveFailed')} <button type="button" disabled={saveDisabled} onClick={() => void onSaveComment()}>{t('preview.retry')}</button></p> : null}
             {/* OP2: explain WHY the textarea is read-only when it's specifically
                 a share-page (external) comment — team-member-vs-team-member

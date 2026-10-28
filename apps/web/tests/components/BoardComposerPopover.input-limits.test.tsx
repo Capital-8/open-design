@@ -7,7 +7,7 @@ import type { PreviewComment } from '../../src/types';
 const target: PreviewCommentSnapshot={filePath:'index.html',elementId:'hero',selector:'#hero',label:'Hero',text:'',htmlHint:'',selectionKind:'element',position:{x:0,y:0,width:10,height:10}};
 function mount(draft:string, extra:Partial<React.ComponentProps<typeof BoardComposerPopover>>={}) {
  const onSaveComment=vi.fn(), onSendBatch=vi.fn();
- render(<BoardComposerPopover target={target} existing={null} draft={draft} notes={[]} onDraft={()=>{}} onAddDraft={()=>{}} onRemoveQueuedNote={()=>{}} onClose={()=>{}} onSaveComment={onSaveComment} onSendBatch={onSendBatch} onRemoveMember={()=>{}} sending={false} t={((key:string)=>key) as never} {...extra}/>);
+ render(<BoardComposerPopover target={target} existing={null} draft={draft} notes={[]} onDraft={()=>{}} onAddDraft={()=>{}} onRemoveQueuedNote={()=>{}} onClose={()=>{}} onSaveComment={onSaveComment} onSendBatch={onSendBatch} onRemoveMember={()=>{}} sending={false} t={((key:string, params?:Record<string,number>)=>key === 'comment.overLimit' ? `已超出 ${params?.count} 字，请精简后发送` : key) as never} {...extra}/>);
  return {onSaveComment,onSendBatch};
 }
 afterEach(cleanup);
@@ -16,7 +16,7 @@ it('D10: permits 400 trimmed graphemes including composed emoji without a counte
  fireEvent.keyDown(screen.getByTestId('comment-popover-input'),{key:'Enter'}); expect(onSaveComment).toHaveBeenCalledOnce();
 });
 it('D10: keeps 401 graphemes and blocks Enter, save and Agent',()=>{
- const {onSaveComment,onSendBatch}=mount('字'.repeat(401)); expect(screen.getByTestId('comment-popover-input')).toHaveValue('字'.repeat(401)); expect(screen.getByRole('alert')).toHaveTextContent('comment.overLimit');
+ const {onSaveComment,onSendBatch}=mount('字'.repeat(401)); expect(screen.getByTestId('comment-popover-input')).toHaveValue('字'.repeat(401)); expect(screen.getByRole('alert')).toHaveTextContent('已超出 1 字，请精简后发送'); expect(screen.getByRole('alert')).toHaveTextContent('401 / 400'); expect(screen.getByTestId('comment-popover-input')).toHaveAttribute('aria-invalid','true');
  expect(screen.getByTestId('comment-popover-save')).toBeDisabled(); expect(screen.getByTestId('comment-add-send')).toBeDisabled();
  fireEvent.keyDown(screen.getByTestId('comment-popover-input'),{key:'Enter'}); expect(onSaveComment).not.toHaveBeenCalled(); expect(onSendBatch).not.toHaveBeenCalled();
 });

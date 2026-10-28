@@ -5532,7 +5532,7 @@ export const pl: Dict = {
   "comment.unknownAuthor": "Unknown author",
   "comment.moreCount": "Show comments ({n})",
   "comment.resizePanel": "Resize comments panel",
-  "comment.overLimit": "Comment exceeds {max} characters. Shorten it before sending.",
+  "comment.overLimit": "{count} characters over the limit. Shorten before sending.",
   "comment.saveFailed": "Could not save comment. Try again.",
   "comment.imageFailed": "Image unavailable",
   "comment.moreActions": "More comment actions",

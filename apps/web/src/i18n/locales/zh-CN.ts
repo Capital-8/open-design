@@ -5975,7 +5975,7 @@ export const zhCN: Dict = {
   "comment.unknownAuthor": "未知作者",
   "comment.moreCount": "查看评论（{n}）",
   "comment.resizePanel": "调整评论面板宽度",
-  "comment.overLimit": "评论不能超过 {max} 字，请精简后发送。",
+  "comment.overLimit": "已超出 {count} 字，请精简后发送",
   "comment.saveFailed": "评论提交失败，请重试。",
   "comment.imageFailed": "图片暂时无法显示",
   "comment.moreActions": "更多评论操作",

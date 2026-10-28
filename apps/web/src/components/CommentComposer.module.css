@@ -54,3 +54,5 @@
 
 .popover .menuItems button { font-weight: 500; }
 .menuItems .deleteAction { color:#f04142; font-weight: 500; }
+
+.popover[data-existing-comment="false"] .limitError { margin:0 14px 8px; color:#f04142; font-size:11px; line-height:18px; font-weight:400; }
