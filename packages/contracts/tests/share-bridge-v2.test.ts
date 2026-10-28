@@ -153,3 +153,13 @@ describe('share bridge v2 wire boundaries', () => {
     expect(bridge.isShareBridgePinDisplay({ label: '1' })).toBe(false);
   });
 });
+
+describe('relative comment anchor', () => {
+  it('preserves fractional points and rejects coordinates outside the element', () => {
+    expect(bridge.isShareBridgeAnchorPoint({ u: 0.125, v: 0.875 })).toBe(true);
+    expect(bridge.isShareBridgeAnchorPoint({ u: 0, v: 1 })).toBe(true);
+    for (const point of [{ u: -0.01, v: 0 }, { u: 0, v: 1.01 }, { u: NaN, v: 0 }, { u: 0 }, { u: 0, v: 0, extra: true }]) {
+      expect(bridge.isShareBridgeAnchorPoint(point)).toBe(false);
+    }
+  });
+});

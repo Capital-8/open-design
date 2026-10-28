@@ -571,7 +571,7 @@ export interface ShareComment {
   /** Server-stamped alias version at insertion, not a viewer-supplied value. */
   anchoredVersion?: number;
   /** Optional normalized anchor geometry; never grants write authority. */
-  position?: { left: number; top: number; width: number; height: number; viewportWidth: number; viewportHeight: number };
+  position?: { left: number; top: number; width: number; height: number; viewportWidth: number; viewportHeight: number; anchor?: { u: number; v: number } };
   status: string;
   createdAt: number;
   updatedAt: number;
@@ -597,7 +597,7 @@ export interface ShareCommentCreateRequest {
   elementId: string;
   selector: string;
   htmlHint: string;
-  position?: { left: number; top: number; width: number; height: number; viewportWidth: number; viewportHeight: number };
+  position?: { left: number; top: number; width: number; height: number; viewportWidth: number; viewportHeight: number; anchor?: { u: number; v: number } };
 }
 
 /** Same shape as one list item — see {@link ShareComment}. */
@@ -1214,9 +1214,12 @@ export interface ShareBridgePinDisplay {
 /** host → frame. Turns the comment affordance on or off in the frame. */
 export interface ShareBridgeInitPayload { enabled: boolean }
 /** host → frame. Enters or leaves element-selection mode. */
-export interface ShareBridgeModePayload { enabled: boolean }
+export interface ShareBridgeModePayload { enabled: boolean; colorIndex?: number; label?: string }
+/** Relative element anchor. Presentation avoidance never changes this point. */
+export interface ShareBridgeAnchorPoint { u: number; v: number }
 /** host → frame. Asks the frame to find and highlight one anchored comment. */
 export interface ShareBridgeLocatePayload {
+  anchor?: ShareBridgeAnchorPoint;
   id: string;
   elementId: string;
   selector: string;
@@ -1248,6 +1251,7 @@ export interface ShareBridgePinsPayload {
     elementId: string;
     selector: string;
     display?: ShareBridgePinDisplay;
+    anchor?: ShareBridgeAnchorPoint;
     /** Old-publication comments never bind to same-named targets in a newer document. */
     forceGhost?: boolean;
     /** Stored comment geometry, displayed only as untrusted layout fallback. */
@@ -1259,6 +1263,7 @@ export interface ShareBridgePinsPayload {
 export interface ShareBridgeReadyPayload { }
 /** frame → host. The viewer picked an element to comment on. */
 export interface ShareBridgeTargetPayload {
+  anchor?: ShareBridgeAnchorPoint;
   elementId: string;
   selector: string;
   htmlHint: string;
@@ -1271,12 +1276,17 @@ export interface ShareBridgeTargetPayload {
  * rect must pass isShareBridgeFallbackRect: a visible pin remains activatable.
  */
 export interface ShareBridgePinPayload {
+  /** False when the true anchor is offscreen or excluded from the visible cluster. */
+  visible?: boolean;
   id: string;
   found: boolean;
   rect: ShareBridgeViewportRect;
 }
 /** frame → host. One locate answer; same anchor/fallback semantics as pin. */
-export interface ShareBridgeLocatedPayload extends ShareBridgePinPayload { }
+export interface ShareBridgeLocatedPayload extends ShareBridgePinPayload {
+  /** Fresh element bounds for restoring a draft; never the displayed avatar. */
+  targetRect?: ShareBridgeViewportRect;
+}
 
 /**
  * frame → host. Updates ONLY an already selected target or pin on scroll,
@@ -1418,6 +1428,12 @@ export function isShareBridgeFallbackRect(value: unknown): value is ShareBridgeV
     && value.width > 0 && value.height > 0
     && value.left + value.width <= value.viewportWidth
     && value.top + value.height <= value.viewportHeight;
+}
+
+export function isShareBridgeAnchorPoint(value: unknown): value is ShareBridgeAnchorPoint {
+  return shareBridgeExactRecord(value, ['u', 'v'])
+    && typeof value.u === 'number' && Number.isFinite(value.u) && value.u >= 0 && value.u <= 1
+    && typeof value.v === 'number' && Number.isFinite(value.v) && value.v >= 0 && value.v <= 1;
 }
 
 export function isShareBridgePinDisplay(value: unknown): value is ShareBridgePinDisplay {
