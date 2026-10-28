@@ -20,6 +20,18 @@ export function newerTaskDisplay(a?: TaskDisplayProjection, b?: TaskDisplayProje
 
 export function taskDisplayWithDeliveryState(display: TaskDisplayProjection, messages: readonly ChatMessage[]): TaskDisplayProjection {
   const current = messages.filter(message => message.runId === display.currentRunId).at(-1);
+  // Local stop/error finalization can precede (or abort) the terminal SSE.
+  // Freeze the presentation at that Run's end without inventing a server
+  // revision, so a later authoritative timing snapshot can still replace it.
+  if (current && (display.state === 'running' || display.state === 'preparing')
+    && (current.runStatus === 'canceled' || current.runStatus === 'failed')) {
+    const endedAt = current.endedAt ?? display.observedAt;
+    // A running snapshot may arrive after Stop; rewind it to the same
+    // terminal instant instead of retaining time accrued after that instant.
+    const elapsedMs = display.elapsedMs == null ? null : Math.max(0, display.elapsedMs
+      + (display.ticking ? endedAt - display.observedAt : 0));
+    return { ...display, state: current.runStatus, ticking: false, elapsedMs, observedAt: endedAt };
+  }
   return display.state === 'completed' && current && effectiveTurnRunStatus(current) === 'failed'
     ? { ...display, state: 'failed' } : display;
 }
@@ -107,16 +119,20 @@ export function taskRecordParts(messages: ChatMessage[], nowMs?: number, context
       mediaTasks: message.runId ? context?.mediaTasksByRunId?.get(message.runId) : undefined,
       previousTodos: context?.previousTodosByMessageId?.get(message.id),
       runStatus: effectiveTurnRunStatus(message,
-        message.taskDisplay?.state === 'running' && message.taskDisplay.currentRunId === message.runId),
+        message.taskDisplay?.state === 'running' && message.taskDisplay.currentRunId === message.runId
+          && !['succeeded', 'failed', 'canceled'].includes(message.runStatus ?? '')),
       ...(message.startedAt != null || message.createdAt != null ? { startedAtMs: message.startedAt ?? message.createdAt } : {}),
       ...(message.endedAt != null ? { endedAtMs: message.endedAt } : {}), ...(nowMs != null ? { nowMs } : {}) });
     blocks.forEach((block, index) => {
       const key = `${message.id}:${index}`;
-      if (block.kind === 'shell' && (block.items.length || block.segments.length)) parts.push({ key, shell: block });
+      if (block.kind === 'shell' && (block.items.length || block.segments.length
+        || (block.status === 'running' && !block.stopped))) parts.push({ key, shell: block });
       else if (block.kind === 'prose' && automaticTaskProse(blocks, index, message, messages)) parts.push({ key, text: block.text });
     });
   }
-  return parts;
+  // Preserve live thinking/first-output rows inside an existing process,
+  // while still omitting a task record with no process content at all.
+  return parts.some(part => 'text' in part || part.shell.items.length || part.shell.segments.length) ? parts : [];
 }
 
 export function taskDisplayElapsed(display: TaskDisplayProjection, nowMs?: number): number | null {

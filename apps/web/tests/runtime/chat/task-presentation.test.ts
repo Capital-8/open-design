@@ -110,3 +110,41 @@ it.each([
   expect(parts.some(part => 'text' in part && part.text.includes('automatic plan'))).toBe(true);
   expect(parts.some(part => 'text' in part && part.text.includes('confirm'))).toBe(false);
 });
+
+
+it('does not restart a settled planning record while its automatic successor starts', () => {
+  const plan: ChatMessage = { id: 'plan', role: 'assistant', runId: 'question-run', runStatus: 'succeeded',
+    startedAt: 1000, endedAt: 6000, content: '', events: [{kind: 'thinking', text: 'Planning'}],
+    taskDisplay: {...projection, currentRunId: 'question-run', runIds: ['question-run'], revision: 2} };
+  const production: ChatMessage = {id: 'production', role: 'assistant', runId: 'answer-run',
+    runStatus: 'running', content: '', events: [], taskDisplay: projection};
+  const task = withTaskPresentation([plan, production])[0]!.taskPresentation!;
+  const earlier = taskRecordParts(task.messages, 10_000);
+  const later = taskRecordParts(task.messages, 15_000);
+  expect(earlier).toEqual(later);
+  expect(earlier[0]).toMatchObject({shell: {status: 'done', elapsedMs: 5000}});
+});
+
+
+it.each(['canceled', 'failed'] as const)('freezes a local %s verdict until authoritative timing arrives', runStatus => {
+  const message: ChatMessage = {id: 'current', role: 'assistant', runId: 'answer-run', content: '',
+    startedAt: 480_000, endedAt: 502_000, runStatus, taskDisplay: projection};
+  const stopped = withTaskPresentation([message]);
+  const display = stopped[0]!.taskPresentation!.display;
+  expect(display).toMatchObject({state: runStatus, ticking: false, elapsedMs: 29_000, revision: 3});
+  expect(taskDisplayElapsed(display, 510_000)).toBe(29_000);
+  const stale = withTaskPresentation([{...message, taskDisplay: {...projection, observedAt: 503_000, elapsedMs: 30_000}}], stopped);
+  expect(stale[0]!.taskPresentation!.display).toMatchObject({state: runStatus, ticking: false, elapsedMs: 29_000});
+  const authoritative = withTaskPresentation([{...message, taskDisplay: {...projection, revision: 4,
+    state: runStatus, ticking: false, elapsedMs: 28_500, observedAt: 504_000}}], stale);
+  expect(authoritative[0]!.taskPresentation!.display.elapsedMs).toBe(28_500);
+  const resumed = withTaskPresentation([{...message, runStatus: 'running', endedAt: undefined,
+    taskDisplay: {...projection, revision: 5, observedAt: 510_000}}], authoritative);
+  expect(resumed[0]!.taskPresentation!.display).toMatchObject({state: 'running', ticking: true, revision: 5});
+});
+
+it('does not invent an empty task record when no process content has arrived', () => {
+  const message: ChatMessage = {id: 'empty', role: 'assistant', runId: 'answer-run', runStatus: 'running',
+    content: '', events: [], startedAt: 1000, taskDisplay: projection};
+  expect(taskRecordParts([message], 90_000)).toEqual([]);
+});

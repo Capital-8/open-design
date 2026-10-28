@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AssistantMessage } from '../../../src/components/AssistantMessage';
+import { finalizeActiveAssistantMessagesOnStop } from '../../../src/components/ProjectView';
 import { foldStrategyTaskTurns } from '../../../src/components/ChatPane';
 import { I18nProvider } from '../../../src/i18n';
 import { withTaskPresentation } from '../../../src/runtime/chat/task-presentation';
 import type { ChatMessage } from '../../../src/types';
 
-afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); localStorage.clear(); vi.unstubAllGlobals(); });
 
 function productionTurn(state: 'running' | 'completed' | 'failed' | 'canceled' = 'running', conclusion = '') {
   const display = { id: 'task', revision: 4, currentRunId: 'production', runIds: ['plan', 'production'],
@@ -129,4 +130,57 @@ it('leaves a single Run and plain text answers on the original rendering path', 
     content: 'Text answer.', events: [{ kind: 'text', text: 'Text answer.' }] }, false));
   expect(record(view.container)).toBeNull();
   expect(screen.getByText('Text answer.').closest('details')).toBeNull();
+});
+
+
+it.each([false, true])('freezes thoughts and both clocks immediately on Stop (cached presentation: %s)', cached => {
+  vi.useFakeTimers();
+  vi.setSystemTime(100_000);
+  const active = productionTurn();
+  active.startedAt = 90_000;
+  active.taskDisplay = { ...active.taskDisplay!, ticking: true, observedAt: 100_000 };
+  active.events!.push({ kind: 'tool_result', toolUseId: 'write', content: 'ok', isError: false, completedAt: 99_000 },
+    { kind: 'thinking', text: 'Checking the final layout' });
+  let presented = withTaskPresentation([active]);
+  const draw = (message: ChatMessage, streaming: boolean) => <I18nProvider initial="en">
+    <AssistantMessage message={message} streaming={streaming}
+      taskPresentation={cached ? presented[0]!.taskPresentation : undefined}
+      projectId="project" conversationId="conversation" />
+  </I18nProvider>;
+  const view = render(draw(active, true));
+  expect(screen.getByText('Thinking')).toBeInTheDocument();
+  act(() => { vi.advanceTimersByTime(2000); });
+  const stopped = finalizeActiveAssistantMessagesOnStop([active], Date.now()).messages[0]!;
+  presented = withTaskPresentation([stopped], presented);
+  view.rerender(draw(stopped, false));
+  expect(record(view.container).querySelector('summary')).toHaveTextContent('Canceled28s');
+  expect(screen.queryByText('Thinking')).toBeNull();
+  expect(view.container.querySelector('[data-orb]')).toBeNull();
+  const frozen = view.container.textContent;
+  act(() => { vi.advanceTimersByTime(5000); });
+  expect(view.container.textContent).toBe(frozen);
+  view.unmount();
+  const reopened = render(draw(stopped, false));
+  expect(record(reopened.container).querySelector('summary')).toHaveTextContent('Canceled28s');
+  expect(screen.queryByText('Thinking')).toBeNull();
+});
+
+it.each(['empty thinking', 'waiting for first output'])('preserves production %s inside an existing plan record', phase => {
+  vi.useFakeTimers();
+  vi.setSystemTime(100_000);
+  const merged = productionTurn();
+  merged.taskDisplay = {...merged.taskDisplay!, ticking: true};
+  const plan: ChatMessage = {id: 'plan', role: 'assistant', runId: 'plan', runStatus: 'succeeded',
+    content: '', startedAt: 1000, endedAt: 5000, taskDisplay: merged.taskDisplay,
+    events: [{kind: 'thinking', text: 'Planning the site'}]};
+  const production: ChatMessage = {id: 'production', role: 'assistant', runId: 'production', runStatus: 'running',
+    content: '', startedAt: 6000, taskDisplay: merged.taskDisplay,
+    events: phase === 'empty thinking' ? [{kind: 'thinking', text: ''}] : []};
+  const presented = withTaskPresentation([plan, production]);
+  const view = render(<I18nProvider initial="en"><AssistantMessage message={presented[0]!} streaming={false}
+    taskPresentation={presented[0]!.taskPresentation} /></I18nProvider>);
+  // Production has not emitted its first fold boundary; only its live row
+  // belongs inside the already-visible planning process.
+  expect(screen.getByText('Thinking')).toBeInTheDocument();
+  expect(record(view.container).querySelector('summary')).toHaveTextContent('Working');
 });
