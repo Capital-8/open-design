@@ -32,10 +32,16 @@ test('[P1] stopping an automatic task freezes its thinking and elapsed clocks', 
   await page.route(`**${messagesUrl}`, async route => {
     if (route.request().method() !== 'GET') return route.fallback();
     const response = await route.fetch();
-    const body = await response.json();
-    await route.fulfill({ json: { ...body, messages: body.messages.map((row: { id: string }) =>
-      row.id === assistantId ? { ...row, taskDisplay: display,
-        strategyTaskExecutionId: display.id, strategyTaskRunIndex: 1 } : row) } });
+    const withDisplay = (row: { id: string }) => row.id === assistantId
+      ? { ...row, taskDisplay: display, strategyTaskExecutionId: display.id, strategyTaskRunIndex: 1 } : row;
+    if (response.headers()['content-type']?.includes('application/x-ndjson')) {
+      const records = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
+      await route.fulfill({ response, body: records.map(record => JSON.stringify(record.type === 'message'
+        ? { ...record, message: withDisplay(record.message) } : record)).join('\n') + '\n' });
+    } else {
+      const body = await response.json();
+      await route.fulfill({ json: { ...body, messages: body.messages.map(withDisplay) } });
+    }
   });
   await page.route(`**/api/runs/${runId}`, route => route.fulfill({ json: {
     id: runId, projectId, conversationId, assistantMessageId: assistantId,
@@ -76,7 +82,7 @@ test('[P1] stopping an automatic task freezes its thinking and elapsed clocks', 
   await expect(header).toContainText('Canceled');
   const stopped = await flow.innerText();
   // Observe multiple real one-second UI clock ticks after Stop.
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(15_000);
   await expect(flow).toHaveText(stopped, { useInnerText: true });
   await page.screenshot({ path: testInfo.outputPath('after-stop.png'), fullPage: true });
 });
