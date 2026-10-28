@@ -6274,7 +6274,7 @@ function CommentPreviewOverlays({
     const label = commentTargetDisplayName(comment);
     return <div key={comment.id} className="comment-saved-marker"
       style={{ left: pin.left, top: pin.top, width: pin.width, height: pin.height }}
-      data-testid={`comment-saved-marker-${comment.elementId}`} data-pin-number={markerNumber} data-anchor-state={anchorState}>
+      data-comment-id={comment.id} data-testid={`comment-saved-marker-${comment.elementId}`} data-pin-number={markerNumber} data-anchor-state={anchorState}>
       <button type="button" className="comment-saved-pin"
         style={{ background: pinColor.bg, color: pinColor.fg, left: 0, top: 0 }}
         onMouseEnter={event => hoverPreview.show(comment, event.currentTarget)} onMouseLeave={hoverPreview.leave}
@@ -7400,12 +7400,10 @@ function HtmlViewer({
     ),
     [workspaceContext, projectResourceReadBlocked],
   );
-  // Reuse the server-issued display seed for this member; never derive an
-  // authorKey from a name/member ID. Until one is known, keep the shared fallback.
-  const draftCommentColor = commentAuthorAvatarColor(previewComments.find(comment =>
-    commentAuthorSelf && comment.authorKind !== 'user'
-      && comment.authorMemberId === commentAuthorSelf.memberId && comment.authorKey,
-  )?.authorKey ?? '');
+  // The current account's server-issued seed is available before its first comment.
+  const draftCommentColor = commentAuthorAvatarColor(
+    projectResourceReadBlocked ? '' : observedWorkspaceContext?.authorKey ?? '',
+  );
   const commentCursor = useMemo(() => {
     const initial = commentAuthorInitials(commentAuthorSelf?.displayName ?? '').replace(/[<>&]/g, value => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[value]!));
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><path fill="${draftCommentColor.bg}" d="M0 14a14 14 0 1 1 14 14H0Z"/><text x="14" y="18" text-anchor="middle" font-family="sans-serif" font-size="12" fill="${draftCommentColor.fg}">${initial}</text></svg>`;
@@ -8748,6 +8746,7 @@ function HtmlViewer({
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const [commentComposerHost, setCommentComposerHost] = useState<HTMLDivElement | null>(null);
   const [commentPreviewCanvasNode, setCommentPreviewCanvasNode] = useState<HTMLDivElement | null>(null);
+  const [composerMarkerRect, setComposerMarkerRect] = useState<CommentCanvasRect | null>(null);
   const [deckThumbnailCanvasSize, setDeckThumbnailCanvasSize] =
     useState<DeckThumbnailViewport | null>(null);
   // Seed from the cache instead of a cold `null` — see htmlPreviewContentWidthState
@@ -16963,18 +16962,45 @@ function HtmlViewer({
   const canEditActiveComment = !activeComposerComment && canEditComment(activeComposerComment, commentAuthority);
   const canDeleteActiveComment = canDeleteComment(activeComposerComment, commentAuthority);
   const canSendActiveComment = canSendCommentToAgentPure(activeComposerComment, commentAuthority);
+  useLayoutEffect(() => {
+    const canvas = commentPreviewCanvasNode;
+    const host = commentComposerHost ?? canvas;
+    const marker = activePreviewCommentId
+      ? Array.from(canvas?.querySelectorAll<HTMLElement>('.comment-saved-marker') ?? []).find(node => node.dataset.commentId === activePreviewCommentId)
+      : canvas?.querySelector<HTMLElement>('.comment-active-pin');
+    const rect = marker?.getBoundingClientRect();
+    const hostRect = host?.getBoundingClientRect();
+    const next = rect && hostRect && rect.width > 0 && rect.height > 0
+      ? { left: rect.left - hostRect.left + (host?.scrollLeft ?? 0), top: rect.top - hostRect.top + (host?.scrollTop ?? 0), width: rect.width, height: rect.height }
+      : null;
+    setComposerMarkerRect(current => current?.left === next?.left && current?.top === next?.top && current?.width === next?.width && current?.height === next?.height ? current : next);
+  });
+  const commentCanvasViewportBounds = (() => {
+    const canvas = commentPreviewCanvasNode?.getBoundingClientRect();
+    const host = commentComposerHost?.getBoundingClientRect();
+    if (!canvas) return undefined;
+    const left = Math.max(canvas.left, host?.left ?? 0, 0);
+    const top = Math.max(canvas.top, host?.top ?? 0, 0);
+    const right = Math.min(canvas.right, host?.right ?? window.innerWidth, window.innerWidth);
+    const bottom = Math.min(canvas.bottom, host?.bottom ?? window.innerHeight, window.innerHeight);
+    return new DOMRect(left, top, Math.max(0, right - left), Math.max(0, bottom - top));
+  })();
   const commentComposerPortalMetrics = (() => {
     if (!commentComposerHost || !commentPreviewCanvasNode) return null;
     const hostRect = commentComposerHost.getBoundingClientRect();
     const canvasRect = commentPreviewCanvasNode.getBoundingClientRect();
     if (hostRect.width <= 0 || hostRect.height <= 0) return null;
+    const left = Math.max(hostRect.left, canvasRect.left, 0);
+    const top = Math.max(hostRect.top, canvasRect.top, 0);
+    const right = Math.min(hostRect.right, canvasRect.right, window.innerWidth);
+    const bottom = Math.min(hostRect.bottom, canvasRect.bottom, window.innerHeight);
     return {
       host: commentComposerHost,
       bounds: {
-        width: hostRect.width,
-        height: hostRect.height,
-        scrollLeft: commentComposerHost.scrollLeft,
-        scrollTop: commentComposerHost.scrollTop,
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top),
+        scrollLeft: left - hostRect.left + commentComposerHost.scrollLeft,
+        scrollTop: top - hostRect.top + commentComposerHost.scrollTop,
       },
       offset: {
         x: canvasRect.left - hostRect.left + commentComposerHost.scrollLeft + overlayPreviewTransform.offsetX,
@@ -16982,9 +17008,10 @@ function HtmlViewer({
       },
     };
   })();
-  const commentComposerNode = boardMode && activeCommentTarget && activeCommentTargetVisible ? (
+  const commentComposerNode = boardMode && activeCommentTarget ? (
     <BoardComposerPopover
       target={activeCommentTarget}
+      markerRect={composerMarkerRect}
       existing={activeComposerComment}
       canEditComment={canEditActiveComment}
       canDeleteComment={canDeleteActiveComment}
@@ -18516,7 +18543,7 @@ function HtmlViewer({
                   </button>
                 </div>
               ) : null}
-              <CommentHoverPreview images={commentHoverPreview.preview?.comment.attachments?.map(a => ({ url: projectRawUrl(projectId, a.path, workspaceContext), name: a.name }))} imageFailedLabel={t('comment.imageFailed')} state={commentHoverPreview} author={commentHoverPreview.preview ? <div className="comment-detail-author"><CommentAuthorIdentity comment={commentHoverPreview.preview.comment} currentUser={commentAuthorSelf} displayNumber={commentHoverPreview.preview.comment.pinSeq ?? 1} t={t} /><span className="comment-detail-time">{formatCommentTime(commentCreatedAt(commentHoverPreview.preview.comment), Date.now(), t)}</span></div> : null} bounds={previewBodyRef.current?.getBoundingClientRect()} />
+              <CommentHoverPreview images={commentHoverPreview.preview?.comment.attachments?.map(a => ({ url: projectRawUrl(projectId, a.path, workspaceContext), name: a.name }))} imageFailedLabel={t('comment.imageFailed')} state={commentHoverPreview} author={commentHoverPreview.preview ? <div className="comment-detail-author"><CommentAuthorIdentity comment={commentHoverPreview.preview.comment} currentUser={commentAuthorSelf} displayNumber={commentHoverPreview.preview.comment.pinSeq ?? 1} t={t} /><span className="comment-detail-time">{formatCommentTime(commentCreatedAt(commentHoverPreview.preview.comment), Date.now(), t)}</span></div> : null} bounds={commentCanvasViewportBounds} />
               {commentComposer}
               {boardMode && !commentCreateMode && hoveredCommentTarget && (!activeCommentTarget || commentPortalHost) ? (
                 <AnnotationHoverPopover

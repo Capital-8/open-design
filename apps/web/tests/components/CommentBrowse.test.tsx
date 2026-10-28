@@ -28,8 +28,45 @@ it('H11: draft suppresses preview; hover has 200ms leave grace and 100ms fade', 
   vi.useFakeTimers(); const {rerender}=render(<Rail count={1}/>);
   const avatar=screen.getByRole('button',{name:'Note 0'});
   vi.spyOn(avatar,'getBoundingClientRect').mockReturnValue({left:400,right:430,top:100,bottom:130,width:30,height:30,x:400,y:100,toJSON:()=>({})});
-  fireEvent.mouseEnter(avatar); expect(screen.getByRole('tooltip')).toHaveTextContent('Note 0');
+  fireEvent.mouseEnter(avatar); expect(screen.queryByRole('tooltip')).toBeNull();
+  act(()=>vi.advanceTimersByTime(150)); expect(screen.getByRole('tooltip')).toHaveTextContent('Note 0');
   fireEvent.mouseLeave(avatar); act(()=>vi.advanceTimersByTime(199)); expect(screen.getByRole('tooltip')).toBeTruthy();
   act(()=>vi.advanceTimersByTime(101)); expect(screen.queryByRole('tooltip')).toBeNull();
   rerender(<Rail count={1} suppressed/>); fireEvent.mouseEnter(avatar); expect(screen.queryByRole('tooltip')).toBeNull();
+});
+
+it('CV13/14: cancels a short hover, switches immediately and cancels closing on re-entry', () => {
+  vi.useFakeTimers(); render(<Rail count={2}/>);
+  const first = screen.getByRole('button', {name:'Note 0'}), second = screen.getByRole('button', {name:'Note 1'});
+  fireEvent.mouseEnter(first); act(()=>vi.advanceTimersByTime(149));
+  expect(screen.queryByRole('tooltip')).toBeNull();
+  fireEvent.mouseLeave(first); act(()=>vi.advanceTimersByTime(200));
+  expect(screen.queryByRole('tooltip')).toBeNull();
+  fireEvent.mouseEnter(first); act(()=>vi.advanceTimersByTime(150));
+  expect(screen.getByRole('tooltip').className).toContain('entering');
+  fireEvent.mouseLeave(first); fireEvent.mouseEnter(second);
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Note 1');
+  expect(screen.getByRole('tooltip').className).toContain('switching');
+  fireEvent.mouseLeave(second); act(()=>vi.advanceTimersByTime(200));
+  expect(screen.getByRole('tooltip').className).toContain('closing');
+  fireEvent.mouseEnter(screen.getByRole('tooltip')); act(()=>vi.advanceTimersByTime(100));
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Note 1');
+});
+it('CV14: clicking a pin clears pending entry and old leave timers', () => {
+  vi.useFakeTimers(); const onOpen = vi.fn(); render(<Rail count={2} onOpen={onOpen}/>);
+  const first = screen.getByRole('button',{name:'Note 0'}), second = screen.getByRole('button',{name:'Note 1'});
+  fireEvent.mouseEnter(first); fireEvent.click(first); act(()=>vi.advanceTimersByTime(500));
+  expect(screen.queryByRole('tooltip')).toBeNull();
+  fireEvent.mouseEnter(first); act(()=>vi.advanceTimersByTime(150)); fireEvent.mouseLeave(first);
+  fireEvent.click(second); act(()=>vi.advanceTimersByTime(500));
+  expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({id:'1'}));
+  expect(screen.queryByRole('tooltip')).toBeNull();
+});
+it('CV27: reduced motion displays and hides directly', () => {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({matches:true})));
+  render(<Rail count={1}/>);
+  const avatar = screen.getByRole('button', {name:'Note 0'});
+  fireEvent.mouseEnter(avatar); expect(screen.getByRole('tooltip')).toBeTruthy();
+  fireEvent.mouseLeave(avatar); expect(screen.queryByRole('tooltip')).toBeNull();
+  vi.unstubAllGlobals();
 });

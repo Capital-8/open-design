@@ -83,6 +83,38 @@ for (const authorKind of ['user', 'member'] as const) {
   });
 }
 
+it('reprojects a Viewer left/top position and fractional anchor through current DOM movement and resize', async () => {
+  stubAccount(async () => account('other'));
+  // This is the public Viewer wire shape persisted by the existing relay, without x/y.
+  const viewerPosition = { left: 600, top: 450, width: 300, height: 120,
+    viewportWidth: 1200, viewportHeight: 800, anchor: { u: .25, v: .75 } };
+  render(tree([{ ...comment, position: viewerPosition as unknown as PreviewComment['position'] }]));
+  fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+  const target = { filePath: file.name, elementId: comment.elementId, selector: comment.selector,
+    label: 'h2', text: '', htmlHint: '', position: { x: 20, y: 40, width: 200, height: 80 } };
+  const report = async (position: typeof target.position) => act(async () => {
+    const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
+      data: { type: 'od:comment-targets', targets: [{ ...target, position }] } }));
+  });
+  await report(target.position);
+  const marker = await screen.findByTestId('comment-saved-marker-pin');
+  // True point = (70, 100), and the 28px avatar extends upward from it.
+  expect(marker).toHaveStyle({ left: '70px', top: '72px', width: '28px', height: '28px' });
+  fireEvent.click(marker.querySelector('button')!);
+  expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
+  expect(screen.getByTestId('comment-target-overlay')).toHaveStyle({ left: '20px', top: '40px', width: '200px', height: '80px' });
+  // A selected saved comment keeps one avatar rather than adding a draft avatar.
+  expect(screen.queryByTestId('comment-active-pin')).toBeNull();
+  await report({ x: 100, y: 80, width: 400, height: 160 });
+  expect(screen.getByTestId('comment-saved-marker-pin')).toHaveStyle({ left: '200px', top: '172px', width: '28px', height: '28px' });
+  expect(screen.getByTestId('comment-target-overlay')).toHaveStyle({ left: '100px', top: '80px', width: '400px', height: '160px' });
+  expect(screen.queryByTestId('comment-active-pin')).toBeNull();
+  expect(viewerPosition).not.toHaveProperty('x');
+  expect(viewerPosition).not.toHaveProperty('y');
+  expect(viewerPosition.anchor).toEqual({ u: .25, v: .75 });
+});
+
 it('3650: keeps self public feedback visible but excludes it from external unread', async () => {
   stubAccount(async () => account('self'));
   render(tree([comment]));
@@ -131,24 +163,30 @@ it('3650: account boundary invalidates self identity and a late old response can
   await waitFor(() => expect(screen.getByTestId('comment-unread-dot')).toBeVisible());
 });
 
-it('uses the known current member display seed for a draft pin and target', async () => {
+it('uses the server account display seed for its first draft pin, target and cursor', async () => {
   stubAccount(async () => account('self'));
   const collab: CollabContextValue = {
-    workspaceContext: { workspaceId: 'ws', workspaceType: 'team', workspaceMemberId: 'self-member', role: 'owner', displayName: 'Self',
+    workspaceContext: { workspaceId: 'ws', workspaceType: 'team', workspaceMemberId: 'self-member', role: 'owner', displayName: 'Self', authorKey: comment.authorKey,
       memberStatus: 'active', lifecycleState: 'active', billingState: 'active', planId: null, providerMode: 'platform_credits',
       seatSummary: buildWorkspaceSeatSummary({seatLimit:3,usedSeats:1}), permissions:buildWorkspacePermissions({role:'owner',lifecycleState:'active'}) },
     workspaceContextLoading:false,enabled:false,member:null,present:[],publishedVersion:null,syncState:null,viewerOnly:false,
     writerAuthority:'allowed',isOwner:true,isEffectiveOwner:true,isSharedNonOwner:false,ownerDisplayName:null,ownerRole:null,downloadPending:false,
     reportChange(){},requestPublish(){},refreshPresence(){},checkStatusNow(){},
   };
-  render(<CollabProvider value={collab}>{tree([{...comment,authorKind:'member',authorMemberId:'self-member'}])}</CollabProvider>);
+  const view = render(<CollabProvider value={{...collab, workspaceContext: {...collab.workspaceContext!, authorKey: undefined}}}>{tree([])}</CollabProvider>);
+  view.rerender(<CollabProvider value={collab}>{tree([])}</CollabProvider>);
   fireEvent.click(screen.getByTestId('board-mode-toggle'));
   const frame=screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+  const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+  fireEvent.load(frame);
   await act(async()=>window.dispatchEvent(new MessageEvent('message',{source:frame.contentWindow,data:{type:'od:comment-target',
     filePath:file.name,elementId:'new',selector:'h2',label:'h2',text:'',htmlHint:'',position:{x:20,y:40,width:200,height:80},hoverPoint:{x:50,y:60}}})));
   const swatch=commentAuthorAvatarColor(comment.authorKey!);
   expect(screen.getByTestId('comment-active-pin')).toHaveStyle({background:swatch.bg,color:swatch.fg});
   expect(screen.getByTestId('comment-active-pin')).toHaveTextContent('S');
+  await waitFor(() => expect(post).toHaveBeenCalledWith(expect.objectContaining({
+    type: 'od:comment-mode', cursor: expect.stringContaining(encodeURIComponent(`fill="${swatch.bg}"`)),
+  }), '*'));
 });
 
 

@@ -3,6 +3,8 @@ import { Button, Textarea } from '@open-design/components';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { PreviewCommentSnapshot } from '../comments';
+import { layoutCommentMarkerCluster, projectCommentPoint, type CommentCanvasRect } from '../comments/canvas-geometry';
+import { placeCommentPopover } from '../comments/popover-geometry';
 import type { Dict } from '../i18n/types';
 import type { PreviewComment, PreviewCommentMember } from '../types';
 import { isImeComposing } from '../utils/imeComposing';
@@ -53,7 +55,6 @@ type PopoverBounds = { width: number; height: number; scrollLeft?: number; scrol
 type PopoverOffset = { x: number; y: number };
 type PopoverSize = { width: number; height: number };
 type PopoverPosition = { left: number; top: number };
-type PopoverSide = 'top' | 'bottom' | 'left' | 'right';
 
 const POPOVER_PAD = 14;
 const POPOVER_DEFAULT_WIDTH = 320;
@@ -167,110 +168,18 @@ function popoverAnchorStyle(
   offset: PopoverOffset = { x: 0, y: 0 },
   expanded = true,
   measuredSize?: PopoverSize,
+  markerRect?: CommentCanvasRect | null,
 ): CSSProperties {
-  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  const anchor = target.hoverPoint ?? {
-    x: target.position.x + Math.min(target.position.width, 24),
-    y: target.position.y + Math.min(target.position.height, 24),
+  const viewport = {
+    left: bounds?.scrollLeft ?? 0, top: bounds?.scrollTop ?? 0,
+    width: bounds?.width ?? window.innerWidth, height: bounds?.height ?? window.innerHeight,
   };
-  const anchorX = offset.x + anchor.x * safeScale;
-  const anchorY = offset.y + anchor.y * safeScale;
-  const preferredLeft = clampPopoverCoordinate(anchorX + POPOVER_PAD, POPOVER_PAD);
-  const preferredTop = clampPopoverCoordinate(anchorY + POPOVER_PAD, POPOVER_PAD);
-  if (bounds?.width && bounds.width > 0) {
-    const viewportLeft = Math.max(0, bounds.scrollLeft ?? 0);
-    const viewportTop = Math.max(0, bounds.scrollTop ?? 0);
-    const viewportRight = viewportLeft + bounds.width;
-    const viewportBottom = bounds.height ? viewportTop + bounds.height : Number.POSITIVE_INFINITY;
-    const position = target.position;
-    const rect = {
-      left: offset.x + position.x * safeScale,
-      top: offset.y + position.y * safeScale,
-      width: Math.max(1, position.width * safeScale),
-      height: Math.max(1, position.height * safeScale),
-    };
-    const rectRight = rect.left + rect.width;
-    const rectBottom = rect.top + rect.height;
-    const measured = popoverSizeForPositioning(expanded, measuredSize);
-    const verticalCenterLeft = rect.left + rect.width / 2 - measured.width / 2;
-    const horizontalCenterTop = rect.top + rect.height / 2 - measured.height / 2;
-    const spaces = [
-      {
-        side: 'top' as const,
-        space: rect.top - viewportTop - POPOVER_PAD,
-        fits: rect.top - viewportTop - POPOVER_PAD >= measured.height,
-      },
-      {
-        side: 'bottom' as const,
-        space: viewportBottom - rectBottom - POPOVER_PAD,
-        fits: viewportBottom - rectBottom - POPOVER_PAD >= measured.height,
-      },
-      {
-        side: 'left' as const,
-        space: rect.left - viewportLeft - POPOVER_PAD,
-        fits: rect.left - viewportLeft - POPOVER_PAD >= measured.width,
-      },
-      {
-        side: 'right' as const,
-        space: viewportRight - rectRight - POPOVER_PAD,
-        fits: viewportRight - rectRight - POPOVER_PAD >= measured.width,
-      },
-    ];
-    const sorted = spaces
-      .filter((item) => Number.isFinite(item.space))
-      .sort((a, b) => Number(b.fits) - Number(a.fits) || b.space - a.space);
-    const sidePosition = (side: PopoverSide): { left: number; top: number; maxHeightLimit?: number } => {
-      if (side === 'top') {
-        const topLimit = rect.top - POPOVER_PAD;
-        const top = Number.isFinite(topLimit)
-          ? Math.max(viewportTop + POPOVER_PAD, topLimit - measured.height)
-          : rect.top - measured.height - POPOVER_PAD;
-        return {
-          left: verticalCenterLeft,
-          top,
-          maxHeightLimit: Number.isFinite(topLimit) ? topLimit - top : undefined,
-        };
-      }
-      if (side === 'bottom') {
-        const top = rectBottom + POPOVER_PAD;
-        return {
-          left: verticalCenterLeft,
-          top,
-          maxHeightLimit: Number.isFinite(viewportBottom) ? viewportBottom - top - POPOVER_PAD : undefined,
-        };
-      }
-      if (side === 'left') {
-        return {
-          left: rect.left - measured.width - POPOVER_PAD,
-          top: horizontalCenterTop,
-        };
-      }
-      return {
-        left: rectRight + POPOVER_PAD,
-        top: horizontalCenterTop,
-      };
-    };
-    const fullyFittingSide = sorted.find((item) => item.fits)?.side;
-    if (fullyFittingSide) {
-      const next = sidePosition(fullyFittingSide);
-      return clampPopoverPositionStyle(next.left, next.top, bounds, measured, next.maxHeightLimit);
-    }
-    const partialVerticalSide = sorted.find((item) =>
-      (item.side === 'bottom' || item.side === 'top') && item.space >= POPOVER_MIN_VISIBLE_HEIGHT
-    )?.side;
-    if (partialVerticalSide) {
-      const next = sidePosition(partialVerticalSide);
-      return clampPopoverPositionStyle(next.left, next.top, bounds, measured, next.maxHeightLimit);
-    }
-    const fallbackLeft = anchorX + POPOVER_PAD + measured.width <= viewportRight - POPOVER_PAD
-      ? anchorX + POPOVER_PAD
-      : anchorX - measured.width - POPOVER_PAD;
-    return clampPopoverPositionStyle(fallbackLeft, anchorY + POPOVER_PAD, bounds, measured);
-  }
-  return {
-    left: preferredLeft,
-    top: preferredTop,
-  };
+  const avatar = markerRect === undefined
+    ? layoutCommentMarkerCluster(projectCommentPoint(target, { scale, offset }), 1, viewport)?.avatars[0]
+    : markerRect;
+  const placement = avatar && placeCommentPopover(avatar, viewport, popoverSizeForPositioning(expanded, measuredSize).height);
+  // Keep the mounted editor and its draft while the nearby safe space is unavailable.
+  return placement ? { ...placement, boxSizing: 'border-box' } : { visibility: 'hidden', pointerEvents: 'none' };
 }
 
 export function AnnotationStyleSummary({
@@ -449,6 +358,7 @@ export function BoardComposerPopover({
   scale = 1,
   bounds,
   offset,
+  markerRect,
   docked = false,
   commenting = true,
   discardPending = false,
@@ -503,6 +413,8 @@ export function BoardComposerPopover({
   scale?: number;
   bounds?: PopoverBounds;
   offset?: PopoverOffset;
+  /** Current displayed avatar rectangle, in the same host coordinates as bounds. */
+  markerRect?: CommentCanvasRect | null;
   docked?: boolean;
   commenting?: boolean;
   /** A pick was held back to protect unsent work; the next pick discards it. */
@@ -584,7 +496,7 @@ export function BoardComposerPopover({
   const measuredPopover = popoverSizeForPositioning(commenting, popoverSize);
   const autoStyle = docked
     ? undefined
-    : popoverAnchorStyle(target, scale, bounds, offset, commenting, popoverSize);
+    : popoverAnchorStyle(target, scale, bounds, offset, commenting, popoverSize, markerRect);
   const popoverStyle = docked
     ? undefined
     : manualPosition
@@ -832,11 +744,12 @@ export function BoardComposerPopover({
               </div>
             ) : null}
             {existing ? <div className={browseStyles.detail} data-testid="comment-popover-detail">
-              <p ref={detailRef} className={detailExpanded ? browseStyles.expanded : browseStyles.clamped}>{existing.note}</p>
+              <p dir="auto" ref={detailRef} className={detailExpanded ? browseStyles.expanded : browseStyles.clamped}>{existing.note}</p>
               {detailOverflows || detailExpanded ? <button type="button" onClick={() => setDetailExpanded(value => !value)} aria-expanded={detailExpanded}>
                 {t(detailExpanded ? 'chat.comments.collapseBody' : 'chat.comments.expandBody')}
               </button> : null}
             </div> : <Textarea
+              dir="auto"
               data-testid="comment-popover-input"
               className={!canEditComment ? 'composer-note--readonly' : undefined}
               value={draft}
@@ -874,8 +787,8 @@ export function BoardComposerPopover({
                 }
               }}
             />}
-            {overLimit ? <p role="alert" className={`${browseStyles.error} ${browseStyles.limitError}`}><span>{t('comment.overLimit', { count: characterCount - COMMENT_MAX_CHARACTERS, max: COMMENT_MAX_CHARACTERS })}</span><span className={browseStyles.counter}>{characterCount} / {COMMENT_MAX_CHARACTERS}</span></p> : null}
-            {!existing && saveError ? <p role="alert" className={browseStyles.error}>{t('comment.saveFailed')} <button type="button" disabled={saveDisabled} onClick={() => void onSaveComment()}>{t('preview.retry')}</button></p> : null}
+            {overLimit ? <p dir="auto" role="alert" className={`${browseStyles.error} ${browseStyles.limitError}`}><span>{t('comment.overLimit', { count: characterCount - COMMENT_MAX_CHARACTERS, max: COMMENT_MAX_CHARACTERS })}</span><span dir="ltr" className={browseStyles.counter}>{characterCount} / {COMMENT_MAX_CHARACTERS}</span></p> : null}
+            {!existing && saveError ? <p dir="auto" role="alert" className={browseStyles.error}>{t('comment.saveFailed')} <button type="button" disabled={saveDisabled} onClick={() => void onSaveComment()}>{t('preview.retry')}</button></p> : null}
             {/* OP2: explain WHY the textarea is read-only when it's specifically
                 a share-page (external) comment — team-member-vs-team-member
                 read-only (OP3) has no such reason line, board only asked for

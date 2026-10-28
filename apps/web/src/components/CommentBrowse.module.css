@@ -9,9 +9,16 @@
 .avatar:focus-visible,.toggle:focus-visible { outline:2px solid #555; outline-offset:-2px; }
 .more { background:#e9e9e9; color:#555; }
 .unread { position:absolute; right:-1px; top:-1px; width:7px; height:7px; border:1px solid #fafafa; border-radius:50%; background:#ed4b45; pointer-events:none; }
-.preview { position:fixed; z-index:10000; width:280px; box-sizing:border-box; padding:14px; border:1px solid #e6e6e6; border-radius:12px; background:#fff; color:#333; box-shadow:0 5px 20px #00000014; overflow:auto; transition:opacity 100ms; font-size:13px; }
+.preview { position:fixed; z-index:10000; width:320px; box-sizing:border-box; padding:14px; border:1px solid #e6e6e6; border-radius:12px; background:#fff; color:#333; box-shadow:0 5px 20px #00000014; overflow:auto; transition:opacity 100ms; font-size:13px; }
 .preview p { margin:10px 0 0; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.entering { animation:preview-enter 180ms ease-out; }
+.switching { animation:preview-switch 120ms ease-out; }
 .closing { opacity:0; }
+@keyframes preview-enter { from { opacity:0; transform:translateY(4px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes preview-switch { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion: reduce) {
+  .preview { animation:none; transition:none; }
+}
 .imageFailed { display:flex; align-items:center; justify-content:center; min-height:48px; padding:5px; font-size:11px; color:#777; background:#eee; }
 
 .previewImages { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }

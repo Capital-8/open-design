@@ -2,30 +2,48 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom';
 import type { PreviewComment } from '../types';
 import { Icon } from './Icon';
+import { placeCommentPopover } from '../comments/popover-geometry';
 import styles from './CommentBrowse.module.css';
 
 export function useCommentHoverPreview(suppressed: boolean) {
-  const [preview, setPreview] = useState<{ comment: PreviewComment; anchor: DOMRect; preferLeft: boolean } | null>(null);
+  const [preview, setPreview] = useState<{ comment: PreviewComment; anchor: DOMRect; preferLeft: boolean; animation: 'enter' | 'switch' } | null>(null);
   const [closing, setClosing] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const current = useRef(preview);
+  const isSuppressed = useRef(suppressed);
+  isSuppressed.current = suppressed;
+  const showTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const fadeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const keep = () => { clearTimeout(timer.current); clearTimeout(fadeTimer.current); setClosing(false); };
-  const dismiss = () => { clearTimeout(timer.current); clearTimeout(fadeTimer.current); setPreview(null); setClosing(false); };
-  useEffect(() => () => { clearTimeout(timer.current); clearTimeout(fadeTimer.current); }, []);
+  const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const cancelClose = () => { clearTimeout(closeTimer.current); clearTimeout(fadeTimer.current); setClosing(false); };
+  const dismiss = () => {
+    clearTimeout(showTimer.current); cancelClose(); current.current = null; setPreview(null);
+  };
+  useEffect(() => { if (suppressed) dismiss(); }, [suppressed]);
+  useEffect(() => () => { clearTimeout(showTimer.current); clearTimeout(closeTimer.current); clearTimeout(fadeTimer.current); }, []);
   return {
     preview: suppressed ? null : preview,
     closing,
     show: (comment: PreviewComment, node: HTMLElement, preferLeft = false) => {
-      keep();
-      if (!suppressed) setPreview({ comment, anchor: node.getBoundingClientRect(), preferLeft });
+      clearTimeout(showTimer.current); cancelClose();
+      if (isSuppressed.current) return;
+      const reveal = () => {
+        if (isSuppressed.current) return;
+        const next = { comment, anchor: node.getBoundingClientRect(), preferLeft, animation: current.current ? 'switch' as const : 'enter' as const };
+        current.current = next; setPreview(next);
+      };
+      if (current.current || reducedMotion()) reveal();
+      else showTimer.current = setTimeout(reveal, 150);
     },
-    keep,
+    keep: cancelClose,
     dismiss,
     leave: () => {
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
+      clearTimeout(showTimer.current); cancelClose();
+      if (!current.current) return;
+      if (reducedMotion()) { dismiss(); return; }
+      closeTimer.current = setTimeout(() => {
         setClosing(true);
-        fadeTimer.current = setTimeout(() => setPreview(null), 100);
+        fadeTimer.current = setTimeout(() => { current.current = null; setPreview(null); setClosing(false); }, 100);
       }, 200);
     },
   };
@@ -39,41 +57,35 @@ export function CommentHoverPreview({ state, author, bounds, images = [], imageF
   imageFailedLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 280, height: 120 });
+  const [size, setSize] = useState({ width: 320, height: 120 });
   const preview = state.preview;
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
-    const rect = node.getBoundingClientRect();
-    setSize({ width: rect.width, height: rect.height });
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      const width = node.offsetWidth || rect.width, height = node.offsetHeight || rect.height;
+      if (height > 0) setSize(current => current.width === width && current.height === height ? current : { width, height });
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, [preview]);
   if (!preview) return null;
-  const { anchor, comment, preferLeft } = preview;
-  const minX = (bounds?.left ?? 0) + 16;
-  const maxX = (bounds?.right ?? window.innerWidth) - 16;
-  const minY = (bounds?.top ?? 0) + 16;
-  const maxY = (bounds?.bottom ?? window.innerHeight) - 16;
-  const rightFits = anchor.right + 12 + size.width <= maxX;
-  const leftFits = anchor.left - 12 - size.width >= minX;
-  let left: number;
-  let top: number;
-  if ((preferLeft && leftFits) || (!rightFits && leftFits)) {
-    left = anchor.left - 12 - size.width;
-    top = Math.max(minY, Math.min(anchor.top, maxY - size.height));
-  } else if (rightFits) {
-    left = anchor.right + 12;
-    top = Math.max(minY, Math.min(anchor.top, maxY - size.height));
-  } else if (anchor.top - 12 - size.height >= minY) {
-    left = Math.max(minX, Math.min(anchor.left, maxX - size.width));
-    top = anchor.top - 12 - size.height;
-  } else if (anchor.bottom + 12 + size.height <= maxY) {
-    left = Math.max(minX, Math.min(anchor.left, maxX - size.width));
-    top = anchor.bottom + 12;
-  } else return null;
-  return createPortal(<div ref={ref} className={`${styles.preview}${state.closing ? ` ${styles.closing}` : ''}`} role="tooltip"
-    style={{ left, top, maxHeight: Math.max(80, maxY - minY) }}
+  const { anchor, comment } = preview;
+  const viewport = {
+    left: Math.max(0, bounds?.left ?? 0), top: Math.max(0, bounds?.top ?? 0),
+    width: Math.min(window.innerWidth, bounds?.right ?? window.innerWidth) - Math.max(0, bounds?.left ?? 0),
+    height: Math.min(window.innerHeight, bounds?.bottom ?? window.innerHeight) - Math.max(0, bounds?.top ?? 0),
+  };
+  const placement = placeCommentPopover({ left: anchor.left, top: anchor.top, width: anchor.width, height: anchor.height }, viewport, size.height);
+  if (!placement) return null;
+  return createPortal(<div ref={ref} key={comment.id} className={`${styles.preview} ${preview.animation === 'switch' ? styles.switching : styles.entering}${state.closing ? ` ${styles.closing}` : ''}`} role="tooltip"
+    style={placement}
     onMouseEnter={state.keep} onMouseLeave={state.leave}>
-    {author}{comment.note ? <p>{comment.note}</p> : null}
+    {author}{comment.note ? <p dir="auto">{comment.note}</p> : null}
     {images.length > 0 ? <div className={styles.previewImages}>{images.map(image => <a key={image.url} href={image.url} target="_blank" rel="noopener noreferrer" title={image.name}><CommentImage src={image.url} name={image.name} failedLabel={imageFailedLabel} /></a>)}</div> : null}
   </div>, document.body);
 }
