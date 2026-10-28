@@ -1,4 +1,4 @@
-import type { ReactNode, ChangeEvent, ClipboardEvent, CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { ReactNode, ChangeEvent, ClipboardEvent, CSSProperties } from 'react';
 import { Button, Textarea } from '@open-design/components';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -54,13 +54,11 @@ type AnnotationStyleRow = { label: string; value: string; swatch?: string };
 type PopoverBounds = { width: number; height: number; scrollLeft?: number; scrollTop?: number };
 type PopoverOffset = { x: number; y: number };
 type PopoverSize = { width: number; height: number };
-type PopoverPosition = { left: number; top: number };
 
 const POPOVER_PAD = 14;
 const POPOVER_DEFAULT_WIDTH = 320;
 const POPOVER_EXPANDED_ESTIMATED_HEIGHT = 320;
 const POPOVER_COLLAPSED_ESTIMATED_HEIGHT = 112;
-const POPOVER_MIN_VISIBLE_HEIGHT = 120;
 
 function annotationStyleRows(target: PreviewCommentSnapshot): AnnotationStyleRow[] {
   const rows: AnnotationStyleRow[] = [];
@@ -110,55 +108,6 @@ function popoverSizeForPositioning(
         ? POPOVER_EXPANDED_ESTIMATED_HEIGHT
         : POPOVER_COLLAPSED_ESTIMATED_HEIGHT,
   };
-}
-
-function clampPopoverPositionStyle(
-  left: number,
-  top: number,
-  bounds: PopoverBounds | undefined,
-  size: PopoverSize,
-  maxHeightLimit?: number,
-): CSSProperties {
-  if (!bounds?.width || bounds.width <= 0) {
-    return {
-      left: clampPopoverCoordinate(left, POPOVER_PAD),
-      top: clampPopoverCoordinate(top, POPOVER_PAD),
-    };
-  }
-  const viewportLeft = Math.max(0, bounds.scrollLeft ?? 0);
-  const viewportTop = Math.max(0, bounds.scrollTop ?? 0);
-  const viewportRight = viewportLeft + bounds.width;
-  const viewportBottom = bounds.height ? viewportTop + bounds.height : Number.POSITIVE_INFINITY;
-  const minLeft = viewportLeft + POPOVER_PAD;
-  const minTop = viewportTop + POPOVER_PAD;
-  const maxLeft = Math.max(minLeft, viewportRight - size.width - POPOVER_PAD);
-  const effectiveHeight = typeof maxHeightLimit === 'number' && Number.isFinite(maxHeightLimit)
-    ? Math.min(size.height, Math.max(POPOVER_MIN_VISIBLE_HEIGHT, Math.floor(maxHeightLimit)))
-    : size.height;
-  const maxTop = Number.isFinite(viewportBottom)
-    ? Math.max(minTop, viewportBottom - effectiveHeight - POPOVER_PAD)
-    : top;
-  const clampedTop = clampPopoverRange(top, minTop, maxTop);
-  const style: CSSProperties = {
-    left: clampPopoverRange(left, minLeft, maxLeft),
-    top: clampedTop,
-  };
-  if (Number.isFinite(viewportBottom)) {
-    const visibleHeight = Math.floor(viewportBottom - clampedTop - POPOVER_PAD);
-    const limitedHeight = typeof maxHeightLimit === 'number' && Number.isFinite(maxHeightLimit)
-      ? Math.min(visibleHeight, Math.floor(maxHeightLimit))
-      : visibleHeight;
-    style.maxHeight = Math.max(POPOVER_MIN_VISIBLE_HEIGHT, limitedHeight);
-  }
-  return style;
-}
-
-function numericStyleValue(style: CSSProperties, key: 'left' | 'top'): number | null {
-  const value = style[key];
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value !== 'string') return null;
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function popoverAnchorStyle(
@@ -340,7 +289,6 @@ export function BoardComposerPopover({
   onRemoveMember,
   onHoverMember,
   onDeleteComment,
-  onViewAllComments,
   images = [],
   existingImages = [],
   onAttachImages,
@@ -378,8 +326,6 @@ export function BoardComposerPopover({
   onRemoveMember: (elementId: string) => void;
   onHoverMember?: (elementId: string | null) => void;
   onDeleteComment?: (commentId: string) => void | Promise<boolean | void>;
-  /** Opens the all-comments side panel without closing this popover. */
-  onViewAllComments?: (returnFocusTarget?: HTMLElement | null) => void;
   /** Object-URL thumbnails for images the user attached to this comment. */
   images?: { file: File; url: string }[];
   /** Already-saved attachment thumbnails (read-only) for a re-opened comment. */
@@ -445,29 +391,6 @@ export function BoardComposerPopover({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [popoverSize, setPopoverSize] = useState<PopoverSize | undefined>(undefined);
-  const [manualPosition, setManualPosition] = useState<PopoverPosition | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const targetPlacementKey = [
-    target.filePath,
-    target.elementId,
-    target.selector,
-    target.selectionKind,
-    target.position.x,
-    target.position.y,
-    target.position.width,
-    target.position.height,
-    target.hoverPoint?.x,
-    target.hoverPoint?.y,
-    bounds?.width,
-    bounds?.height,
-    bounds?.scrollLeft,
-    bounds?.scrollTop,
-    offset?.x,
-    offset?.y,
-  ].join('\0');
-  useEffect(() => {
-    setManualPosition(null);
-  }, [targetPlacementKey, docked]);
   useLayoutEffect(() => {
     const node = popoverRef.current;
     if (!node) return;
@@ -493,60 +416,9 @@ export function BoardComposerPopover({
     // ResizeObserver itself, so listing draft/images/notes here only churned a
     // teardown + re-observe + synchronous getBoundingClientRect on every keystroke.
   }, [commenting]);
-  const measuredPopover = popoverSizeForPositioning(commenting, popoverSize);
-  const autoStyle = docked
-    ? undefined
-    : popoverAnchorStyle(target, scale, bounds, offset, commenting, popoverSize, markerRect);
   const popoverStyle = docked
     ? undefined
-    : manualPosition
-      ? clampPopoverPositionStyle(manualPosition.left, manualPosition.top, bounds, measuredPopover)
-      : autoStyle;
-  const startPopoverDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (docked) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const node = popoverRef.current;
-    if (!node) return;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startLeft = manualPosition?.left
-      ?? numericStyleValue(popoverStyle ?? {}, 'left')
-      ?? node.offsetLeft;
-    const startTop = manualPosition?.top
-      ?? numericStyleValue(popoverStyle ?? {}, 'top')
-      ?? node.offsetTop;
-    const ownerDocument = node.ownerDocument;
-    const handle = event.currentTarget;
-    const pointerId = event.pointerId;
-    const previousUserSelect = ownerDocument.body.style.userSelect;
-    ownerDocument.body.style.userSelect = 'none';
-    handle.setPointerCapture?.(pointerId);
-    setDragging(true);
-    const move = (moveEvent: PointerEvent) => {
-      const clamped = clampPopoverPositionStyle(
-        startLeft + moveEvent.clientX - startX,
-        startTop + moveEvent.clientY - startY,
-        bounds,
-        measuredPopover,
-      );
-      setManualPosition({
-        left: numericStyleValue(clamped, 'left') ?? startLeft,
-        top: numericStyleValue(clamped, 'top') ?? startTop,
-      });
-    };
-    const up = () => {
-      ownerDocument.body.style.userSelect = previousUserSelect;
-      handle.releasePointerCapture?.(pointerId);
-      setDragging(false);
-      ownerDocument.removeEventListener('pointermove', move);
-      ownerDocument.removeEventListener('pointerup', up);
-      ownerDocument.removeEventListener('pointercancel', up);
-    };
-    ownerDocument.addEventListener('pointermove', move);
-    ownerDocument.addEventListener('pointerup', up);
-    ownerDocument.addEventListener('pointercancel', up);
-  };
+    : popoverAnchorStyle(target, scale, bounds, offset, commenting, popoverSize, markerRect);
   const trimmedDraft = draft.trim();
   const existingNote = existing?.note.trim() ?? '';
   const hasFreshImage = images.length > 0;
@@ -602,13 +474,13 @@ export function BoardComposerPopover({
   return (
     <div
       ref={popoverRef}
-      className={`${browseStyles.popover} comment-popover comment-popover-composer${docked ? ' comment-popover-docked' : ''}${dragging ? ' comment-popover-dragging' : ''}`}
+      className={browseStyles.popover}
       data-testid="comment-popover"
       data-existing-comment={Boolean(existing)}
       data-over-limit={overLimit}
       role="dialog"
       aria-modal="false"
-      aria-label="Annotation"
+      aria-label={`${t('chat.comments.comment')}${target.label ? `: ${target.label}` : ''}`}
       style={popoverStyle}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -617,40 +489,20 @@ export function BoardComposerPopover({
         }
       }}
     >
-      {!docked ? (
-        <div className="comment-popover-titlebar">
-          <button
-            type="button"
-            className="comment-popover-drag-handle"
-            aria-label="Move comment box"
-            title="Move comment box"
-            onPointerDown={startPopoverDrag}
-          >
-            <span aria-hidden />
-          </button>
-          <span className="comment-popover-title" title={target.label || target.elementId}>
-            {existing ? (author ?? existing.authorDisplayName ?? t('comment.unknownAuthor')) : t('chat.comments.comment')}
-          </span>
-          {existing ? actionsMenu : null}
-          <button type="button" className="comment-popover-close" aria-label={t('common.close')} onClick={onClose}><Icon name="close" size={14} /></button>
-          {onViewAllComments ? (
-            <button
-              type="button"
-              className="comment-popover-view-all"
-              data-testid="comment-popover-view-all"
-              onClick={(event) => onViewAllComments(event.currentTarget)}
-            >
-              {t('chat.comments.viewAll')}
-              <Icon name="chevron-right" size={12} />
-            </button>
-          ) : null}
+      {existing && !docked ? (
+        <div className={browseStyles.header}>
+          <div className={browseStyles.author}>
+            {author ?? existing.authorDisplayName ?? t('comment.unknownAuthor')}
+          </div>
+          {actionsMenu}
+          <button type="button" className={browseStyles.iconButton} aria-label={t('common.close')} onClick={onClose}><Icon name="close" size={14} /></button>
         </div>
       ) : null}
       {/* Everything above the action row scrolls; the action row itself lives
           outside this box (see below) so a height-clamped card can never push
           the buttons out of view. */}
-      <div className="comment-popover-body">
-        {!commenting ? <section className="comment-popover-section comment-popover-section-params">
+      <div className={browseStyles.body}>
+        {!commenting ? <section className={browseStyles.parameters}>
           <AnnotationStyleSummary target={target} testId="comment-popover-style-summary" />
         </section> : null}
         {podMembers.length > 0 ? (
@@ -689,7 +541,7 @@ export function BoardComposerPopover({
           </div>
         ) : null}
         {commenting ? (
-          <section className="comment-popover-section comment-popover-section-compose">
+          <section className={browseStyles.compose}>
             {notes.length > 0 ? (
               <div className="board-note-list">
                 {notes.map((note, index) => (
@@ -703,11 +555,11 @@ export function BoardComposerPopover({
               </div>
             ) : null}
             {existingImages.length > 0 || images.length > 0 ? (
-              <div className="comment-popover-images">
+              <div className={browseStyles.images}>
                 {existingImages.map((item) => (
-                  <div key={`saved-${item.url}`} className="comment-popover-image">
+                  <div key={`saved-${item.url}`} className={browseStyles.image}>
                     <a
-                      className="comment-popover-image-thumb"
+                      className={browseStyles.imageThumb}
                       data-testid="comment-popover-existing-image"
                       href={item.url}
                       target="_blank"
@@ -719,10 +571,10 @@ export function BoardComposerPopover({
                   </div>
                 ))}
                 {images.map((item, index) => (
-                  <div key={item.url} className="comment-popover-image">
+                  <div key={item.url} className={browseStyles.image}>
                     <button
                       type="button"
-                      className="comment-popover-image-thumb"
+                      className={browseStyles.imageThumb}
                       onClick={() => onPreviewImage?.(index)}
                       title={item.file.name}
                       aria-label={item.file.name}
@@ -731,7 +583,7 @@ export function BoardComposerPopover({
                     </button>
                     <button
                       type="button"
-                      className="comment-popover-image-remove"
+                      className={browseStyles.imageRemove}
                       disabled={sending}
                       onClick={() => onRemoveImage?.(index)}
                       aria-label={t('chat.annotationAttachedRemove')}
@@ -794,21 +646,21 @@ export function BoardComposerPopover({
                 read-only (OP3) has no such reason line, board only asked for
                 this on the owner-reads-external-comment case. */}
             {!canEditComment && existing?.authorKind === 'user' ? (
-              <p className="comment-popover-readonly-note">{t('comment.sharePageCommentReadOnly')}</p>
+              <p className={browseStyles.readonlyNote}>{t('comment.sharePageCommentReadOnly')}</p>
             ) : null}
             {discardPending ? (
-              <p className="comment-popover-readonly-note" role="status">
+              <p className={browseStyles.readonlyNote} role="status">
                 {t('comment.unsentDiscardNotice')}
               </p>
             ) : null}
           </section>
         ) : null}
       </div>
-      {commenting && !existing ? <div className="comment-popover-actions">
-        <div className="comment-popover-actions-start">
+      {commenting && !existing ? <div className={browseStyles.actions}>
+        <div className={browseStyles.actionsStart}>
           {!existing && onAttachImages && canEditComment ? <>
             <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={onImageInputChange} />
-            <button type="button" className="comment-popover-close" disabled={sending} onClick={() => imageInputRef.current?.click()} title={t('chat.annotationAttachImage')} aria-label={t('chat.annotationAttachImage')}><Icon name="image" size={16} /></button>
+            <button type="button" className={browseStyles.iconButton} disabled={sending} onClick={() => imageInputRef.current?.click()} title={t('chat.annotationAttachImage')} aria-label={t('chat.annotationAttachImage')}><Icon name="image" size={16} /></button>
           </> : null}
         </div>
         {!existing ? actionsMenu : null}

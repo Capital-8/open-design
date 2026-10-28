@@ -11016,7 +11016,7 @@ describe('FileViewer tweaks toolbar', () => {
     expect(await screen.findByTestId('comment-side-panel')).toBeTruthy();
   });
 
-  it('keeps the comment popover open and restores focus when View all comments closes', async () => {
+  it('renders a draft without legacy titlebar controls', async () => {
     const portalId = 'project-comments-view-all';
     render(
       <>
@@ -11047,26 +11047,14 @@ describe('FileViewer tweaks toolbar', () => {
       },
     }));
 
-    const viewAll = await screen.findByTestId('comment-popover-view-all');
-    fireEvent.click(viewAll);
-
-    const panel = await screen.findByTestId('comment-side-panel');
-    const dismiss = within(panel).getByRole('button', { name: /hide comments/i });
-    dismiss.focus();
-    fireEvent.click(dismiss);
-
-    const rail = await screen.findByTestId('comment-side-collapsed-rail');
-    expect(screen.getByTestId('comment-popover')).toBeTruthy();
-    await waitFor(() => expect(document.activeElement).toBe(within(rail).getByRole('button', { name: /show comments/i })));
-
-    fireEvent.click(within(rail).getByRole('button', { name: /show comments/i }));
-    const reopened = await screen.findByTestId('comment-side-panel');
-    fireEvent.keyDown(reopened, { key: 'Escape' });
-    await waitFor(() => {
-      expect(screen.queryByTestId('comment-side-panel')).toBeNull();
-      expect(screen.getByTestId('comment-popover')).toBeTruthy();
-      expect(document.activeElement).toBe(viewAll);
-    });
+    const input = await screen.findByTestId('comment-popover-input');
+    fireEvent.change(input, { target: { value: 'Keep this draft' } });
+    const popover = screen.getByTestId('comment-popover');
+    expect(popover.getAttribute('aria-label')).toContain('Hero');
+    expect(screen.queryByTestId('comment-popover-view-all')).toBeNull();
+    expect(within(popover).queryByRole('button', { name: /move comment box/i })).toBeNull();
+    expect(popover.querySelector('.comment-popover-titlebar')).toBeNull();
+    expect(input).toHaveValue('Keep this draft');
   });
 
   it('shows the open comment count beside the comments icon', () => {
@@ -12621,13 +12609,13 @@ describe('FileViewer tweaks toolbar', () => {
       return (screen.getByTestId('comment-popover-input') as HTMLTextAreaElement).value;
     }
 
-    function composerTitle() {
-      return screen.getByTestId('comment-popover').querySelector('.comment-popover-title')?.getAttribute('title');
+    function composerAccessibleName() {
+      return screen.getByTestId('comment-popover').getAttribute('aria-label');
     }
 
     function expectDraftKeptOnHero(draft: string) {
       expect(composerDraft()).toBe(draft);
-      expect(composerTitle()).toBe('Hero heading');
+      expect(composerAccessibleName()).toContain('Hero heading');
       expect(screen.getByText(discardNotice)).toBeTruthy();
     }
 
@@ -12640,7 +12628,7 @@ describe('FileViewer tweaks toolbar', () => {
       expectDraftKeptOnHero('Unsent thought');
 
       pickElement(frame, ledeTarget);
-      expect(composerTitle()).toBe('Lede paragraph');
+      expect(composerAccessibleName()).toContain('Lede paragraph');
       expect(composerDraft()).toBe('');
       expect(screen.queryByText(discardNotice)).toBeNull();
     });
@@ -12651,7 +12639,7 @@ describe('FileViewer tweaks toolbar', () => {
       await screen.findByTestId('comment-popover-input');
 
       pickElement(frame, ledeTarget);
-      expect(composerTitle()).toBe('Lede paragraph');
+      expect(composerAccessibleName()).toContain('Lede paragraph');
       expect(screen.queryByText(discardNotice)).toBeNull();
     });
 
@@ -12683,7 +12671,7 @@ describe('FileViewer tweaks toolbar', () => {
       expectDraftKeptOnHero('Unsent thought');
 
       postFromPreview(frame, lasso);
-      expect(composerTitle()).not.toBe('Hero heading');
+      expect(composerAccessibleName()).not.toContain('Hero heading');
       expect(composerDraft()).toBe('');
     });
 
@@ -12721,7 +12709,7 @@ describe('FileViewer tweaks toolbar', () => {
       expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent('Saved note');
 
       pickElement(frame, heroTarget);
-      expect(composerTitle()).toBe('Hero heading');
+      expect(composerAccessibleName()).toContain('Hero heading');
       expect(screen.queryByText(discardNotice)).toBeNull();
     });
   });

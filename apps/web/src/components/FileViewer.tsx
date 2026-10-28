@@ -17062,11 +17062,6 @@ function HtmlViewer({
         setHoveredPodMemberId((current) => (current === elementId ? null : current));
       }}
       onHoverMember={setHoveredPodMemberId}
-      onViewAllComments={(returnFocusTarget) => {
-        commentPanelReturnFocusRef.current = returnFocusTarget ?? null;
-        setCommentPanelOpen(true);
-        setCommentSidePanelCollapsed(false);
-      }}
       onDeleteComment={onRemovePreviewComment ? async (commentId) => {
         const removed = await onRemovePreviewComment(commentId);
         if (!removed) return;

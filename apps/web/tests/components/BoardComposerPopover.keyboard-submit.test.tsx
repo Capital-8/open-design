@@ -164,22 +164,8 @@ describe('BoardComposerPopover keyboard submit', () => {
     expect(Number.parseInt(popover.style.maxHeight, 10)).toBe(568);
   });
 
-  it('drags the composer and clamps it inside the preview bounds', () => {
-    renderPopover({
-      targetOverride: {
-        hoverPoint: { x: 120, y: 120 },
-        position: { x: 110, y: 110, width: 80, height: 40 },
-      },
-      bounds: { width: 800, height: 600 },
-    });
-
-    const handle = screen.getByLabelText('Move comment box');
-    fireEvent.pointerDown(handle, { clientX: 10, clientY: 10, pointerId: 1 });
-    fireEvent.pointerMove(document, { clientX: 2000, clientY: 2000, pointerId: 1 });
-    fireEvent.pointerUp(document, { pointerId: 1 });
-
-    const popover = screen.getByTestId('comment-popover');
-    expect(Number.parseInt(popover.style.left, 10)).toBeLessThanOrEqual(466);
-    expect(Number.parseInt(popover.style.top, 10)).toBeLessThanOrEqual(266);
+  it('does not mount the retired drag handle', () => {
+    renderPopover();
+    expect(screen.queryByLabelText('Move comment box')).toBeNull();
   });
 });
