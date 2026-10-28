@@ -2131,6 +2131,7 @@
   bottom: -2px;
 }
 .comment-side-item-head {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3020,7 +3021,7 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
 /* Collaboration comment panel resize affordance. */
 .comment-side-resizer { position:absolute; z-index:3; left:-4px; top:8px; bottom:8px; width:8px; cursor:col-resize; touch-action:none; }
 .comment-side-resizer:focus-visible { outline:2px solid var(--text-muted); outline-offset:1px; }
-.comment-side-time { flex-shrink:0; white-space:nowrap; }
+.comment-side-time { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .comment-side-author-copy { min-width:0; }
 .comment-side-author-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 

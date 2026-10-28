@@ -75,3 +75,49 @@ Viewer 280px 浮层，长文内部滚动，关闭和发送可达；不足160px�
 新增受控回归先复现2次PUT，再验证修复后只有1次且成功响应清除未读。相关组件与样式11文件74项、原失败用例及新回归13项、已读相关5项通过（分组有重叠，不累加）。
 
 两个针对性 Playwright 闭环通过：评论发送后打开后续产物（含附件、401禁发、保存/重开只读详情）；多客户端内容/在线状态/已读/取消分享（保留精确1次已读请求断言）。根guard/typecheck通过。远端CI以本次新提交另行核对，未合并或部署。
+
+## 八类确认缺口（2026-10-28）
+
+以客户端 `94ebfebbb7` / Vela `99014c9c8` 为修复前基线，规则 revision 14；只处理以下八类。CV05 暂不处理。Terra 独立实施与只读范围审查，FileViewer / Viewer route 由父 agent 串行集成。
+
+|规则|本次结果|针对性证据|
+|---|---|---|
+|CV04|客户端及两种 iframe C 快捷键尊重菜单、对话框和 defaultPrevented|组件/桥测试；实际 host 和 URL iframe 控件保护及普通 C 触发|
+|CV16|原生更多菜单内第一次 Esc 仅关菜单；第二次关评论浮层|实屏保留正文与新附件，再关闭回焦|
+|CV06|Viewer 空草稿可换目标，非空草稿保留原目标和输入锁|浏览器空草稿换点、输入后保护及原 pending/error 回归|
+|CV19|客户端列表/详情显示 reanchored/stale 说明；Viewer 同版本 missing 显示原位置不可用|客户端两态列表+详情组件测试；stale 列表实屏；Viewer missing 与旧版本列表/详情实屏|
+|CV21|CRLF/CR 统一为 LF 后 trim，计数、发送与存储一致|contracts 2项、daemon HTTP/CLI/SQLite/同步22项；Vela API相关104项；400/401浏览器回归|
+|CV25|客户端窄列表时间可换行，姓名仍省略且 title 完整|240px resizer 实屏、长姓名与日期测量，无横溢|
+|CV26|客户端列表姓名/正文各自 dir=auto|组件及阿拉伯文/中文/英文混合实屏|
+|CV27|客户端关闭回原列表/图钉/创建入口；Viewer 桌面关闭回列表或 iframe 图钉|客户端三个入口组件测试与创建/列表实屏；Viewer 列表及异步重绘后图钉回焦浏览器断言|
+
+### 本轮验证与边界
+
+- 客户端4个聚焦文件23项、保存边界/未发送草稿与新增回归4文件19项通过（两组共享10项，不累加）；contracts2项、daemon22项通过；根 guard/typecheck 通过。
+- Vela 浏览器16项通过，API相关104项、桥/提交聚焦41项通过；根 lint（含workspace typecheck）通过。额外单测发现旧点击fixture位于元素外，修正坐标及已有 visible 字段预期；runtime32与33均复现相同行为，未修改CV05产品规则。
+- 浏览器使用实际产品组件、受控评论/auth/API。客户端临时HTML与GET响应覆盖均还原；附件为透明图片fixture，仅证明操作/保留。
+- 客户端个人fixture没有合法workspace publishedVersion，reanchored尚未实屏；旧ID stale详情受现有定位/隐藏边界影响，此项仅列表实屏及两态组件验证，不冒称详情浏览器验收通过。CV05没有为验收而修改。
+- 设计比对使用已有B08/D05/D06结构参考；内容、头像、时间和画布尺寸不同，新增位置提示也无一一对应设计状态，不宣称像素全等。Viewer使用既有自身皮肤；旧1.0设计不冒充2.0完整标准。
+- 不改发布生命周期、权限、同步调度、数据库结构或跨设备已读；只统一评论正文在既有写链路中的换行形式。未跑全量本地套件，真实IdP、生产及全部设计状态未验收。CI需按本次提交SHA另查，未合并、未部署。
+
+### 本轮实际截图
+
+第一次Esc后正文/附件仍在，菜单已关闭：
+
+![客户端Esc保留草稿](../assets/opend-4408/eight-gaps-client-D05-first-escape-keeps-draft.png)
+
+窄列表长姓名、时间换行与局部RTL：
+
+![客户端窄列表](../assets/opend-4408/eight-gaps-client-B08-narrow-mixed-list.png)
+
+Viewer空草稿可换目标，输入后固定：
+
+![Viewer空草稿换点](../assets/opend-4408/eight-gaps-viewer-cv06-empty-retargeted.png)
+
+![Viewer输入后保护](../assets/opend-4408/eight-gaps-viewer-cv06-retargeted-typed-draft.png)
+
+Viewer同版本目标不可用，保留既有虚线兜底头像和明确提示：
+
+![Viewer位置说明](../assets/opend-4408/eight-gaps-viewer-cv19-same-version-missing-target.png)
+
+![Viewer关闭后回图钉](../assets/opend-4408/eight-gaps-viewer-cv27-pin-focus-return.png)

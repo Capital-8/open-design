@@ -29,8 +29,11 @@ function renderPopover({
   targetOverride = {},
   draft = 'Tighten this heading',
   existingImages = [],
+  images = [],
   bounds,
+  onClose = () => {},
 }: {
+  onClose?: () => void;
   onSaveComment?: () => void;
   onSendBatch?: () => void;
   sending?: boolean;
@@ -38,6 +41,7 @@ function renderPopover({
   targetOverride?: Partial<PreviewCommentSnapshot>;
   draft?: string;
   existingImages?: { url: string; name: string }[];
+  images?: { file: File; url: string }[];
   bounds?: { width: number; height: number; scrollLeft?: number; scrollTop?: number };
 } = {}) {
   return render(
@@ -49,11 +53,12 @@ function renderPopover({
       onDraft={() => {}}
       onAddDraft={() => {}}
       onRemoveQueuedNote={() => {}}
-      onClose={() => {}}
+      onClose={onClose}
       onSaveComment={onSaveComment}
       onSendBatch={onSendBatch}
       onRemoveMember={() => {}}
       existingImages={existingImages}
+      images={images}
       sending={sending}
       t={((key: string) => String(key)) as never}
       bounds={bounds}
@@ -62,6 +67,31 @@ function renderPopover({
 }
 
 describe('BoardComposerPopover keyboard submit', () => {
+  it('keeps ordinary Escape closing behavior when the menu is closed', () => {
+    const onClose = vi.fn();
+    renderPopover({ onClose });
+    fireEvent.keyDown(screen.getByTestId('comment-popover-input'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the nested native menu on first Escape and retains the draft and attachment', () => {
+    const onClose = vi.fn();
+    renderPopover({ onClose, images: [{ url: 'blob:reference', file: new File(['image'], 'reference.png', { type: 'image/png' }) }] });
+    const menu = screen.getByRole('menu', { hidden: true });
+    let menuOpen = false;
+    vi.spyOn(menu, 'matches').mockImplementation(selector => selector === ':popover-open' && menuOpen);
+    const hide = vi.fn(() => { menuOpen = false; });
+    Object.assign(menu, { togglePopover: () => { menuOpen = !menuOpen; }, hidePopover: hide });
+    fireEvent.click(screen.getByLabelText('comment.moreActions'));
+    fireEvent.keyDown(screen.getByTestId('comment-popover-input'), { key: 'Escape' });
+    expect(hide).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('comment-popover-input')).toHaveValue('Tighten this heading');
+    expect(screen.getByRole('button', { name: 'reference.png' }).querySelector('img')).toHaveAttribute('src', 'blob:reference');
+    fireEvent.keyDown(screen.getByTestId('comment-popover-input'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('saves an element comment with Enter and keeps Shift+Enter for multiline text', () => {
     const onSaveComment = vi.fn();
     renderPopover({ onSaveComment });

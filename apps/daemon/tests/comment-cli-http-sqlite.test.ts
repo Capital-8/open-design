@@ -12,6 +12,7 @@ import {
   buildWorkspacePermissions,
   buildWorkspaceSeatSummary,
   SHARE_COMMENT_MAX_BYTES,
+  type PreviewCommentResponse,
   type WorkspaceCollabContext,
 } from '@open-design/contracts';
 import {
@@ -283,10 +284,38 @@ describe('od comment CLI HTTP/SQLite route integration', () => {
       expect(getPreviewComment(db!, PROJECT, CONVERSATION, createdId)?.note).toBe(fileNote);
     }
 
-    const stdinNote = '第一行\n第二行评论\n第三行';
+    const stdinNote = ' \r\n第一行\r\n第二行评论\r第三行\r ';
     const fromStdin = await runCliWithStdin(['comment', 'create', PROJECT, CONVERSATION, '--target', JSON.stringify(target), '--prompt-file', '-', ...common], stdinNote);
     expect(fromStdin.code).toBe(0);
-    expect(getPreviewComment(db!, PROJECT, CONVERSATION, JSON.parse(fromStdin.stdout).comment.id)?.note).toBe(stdinNote);
+    expect(getPreviewComment(db!, PROJECT, CONVERSATION, JSON.parse(fromStdin.stdout).comment.id)?.note).toBe('第一行\n第二行评论\n第三行');
+  });
+
+  it('normalizes newline content for both HTTP create and edit before SQLite persistence', async () => {
+    const base = await startRouteServer();
+    const url = `${base}/api/projects/${PROJECT}/conversations/${CONVERSATION}/comments`;
+    const send = (body: unknown) => fetch(url, { method: 'POST', headers: {
+      'Content-Type': 'application/json', 'x-od-workspace-id': WORKSPACE,
+      'x-od-workspace-member-id': OWNER,
+    }, body: JSON.stringify(body) });
+    const note = '👨‍👩‍👧‍👦'.repeat(199) + '\r\n' + '👨‍👩‍👧‍👦'.repeat(200);
+    const created = await send({ target, note: ' \r' + note + '\r ' });
+    expect(created.status).toBe(200);
+    const { comment } = await created.json() as PreviewCommentResponse;
+    expect(comment.note).toBe(note.replace(/\r\n?/g, '\n'));
+    expect(getPreviewComment(db!, PROJECT, CONVERSATION, comment.id)?.note).toBe(comment.note);
+    const edited = await send({ id: comment.id, target, note: ' first\rsecond\r\nthird ' });
+    expect(edited.status).toBe(200);
+    expect(getPreviewComment(db!, PROJECT, CONVERSATION, comment.id)?.note).toBe('first\nsecond\nthird');
+    const rejected = await send({ id: comment.id, target, note: note + '😀' });
+    expect(rejected.status).toBe(400);
+    expect(getPreviewComment(db!, PROJECT, CONVERSATION, comment.id)?.note).toBe('first\nsecond\nthird');
+    const imageOnly = await send({ target, note: ' \r\n\r ',
+      attachments: [{ path: 'image.png', name: 'image.png' }] });
+    expect(imageOnly.status).toBe(200);
+    const imageComment = (await imageOnly.json() as PreviewCommentResponse).comment;
+    expect(imageComment.note).toBe('');
+    expect(imageComment.attachments).toEqual([{ path: 'image.png', name: 'image.png' }]);
+    expect((await send({ target, note: ' \r\n\r ' })).status).toBe(400);
   });
 
   it('OPEND-3661 rejects a complete JSON body over 64 KiB before SQLite or relay writes', async () => {

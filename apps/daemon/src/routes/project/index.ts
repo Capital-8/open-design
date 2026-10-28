@@ -1333,13 +1333,13 @@ ${COMMENT_IDENTITY_HELPERS}
     };
   }
   document.addEventListener('keydown', function(event){
-    if (!commentShortcutEnabled || event.key.toLowerCase() !== 'c' || event.ctrlKey || event.metaKey || event.altKey || event.repeat || event.isComposing || event.keyCode === 229) return;
+    if (event.defaultPrevented || !commentShortcutEnabled || event.key.toLowerCase() !== 'c' || event.ctrlKey || event.metaKey || event.altKey || event.repeat || event.isComposing || event.keyCode === 229) return;
     var target = event.target;
-    if (target && target.closest && (target.isContentEditable || target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))) return;
+    if (target && target.closest && (target.isContentEditable || target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="menu"], [role="dialog"], dialog, [popover]'))) return;
     event.preventDefault();
     event.stopPropagation();
     try { window.parent.postMessage({ type: 'od:comment-shortcut' }, '*'); } catch (_) {}
-  }, true);
+  });
   window.addEventListener('message', function(ev){
     var data = ev && ev.data;
     if (!data || !data.type) return;

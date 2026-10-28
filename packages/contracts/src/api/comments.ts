@@ -3,9 +3,14 @@ import type { OkResponse } from '../common.js';
 export const COMMENT_MAX_CHARACTERS = 400;
 const commentSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
-/** Count the text that will be stored; surrounding whitespace is trimmed on save. */
+/** Canonical saved text: normalize platform line endings before trimming. */
+export function normalizeCommentContent(note: string): string {
+  return note.replace(/\r\n?/g, '\n').trim();
+}
+
+/** Count the canonical text that will be stored. */
 export function countCommentCharacters(note: string): number {
-  return Array.from(commentSegmenter.segment(note.trim())).length;
+  return Array.from(commentSegmenter.segment(normalizeCommentContent(note))).length;
 }
 
 export type PreviewCommentStatus =

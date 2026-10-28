@@ -312,6 +312,7 @@ export function BoardComposerPopover({
   discardPending = false,
   saveError = false,
   author,
+  locationNotice,
 }: {
   target: PreviewCommentSnapshot;
   existing: PreviewComment | null;
@@ -367,6 +368,7 @@ export function BoardComposerPopover({
   discardPending?: boolean;
   saveError?: boolean;
   author?: ReactNode;
+  locationNotice?: string;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<CSSProperties>({});
@@ -485,6 +487,11 @@ export function BoardComposerPopover({
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
+          if (menuRef.current?.matches(':popover-open')) {
+            menuRef.current.hidePopover();
+            event.stopPropagation();
+            return;
+          }
           onClose();
         }
       }}
@@ -595,6 +602,7 @@ export function BoardComposerPopover({
                 ))}
               </div>
             ) : null}
+            {existing && locationNotice ? <p dir="auto" role="status" className={browseStyles.readonlyNote}>{locationNotice}</p> : null}
             {existing ? <div className={browseStyles.detail} data-testid="comment-popover-detail">
               <p dir="auto" ref={detailRef} className={detailExpanded ? browseStyles.expanded : browseStyles.clamped}>{existing.note}</p>
               {detailOverflows || detailExpanded ? <button type="button" onClick={() => setDetailExpanded(value => !value)} aria-expanded={detailExpanded}>

@@ -26,8 +26,9 @@ it('draft mounts no header, retired handle, view-all entry, or legacy skin DOM',
 });
 it('detail mounts its real author, menu and close while keeping the old controls absent', () => {
   const close=vi.fn();
-  render(<BoardComposerPopover {...props} onClose={close} author={<span>Alice</span>} existing={{...props.target,id:'comment-1',projectId:'project',conversationId:'conversation',note:'Read only detail',status:'open',createdAt:1,updatedAt:1}}/>);
+  render(<BoardComposerPopover {...props} onClose={close} locationNotice="Position may have changed" author={<span>Alice</span>} existing={{...props.target,id:'comment-1',projectId:'project',conversationId:'conversation',note:'Read only detail',status:'open',createdAt:1,updatedAt:1}}/>);
   expect(screen.getByText('Alice')).toBeTruthy();
+  expect(screen.getByRole('status')).toHaveTextContent('Position may have changed');
   expect(screen.getByLabelText('comment.moreActions')).toBeTruthy();
   expect(screen.queryByLabelText('Move comment box')).toBeNull();
   expect(screen.queryByTestId('comment-popover-view-all')).toBeNull();

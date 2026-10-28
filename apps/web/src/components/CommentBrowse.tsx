@@ -97,7 +97,7 @@ export function CommentAvatarRail({ comments, activeId, unreadIds, renderAvatar,
   renderAvatar: (comment: PreviewComment) => ReactNode;
   label: (comment: PreviewComment) => string;
   moreLabel: (count: number) => string;
-  onOpen: (comment: PreviewComment) => void;
+  onOpen: (comment: PreviewComment, origin?: HTMLElement) => void;
   onExpand: () => void;
   expandLabel?: string;
   toggleRef: React.RefObject<HTMLButtonElement>;
@@ -114,7 +114,7 @@ export function CommentAvatarRail({ comments, activeId, unreadIds, renderAvatar,
         aria-label={label(comment)} aria-current={activeId === comment.id ? 'true' : undefined}
         onMouseEnter={event => hover.show(comment, event.currentTarget, true)} onMouseLeave={hover.leave}
         onFocus={event => hover.show(comment, event.currentTarget, true)} onBlur={hover.leave}
-        onClick={() => { hover.dismiss(); onOpen(comment); }}>
+        onClick={event => { hover.dismiss(); onOpen(comment, event.currentTarget); }}>
         {renderAvatar(comment)}{unreadIds.has(comment.id) ? <i className={styles.unread} /> : null}
       </button>)}
       {hidden > 0 ? <span className={styles.more} aria-label={moreLabel(hidden)} title={moreLabel(hidden)}>+{Math.min(99, hidden)}

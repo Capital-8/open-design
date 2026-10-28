@@ -47,6 +47,7 @@ import {
   resolveCommentTargetTitle,
   hasUnreadComments,
   countCommentCharacters,
+  normalizeCommentContent,
   COMMENT_MAX_CHARACTERS,
   type ProjectCommentReadState,
   OPEN_DESIGN_GITHUB_REPO_URL,
@@ -4705,7 +4706,7 @@ function CommentAuthorIdentityContent({
         {commentAuthorInitials(displayName)}
       </span>
       <span className="comment-side-author-copy">
-        <strong title={displayName || t('comment.unknownAuthor')}>{displayName || t('comment.unknownAuthor')}</strong>
+        <strong dir="auto" title={displayName || t('comment.unknownAuthor')}>{displayName || t('comment.unknownAuthor')}</strong>
       </span>
     </span>
   );
@@ -4757,7 +4758,7 @@ function CommentListBody({ note, t }: { note: string; t: TranslateFn }) {
 
   return (
     <div className="comment-side-body-wrap">
-      <div ref={bodyRef} id={bodyId} className={`comment-side-body${expanded ? '' : ' is-clamped'}`}>{note}</div>
+      <div ref={bodyRef} id={bodyId} dir="auto" className={`comment-side-body${expanded ? '' : ' is-clamped'}`}>{note}</div>
       {overflows ? (
         <button
           type="button"
@@ -4783,6 +4784,7 @@ export function CommentSidePanel({
   selectedIds,
   activeCommentId,
   unavailableCommentId,
+  locationNotices,
   collapsed,
   hasUnread = false,
   unreadIds = new Set<string>(),
@@ -4819,6 +4821,7 @@ export function CommentSidePanel({
   selectedIds: Set<string>;
   activeCommentId: string | null;
   unavailableCommentId?: string | null;
+  locationNotices?: ReadonlyMap<string, string>;
   collapsed: boolean;
   hasUnread?: boolean;
   unreadIds?: ReadonlySet<string>;
@@ -4838,7 +4841,7 @@ export function CommentSidePanel({
   currentUser?: CollabCloudMemberDirectoryEntry | null;
   onClearSelection: () => void;
   onReorder?: (orderedIds: string[], draggedId: string) => void;
-  onReply: (comment: PreviewComment) => void;
+  onReply: (comment: PreviewComment, origin?: HTMLElement) => void;
   onSendSelected: () => void | Promise<void>;
   onCreateComment?: (note: string) => boolean | Promise<boolean>;
   sending: boolean;
@@ -5073,11 +5076,11 @@ export function CommentSidePanel({
               tabIndex={0}
               onDragOver={(event) => handleDragOver(event, comment.id)}
               onDrop={(event) => handleDrop(event, comment.id)}
-              onClick={() => onReply(comment)}
+              onClick={(event) => onReply(comment, event.currentTarget)}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return;
                 event.preventDefault();
-                onReply(comment);
+                onReply(comment, event.currentTarget);
               }}
             >
               <div className="comment-side-item-head">
@@ -5116,6 +5119,9 @@ export function CommentSidePanel({
                 <span role="status" data-testid="comment-location-unavailable">
                   {t('comment.anchorState.lost')}
                 </span>
+              ) : null}
+              {unavailableCommentId !== comment.id && locationNotices?.get(comment.id) ? (
+                <span role="status" data-testid="comment-location-notice">{locationNotices.get(comment.id)}</span>
               ) : null}
               {projectId && comment.attachments && comment.attachments.length > 0 ? (
                 <div className="comment-side-attachments">
@@ -5293,6 +5299,7 @@ function CommentSideDock({
   selectedIds,
   activeCommentId,
   unavailableCommentId,
+  locationNotices,
   collapsed,
   hasUnread = false,
   unreadIds = new Set<string>(),
@@ -5326,6 +5333,7 @@ function CommentSideDock({
   selectedIds: Set<string>;
   activeCommentId: string | null;
   unavailableCommentId?: string | null;
+  locationNotices?: ReadonlyMap<string, string>;
   collapsed: boolean;
   hasUnread?: boolean;
   unreadIds?: ReadonlySet<string>;
@@ -5336,7 +5344,7 @@ function CommentSideDock({
   onSelectAll: () => void;
   onClearSelection: () => void;
   onReorder?: (orderedIds: string[], draggedId: string) => void;
-  onReply: (comment: PreviewComment) => void;
+  onReply: (comment: PreviewComment, origin?: HTMLElement) => void;
   onSendSelected: () => void | Promise<void>;
   onCreateComment?: (note: string) => boolean | Promise<boolean>;
   /** Team-collab gate: which comments the viewer may send to the agent (author
@@ -5388,6 +5396,7 @@ function CommentSideDock({
         selectedIds={selectedIds}
         activeCommentId={activeCommentId}
         unavailableCommentId={unavailableCommentId}
+        locationNotices={locationNotices}
         collapsed={collapsed}
         hasUnread={hasUnread}
         unreadIds={unreadIds}
@@ -6190,7 +6199,7 @@ function CommentPreviewOverlays({
   /** Team collaboration: persist the durable `lost` capture (last-good position) so the
    *  ghost pin survives reload. Only fires in drift-ladder mode. */
   onLostAnchors?: (writeBacks: AnchorWriteBack[]) => void;
-  onOpenComment: (comment: PreviewComment, snapshot: PreviewCommentSnapshot) => void;
+  onOpenComment: (comment: PreviewComment, snapshot: PreviewCommentSnapshot, origin: HTMLElement) => void;
   t: TranslateFn;
 }) {
   const overlayOffset = useMemo(() => ({ x: offsetX, y: offsetY }), [offsetX, offsetY]);
@@ -6279,7 +6288,7 @@ function CommentPreviewOverlays({
         style={{ background: pinColor.bg, color: pinColor.fg, left: 0, top: 0 }}
         onMouseEnter={event => hoverPreview.show(comment, event.currentTarget)} onMouseLeave={hoverPreview.leave}
         onFocus={event => hoverPreview.show(comment, event.currentTarget)} onBlur={hoverPreview.leave}
-        onClick={event => { event.stopPropagation(); hoverPreview.dismiss(); onOpenCommentRef.current(comment, target); }}
+        onClick={event => { event.stopPropagation(); hoverPreview.dismiss(); onOpenCommentRef.current(comment, target, event.currentTarget); }}
         title={`${label}: ${comment.note}`} aria-label={`Open comment for ${label}`}>
         <CommentAuthorIdentity comment={comment} currentUser={currentUser} displayNumber={markerNumber} initialOnly t={t} />
       </button>
@@ -8692,6 +8701,8 @@ function HtmlViewer({
   const commentReadScopeRef = useRef(commentReadScopeKey);
   const pendingCommentReadsRef = useRef(new Set<string>());
   const commentPanelToggleRef = useRef<HTMLButtonElement | null>(null);
+  const commentCreateToolRef = useRef<HTMLButtonElement | null>(null);
+  const commentComposerReturnFocusRef = useRef<HTMLElement | null>(null);
   const commentPanelReturnFocusRef = useRef<HTMLElement | null>(null);
   const pendingCommentPanelFocusRef = useRef<HTMLElement | null>(null);
   const [commentCreateMode, setCommentCreateMode] = useState(false);
@@ -15465,6 +15476,7 @@ function HtmlViewer({
   }
 
   function activateCommentCreateTool(returnFocusTarget?: HTMLElement | null) {
+    commentComposerReturnFocusRef.current = returnFocusTarget ?? commentCreateToolRef.current;
     if (returnFocusTarget) commentPanelReturnFocusRef.current = returnFocusTarget;
     fireArtifactToolbarClick('comment');
     void capturePreviewScrollPosition();
@@ -15503,8 +15515,8 @@ function HtmlViewer({
   useEffect(() => {
     if (!workspaceActive) return;
     const handleCommentShortcut = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== 'c' || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.repeat) return;
-      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
+      if (event.defaultPrevented || event.key.toLowerCase() !== 'c' || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.repeat) return;
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], [role="menu"], [role="menuitem"], [role="dialog"], dialog, [aria-modal="true"], [popover]')) return;
       event.preventDefault();
       commentShortcutRef.current();
     };
@@ -15598,7 +15610,7 @@ function HtmlViewer({
   }
 
   function queueCurrentDraft() {
-    const note = commentDraft.trim();
+    const note = normalizeCommentContent(commentDraft);
     if (!note) return;
     setQueuedBoardNotes((current) => [...current, note]);
     setCommentDraft('');
@@ -15631,7 +15643,7 @@ function HtmlViewer({
       existingComment
       && queuedBoardNotes.length === 0
       && boardImages.length === 0
-      && commentDraft.trim() === existingComment.note.trim(),
+      && normalizeCommentContent(commentDraft) === normalizeCommentContent(existingComment.note),
     );
     if (existingComment && sendingUnchangedSavedComment) {
       setSendingBoardBatch(true);
@@ -15649,7 +15661,7 @@ function HtmlViewer({
       return;
     }
     const nextNotes = [...queuedBoardNotes];
-    if (commentDraft.trim()) nextNotes.push(commentDraft.trim());
+    if (normalizeCommentContent(commentDraft)) nextNotes.push(normalizeCommentContent(commentDraft));
     if (nextNotes.length === 0 && boardImages.length === 0) return;
     setSendingBoardBatch(true);
     try {
@@ -15707,7 +15719,7 @@ function HtmlViewer({
     if (!activeCommentTarget || !onSavePreviewComment || sendingBoardBatch || countCommentCharacters(commentDraft) > COMMENT_MAX_CHARACTERS) return;
     setCommentSaveError(false);
     // Allow saving when there is text OR an attached image (image-only notes).
-    if (!commentDraft.trim() && boardImages.length === 0 && currentActiveComposerAttachments().length === 0) return;
+    if (!normalizeCommentContent(commentDraft) && boardImages.length === 0 && currentActiveComposerAttachments().length === 0) return;
     setSendingBoardBatch(true);
     try {
       const checked = await currentCommentSaveTarget(activeCommentTarget);
@@ -15715,7 +15727,7 @@ function HtmlViewer({
       const target = withDeckSlideIndex(targetFromSnapshot(checked));
       const saved = await onSavePreviewComment(
         target,
-        commentDraft.trim(),
+        normalizeCommentContent(commentDraft),
         false,
         boardImages,
         activeComposerComment?.id,
@@ -15737,7 +15749,7 @@ function HtmlViewer({
 
   async function savePanelComment(note: string) {
     if (!onSavePreviewComment) return false;
-    const cleanNote = note.trim();
+    const cleanNote = normalizeCommentContent(note);
     if (!cleanNote) return false;
     setSendingBoardBatch(true);
     try {
@@ -16488,6 +16500,15 @@ function HtmlViewer({
       .sort((a, b) => commentCreatedAt(a) - commentCreatedAt(b)),
     [file.name, previewComments],
   );
+  const commentLocationNotices = useMemo(() => {
+    const notices = new Map<string, string>();
+    if (commentTargetsReadyKey !== commentTargetsKey) return notices;
+    for (const comment of creationSortedSideComments) {
+      const state = resolveOwnerCommentAnchor(comment, liveCommentTargets, collab.publishedVersion ?? undefined).state;
+      if (state === 'reanchored' || state === 'stale') notices.set(comment.id, anchorStateLabel(state, t));
+    }
+    return notices;
+  }, [creationSortedSideComments, liveCommentTargets, collab.publishedVersion, commentTargetsReadyKey, commentTargetsKey, t]);
   // Provisional number for the next (not-yet-saved) pin. Computed over the
   // file's comments across ALL statuses — a resolved/attached/failed comment
   // keeps its pin_seq row in the daemon DB, so its number stays retired even
@@ -17017,6 +17038,7 @@ function HtmlViewer({
       target={activeCommentTarget}
       markerRect={composerMarkerRect}
       existing={activeComposerComment}
+      locationNotice={activeComposerComment ? commentLocationNotices.get(activeComposerComment.id) : undefined}
       canEditComment={canEditActiveComment}
       canDeleteComment={canDeleteActiveComment}
       canSendToAgent={canSendActiveComment}
@@ -17034,14 +17056,19 @@ function HtmlViewer({
       onRemoveQueuedNote={(index) =>
         setQueuedBoardNotes((current) => current.filter((_, currentIndex) => currentIndex !== index))
       }
-      onClose={clearBoardComposer}
+      onClose={() => {
+        const origin = commentComposerReturnFocusRef.current;
+        clearBoardComposer();
+        commentComposerReturnFocusRef.current = null;
+        (origin?.isConnected ? origin : commentCreateToolRef.current)?.focus({ preventScroll: true });
+      }}
       onSaveComment={() => { fireCommentPopoverClick('save_comment'); return savePersistentComment(); }}
       onSendBatch={() => {
         observeAnalytics(() => {
           const saved = currentActiveComposerComment();
           // Observe the same saved-comment branch as sendBoardBatch, without changing its submission.
           const unchanged = saved && queuedBoardNotes.length === 0 && boardImages.length === 0
-            && commentDraft.trim() === saved.note.trim();
+            && normalizeCommentContent(commentDraft) === normalizeCommentContent(saved.note);
           fireCommentPopoverClick('send_to_chat', unchanged ? [saved] : undefined);
         });
         return sendBoardBatch();
@@ -17144,6 +17171,7 @@ function HtmlViewer({
       selectedIds={selectedSideCommentIds}
       activeCommentId={activeSideCommentId}
       unavailableCommentId={unavailableCommentId}
+      locationNotices={commentLocationNotices}
       // The panel used to be pinned open whenever it was portaled (it docked
       // into a full-height column, where a collapsed rail made no sense). It
       // now always floats as a card, so its collapse control has to actually
@@ -17180,7 +17208,7 @@ function HtmlViewer({
         const sortKey = computeReorderedSortKey(visibleSideComments, orderedIds, draggedId);
         void onReorderPreviewComment?.(draggedId, sortKey);
       }}
-      onReply={(comment) => {
+      onReply={(comment, origin) => {
         // Open the saved comment as read-only detail.
         const snapshot = liveSnapshotForComment(comment, liveCommentTargets) ?? {
           filePath: comment.filePath,
@@ -17197,6 +17225,7 @@ function HtmlViewer({
           ...(typeof comment.slideIndex === 'number' ? { slideIndex: comment.slideIndex } : {}),
         };
         requestComposerRetarget(() => {
+          commentComposerReturnFocusRef.current = origin ?? commentPanelToggleRef.current;
           const needsLocation = ownerCommentNeedsLocation(comment, collab.enabled);
           if (needsLocation) setCommentLocationIntent(intent => intent + 1);
           setActiveCommentTarget(needsLocation ? null : preserveCommentPoint(comment, snapshot));
@@ -17450,6 +17479,7 @@ function HtmlViewer({
                 <button
                   type="button"
                   className={`viewer-action viewer-action-icon viewer-comment-toggle od-tooltip${boardMode && commentCreateMode && boardTool === 'inspect' ? ' active' : ''}`}
+                  ref={commentCreateToolRef}
                   data-testid="board-mode-toggle"
                   data-tooltip={t('fileViewer.comment')}
                   data-tooltip-placement="bottom"
@@ -18433,8 +18463,9 @@ function HtmlViewer({
                   offsetY={overlayPreviewTransform.offsetY}
                   strokePoints={strokePoints}
                   activeSlideIndex={effectiveDeck ? slideState?.active ?? null : null}
-                  onOpenComment={(comment, snapshot) => {
+                  onOpenComment={(comment, snapshot, origin) => {
                     requestComposerRetarget(() => {
+                      commentComposerReturnFocusRef.current = origin;
                       setCommentPanelOpen(true);
                       setCommentCreateMode(true);
                       setBoardMode(true);

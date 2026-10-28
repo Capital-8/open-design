@@ -27,6 +27,7 @@ import {
   stripNextStepMarkers,
   asPreviewCommentAnchorState,
   isPreviewCommentPoint,
+  normalizeCommentContent,
 } from '@open-design/contracts';
 import { parseCommentFileState } from './collab/comment-file-facts.js';
 import { migrateCollabSyncSnapshots } from './collab/sync-snapshot-store.js';
@@ -3881,7 +3882,7 @@ export function upsertPreviewComment(
   options: UpsertPreviewCommentOptions = {},
 ) {
   const target = input?.target ?? {};
-  const note = typeof input?.note === 'string' ? input.note.trim() : '';
+  const note = typeof input?.note === 'string' ? normalizeCommentContent(input.note) : '';
   const attachmentsProvided = Object.prototype.hasOwnProperty.call(input ?? {}, 'attachments');
   const incomingAttachments = normalizePreviewCommentAttachments(input?.attachments);
   const filePath = cleanRequiredString(target.filePath, 'filePath');
@@ -4682,7 +4683,7 @@ export function mergeSyncedPreviewComment(
       attachments ? JSON.stringify(attachments) : null,
       slideIndex,
       slideKey,
-      typeof comment.note === 'string' ? comment.note : '',
+      typeof comment.note === 'string' ? normalizeCommentContent(comment.note) : '',
       status,
       anchorState,
       anchoredVersion,
@@ -4756,7 +4757,7 @@ export function mergeSyncedPreviewComment(
       attachments ? JSON.stringify(attachments) : null,
       slideIndex,
       slideKey,
-      typeof comment.note === 'string' ? comment.note : '',
+      typeof comment.note === 'string' ? normalizeCommentContent(comment.note) : '',
       status,
       createdAt,
       incomingUpdatedAt ?? createdAt,

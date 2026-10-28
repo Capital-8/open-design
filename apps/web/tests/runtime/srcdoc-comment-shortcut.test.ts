@@ -5,7 +5,7 @@ import { buildSrcdoc } from '../../src/runtime/srcdoc';
 
 it('forwards enabled comment shortcuts, protects editing, and applies the supplied comment cursor', () => {
   const srcdoc = buildSrcdoc('<body></body>', { commentBridge: true, inspectBridge: true });
-  const dom = new JSDOM('<body><input><textarea></textarea><select></select><div contenteditable="true"><span>Editing</span></div></body>', { runScripts: 'outside-only', pretendToBeVisual: true });
+  const dom = new JSDOM('<body><input><textarea></textarea><select></select><div contenteditable="true"><span>Editing</span></div><div role="menu"><button>Menu</button></div><div role="dialog"><button>Dialog</button></div><dialog open><button>Native dialog</button></dialog><div popover><button>Popover</button></div><button id="handled">Handled</button></body>', { runScripts: 'outside-only', pretendToBeVisual: true });
   try {
     const win = dom.window;
     const postMessage = vi.fn();
@@ -26,6 +26,10 @@ it('forwards enabled comment shortcuts, protects editing, and applies the suppli
     expect(key({ key: 'C', shiftKey: true })).toBe(true);
     for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { repeat: true }, { isComposing: true }, { keyCode: 229 }, { key: 'x' }]) expect(key(init)).toBe(false);
     for (const selector of ['input', 'textarea', 'select', '[contenteditable] span']) expect(key({}, win.document.querySelector(selector) as HTMLElement)).toBe(false);
+    for (const selector of ['[role=menu] button', '[role=dialog] button', 'dialog button', '[popover] button']) expect(key({}, win.document.querySelector(selector) as HTMLElement)).toBe(false);
+    const handled = win.document.getElementById('handled')!;
+    handled.addEventListener('keydown', event => event.preventDefault());
+    expect(key({}, handled)).toBe(true);
     expect(postMessage.mock.calls.map(call => call[0])).toEqual([{ type: 'od:comment-shortcut' }, { type: 'od:comment-shortcut' }]);
     expect(win.document.documentElement.style.getPropertyValue('--od-comment-cursor')).toBe('url("comment.svg") 8 8, crosshair');
     expect(srcdoc).toContain('cursor: var(--od-comment-cursor, crosshair) !important');
