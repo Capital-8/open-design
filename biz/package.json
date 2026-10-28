@@ -1,0 +1,141 @@
+{
+  "name": "@open-design/biz",
+  "version": "0.25.1",
+  "private": true,
+  "type": "module",
+  "description": "Shared backend business rules and durable workflows.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./account": {
+      "types": "./dist/account/index.d.ts",
+      "default": "./dist/account/index.js"
+    },
+    "./workspaces": {
+      "types": "./dist/workspaces/index.d.ts",
+      "default": "./dist/workspaces/index.js"
+    },
+    "./billing": {
+      "types": "./dist/billing/index.d.ts",
+      "default": "./dist/billing/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./projects": {
+      "types": "./dist/projects/index.d.ts",
+      "import": "./dist/projects/index.js"
+    },
+    "./conversations": {
+      "types": "./dist/conversations/index.d.ts",
+      "import": "./dist/conversations/index.js"
+    },
+    "./files": {
+      "types": "./dist/files/index.d.ts",
+      "import": "./dist/files/index.js"
+    },
+    "./catalog": {
+      "types": "./dist/catalog/index.d.ts",
+      "import": "./dist/catalog/index.js"
+    },
+    "./model": {
+      "types": "./dist/model.d.ts",
+      "import": "./dist/model.js"
+    },
+    "./access": {
+      "types": "./dist/access.d.ts",
+      "import": "./dist/access.js"
+    },
+    "./files/attachments": {
+      "types": "./dist/files/attachments.d.ts",
+      "import": "./dist/files/attachments.js"
+    },
+    "./prompts/strategy": {
+      "types": "./dist/prompts/strategy.d.ts",
+      "import": "./dist/prompts/strategy.js"
+    },
+    "./prompts/example": {
+      "types": "./dist/prompts/example.d.ts",
+      "import": "./dist/prompts/example.js"
+    },
+    "./catalog/official": {
+      "types": "./dist/catalog/official.d.ts",
+      "import": "./dist/catalog/official.js"
+    },
+    "./catalog/selection": {
+      "types": "./dist/catalog/selection.d.ts",
+      "import": "./dist/catalog/selection.js"
+    },
+    "./projects/input": {
+      "types": "./dist/projects/input.d.ts",
+      "import": "./dist/projects/input.js"
+    },
+    "./views": {
+      "types": "./dist/views.d.ts",
+      "import": "./dist/views.js"
+    },
+    "./runs": {
+      "types": "./dist/runs/index.d.ts",
+      "import": "./dist/runs/index.js"
+    },
+    "./journal": {
+      "types": "./dist/journal/index.d.ts",
+      "import": "./dist/journal/index.js"
+    },
+    "./runs/recovery": {
+      "types": "./dist/runs/recovery.d.ts",
+      "import": "./dist/runs/recovery.js"
+    },
+    "./runs/views": {
+      "types": "./dist/runs/views.d.ts",
+      "import": "./dist/runs/views.js"
+    },
+    "./exports": {
+      "types": "./dist/exports/index.d.ts",
+      "import": "./dist/exports/index.js"
+    },
+    "./files/metadata": {
+      "types": "./dist/files/metadata.d.ts",
+      "import": "./dist/files/metadata.js"
+    },
+    "./catalog/preview": {
+      "types": "./dist/catalog/preview.d.ts",
+      "default": "./dist/catalog/preview.js"
+    },
+    "./public-metadata": {
+      "types": "./dist/public-metadata/index.d.ts",
+      "default": "./dist/public-metadata/index.js"
+    },
+    "./runs/input": {
+      "types": "./dist/runs/input.d.ts",
+      "default": "./dist/runs/input.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/node": "24.12.2",
+    "vitest": "4.1.6"
+  },
+  "engines": {
+    "node": "~24"
+  },
+  "dependencies": {
+    "@open-design/bridge": "workspace:*",
+    "@open-design/contracts": "workspace:*",
+    "zod": "3.25.76",
+    "jszip": "3.10.1"
+  }
+}

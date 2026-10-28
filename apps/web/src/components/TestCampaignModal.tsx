@@ -8,7 +8,8 @@ import type {
 	TestRuntimeDecision,
 	TestRuntimeContextMismatch,
 } from "@open-design/contracts/api/touchpointTestRuntime";
-import { getOpenDesignHost, OPEN_DESIGN_HOST_VERSION } from "@open-design/host";
+import { OPEN_DESIGN_HOST_VERSION } from "@open-design/host";
+import { supportsCampaigns } from "../runtime/campaign-support";
 import { mountTouchpoint } from "./touchpoint-lifecycle";
 import {
 	navigateCampaignTarget,
@@ -426,11 +427,9 @@ export async function dispatchTestCampaignAction(
 }
 
 function supportsHost(authenticated: boolean): boolean {
-	const host = getOpenDesignHost();
 	return (
 		authenticated &&
-		host?.version === OPEN_DESIGN_HOST_VERSION &&
-		host.client.type === "desktop"
+		supportsCampaigns()
 	);
 }
 

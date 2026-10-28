@@ -109,6 +109,50 @@
     "./runtime/motion-source-player": {
       "types": "./dist/runtime/motion-source-player.d.ts",
       "default": "./dist/runtime/motion-source-player.mjs"
+    },
+    "./cloud/workspaces": {
+      "types": "./dist/cloud/workspaces.d.ts",
+      "default": "./dist/cloud/workspaces.mjs"
+    },
+    "./cloud/legacy-app-config": {
+      "types": "./dist/cloud/legacy-app-config.d.ts",
+      "default": "./dist/cloud/legacy-app-config.mjs"
+    },
+    "./cloud/legacy-workspace": {
+      "types": "./dist/cloud/legacy-workspace.d.ts",
+      "default": "./dist/cloud/legacy-workspace.mjs"
+    },
+    "./cloud/api": {
+      "types": "./dist/cloud/api.d.ts",
+      "default": "./dist/cloud/api.mjs"
+    },
+    "./cloud/legacy-catalog": {
+      "types": "./dist/cloud/legacy-catalog.d.ts",
+      "default": "./dist/cloud/legacy-catalog.mjs"
+    },
+    "./cloud/legacy-attachments": {
+      "types": "./dist/cloud/legacy-attachments.d.ts",
+      "default": "./dist/cloud/legacy-attachments.mjs"
+    },
+    "./cloud/legacy-public-metadata": {
+      "types": "./dist/cloud/legacy-public-metadata.d.ts",
+      "default": "./dist/cloud/legacy-public-metadata.mjs"
+    },
+    "./cloud/legacy-design-systems": {
+      "types": "./dist/cloud/legacy-design-systems.d.ts",
+      "default": "./dist/cloud/legacy-design-systems.mjs"
+    },
+    "./cloud/legacy-files": {
+      "types": "./dist/cloud/legacy-files.d.ts",
+      "default": "./dist/cloud/legacy-files.mjs"
+    },
+    "./cloud/legacy-chat": {
+      "types": "./dist/cloud/legacy-chat.d.ts",
+      "default": "./dist/cloud/legacy-chat.mjs"
+    },
+    "./cloud/render": {
+      "types": "./dist/cloud/render.d.ts",
+      "default": "./dist/cloud/render.mjs"
     }
   },
   "scripts": {

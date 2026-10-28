@@ -194,6 +194,8 @@ export type DaemonStatusSnapshot = {
 };
 
 export type WebStatusSnapshot = {
+  /** Compiled frontend selection; not part of sidecar process identity. */
+  buildTarget?: "desktop" | "web";
   pid?: number | null;
   state: ServiceRuntimeState;
   updatedAt?: string;

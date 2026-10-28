@@ -10,10 +10,8 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import {
-  clearHostBrowserData,
-  isOpenDesignHostAvailable,
-} from '@open-design/host';
+import { clearBrowserData } from '../runtime/brand-browser';
+import { BrowserSurface, BrowserCaptureControl } from './BrowserSurface';
 import type { TrackingReferenceBoardCategory } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import {
@@ -299,7 +297,6 @@ export interface BrowserPageInfo {
 }
 
 const EMPTY_URL = 'about:blank';
-const DESIGN_BROWSER_PARTITION = 'persist:open-design-design-browser';
 const HISTORY_LIMIT = DESIGN_BROWSER_HISTORY_LIMIT;
 const HISTORY_SUGGESTION_LIMIT = 20;
 const EMPTY_PREVIEW_COMMENTS: PreviewComment[] = [];
@@ -933,7 +930,6 @@ export function DesignBrowserPanel({
 }: DesignBrowserPanelProps) {
   const t = useT();
   const { workspaceContext } = useProjectCollabContext();
-  const desktopHostAvailable = isOpenDesignHostAvailable();
   const initialState = initialBrowserState(initialUrl, initialTitle);
   // `loadUrl` is the navigation target bound to the <webview>/<iframe> `src`.
   // It changes ONLY on user-initiated navigation. `currentUrl` is the committed
@@ -1028,7 +1024,7 @@ export function DesignBrowserPanel({
   useEffect(() => {
     if (!browserTabId) return undefined;
     const handle: BrandBrowserHandle = {
-      isDesktopWebview: desktopHostAvailable && Boolean(webviewNode),
+      isDesktopWebview: Boolean(webviewNode),
       getURL: () => webviewNode?.getURL?.() ?? currentUrl,
       executeJavaScript: (code, gesture) =>
         webviewNode ? webviewNode.executeJavaScript(code, gesture) : null,
@@ -1036,15 +1032,8 @@ export function DesignBrowserPanel({
     };
     registerBrandBrowser(projectId, browserTabId, handle);
     return () => registerBrandBrowser(projectId, browserTabId, null);
-  }, [browserTabId, projectId, webviewNode, currentUrl, desktopHostAvailable]);
+  }, [browserTabId, projectId, webviewNode, currentUrl]);
   const assignWebviewNode = useCallback((node: HTMLWebViewElement | null) => {
-    // Set `allowpopups` imperatively rather than as a JSX prop. React's DOM
-    // renderer does not treat `allowpopups` as a known boolean attribute, so
-    // passing it through JSX logs "Received `true` for a non-boolean
-    // attribute" at runtime (only reproducible once the webview branch mounts
-    // in the desktop host). The attribute must still reach Electron's <webview>
-    // as a present string so the guest page may open popups.
-    if (node) node.setAttribute('allowpopups', 'true');
     setWebviewNode(node as WebviewElement | null);
   }, []);
 
@@ -2002,11 +1991,11 @@ export function DesignBrowserPanel({
   }
 
   async function clearCookies(storage: boolean) {
-    if (!desktopHostAvailable) {
+    const result = await clearBrowserData({ cookies: true, storage });
+    if (!result.ok && result.reason === 'host-unavailable') {
       setStatusMessage(t('designBrowser.status.desktopDataUnavailable'));
       return;
     }
-    const result = await clearHostBrowserData({ cookies: true, storage });
     setStatusMessage(
       result.ok
         ? t('designBrowser.status.browserDataCleared')
@@ -2537,7 +2526,7 @@ export function DesignBrowserPanel({
           ) : null}
         </form>
         <div className="db-actions">
-          {desktopHostAvailable ? (
+          <BrowserCaptureControl>
             <IconTooltipButton
               label={t('fileViewer.screenshot')}
               wrapperClassName="db-action-item db-action-secondary db-action-screenshot"
@@ -2546,7 +2535,7 @@ export function DesignBrowserPanel({
             >
               <RemixIcon name="screenshot-2-line" size={15} />
             </IconTooltipButton>
-          ) : null}
+          </BrowserCaptureControl>
           <IconTooltipButton
             label={t('browserUse.title')}
             wrapperClassName="db-action-item db-action-browser-use"
@@ -2674,7 +2663,7 @@ export function DesignBrowserPanel({
           active={drawOverlayOpen}
           captureTarget={activeCommentTarget ? browserTargetFromSnapshot(activeCommentTarget) : null}
           captureViewport={!isBlank}
-          captureSnapshot={desktopHostAvailable ? captureBrowserSnapshot : undefined}
+          captureSnapshot={webviewNode ? captureBrowserSnapshot : undefined}
           captureFrameRect={() => webviewNode?.getBoundingClientRect() ?? null}
           filePath={isBlank ? undefined : currentUrl}
           hideChrome={captureChromeHidden}
@@ -2688,22 +2677,8 @@ export function DesignBrowserPanel({
                 onNavigate={navigateTo}
                 projectId={projectId}
               />
-            ) : desktopHostAvailable ? (
-              <webview
-                ref={assignWebviewNode}
-                className="db-webview"
-                src={loadUrl}
-                partition={DESIGN_BROWSER_PARTITION}
-                title={pageTitle}
-              />
             ) : (
-              <div className="db-fallback">
-                <iframe
-                  title={pageTitle}
-                  src={loadUrl}
-                  onLoad={(event) => syncFromFallbackFrame(event.currentTarget)}
-                />
-              </div>
+              <BrowserSurface src={loadUrl} title={pageTitle} onNativeView={assignWebviewNode} onFrameLoad={syncFromFallbackFrame} />
             )}
             {commentComposer}
             {(activeTool === 'inspect' || activeTool === 'edit') && activeCommentTarget ? (

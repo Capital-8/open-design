@@ -2,25 +2,24 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { canRenderProjectImage as webImageRenderer } from '../../src/runtime/exports/web';
 import type { ProjectFile } from '../../src/types';
 
 const {
+  canRenderProjectImageMock,
   captureHostIframeSnapshotMock,
-  downloadImageDataUrlMock,
+  saveImageExportMock,
   exportProjectImageDataUrlMock,
   imageDataUrlToBlobMock,
-  isOpenDesignHostAvailableMock,
   prepareImageExportTargetMock,
   requestPreviewSnapshotMock,
   saveImageBlobMock,
 } = vi.hoisted(() => ({
+  canRenderProjectImageMock: vi.fn(() => false),
   captureHostIframeSnapshotMock: vi.fn(),
-  downloadImageDataUrlMock: vi.fn(),
+  saveImageExportMock: vi.fn((target, blob) => target.save(blob)),
   exportProjectImageDataUrlMock: vi.fn(),
   imageDataUrlToBlobMock: vi.fn(),
-  // Default: no desktop host, so existing tests exercise the host-snapshot
-  // fallback path exactly as before. The runtime-deck test flips this on.
-  isOpenDesignHostAvailableMock: vi.fn(() => false),
   prepareImageExportTargetMock: vi.fn(),
   requestPreviewSnapshotMock: vi.fn(),
   saveImageBlobMock: vi.fn(),
@@ -32,11 +31,11 @@ vi.mock('../../src/runtime/exports', async () => {
   );
   return {
     ...actual,
+    canRenderProjectImage: canRenderProjectImageMock,
     captureHostIframeSnapshot: captureHostIframeSnapshotMock,
-    downloadImageDataUrl: downloadImageDataUrlMock,
+    saveImageExport: saveImageExportMock,
     exportProjectImageDataUrl: exportProjectImageDataUrlMock,
     imageDataUrlToBlob: imageDataUrlToBlobMock,
-    isOpenDesignHostAvailable: isOpenDesignHostAvailableMock,
     prepareImageExportTarget: prepareImageExportTargetMock,
     requestPreviewSnapshot: requestPreviewSnapshotMock,
   };
@@ -117,8 +116,7 @@ describe('FileViewer image export', () => {
   });
 
   it('uses the server renderer for cloud image export without a desktop host', async () => {
-    vi.stubEnv('NEXT_PUBLIC_OD_CLOUD_POC', '1');
-    isOpenDesignHostAvailableMock.mockReturnValue(false);
+    canRenderProjectImageMock.mockImplementation(webImageRenderer);
     exportProjectImageDataUrlMock.mockResolvedValue({ ok: true, snapshot: { dataUrl: 'data:image/png;base64,cloud', w: 800, h: 600 } });
     imageDataUrlToBlobMock.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
     renderHtmlPreview();
@@ -295,7 +293,8 @@ describe('FileViewer image export', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('uses the prepared PNG data URL for fallback downloads', async () => {
+  it('passes the prepared PNG data URL to the selected save operation', async () => {
+    saveImageExportMock.mockResolvedValueOnce(undefined);
     const imageBlob = new Blob(['png'], { type: 'image/png' });
     requestPreviewSnapshotMock.mockResolvedValueOnce({
       dataUrl: 'data:image/png;base64,ok',
@@ -315,14 +314,14 @@ describe('FileViewer image export', () => {
 
     await waitFor(() => {
       expect(prepareImageExportTargetMock).toHaveBeenCalledWith('workspace', 'png', { useNativePicker: false });
-      expect(downloadImageDataUrlMock).toHaveBeenCalledWith('data:image/png;base64,ok', 'workspace.png');
+      expect(saveImageExportMock).toHaveBeenCalledWith(expect.objectContaining({ filename: 'workspace.png' }), expect.any(Blob), 'png', 'data:image/png;base64,ok');
     });
     expect(saveImageBlobMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Download started')).toBeTruthy();
   });
 
   it('passes the selected mobile viewport to the off-screen image exporter', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
+    canRenderProjectImageMock.mockReturnValue(true);
     exportProjectImageDataUrlMock.mockResolvedValueOnce({
       ok: true,
       snapshot: {
@@ -356,7 +355,7 @@ describe('FileViewer image export', () => {
   });
 
   it('keeps desktop page exports on the renderer defaults', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
+    canRenderProjectImageMock.mockReturnValue(true);
     exportProjectImageDataUrlMock.mockResolvedValueOnce({
       ok: true,
       snapshot: {
@@ -387,7 +386,7 @@ describe('FileViewer image export', () => {
   });
 
   it('keeps deck exports on the renderer defaults when mobile preview is selected', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
+    canRenderProjectImageMock.mockReturnValue(true);
     exportProjectImageDataUrlMock.mockResolvedValueOnce({
       ok: true,
       snapshot: {
@@ -476,7 +475,7 @@ describe('FileViewer image export', () => {
     // affordance: the export menu's 截图 row was removed (export produces files
     // and links; a capture is a different job). Both always shared this one
     // `captureExportImageSnapshot` path, which is what this test pins.
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
+    canRenderProjectImageMock.mockReturnValue(true);
     captureHostIframeSnapshotMock.mockResolvedValue({ dataUrl: 'data:image/png;base64,host', w: 1280, h: 720 });
 
     render(

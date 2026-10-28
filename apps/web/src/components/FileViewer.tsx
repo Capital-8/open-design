@@ -1,4 +1,4 @@
-import { CloudMotionExportButton, isCloudMotionSource } from './CloudMotionExportButton';
+import { MotionExportButton } from './MotionExportButton';
 import { commentSelectorsMatch, commentUsesIdentity, ownerCommentNeedsLocation, resolveOwnerCommentAnchor } from '../comments/owner-anchor';
 import { indexCommentTargets } from '../comments/target-index';
 import { useShareSourceGuard } from './share/useShareSourceGuard';
@@ -29,8 +29,8 @@ import { Button, Input, Select } from '@open-design/components';
 import {
   getLatestHostPreviewNavigationFailure,
   subscribeHostPreviewNavigationFailure,
-  type OpenDesignHostPreviewNavigationFailure,
-} from '@open-design/host';
+} from '../runtime/preview-navigation';
+import type { OpenDesignHostPreviewNavigationFailure } from '@open-design/host';
 import { CenteredLoader } from './Loading';
 import { APP_CHROME_FILE_ACTIONS_ID, APP_CHROME_FILE_ACTIONS_SELECTOR } from './AppChromeHeader';
 import {
@@ -198,17 +198,17 @@ import {
   exportAsPdf,
   exportAsZip,
   exportProjectAsHtml,
-  exportProjectAsPdf,
   exportProjectAsPptx,
   exportProjectAsZip,
   exportProjectImageDataUrl,
-  exportProjectScreenshotPdf,
+  canRenderProjectImage,
   exportSnapshotAsPdf,
   exportReactComponentAsHtml,
   exportReactComponentAsZip,
   captureHostIframeSnapshot,
   imageDataUrlToBlob,
-  isOpenDesignHostAvailable,
+  exportPreviewPdf,
+  saveImageExport,
   openSandboxedPreviewInNewTab,
   prepareImageExportTarget,
   planDeckImageCapture,
@@ -7555,7 +7555,7 @@ function HtmlViewer({
     }
   };
   // Feeds per-slide capture progress into the ref the loading-toast ticker reads
-  // (apps/web/src/runtime/exports.ts drives this for the PDF exporter).
+  // (apps/web/src/runtime/exports/shared.ts drives this for the PDF exporter).
   const onExportProgress: ExportProgress = (done, total) => {
     exportProgressRef.current = { done, total };
   };
@@ -15659,27 +15659,7 @@ function HtmlViewer({
     const pdfTitle = context?.title ?? exportTitle;
     const pdfSource = context?.content ?? source ?? '';
     const pdfDeck = deckExportSignalForContext(context);
-    if (isOpenDesignHostAvailable()) {
-      const res = await exportProjectScreenshotPdf({
-        projectId,
-        fileName: file.name,
-        title: pdfTitle,
-        workspaceContext,
-        // Broader deck signal than the viewer's nav so runtime-managed decks
-        // (<deck-stage>) paginate per slide; the vector fallback below uses
-        // the SAME signal, so an artifact exports identically with or without
-        // a desktop host (no per-host divergence).
-        deck: pdfDeck,
-        ...(context?.versionId ? { versionId: context.versionId } : {}),
-      });
-      if (res.ok) return res.completion;
-      // A SEMANTIC failure (bad deck routing, unreadable renderer output,
-      // renderer 502, ...) must surface, not silently downgrade to the vector
-      // PDF, which can reintroduce the fidelity bugs the screenshot path
-      // exists to avoid. Only a genuinely unavailable renderer falls through.
-      if (!('unavailable' in res)) throw new Error(res.error);
-    }
-    return exportProjectAsPdf({
+    return exportPreviewPdf({
       deck: pdfDeck,
       fallbackPdf: () => exportAsPdf(pdfSource, pdfTitle, { deck: pdfDeck, onProgress: onExportProgress }),
       filePath: file.name,
@@ -15879,7 +15859,7 @@ function HtmlViewer({
     // reports; otherwise (Copy screenshot, Mark/Draw capture) it grabs the
     // CURRENT slide, mirroring what's on screen. An ordinary page is its
     // full-page capture either way.
-    if ((isOpenDesignHostAvailable() || process.env.NEXT_PUBLIC_OD_CLOUD_POC === '1') && projectId && file.name) {
+    if (canRenderProjectImage() && projectId && file.name) {
       // Deck-vs-page uses the same signal as PDF export — broader than the viewer's nav
       // signal — so runtime-managed decks (`<deck-stage>` / `data-screen-label`,
       // no literal `.slide`) export as a deck instead of a single page-mode shot
@@ -16126,28 +16106,7 @@ function HtmlViewer({
     // unacceptable for a Chinese-first product. Falls back to the
     // vector/browser print path on web or on failure.
     fireShareExport('pdf', async () => {
-      if (isOpenDesignHostAvailable()) {
-        const res = await exportProjectScreenshotPdf({
-          projectId,
-          fileName: file.name,
-          title: exportTitle,
-          workspaceContext,
-          // Broader deck signal than the viewer's nav so runtime-managed decks
-          // (<deck-stage>) paginate per slide; the vector fallback below uses
-          // the SAME signal, so an artifact exports identically with or without
-          // a desktop host (no per-host divergence).
-          deck: deckExportSignal,
-        });
-        if (res.ok) return res.completion;
-        // A SEMANTIC failure (bad deck routing, unreadable renderer output,
-        // renderer 502, …) must surface — NOT silently downgrade to the vector
-        // PDF, which can reintroduce the CJK-glyph / fidelity bugs the
-        // screenshot path exists to avoid. Only a genuinely unavailable
-        // renderer (no host / 501 / transport) falls through to the vector path
-        // below.
-        if (!('unavailable' in res)) throw new Error(res.error);
-      }
-      return exportProjectAsPdf({
+      return exportPreviewPdf({
         deck: deckExportSignal,
         fallbackPdf: () => exportAsPdf(source ?? '', exportTitle, { deck: deckExportSignal, onProgress: onExportProgress }),
         filePath: file.name,
@@ -16256,12 +16215,7 @@ function HtmlViewer({
         fireImageExportResult('cancelled');
         return;
       }
-      let saved: void | 'desktop' | 'cancelled' | 'download' = undefined;
-      if (!isOpenDesignHostAvailable() && target.method === 'download' && imageExportFormat === 'png' && dataUrl) {
-        downloadImageDataUrl(dataUrl, target.filename);
-      } else {
-        saved = await target.save(blob);
-      }
+      const saved = await saveImageExport(target, blob, imageExportFormat, dataUrl);
       if (saved === 'cancelled') {
         setExportToast(null);
         fireImageExportResult('cancelled');
@@ -17779,10 +17733,8 @@ function HtmlViewer({
                     ) : null}
                     {unifiedActionTab === 'export' && rawCanDownload ? (
                       <div className="chrome-unified-panel">
-                  {process.env.NEXT_PUBLIC_OD_CLOUD_POC === '1' && isCloudMotionSource(source) ? (
-                    <CloudMotionExportButton menu projectId={projectId} fileName={file.name}
-                      title={exportTitle} disabled={viewerOnly || streaming} />
-                  ) : null}
+                  <MotionExportButton menu source={source} projectId={projectId} fileName={file.name}
+                    title={exportTitle} disabled={viewerOnly || streaming} />
                   <button
                     type="button"
                     className="share-menu-item"

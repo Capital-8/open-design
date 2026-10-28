@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-design-cloud
+spec:
+  replicas: 1
+  # The recovery worker takes a single-instance database lock.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-design-cloud
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-design-cloud
+        app.kubernetes.io/instance: {{ .Release.Name | quote }}
+        app.kubernetes.io/part-of: open-design-cloud
+      annotations:
+        resources/revision: {{ .Values.resources.revision | quote }}
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 75
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: cloud
+          command: ["node", "dist/server.js"]
+          image: {{ include "cloud.image" .Values.image | quote }}
+          ports: [{name: http, containerPort: 19000}]
+          envFrom:
+            - configMapRef: {name: open-design-cloud}
+          env:
+            {{- range list "OD_CLOUD_DATABASE_URL" "OD_CLOUD_CREDENTIAL_KEYS" "OD_CLOUD_CREDENTIAL_KEY_ID" }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "secrets.application required" $.Values.secrets.application | quote }}
+                  key: {{ . }}
+            {{- end }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            {{- toYaml .Values.cloudResources | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /ready, port: http}
+            failureThreshold: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - name: resources
+              mountPath: /opt/open-design/resources
+              readOnly: true
+              {{- with .Values.resources.subPath }}
+              subPath: {{ . | quote }}
+              {{- end }}
+      volumes:
+        - name: resources
+          persistentVolumeClaim:
+            claimName: {{ required "resources.existingClaim required" .Values.resources.existingClaim | quote }}
+            readOnly: true
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-design-cloud
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: open-design-cloud
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  ports:
+    - {name: http, port: 19000, targetPort: http}

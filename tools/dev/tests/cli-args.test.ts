@@ -16,6 +16,8 @@ describe("tools-dev CLI argument rewriting", () => {
   });
 
   it("inserts the default start command without stealing option values", () => {
+    assert.deepEqual(rewriteCliArgsForDefaultStart(["--web-target", "web"]), ["start", "--web-target", "web"]);
+    assert.deepEqual(rewriteCliArgsForDefaultStart(["--web-target", "web", "status"]), ["--web-target", "web", "status"]);
     assert.deepEqual(rewriteCliArgsForDefaultStart([]), ["start"]);
     assert.deepEqual(rewriteCliArgsForDefaultStart(["--namespace", "demo", "--json"]), [
       "start",

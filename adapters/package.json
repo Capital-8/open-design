@@ -1,0 +1,68 @@
+{
+  "name": "@open-design/adapters",
+  "version": "0.25.1",
+  "private": true,
+  "type": "module",
+  "description": "Concrete backend adapters for the matching bridge capabilities.",
+  "files": [
+    "dist",
+    "vendor"
+  ],
+  "exports": {
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "default": "./dist/auth/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "default": "./dist/runtime/index.js"
+    },
+    "./render": {
+      "types": "./dist/render/index.d.ts",
+      "default": "./dist/render/index.js"
+    },
+    "./db": {
+      "types": "./dist/db/postgres/index.d.ts",
+      "default": "./dist/db/postgres/index.js"
+    },
+    "./file": {
+      "types": "./dist/file/index.d.ts",
+      "import": "./dist/file/index.js"
+    },
+    "./db/catalog": {
+      "types": "./dist/db/catalog.d.ts",
+      "import": "./dist/db/catalog.js"
+    },
+    "./render/engine": {
+      "types": "./dist/render/engine/index.d.ts",
+      "default": "./dist/render/engine/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node --experimental-strip-types scripts/copy-migrations.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
+  },
+  "dependencies": {
+    "@open-design/bridge": "workspace:*",
+    "@open-design/dependencies": "workspace:*",
+    "pg": "8.20.0",
+    "@open-design/contracts": "workspace:*",
+    "playwright-core": "1.60.0",
+    "pptxgenjs": "4.0.1",
+    "pdf-lib": "1.17.1",
+    "gsap": "3.14.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.6",
+    "@types/pg": "8.15.6",
+    "embedded-postgres": "18.4.0-beta.17",
+    "@ffmpeg-installer/ffmpeg": "1.1.0",
+    "jszip": "3.10.1"
+  },
+  "engines": {
+    "node": "~24"
+  }
+}

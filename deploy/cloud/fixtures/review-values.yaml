@@ -1,0 +1,24 @@
+# Offline test fixture only: these images/endpoints/secrets do not exist.
+webUrl: https://cloud.example.invalid
+amr:
+  api: https://api.example.invalid
+  web: https://login.example.invalid
+  runtime: https://runtime.example.invalid
+  id: amr-fixture
+image:
+  repository: registry.example.invalid/cloud
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+renderer:
+  image:
+    repository: registry.example.invalid/renderer
+    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+secrets:
+  application: fixture-application
+  migration: fixture-migration
+resources:
+  existingClaim: fixture-resources
+  subPath: fixture-revision
+  revision: cccccccccccccccccccccccccccccccccccccccc
+ingress:
+  host: cloud.example.invalid
+  tlsSecret: fixture-tls

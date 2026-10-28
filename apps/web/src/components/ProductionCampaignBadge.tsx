@@ -1,6 +1,6 @@
 import { useI18n } from "../i18n";
 import { useCallback, useEffect, useRef } from "react";
-import { getOpenDesignHost } from "@open-design/host";
+import { supportsCampaigns } from "../runtime/campaign-support";
 import {
 	emitWebTouchpointDiagnostic,
 	ensureWebTouchpointElement,
@@ -48,8 +48,7 @@ export function canRenderProductionCampaignBadge(
 	authenticated: boolean,
 	sessionSubject: string | null,
 ) {
-	const host = getOpenDesignHost();
-	return authenticated && Boolean(sessionSubject) && host?.client.type === "desktop";
+	return authenticated && Boolean(sessionSubject) && supportsCampaigns();
 }
 
 /** Production account-badge host. Unlike modals, this placement never exposes close. */

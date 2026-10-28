@@ -1,9 +1,14 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
+import { discoverTargetAliases, parseWebTarget, targetCacheRoot } from './build/target';
+
+const target = parseWebTarget(process.env.OD_WEB_TARGET ?? 'desktop');
 
 export default defineConfig({
+  cacheDir: resolve(targetCacheRoot(__dirname, target), 'vitest'),
   resolve: {
     alias: {
+      ...discoverTargetAliases(resolve(__dirname, 'src'), target),
       '@excalidraw/excalidraw': resolve(__dirname, 'tests/helpers/excalidraw-mock.tsx'),
       'motion/react': resolve(__dirname, 'tests/helpers/motion-mock.tsx'),
     },

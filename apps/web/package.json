@@ -14,6 +14,7 @@
     ".next",
     "!.next/cache",
     "app",
+    "build",
     "dist",
     "next.config.ts",
     "package.json",
@@ -21,11 +22,11 @@
     "src"
   ],
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
+    "dev": "node --experimental-strip-types build/cli.ts dev",
+    "build": "node --experimental-strip-types build/cli.ts build",
     "build:sidecar": "tsc -p tsconfig.sidecar.json",
-    "typecheck": "tsc -b --noEmit",
-    "test": "vitest run -c vitest.config.ts --maxWorkers=2"
+    "typecheck": "node --experimental-strip-types build/cli.ts typecheck",
+    "test": "node --experimental-strip-types build/cli.ts test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.32.1",

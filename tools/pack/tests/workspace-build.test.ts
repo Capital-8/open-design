@@ -15,6 +15,7 @@ import {
   WORKSPACE_BUILD_COMMANDS,
   WORKSPACE_BUILD_CACHE_SCHEMA_VERSION,
   WORKSPACE_BUILD_PACKAGES,
+  PACKAGED_WEB_TARGET,
   type WorkspaceBuildRunner,
 } from "@/workspace-build.js";
 
@@ -449,7 +450,7 @@ describe("runWorkspaceBuild", () => {
       });
 
       expect(calls.map((call) => call.args)).toEqual(WORKSPACE_BUILD_COMMANDS.map((command) => [...command.args]));
-      expect(calls[1]?.env).toMatchObject({ OD_WEB_OUTPUT_MODE: "standalone" });
+      expect(calls[1]?.env).toMatchObject({ OD_WEB_OUTPUT_MODE: "standalone", OD_WEB_TARGET: "desktop" });
       expect(calls[1]?.env?.NODE_OPTIONS).toContain("--max-old-space-size=4096");
       expect(await readFile(join(root, "apps/web/next-env.d.ts"), "utf8")).toBe("original\n");
     } finally {
@@ -547,6 +548,7 @@ describe("createWorkspaceBuildCacheKey", () => {
       pnpmWorkspace: "workspace-hash",
       schemaVersion: WORKSPACE_BUILD_CACHE_SCHEMA_VERSION,
       webOutputMode: "standalone" as const,
+      webTarget: PACKAGED_WEB_TARGET,
     };
     const baseline = createWorkspaceBuildCacheKeyFromInputs(inputs);
 
@@ -574,5 +576,6 @@ describe("createWorkspaceBuildCacheKey", () => {
     expect(createWorkspaceBuildCacheKeyFromInputs({ ...inputs, node: "mac.workspace-build" })).not.toBe(baseline);
     expect(createWorkspaceBuildCacheKeyFromInputs({ ...inputs, nodeVersion: "v24.0.1" })).not.toBe(baseline);
     expect(createWorkspaceBuildCacheKeyFromInputs({ ...inputs, schemaVersion: inputs.schemaVersion + 1 })).not.toBe(baseline);
+    expect(createWorkspaceBuildCacheKeyFromInputs({ ...inputs, webTarget: "web" })).not.toBe(baseline);
   });
 });

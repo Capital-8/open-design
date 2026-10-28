@@ -205,7 +205,7 @@ import {
   extractBrandFromHtml,
   finalizeBrandProject,
 } from '../runtime/brands';
-import { isOpenDesignHostAvailable } from '@open-design/host';
+import { readBrowserSnapshotWithRetry, canContinueInBrowser, focusBrowserForExtraction, requestBrowserArchive } from '../runtime/brand-browser';
 import {
   getBrandBrowser,
   BRAND_BROWSER_TAB_ID,
@@ -5803,24 +5803,7 @@ export function ProjectView({
 
   const readBrandBrowserSnapshotWithRetry = useCallback(
     async (tabId = BRAND_BROWSER_TAB_ID): Promise<BrandBrowserSnapshot> => {
-      // The pinned webview can still be mounting/registering right after a
-      // workspace remount, and a freshly-focused tab may not have committed its
-      // post-wall URL yet — so a single read can spuriously report the live DOM
-      // unreadable. Re-read a few times before giving up. Only meaningful on the
-      // desktop host: the web-only host never exposes a webview, so retrying
-      // can't change an `unavailable` verdict.
-      let snapshot = await readBrandBrowserSnapshot(tabId, 8000);
-      if (snapshot.status === 'ready' || !isOpenDesignHostAvailable()) return snapshot;
-      // Retries cover the mount/registration race only — a ready webview resolves
-      // these reads almost instantly. Use a short per-retry cap so a genuinely
-      // hung/walled page fails fast instead of stacking full timeout windows.
-      for (let attempt = 0; attempt < 3 && snapshot.status !== 'ready'; attempt += 1) {
-        await new Promise((resolve) => {
-          window.setTimeout(resolve, 500);
-        });
-        snapshot = await readBrandBrowserSnapshot(tabId, 3000);
-      }
-      return snapshot;
+      return readBrowserSnapshotWithRetry(timeout => readBrandBrowserSnapshot(tabId, timeout));
     },
     [readBrandBrowserSnapshot],
   );
@@ -13240,10 +13223,6 @@ export function ProjectView({
     };
 
     void (async () => {
-      const delay = (ms: number) =>
-        new Promise<void>((resolve) => {
-          window.setTimeout(resolve, ms);
-        });
       const snapshotMessage = (snapshot: BrandBrowserSnapshot): string | null =>
         snapshot.status === 'ready' ? null : snapshot.message;
       const hasBrowserFallback = (): boolean => {
@@ -13309,10 +13288,10 @@ export function ProjectView({
           daemonOutcome.result.conversationId,
         );
         if (daemonOutcome.result.status === 'ready') return;
-        if (!isOpenDesignHostAvailable() && !hasBrowserFallback()) return;
+        if (!canContinueInBrowser(hasBrowserFallback())) return;
       } else {
         fallbackMessage = daemonOutcome.error;
-        if (!isOpenDesignHostAvailable() && !hasBrowserFallback()) {
+        if (!canContinueInBrowser(hasBrowserFallback())) {
           setBrandExtractionStatusOverride({ brandId, status: 'needs_input' });
           setProjectActionsToast({
             message: daemonOutcome.error,
@@ -13330,15 +13309,7 @@ export function ProjectView({
       // from the preview tab, the browser <webview> may be `display:none` and
       // Electron can throttle its renderer; a focus-only request wakes it
       // without navigating/re-triggering a wall.
-      if (isOpenDesignHostAvailable() && brandExtractionSourceUrl) {
-        setBrowserOpenRequest({
-          tabId: BRAND_BROWSER_TAB_ID,
-          url: brandExtractionSourceUrl,
-          nonce: Date.now(),
-          focusOnly: true,
-        });
-        await delay(600);
-      }
+      await focusBrowserForExtraction(brandExtractionSourceUrl, BRAND_BROWSER_TAB_ID, setBrowserOpenRequest);
 
       const liveSnapshot = await readBrandBrowserSnapshotWithRetry(BRAND_BROWSER_TAB_ID);
       requestOpenFile(brandPreviewFile);
@@ -13351,14 +13322,7 @@ export function ProjectView({
       // Still no readable local source. Recoverable — clear/settle/download the
       // Browser page and click Continue again, or use the agent fallback.
       setBrandExtractionStatusOverride({ brandId, status: 'needs_input' });
-      if (isOpenDesignHostAvailable() && brandExtractionSourceUrl) {
-        setBrowserOpenRequest({
-          tabId: BRAND_BROWSER_TAB_ID,
-          url: brandExtractionSourceUrl,
-          nonce: Date.now(),
-          attentionAction: 'download-page',
-        });
-      }
+      requestBrowserArchive(brandExtractionSourceUrl, BRAND_BROWSER_TAB_ID, setBrowserOpenRequest);
       setProjectActionsToast({
         message:
           snapshotMessage(archivedSnapshot) ||

@@ -5,10 +5,14 @@ Follow the root `AGENTS.md` first. This file only records module-level boundarie
 ## Active apps
 
 - `apps/closure`: independently distributable OpenDesign Closure content. During the cold-start phase it owns only a Web/daemon-independent lifecycle fixture and component contribution; do not add shell, Store, channel, or generation policy here.
-- `apps/web`: Next.js 16 App Router + React 18 web runtime. Entrypoints live in `apps/web/app/`; the main client shell is `apps/web/src/App.tsx`. During local `tools-dev` web runs, `apps/web/next.config.ts` rewrites `/api/*`, `/artifacts/*`, and `/frames/*` to `OD_PORT`.
+- `apps/web`: Next.js 16 App Router + React 18 web runtime. Entrypoints live in `apps/web/app/`; the main client shell is `apps/web/src/App.tsx`. Read `apps/web/AGENTS.md` before changing web UI, frontend logic, or target selection: compatible code stays shared; desktop/web differences use feature-local variants selected at build time. During local `tools-dev` web runs, `apps/web/next.config.ts` rewrites `/api/*`, `/artifacts/*`, and `/frames/*` to `OD_PORT`.
 - `apps/daemon`: Express + SQLite local daemon and `od` bin. It owns REST/SSE APIs, agent CLI spawning, skills, design systems, artifact persistence, static serving, and daemon-managed data. Before describing or changing daemon data paths, read the root `AGENTS.md` section **Daemon data directory contract**; it is mandatory and must not be restated here.
 - `apps/desktop`: Electron shell. Desktop does not guess the web port; it reads runtime status through sidecar IPC and opens the reported web URL.
 - `apps/packaged`: Thin packaged Electron runtime entry. It starts packaged daemon/web sidecars, registers the `od://` entry protocol, and delegates desktop host behavior to `apps/desktop`.
+
+## Cloud migration
+
+`apps/cloud` now provides main/renderer composition entrypoints and startup validation. Read [its guide](cloud/AGENTS.md) and the [migration plan](../specs/current/cloud-backend-boundaries.md). Cloud HTTP, durable jobs, resource commands, db/file/auth/runtime adapters and the isolated renderer are implemented. Local lifecycle uses tools-dev cloud; source-resource completeness and live upstream acceptance remain explicit in the migration record.
 
 ## Daemon layout
 

@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { createPortal } from 'react-dom';
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 import { createTabToTracking } from '@open-design/contracts/analytics';
-import { isOpenDesignHostAvailable, pickHostWorkingDir } from '@open-design/host';
+import { pickWorkingDir } from '../runtime/project-folders';
 import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
 import { useAnalytics } from '../analytics/provider';
 import {
@@ -21,7 +21,7 @@ import type {
 import { useI18n, useT } from '../i18n';
 import { localizeSkillDescription, localizeSkillName } from '../i18n/content';
 import type { Dict } from '../i18n/types';
-import { fetchPromptTemplate, openFolderDialog } from '../providers/registry';
+import { fetchPromptTemplate } from '../providers/registry';
 import { isStoredMediaProviderEntryPresent } from '../state/config';
 import { isMediaProviderPickerReady } from '../media/provider-readiness';
 import type {
@@ -794,31 +794,15 @@ export function NewProjectPanel({
     setWorkingDirPicking(true);
     setWorkingDirError(null);
     try {
-      if (isOpenDesignHostAvailable()) {
-        const result = await pickHostWorkingDir();
-        if (result.ok) {
-          setWorkingDir(result.baseDir);
-          setWorkingDirToken(result.token);
-          return;
-        }
-        if ('canceled' in result && result.canceled) return;
-        setWorkingDirError({
-          message: `Couldn't open the folder picker (${'reason' in result ? result.reason : 'host unavailable'}). Please update OpenDesign and try again.`,
-        });
-        return;
+      const result = await pickWorkingDir({ throwOnError: true });
+      if (result.ok) {
+        setWorkingDir(result.baseDir);
+        setWorkingDirToken(result.token);
+      } else if ('error' in result) {
+        setWorkingDirError({ message: result.error });
       }
-      try {
-        const picked = await openFolderDialog({ throwOnError: true });
-        if (picked) {
-          setWorkingDir(picked);
-          setWorkingDirToken(null);
-        }
-      } catch (err) {
-        setWorkingDirError({
-          message: t('chat.linkedFolderPickError'),
-          details: folderPickerErrorDetails(err),
-        });
-      }
+    } catch (err) {
+      setWorkingDirError({ message: t('chat.linkedFolderPickError'), details: folderPickerErrorDetails(err) });
     } finally {
       setWorkingDirPicking(false);
     }

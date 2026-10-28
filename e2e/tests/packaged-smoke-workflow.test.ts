@@ -1864,8 +1864,20 @@ process.stdin.on("end", () => {
     expect(webWorkspaceTests).toContain("fail-fast: false");
     expect(webWorkspaceTests).toContain("matrix: ${{ fromJSON(needs.plan.outputs.web_matrix) }}");
     expect(webWorkspaceTests).toContain(
-      "pnpm --filter @open-design/web exec vitest run -c vitest.config.ts --maxWorkers=2 --shard=${{ matrix.shard }}/2",
+      "pnpm --filter @open-design/web test --target desktop --shard=${{ matrix.shard }}/2",
     );
+    expect(webWorkspaceTests).toContain("pnpm --filter @open-design/web test --target web tests/targets --shard=${{ matrix.shard }}/2");
+    expect(webWorkspaceTests).toContain("WEB_BUILD_TARGET: ${{ matrix.shard == 1 && 'desktop' || 'web' }}");
+    expect(webWorkspaceTests).toContain('OD_WEB_OUTPUT_MODE: export');
+    expect(webWorkspaceTests).toContain('pnpm --filter @open-design/web build --target "$WEB_BUILD_TARGET"');
+    expect(webWorkspaceTests).toContain("OD_WEB_VERIFY_BUILD: '1'");
+    expect(webWorkspaceTests).toContain('pnpm --filter @open-design/web test --target "$WEB_BUILD_TARGET" tests/build/production-artifact.test.ts');
+    const convergence = JSON.parse(await readFile(join(workspaceRoot, '.github/config/convergence.json'), 'utf8'));
+    for (const shard of [1, 2]) {
+      expect(convergence.workflows.ci.workloads[`web_workspace_${shard}`].success[`Web workspace tests (${shard}/2)`]).toEqual([
+        'Prebuild web sidecar declarations', 'Web workspace tests', 'Web target entry tests', 'Build target artifact', 'Verify target artifact',
+      ]);
+    }
     expect(e2eVitest).toContain("fromJSON(needs.runners.outputs.runs_on).js_hot");
     expect(e2eVitest).toContain("toJSON(fromJSON(needs.runners.outputs.runs_on).js_hot)");
     expect(e2eVitest).not.toContain('"od-persistent-ci"');

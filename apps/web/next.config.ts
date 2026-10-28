@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nextTargetResolution, parseWebTarget } from './build/target.ts';
 
 // Daemon port the local Express server binds to (see apps/daemon/src/cli.ts). The
 // dev-all launcher overrides OD_PORT after probing for a free port; we read
@@ -25,6 +26,8 @@ const isServerOutput = webOutputMode === 'server' || webOutputMode === 'standalo
 const shouldStaticExport = isProd && !isServerOutput;
 
 const WEB_ROOT = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = process.env.OD_WEB_PROJECT_ROOT || WEB_ROOT;
+const WEB_TARGET = parseWebTarget(process.env.OD_WEB_TARGET ?? 'desktop');
 
 function resolveWorkspaceRoot(): string {
   const computed = dirname(dirname(WEB_ROOT));
@@ -71,13 +74,14 @@ function resolveWorkspaceRoot(): string {
 }
 
 const WORKSPACE_ROOT = resolveWorkspaceRoot();
+const targetResolution = nextTargetResolution(WEB_ROOT, WEB_TARGET, PROJECT_ROOT);
 const toPosixPath = (value: string) => value.replaceAll('\\', '/');
 
 function resolveDistDir(defaultValue: string) {
   if (process.env.OD_WEB_PROD === '1') return defaultValue;
   const configured = process.env.OD_WEB_DIST_DIR;
   if (!configured) return defaultValue;
-  return toPosixPath(isAbsolute(configured) ? relative(WEB_ROOT, configured) || '.' : configured);
+  return toPosixPath(isAbsolute(configured) ? relative(PROJECT_ROOT, configured) || '.' : configured);
 }
 
 const DIST_DIR = shouldStaticExport && !process.env.OD_WEB_DIST_DIR
@@ -87,7 +91,7 @@ const DIST_DIR = shouldStaticExport && !process.env.OD_WEB_DIST_DIR
 function resolveDevTsconfigPath() {
   const configured = process.env.OD_WEB_TSCONFIG_PATH;
   if (!configured) return undefined;
-  return toPosixPath(isAbsolute(configured) ? relative(WEB_ROOT, configured) || 'tsconfig.json' : configured);
+  return toPosixPath(isAbsolute(configured) ? relative(PROJECT_ROOT, configured) || 'tsconfig.json' : configured);
 }
 
 const DEV_TSCONFIG_PATH = resolveDevTsconfigPath();
@@ -214,6 +218,12 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@open-design/components'],
   turbopack: {
     root: WORKSPACE_ROOT,
+    ...targetResolution.turbopack,
+  },
+  webpack(config) {
+    config.resolve ??= {};
+    config.resolve.alias = { ...config.resolve.alias, ...targetResolution.aliases };
+    return config;
   },
   ...(DEV_TSCONFIG_PATH ? { typescript: { tsconfigPath: DEV_TSCONFIG_PATH } } : {}),
   // Static exports keep Next.js's default `out/` output directory so static

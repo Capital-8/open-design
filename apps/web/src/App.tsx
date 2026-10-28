@@ -255,7 +255,8 @@ import {
   removeProjectFromDisplaySnapshots,
   writeProjectDisplaySnapshot,
 } from './state/project-display-cache';
-import { getOpenDesignHost, type OpenDesignHostProjectImportSuccess } from '@open-design/host';
+import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
+import { readClientContext, installWindowFocusAppearance } from './runtime/client-context';
 import { useI18n } from './i18n';
 import { liveArtifactTabId } from './types';
 import type {
@@ -971,7 +972,7 @@ function AppInner() {
   const { t, locale } = useI18n();
   const iframeKeepAlivePool = useIframeKeepAlivePool();
   const clientType = useMemo(() => detectClientType(), []);
-  const hostPlatform = useMemo(() => getOpenDesignHost()?.client.platform, []);
+  const hostPlatform = useMemo(() => readClientContext().platform, []);
   useModalWindowDragGuard();
   const workspaceContextState = useWorkspaceContext();
   const {
@@ -1043,23 +1044,7 @@ function AppInner() {
   // Desktop vibrancy focus response: an unfocused window drops the cream
   // scrim to let the wallpaper show through more clearly; on focus the scrim
   // returns to full strength (app-wash.css keys off this class).
-  useEffect(() => {
-    if (
-      clientType !== 'desktop'
-      || hostPlatform !== 'darwin'
-      || typeof window === 'undefined'
-    ) return undefined;
-    const root = document.documentElement;
-    const sync = () => root.classList.toggle('is-window-blurred', !document.hasFocus());
-    sync();
-    window.addEventListener('focus', sync);
-    window.addEventListener('blur', sync);
-    return () => {
-      window.removeEventListener('focus', sync);
-      window.removeEventListener('blur', sync);
-      root.classList.remove('is-window-blurred');
-    };
-  }, [clientType, hostPlatform]);
+  useEffect(installWindowFocusAppearance, []);
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
   const configRef = useRef(config);
   configRef.current = config;

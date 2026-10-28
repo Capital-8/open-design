@@ -90,6 +90,13 @@ signal.
 
 **R5 — Every declared input needs a witness.** See **Changing a cache node**.
 
+`<platform>.workspace-build` explicitly builds the `desktop` frontend target.
+Its key and version-family identity carry that target, and the runner overrides
+`OD_WEB_TARGET` rather than inheriting a caller's browser-build selection.
+Browser frontend builds use their own project/output/cache under the workspace's
+ignored `.tmp/web-targets/web/` tree; they must not populate packaged `.next`
+artifacts. Target mapping code and variant files are app source hash inputs.
+
 ## Materialization-time parameters
 
 Some values deliberately do **not** enter node keys. They are stamped onto the

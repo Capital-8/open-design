@@ -1,0 +1,5 @@
+apiVersion: v2
+name: open-design-cloud
+description: Cloud API/worker and isolated renderer; adapted from the AMR POC chart
+type: application
+version: 0.1.0

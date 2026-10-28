@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import * as cloudDeviceLoginModule from '../../src/runtime/cloud-device-login';
+import { createCloudDeviceLogin as desktopLogin } from '../../src/runtime/cloud-device-login/desktop';
+import { createCloudDeviceLogin as webLogin } from '../../src/runtime/cloud-device-login/web';
 import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -315,6 +317,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  vi.spyOn(cloudDeviceLoginModule, 'createCloudDeviceLogin').mockImplementation(desktopLogin);
   globalThis.fetch = originalFetch;
   globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
   analyticsMocks.track.mockReset();
@@ -1992,7 +1995,7 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
   });
 
   it('opens a cloud authorization window during the click, before awaiting status', async () => {
-    vi.stubEnv('NEXT_PUBLIC_OD_CLOUD_POC', '1');
+    vi.spyOn(cloudDeviceLoginModule, 'createCloudDeviceLogin').mockImplementation(webLogin);
     const popup = { opener: window, closed: false, close: vi.fn(), location: { replace: vi.fn() } };
     const open = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
     renderOnboarding();
@@ -2005,10 +2008,10 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
   });
 
   it('hands an approved cloud session to Home once without publishing into stale desktop routing', async () => {
-    vi.stubEnv('NEXT_PUBLIC_OD_CLOUD_POC', '1');
+    vi.spyOn(cloudDeviceLoginModule, 'createCloudDeviceLogin').mockImplementation(webLogin);
     const replace = vi.fn();
     const popup = { opener: window, closed: false, close: vi.fn(), location: { replace: vi.fn() } };
-    const create = cloudDeviceLoginModule.createCloudDeviceLogin;
+    const create = webLogin;
     vi.spyOn(cloudDeviceLoginModule, 'createCloudDeviceLogin').mockImplementation(() => create({ open: () => popup, location: { replace } } as unknown as Window));
     let approved = false;
     globalThis.fetch = vi.fn(async (input) => {

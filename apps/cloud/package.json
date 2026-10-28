@@ -1,0 +1,60 @@
+{
+  "name": "@open-design/cloud",
+  "version": "0.25.1",
+  "private": true,
+  "type": "module",
+  "description": "Cloud HTTP backend, durable run worker and isolated renderer.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "sidecar"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./renderer-server": {
+      "types": "./dist/renderer-server.d.ts",
+      "default": "./dist/renderer-server.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p scripts/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit && tsc -p scripts/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "db:migrate": "node dist/scripts/migrate.js",
+    "start": "node dist/server.js",
+    "start:renderer": "node dist/renderer-server.js",
+    "resources:prepare": "node dist/scripts/resources/prepare.js",
+    "resources:publish:assets": "node dist/scripts/resources/publish-assets.js",
+    "resources:publish:metadata": "node dist/scripts/resources/publish-metadata.js",
+    "resources:prepare:local": "node dist/scripts/resources/prepare-local.js"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/node": "24.12.2",
+    "vitest": "4.1.6",
+    "@types/express": "5.0.6",
+    "@types/js-yaml": "4.0.9"
+  },
+  "engines": {
+    "node": "~24"
+  },
+  "dependencies": {
+    "@open-design/bridge": "workspace:*",
+    "@open-design/adapters": "workspace:*",
+    "@open-design/biz": "workspace:*",
+    "@open-design/dependencies": "workspace:*",
+    "@open-design/contracts": "workspace:*",
+    "express": "5.2.1",
+    "zod": "3.25.76",
+    "js-yaml": "4.3.2",
+    "@open-design/sidecar": "workspace:*"
+  }
+}

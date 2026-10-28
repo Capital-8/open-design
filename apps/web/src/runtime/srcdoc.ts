@@ -982,7 +982,7 @@ function injectPreviewContentSizeBridge(doc: string, documentEpoch: string): str
 }
 
 // Export-capture bridge: the in-iframe half of the programmatic PDF /
-// image exporters (apps/web/src/runtime/exports.ts). The preview iframe is
+// image exporters (apps/web/src/runtime/exports/shared.ts). The preview iframe is
 // sandbox="allow-scripts" WITHOUT allow-same-origin, so the host cannot read
 // iframe.contentDocument — capture must run inside the frame, exactly like the
 // snapshot bridge above. The orchestrator (host) creates a hidden, full-

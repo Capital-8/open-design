@@ -80,10 +80,9 @@ import {
   daemonIsLive,
   dirExists,
   fetchRecentLinkedDirs,
-  openFolderDialog,
   pushRecentLinkedDir,
 } from '../providers/registry';
-import { isOpenDesignHostAvailable, pickHostWorkingDir } from '@open-design/host';
+import { pickWorkingDir } from '../runtime/project-folders';
 import type {
   DesignSystemSummary,
   Project,
@@ -2188,62 +2187,19 @@ export function HomeView({
   }
 
   async function handlePickWorkingDir() {
-    // On desktop the working-dir POST is gated behind a host-minted token, so
-    // pick through the host bridge to capture { baseDir, token } together.
-    if (isOpenDesignHostAvailable()) {
-      const result = await pickHostWorkingDir();
-      if (result.ok) {
-        setWorkingDir(result.baseDir);
-        setWorkingDirToken(result.token);
-        void rememberRecentDir(result.baseDir);
-        return result.baseDir;
-      }
-      // The user explicitly cancelled the host picker — respect that and do
-      // not pop a second dialog.
-      if ('canceled' in result && result.canceled) return null;
-      // The host is present but could not service the pick (mixed-version
-      // upgrade where the preload lacks `project.pickWorkingDir`, or a host
-      // error). We must NOT fall back to openFolderDialog() here: the browser
-      // dialog yields a raw path with no host-minted token, so the later
-      // POST /api/projects/:id/working-dir would be rejected by the desktop
-      // auth gate and surface as a confusing late create-time failure.
-      // Surface the host error instead and keep the existing working dir.
-      setError(
-        `Couldn't open the folder picker (${'reason' in result ? result.reason : 'host unavailable'}). Please update OpenDesign and try again.`,
-      );
-      return null;
-    }
-    // Pure web path: no desktop host, so there is no token gate — the raw
-    // browser folder path is the expected, working input.
-    const picked = await openFolderDialog();
-    if (picked) {
-      setWorkingDir(picked);
-      setWorkingDirToken(null);
-      void rememberRecentDir(picked);
-      return picked;
-    }
-    return null;
+    const result = await pickWorkingDir();
+    if (!result.ok) { if ('error' in result) setError(result.error); return null; }
+    setWorkingDir(result.baseDir);
+    setWorkingDirToken(result.token);
+    void rememberRecentDir(result.baseDir);
+    return result.baseDir;
   }
 
   async function handlePickLocalCodeDir() {
-    if (isOpenDesignHostAvailable()) {
-      const result = await pickHostWorkingDir();
-      if (result.ok) {
-        void rememberRecentDir(result.baseDir);
-        return result.baseDir;
-      }
-      if ('canceled' in result && result.canceled) return null;
-      setError(
-        `Couldn't open the folder picker (${'reason' in result ? result.reason : 'host unavailable'}). Please update OpenDesign and try again.`,
-      );
-      return null;
-    }
-    const picked = await openFolderDialog();
-    if (picked) {
-      void rememberRecentDir(picked);
-      return picked;
-    }
-    return null;
+    const result = await pickWorkingDir();
+    if (!result.ok) { if ('error' in result) setError(result.error); return null; }
+    void rememberRecentDir(result.baseDir);
+    return result.baseDir;
   }
 
   function updateActiveInputs(next: Record<string, unknown>) {

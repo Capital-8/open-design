@@ -1,6 +1,5 @@
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CloudFilePreview } from "./CloudFilePreview";
-import { isCloudIndexLink } from "../runtime/cloud-file-preview";
+import { MessageFilePreview } from "./MessageFilePreview";
 import { useCharReveal } from "./chat/useCharReveal";
 import { ExecutionShell } from "./chat/ExecutionShell";
 import { buildTurnBlocks } from "../runtime/chat/build-turn-blocks";
@@ -451,8 +450,6 @@ function AssistantMessageImpl({
   nextStepVariant = 'default',
 }: Props) {
   const t = useT();
-  const [cloudPreviewProject, setCloudPreviewProject] = useState<string | null>(null);
-  useEffect(() => { setCloudPreviewProject(null); }, [projectId]);
   const { workspaceContext } = useProjectCollabContext();
   const imageSrc = useCallback(
     (path: string) => projectId ? projectFileUrl(projectId, path, workspaceContext) : path,
@@ -1304,25 +1301,14 @@ function AssistantMessageImpl({
   };
 
   return (
-    <div
+    <MessageFilePreview
+      projectId={projectId}
       id={`assistant-message-${message.id}`}
       className={`msg assistant${showRole ? '' : ' assistant-continuation'}`}
       /* 「接上一条,不再重复报名字」是状态,不是样式的私事 —— 给它自己的出口 */
       data-continuation={showRole ? 'false' : 'true'}
       data-assistant-message-id={message.id}
-      onClickCapture={(event) => {
-        // Cloud paths are sandbox filenames, not browser URLs. Capture at the
-        // message boundary so live execution prose and completed/history prose
-        // share this click-only adapter; neither SSE nor stored text is changed.
-        if (process.env.NEXT_PUBLIC_OD_CLOUD_POC !== '1' || !projectId) return;
-        const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
-        if (!link || !isCloudIndexLink(link.getAttribute('href') ?? '')) return;
-        event.preventDefault(); event.stopPropagation();
-        setCloudPreviewProject(projectId);
-      }}
     >
-      {cloudPreviewProject && cloudPreviewProject === projectId && <CloudFilePreview
-        key={cloudPreviewProject} projectId={cloudPreviewProject} onClose={() => setCloudPreviewProject(null)} />}
       {showRole ? (
         <div className="role" data-testid="assistant-role">
           <AgentIcon id={roleIconId} size={20} className="role-agent-icon" />
@@ -1562,7 +1548,7 @@ function AssistantMessageImpl({
           </div>
         ) : null}
       </div>
-    </div>
+    </MessageFilePreview>
   );
 }
 

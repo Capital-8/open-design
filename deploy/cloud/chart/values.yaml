@@ -1,0 +1,49 @@
+# Workload configuration adapted from the POC. Infrastructure/secrets stay externally owned.
+target: spark-amr
+profile: test
+webUrl: ""
+amr:
+  api: ""
+  web: ""
+  runtime: ""
+  id: ""
+  supportsRecovery: false
+image:
+  repository: ""
+  digest: ""
+renderer:
+  image:
+    repository: ""
+    digest: ""
+  resources:
+    requests: {cpu: 250m, memory: 256Mi}
+    limits: {cpu: "2", memory: 1Gi}
+cloudResources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {cpu: "1", memory: 768Mi}
+imagePullSecrets: []
+nodeSelector: {}
+secrets:
+  # OD_CLOUD_DATABASE_URL, OD_CLOUD_CREDENTIAL_KEYS, OD_CLOUD_CREDENTIAL_KEY_ID
+  application: ""
+  # OD_CLOUD_DATABASE_URL only, using the separately authorized migration account.
+  migration: ""
+resources:
+  existingClaim: ""
+  subPath: ""
+  # Immutable resource artifact's complete source SHA; triggers rollout on changes.
+  revision: ""
+# Add access for the new workload labels to the existing POC PostgreSQL policy.
+# Disable when the business DB is external; its network policy is then owned elsewhere.
+postgresAccess:
+  enabled: true
+  podSelector:
+    app.kubernetes.io/name: open-design-cloud-poc-postgres
+migration:
+  enabled: false
+  runId: ""
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  tlsSecret: ""

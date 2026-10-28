@@ -1,0 +1,111 @@
+# Application overlay for the local deployment rehearsal. Use together with compose.yaml.
+services:
+  cloud:
+    image: open-design-cloud:local
+    build:
+      context: ../../..
+      dockerfile: deploy/cloud/Dockerfile
+      target: runtime
+    init: true
+    depends_on:
+      postgres: {condition: service_healthy}
+      renderer: {condition: service_healthy}
+    environment:
+      NODE_ENV: production
+      OD_CLOUD_HOST: 0.0.0.0
+      OD_CLOUD_PORT: "19000"
+      OD_CLOUD_PROFILE: ${OD_CLOUD_PROFILE:?Set profile}
+      OD_CLOUD_DATABASE_URL: ${OD_CLOUD_CONTAINER_DATABASE_URL:?Set the local postgres service connection string}
+      OD_CLOUD_CREDENTIAL_KEYS: ${OD_CLOUD_CREDENTIAL_KEYS:?Set stable credential keys}
+      OD_CLOUD_CREDENTIAL_KEY_ID: ${OD_CLOUD_CREDENTIAL_KEY_ID:?Set active credential key}
+      OD_CLOUD_WEB_URL: ${OD_CLOUD_WEB_URL:?Set the browser origin}
+      OD_CLOUD_VELA_API_URL: ${OD_CLOUD_VELA_API_URL:?Set the cloud account API}
+      OD_CLOUD_VELA_WEB_URL: ${OD_CLOUD_VELA_WEB_URL:?Set the cloud login page}
+      OD_CLOUD_AMR_URL: ${OD_CLOUD_AMR_URL:?Set the cloud runtime API}
+      OD_CLOUD_RUNTIME_ID: ${OD_CLOUD_RUNTIME_ID:?Set the stable runtime ID}
+      OD_CLOUD_RUNTIME_RECOVERY: ${OD_CLOUD_RUNTIME_RECOVERY:-false}
+      OD_CLOUD_RESOURCE_DIR: /opt/open-design/resources
+      OD_CLOUD_RENDERER_URL: http://renderer.cloud-local.svc:19001
+      OD_CLOUD_RENDERER_ALLOW_PRIVATE_HTTP: "true"
+    volumes:
+      - type: bind
+        source: ${OD_CLOUD_RESOURCE_DIR:?Set the validated local resource bundle}
+        target: /opt/open-design/resources
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [default, render]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    cpus: 2
+    restart: unless-stopped
+    stop_grace_period: 75s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:19000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 15s
+  renderer:
+    image: open-design-cloud-renderer:local
+    build:
+      context: ../../..
+      dockerfile: deploy/cloud/Dockerfile
+      target: renderer
+    init: true
+    environment:
+      NODE_ENV: production
+      HOME: /tmp
+    networks:
+      render:
+        aliases: [renderer.cloud-local.svc]
+    read_only: true
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 256
+    restart: unless-stopped
+    stop_grace_period: 75s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:19001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+  web:
+    image: nginx:stable-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+    user: nginx
+    entrypoint: [nginx, -g, "daemon off;"]
+    depends_on:
+      cloud: {condition: service_healthy}
+    ports: ["127.0.0.1:${OD_CLOUD_LOCAL_WEB_PORT:-5182}:8080"]
+    volumes:
+      - type: bind
+        source: ./nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${OD_CLOUD_LOCAL_WEB_DIR:?Set the built static web output directory}
+        target: /usr/share/nginx/html
+        read_only: true
+        bind: {create_host_path: false}
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "wget -q --spider http://127.0.0.1:8080/edge-health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+networks:
+  render:
+    internal: true

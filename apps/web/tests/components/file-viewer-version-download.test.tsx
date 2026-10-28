@@ -15,10 +15,10 @@ const {
   exportProjectImageDataUrlMock,
   exportProjectAsPdfMock,
   exportProjectAsZipMock,
-  exportProjectScreenshotPdfMock,
+  exportPreviewPdfMock,
   exportSnapshotAsPdfMock,
   imageDataUrlToBlobMock,
-  isOpenDesignHostAvailableMock,
+  canRenderProjectImageMock,
   prepareImageExportTargetMock,
   requestPreviewSnapshotMock,
 } = vi.hoisted(() => ({
@@ -31,10 +31,10 @@ const {
   exportProjectImageDataUrlMock: vi.fn(),
   exportProjectAsPdfMock: vi.fn(),
   exportProjectAsZipMock: vi.fn(),
-  exportProjectScreenshotPdfMock: vi.fn(),
+  exportPreviewPdfMock: vi.fn(),
   exportSnapshotAsPdfMock: vi.fn(),
   imageDataUrlToBlobMock: vi.fn(),
-  isOpenDesignHostAvailableMock: vi.fn(() => false),
+  canRenderProjectImageMock: vi.fn(() => false),
   prepareImageExportTargetMock: vi.fn(),
   requestPreviewSnapshotMock: vi.fn(),
 }));
@@ -54,10 +54,11 @@ vi.mock('../../src/runtime/exports', async () => {
     exportProjectImageDataUrl: exportProjectImageDataUrlMock,
     exportProjectAsPdf: exportProjectAsPdfMock,
     exportProjectAsZip: exportProjectAsZipMock,
-    exportProjectScreenshotPdf: exportProjectScreenshotPdfMock,
+    exportPreviewPdf: exportPreviewPdfMock,
     exportSnapshotAsPdf: exportSnapshotAsPdfMock,
     imageDataUrlToBlob: imageDataUrlToBlobMock,
-    isOpenDesignHostAvailable: isOpenDesignHostAvailableMock,
+    canRenderProjectImage: canRenderProjectImageMock,
+    saveImageExport: (target: { save: (blob: Blob) => unknown }, blob: Blob) => target.save(blob),
     prepareImageExportTarget: prepareImageExportTargetMock,
     requestPreviewSnapshot: requestPreviewSnapshotMock,
   };
@@ -167,13 +168,13 @@ describe('FileViewer version download actions', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
-    isOpenDesignHostAvailableMock.mockReturnValue(false);
+    canRenderProjectImageMock.mockReturnValue(false);
     vi.unstubAllGlobals();
   });
 
   it('routes current version PDFs through the main download PDF exporter', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
-    exportProjectScreenshotPdfMock.mockResolvedValueOnce({ ok: true });
+    canRenderProjectImageMock.mockReturnValue(true);
+    exportPreviewPdfMock.mockResolvedValueOnce('desktop');
     const { file } = setupVersionFetch();
     const versionDialog = await renderVersionDialog(file, 'current');
 
@@ -181,14 +182,14 @@ describe('FileViewer version download actions', () => {
     fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
 
     await waitFor(() => {
-      expect(exportProjectScreenshotPdfMock).toHaveBeenCalledWith(expect.objectContaining({
+      expect(exportPreviewPdfMock).toHaveBeenCalledWith(expect.objectContaining({
         deck: false,
-        fileName: 'index.html',
+        filePath: 'index.html',
         projectId: 'project-1',
         title: 'index',
       }));
     });
-    expect(exportProjectScreenshotPdfMock.mock.calls[0]?.[0]).not.toHaveProperty('versionId');
+    expect(exportPreviewPdfMock.mock.calls[0]?.[0]).not.toHaveProperty('versionId');
     expect(requestPreviewSnapshotMock).not.toHaveBeenCalled();
     expect(exportSnapshotAsPdfMock).not.toHaveBeenCalled();
     expect(exportProjectAsPdfMock).not.toHaveBeenCalled();
@@ -196,8 +197,8 @@ describe('FileViewer version download actions', () => {
   });
 
   it('routes historical version PDFs through the main download PDF exporter', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
-    exportProjectScreenshotPdfMock.mockResolvedValueOnce({ ok: true });
+    canRenderProjectImageMock.mockReturnValue(true);
+    exportPreviewPdfMock.mockResolvedValueOnce('desktop');
     const { file } = setupVersionFetch();
     const versionDialog = await renderVersionDialog(file);
 
@@ -205,9 +206,9 @@ describe('FileViewer version download actions', () => {
     fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
 
     await waitFor(() => {
-      expect(exportProjectScreenshotPdfMock).toHaveBeenCalledWith(expect.objectContaining({
+      expect(exportPreviewPdfMock).toHaveBeenCalledWith(expect.objectContaining({
         deck: false,
-        fileName: 'index.html',
+        filePath: 'index.html',
         projectId: 'project-1',
         title: 'index-v1',
         versionId: 'v1',
@@ -220,8 +221,8 @@ describe('FileViewer version download actions', () => {
   });
 
   it('shows the generic export-failed copy (not the raw renderer error) for historical version PDFs', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
-    exportProjectScreenshotPdfMock.mockResolvedValueOnce({ ok: false, error: 'version renderer failed' });
+    canRenderProjectImageMock.mockReturnValue(true);
+    exportPreviewPdfMock.mockRejectedValueOnce(new Error('version renderer failed'));
     const { file } = setupVersionFetch();
     const versionDialog = await renderVersionDialog(file);
 
@@ -239,8 +240,8 @@ describe('FileViewer version download actions', () => {
   });
 
   it('does not show a close button while a version export is still running', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
-    exportProjectScreenshotPdfMock.mockReturnValueOnce(new Promise(() => {}));
+    canRenderProjectImageMock.mockReturnValue(true);
+    exportPreviewPdfMock.mockReturnValueOnce(new Promise(() => {}));
     const { file } = setupVersionFetch();
     const versionDialog = await renderVersionDialog(file);
 
@@ -275,7 +276,7 @@ describe('FileViewer version download actions', () => {
   });
 
   it('exports historical version images through the main image exporter', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
+    canRenderProjectImageMock.mockReturnValue(true);
     exportProjectImageDataUrlMock.mockResolvedValueOnce({
       ok: true,
       snapshot: { dataUrl: 'data:image/png;base64,c25hcHNob3Q=', w: 1, h: 1 },

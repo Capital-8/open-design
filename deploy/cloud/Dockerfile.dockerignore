@@ -1,0 +1,33 @@
+# Explicit cloud build closure. Never send local env files or runtime data.
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!adapters/
+!adapters/**
+!biz/
+!biz/**
+# Legacy pnpm deploy resolves the root workspace graph; metadata only for other apps/tools.
+!apps/
+!apps/*/
+!apps/*/package.json
+!tools/
+!tools/*/
+!tools/*/package.json
+!shells/
+!shells/*/
+!shells/*/package.json
+!e2e/
+!e2e/package.json
+!apps/cloud/
+!apps/cloud/**
+!packages/
+!packages/**
+**/node_modules
+**/dist
+**/.tmp
+**/.git
+**/.env*
+**/*.log
+**/*.tsbuildinfo
+**/.DS_Store

@@ -1,27 +1,9 @@
+import { exportDiagnostics } from '../runtime/diagnostics-export';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import { Icon } from './Icon';
 import { captureAndUploadChatScrollForensics } from '../observability/chat-scroll-forensics';
 
-// Mirrors what apps/desktop preload exposes via contextBridge. Kept inline
-// so the web bundle does not import the desktop package.
-type DesktopExportResult =
-  | { ok: true; path: string }
-  | { ok: false; cancelled: true }
-  | { ok: false; cancelled: false; message: string };
-
-interface OpenDesignDesktopApi {
-  exportDiagnostics(): Promise<DesktopExportResult>;
-}
-
-declare global {
-  interface Window {
-    openDesignDesktop?: OpenDesignDesktopApi;
-  }
-}
-
-const DIAGNOSTICS_EXPORT_PATH = '/api/diagnostics/export';
-const DIAGNOSTICS_FILENAME_PREFIX = 'open-design-diagnostics';
 const STATUS_CLEAR_MS = 6000;
 
 type Status =
@@ -29,52 +11,6 @@ type Status =
   | { kind: 'busy' }
   | { kind: 'success'; message: string }
   | { kind: 'error'; message: string };
-
-function fileNameFromHeader(header: string | null): string | null {
-  if (header == null) return null;
-  const match = /filename\*=UTF-8''([^;\n]+)|filename="([^"]+)"|filename=([^;\n]+)/i.exec(header);
-  if (match == null) return null;
-  const raw = match[1] ?? match[2] ?? match[3];
-  if (raw == null) return null;
-  try {
-    return decodeURIComponent(raw.trim());
-  } catch {
-    return raw.trim();
-  }
-}
-
-function fallbackFilename(): string {
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return `${DIAGNOSTICS_FILENAME_PREFIX}-${stamp}.zip`;
-}
-
-async function exportViaHttp(): Promise<{ filename: string }> {
-  const res = await fetch(DIAGNOSTICS_EXPORT_PATH, { credentials: 'same-origin' });
-  if (!res.ok) {
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      if (body && typeof body.message === 'string') message = body.message;
-    } catch {
-      // ignore body parse errors
-    }
-    throw new Error(message);
-  }
-  const blob = await res.blob();
-  const filename = fileNameFromHeader(res.headers.get('content-disposition')) ?? fallbackFilename();
-  const url = URL.createObjectURL(blob);
-  try {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-  return { filename };
-}
 
 /**
  * The one diagnostics-export mechanism, shared by every surface that offers it.
@@ -112,23 +48,15 @@ export function useDiagnosticsExport() {
     // is supposed to carry. It never throws and never fails the export.
     await captureAndUploadChatScrollForensics();
     try {
-      if (window.openDesignDesktop != null) {
-        const result = await window.openDesignDesktop.exportDiagnostics();
-        if (result.ok) {
-          setStatus({ kind: 'success', message: t('diagnostics.exportSuccess').replace('{path}', result.path) });
-          scheduleClear();
-          return;
-        }
-        if (result.cancelled) {
-          setStatus({ kind: 'idle' });
-          return;
-        }
-        setStatus({ kind: 'error', message: t('diagnostics.exportFailed').replace('{message}', result.message) });
-        scheduleClear();
+      const result = await exportDiagnostics();
+      if (result.ok) {
+        setStatus({ kind: 'success', message: t('diagnostics.exportSuccess').replace('{path}', result.path) });
+      } else if (result.cancelled) {
+        setStatus({ kind: 'idle' });
         return;
+      } else {
+        setStatus({ kind: 'error', message: t('diagnostics.exportFailed').replace('{message}', result.message) });
       }
-      const { filename } = await exportViaHttp();
-      setStatus({ kind: 'success', message: t('diagnostics.exportSuccess').replace('{path}', filename) });
       scheduleClear();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -143,7 +71,7 @@ export function useDiagnosticsExport() {
 /**
  * Designed for the Settings → About panel. Renders a labeled button with a
  * short status line below it. Works in both the Electron shell (uses native
- * save dialog via window.openDesignDesktop) and the browser (triggers a
+ * save dialog through the selected export implementation) and the browser (triggers a
  * browser download via the daemon HTTP endpoint).
  */
 export function ExportDiagnosticsRow() {

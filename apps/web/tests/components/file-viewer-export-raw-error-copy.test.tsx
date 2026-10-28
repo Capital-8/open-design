@@ -14,18 +14,18 @@ import type { ProjectFile } from '../../src/types';
 const {
   exportProjectAsHtmlMock,
   exportProjectImageDataUrlMock,
-  exportProjectScreenshotPdfMock,
+  exportPreviewPdfMock,
   imageDataUrlToBlobMock,
-  isOpenDesignHostAvailableMock,
+  canRenderProjectImageMock,
   prepareImageExportTargetMock,
   requestPreviewSnapshotMock,
   captureHostIframeSnapshotMock,
 } = vi.hoisted(() => ({
   exportProjectAsHtmlMock: vi.fn(),
   exportProjectImageDataUrlMock: vi.fn(),
-  exportProjectScreenshotPdfMock: vi.fn(),
+  exportPreviewPdfMock: vi.fn(),
   imageDataUrlToBlobMock: vi.fn(),
-  isOpenDesignHostAvailableMock: vi.fn(() => false),
+  canRenderProjectImageMock: vi.fn(() => false),
   prepareImageExportTargetMock: vi.fn(),
   requestPreviewSnapshotMock: vi.fn(),
   captureHostIframeSnapshotMock: vi.fn(),
@@ -40,9 +40,9 @@ vi.mock('../../src/runtime/exports', async () => {
     captureHostIframeSnapshot: captureHostIframeSnapshotMock,
     exportProjectAsHtml: exportProjectAsHtmlMock,
     exportProjectImageDataUrl: exportProjectImageDataUrlMock,
-    exportProjectScreenshotPdf: exportProjectScreenshotPdfMock,
+    exportPreviewPdf: exportPreviewPdfMock,
     imageDataUrlToBlob: imageDataUrlToBlobMock,
-    isOpenDesignHostAvailable: isOpenDesignHostAvailableMock,
+    canRenderProjectImage: canRenderProjectImageMock,
     prepareImageExportTarget: prepareImageExportTargetMock,
     requestPreviewSnapshot: requestPreviewSnapshotMock,
   };
@@ -140,7 +140,7 @@ describe('FileViewer export failures never leak raw technical errors (OPEND-2849
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
-    isOpenDesignHostAvailableMock.mockReturnValue(false);
+    canRenderProjectImageMock.mockReturnValue(false);
     vi.unstubAllGlobals();
   });
 
@@ -154,17 +154,17 @@ describe('FileViewer export failures never leak raw technical errors (OPEND-2849
   });
 
   it('shows S26a instead of a raw renderer error string (PDF)', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
-    exportProjectScreenshotPdfMock.mockResolvedValueOnce({ ok: false, error: 'version renderer failed' });
+    canRenderProjectImageMock.mockReturnValue(true);
+    exportPreviewPdfMock.mockRejectedValueOnce(new Error('version renderer failed'));
     const versionDialog = await openVersionMenu('prior');
     fireEvent.click(within(versionDialog).getByRole('menuitem', { name: zhCN['fileViewer.exportPdf'] }));
 
-    await waitFor(() => expect(exportProjectScreenshotPdfMock).toHaveBeenCalled());
+    await waitFor(() => expect(exportPreviewPdfMock).toHaveBeenCalled());
     await expectS26aToast(/version renderer failed/i);
   });
 
   it('shows S26a instead of a raw image-encoding exception (image export)', async () => {
-    isOpenDesignHostAvailableMock.mockReturnValue(true);
+    canRenderProjectImageMock.mockReturnValue(true);
     exportProjectImageDataUrlMock.mockResolvedValueOnce({
       ok: true,
       snapshot: { dataUrl: 'data:image/png;base64,c25hcHNob3Q=', w: 1, h: 1 },

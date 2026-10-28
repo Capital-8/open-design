@@ -258,7 +258,10 @@
           "success": {
             "Web workspace tests (1/2)": [
               "Prebuild web sidecar declarations",
-              "Web workspace tests"
+              "Web workspace tests",
+              "Web target entry tests",
+              "Build target artifact",
+              "Verify target artifact"
             ]
           },
           "inputs": [
@@ -273,7 +276,10 @@
           "success": {
             "Web workspace tests (2/2)": [
               "Prebuild web sidecar declarations",
-              "Web workspace tests"
+              "Web workspace tests",
+              "Web target entry tests",
+              "Build target artifact",
+              "Verify target artifact"
             ]
           },
           "inputs": [

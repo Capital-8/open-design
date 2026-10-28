@@ -20,6 +20,7 @@ import {
 } from "node:net";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { absoluteFrom, discoverTargetAliases, parseWebTarget, prepareTargetProject, prepareTargetTypes, targetCacheRoot, targetProjectRoot } from "../build/target.ts";
 
 import {
   SIDECAR_ENV,
@@ -994,6 +995,7 @@ async function createWebSidecarHandle(
   const closeHttpServer = createWebHttpServerShutdown(httpServer);
   const port = await listen(httpServer, portRequest);
   const state: WebStatusSnapshot = {
+    buildTarget: parseWebTarget(process.env.OD_WEB_TARGET ?? "desktop"),
     pid: process.pid,
     state: "running",
     updatedAt: new Date().toISOString(),
@@ -1078,8 +1080,21 @@ async function startRegularNextSidecar(
   port: number,
 ): Promise<WebSidecarHandle> {
   const dev = process.env.OD_WEB_PROD !== "1" && runtime.mode === "dev";
-  const app = createNextApp({ dev, dir: webRoot, ...resolveNextBundlerOptions(dev) });
-  await prepareNextApp(app, webRoot);
+  const target = parseWebTarget(process.env.OD_WEB_TARGET ?? "desktop");
+  const configuredDist = dev && process.env[WEB_DIST_DIR_ENV] ? absoluteFrom(webRoot, process.env[WEB_DIST_DIR_ENV]!) : undefined;
+  const projectRoot = targetProjectRoot(webRoot, target, configuredDist ? dirname(configuredDist) : undefined);
+  process.env.OD_WEB_TARGET = target;
+  process.env.OD_WEB_PROJECT_ROOT = projectRoot;
+  if (dev) {
+    prepareTargetProject(webRoot, projectRoot);
+    const configPath = process.env.OD_WEB_TSCONFIG_PATH
+      ? absoluteFrom(webRoot, process.env.OD_WEB_TSCONFIG_PATH)
+      : join(targetCacheRoot(webRoot, target), 'dev', 'tsconfig.json');
+    prepareTargetTypes({ webRoot, projectRoot, target, aliases: discoverTargetAliases(join(webRoot, 'src'), target), configPath, distDir: configuredDist });
+    process.env.OD_WEB_TSCONFIG_PATH = configPath;
+  }
+  const app = createNextApp({ dev, dir: projectRoot, ...resolveNextBundlerOptions(dev) });
+  await prepareNextApp(app, projectRoot);
 
   const daemonOrigin = resolveDaemonOrigin();
   const handleRequest = app.getRequestHandler();

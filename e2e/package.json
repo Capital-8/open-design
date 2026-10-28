@@ -33,7 +33,15 @@
     "pngjs": "7.0.0",
     "tsx": "4.22.3",
     "typescript": "5.9.3",
-    "vitest": "4.1.6"
+    "vitest": "4.1.6",
+    "@open-design/adapters": "workspace:*",
+    "@open-design/bridge": "workspace:*",
+    "@open-design/biz": "workspace:*",
+    "@open-design/cloud": "workspace:*",
+    "@open-design/dependencies": "workspace:*",
+    "embedded-postgres": "18.4.0-beta.17",
+    "pg": "8.20.0",
+    "@types/pg": "8.15.6"
   },
   "engines": {
     "node": "~24"

@@ -1,0 +1,51 @@
+{{- if .Values.migration.enabled }}
+{{- if not (regexMatch "^[a-z0-9][a-z0-9-]{0,29}$" .Values.migration.runId) }}
+{{- fail "migration.runId must be an explicit short DNS label" }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: open-design-cloud-migrate-{{ .Values.migration.runId }}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-design-cloud-migrate
+        app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migrate
+          image: {{ include "cloud.image" .Values.image | quote }}
+          command: ["node", "dist/scripts/migrate.js"]
+          env:
+            - name: OD_CLOUD_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "secrets.migration required" .Values.secrets.migration | quote }}
+                  key: OD_CLOUD_DATABASE_URL
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 256Mi}
+{{- end }}

@@ -1,0 +1,29 @@
+{{- if not (and (eq .Values.target "spark-amr") (eq .Release.Namespace "od-amr-4114")) }}
+{{- fail "Only spark-amr/od-amr-4114 is supported; verify cluster context separately" }}
+{{- end }}
+{{- if not (has .Values.profile (list "test" "prod")) }}
+{{- fail "profile must be test or prod" }}
+{{- end }}
+{{- if not (regexMatch "^[a-f0-9]{40}$" .Values.resources.revision) }}
+{{- fail "resources.revision must be the artifact source's complete Git SHA" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open-design-cloud
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+data:
+  NODE_ENV: production
+  OD_CLOUD_HOST: 0.0.0.0
+  OD_CLOUD_PORT: "19000"
+  OD_CLOUD_PROFILE: {{ .Values.profile | quote }}
+  OD_CLOUD_WEB_URL: {{ required "webUrl required" .Values.webUrl | quote }}
+  OD_CLOUD_VELA_API_URL: {{ required "amr.api required" .Values.amr.api | quote }}
+  OD_CLOUD_VELA_WEB_URL: {{ required "amr.web required" .Values.amr.web | quote }}
+  OD_CLOUD_AMR_URL: {{ required "amr.runtime required" .Values.amr.runtime | quote }}
+  OD_CLOUD_RUNTIME_ID: {{ required "amr.id required" .Values.amr.id | quote }}
+  OD_CLOUD_RUNTIME_RECOVERY: {{ .Values.amr.supportsRecovery | quote }}
+  OD_CLOUD_RESOURCE_DIR: /opt/open-design/resources
+  OD_CLOUD_RENDERER_URL: {{ printf "http://open-design-cloud-renderer.%s.svc:19001" .Release.Namespace | quote }}
+  OD_CLOUD_RENDERER_ALLOW_PRIVATE_HTTP: "true"

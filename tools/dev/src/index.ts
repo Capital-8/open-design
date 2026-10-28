@@ -1,5 +1,6 @@
+import { cloudLifecycle } from "./cloud.js";
 import { spawn } from "node:child_process";
-import { lstat, mkdir, open, readdir, rm, symlink, writeFile, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, rm, symlink, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 import { cac } from "cac";
@@ -458,7 +459,6 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
 
   try {
     await ensureWebDevNodeModules(config);
-    await writeWebDevTsconfig(config);
     await logHandle.write(`\n[tools-dev] launching web at ${new Date().toISOString()}\n`);
     await logHandle.write(`[tools-dev] proxying web API requests to daemon port ${daemonPort}\n`);
     return await spawnSidecarRuntime({
@@ -470,8 +470,11 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
           path.join(config.workspaceRoot, "node_modules"),
         ]),
         [SIDECAR_ENV.DAEMON_PORT]: daemonPort,
-        [SIDECAR_ENV.WEB_DIST_DIR]: config.apps.web.nextDistDir,
-        [SIDECAR_ENV.WEB_TSCONFIG_PATH]: config.apps.web.nextTsconfigPath,
+        OD_WEB_TARGET: config.webTarget,
+        ...(options.prod === true ? {} : {
+          [SIDECAR_ENV.WEB_DIST_DIR]: config.apps.web.nextDistDir,
+          [SIDECAR_ENV.WEB_TSCONFIG_PATH]: config.apps.web.nextTsconfigPath,
+        }),
         [SIDECAR_ENV.WEB_PORT]: String(webPort ?? 0),
         PORT: String(webPort ?? 0),
         ...(options.parentPid == null ? {} : { [TOOLS_DEV_PARENT_PID_ENV]: String(options.parentPid) }),
@@ -576,26 +579,6 @@ async function ensureWebDevNodeModules(config: ToolDevConfig): Promise<void> {
   if (current?.isSymbolicLink()) return;
   if (current != null) await rm(runtimeNodeModules, { force: true, recursive: true });
   await symlink(webNodeModules, runtimeNodeModules, "junction");
-}
-
-async function writeWebDevTsconfig(config: ToolDevConfig): Promise<void> {
-  const webRoot = path.join(config.workspaceRoot, "apps/web");
-  const tsconfigPath = config.apps.web.nextTsconfigPath;
-  const tsconfigDir = path.dirname(tsconfigPath);
-  const sourceTsconfig = path.join(webRoot, "tsconfig.json");
-  const relativeSourceTsconfig = (path.relative(tsconfigDir, sourceTsconfig) || "./tsconfig.json").replaceAll("\\", "/");
-
-  await mkdir(tsconfigDir, { recursive: true });
-  await writeFile(
-    tsconfigPath,
-    `${JSON.stringify({
-      extends: relativeSourceTsconfig,
-      compilerOptions: {
-        plugins: [{ name: "next" }],
-      },
-    }, null, 2)}\n`,
-    "utf8",
-  );
 }
 
 async function spawnDesktopRuntime(config: ToolDevConfig, options: CliOptions): Promise<{ pid: number }> {
@@ -791,6 +774,9 @@ async function restartDaemon(config: ToolDevConfig, options: CliOptions) {
 async function startWeb(config: ToolDevConfig, options: CliOptions) {
   const webPort = parsePortOption(options.webPort, "--web-port");
   const existing = await inspectWebRuntime(runtimeLookup(config));
+  if (existing?.url != null && (existing.buildTarget ?? "desktop") !== config.webTarget) {
+    throw new Error(`web in namespace ${config.namespace} was built for ${existing.buildTarget ?? "desktop"}, requested ${config.webTarget}; stop it or choose another namespace`);
+  }
   if (existing?.url != null && statusMatchesForcedPort(existing.url, webPort)) {
     if (options.parentPid != null) {
       throw new Error(
@@ -1156,6 +1142,7 @@ const cli = cac("tools-dev");
 function addSharedOptions(command: ReturnType<typeof cli.command>) {
   return command
     .option("--namespace <name>", "runtime namespace (default: default)")
+    .option("--web-target <target>", "frontend target: desktop (default) or web; also reads OD_WEB_TARGET")
     .option("--tools-dev-root <path>", "tools-dev runtime root")
     .option("--env-file <path>", "load env file before resolving tools-dev config; repeatable")
     .option("--no-env-file", "skip automatic .env file loading", { default: false })
@@ -1256,6 +1243,13 @@ addSharedOptions(cli.command("check [app]", "Print status and recent logs for qu
       await Promise.all(targets.map(async (target) => [target, await readLogs(config, target)] as const)),
     );
     printCheckResult({ apps, diagnostics: createLogDiagnostics(logs), logs, namespace: config.namespace }, options);
+  },
+);
+
+addPortOptions(addSharedOptions(cli.command("cloud [action]", "Manage cloud HTTP and renderer without starting daemon"))).action(
+  async (action: string | undefined, options: CliOptions) => {
+    assertSupportedNodeRuntimeForStart();
+    output(await cloudLifecycle(action ?? "start", resolveToolDevConfig(options), options), options);
   },
 );
 

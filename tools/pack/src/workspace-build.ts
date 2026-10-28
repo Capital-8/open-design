@@ -41,13 +41,14 @@ export const WORKSPACE_BUILD_COMMANDS = [
       "--filter", "@open-design/packaged^...",
       "--workspace-concurrency=1", "--if-present", "run", "build",
     ],
-    env: ["OD_WEB_OUTPUT_MODE"],
+    env: ["OD_WEB_OUTPUT_MODE", "OD_WEB_TARGET"],
   },
   { args: ["--filter", "@open-design/web", "run", "build:sidecar"] },
   { args: ["--filter", "@open-design/packaged", "run", "build"] },
 ] as const;
 
-export const WORKSPACE_BUILD_CACHE_SCHEMA_VERSION = 11;
+export const WORKSPACE_BUILD_CACHE_SCHEMA_VERSION = 12;
+export const PACKAGED_WEB_TARGET = "desktop" as const;
 
 /**
  * V8 old-space ceiling (MB) for the packaged closure build, the stage that runs
@@ -83,6 +84,7 @@ export type WorkspaceBuildCacheKeyInputs = {
   pnpmWorkspace: string;
   schemaVersion: number;
   webOutputMode: ToolPackConfig["webOutputMode"];
+  webTarget: string;
 };
 
 export function createWorkspaceBuildCacheKeyFromInputs(inputs: WorkspaceBuildCacheKeyInputs): string {
@@ -151,6 +153,7 @@ export async function createWorkspaceBuildCacheKey(config: ToolPackConfig): Prom
     pnpmWorkspace: await hashPath(join(config.workspaceRoot, "pnpm-workspace.yaml")),
     schemaVersion: WORKSPACE_BUILD_CACHE_SCHEMA_VERSION,
     webOutputMode: config.webOutputMode,
+    webTarget: PACKAGED_WEB_TARGET,
   });
 }
 
@@ -174,6 +177,7 @@ export async function runWorkspaceBuild(
       {
         NODE_OPTIONS: workspaceBuildNodeOptions(process.env.NODE_OPTIONS),
         OD_WEB_OUTPUT_MODE: config.webOutputMode,
+        OD_WEB_TARGET: PACKAGED_WEB_TARGET,
       },
     );
     await runPnpm([...WORKSPACE_BUILD_COMMANDS[2].args]);
@@ -406,6 +410,7 @@ export async function ensureWorkspaceBuildArtifacts(
         scope: "version-family",
         versionFamily,
         webOutputMode: config.webOutputMode,
+        webTarget: PACKAGED_WEB_TARGET,
       });
   const materialize = artifacts.map((artifact) => ({
     from: artifact.cachePath,

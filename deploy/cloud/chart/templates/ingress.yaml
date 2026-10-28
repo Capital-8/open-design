@@ -1,0 +1,29 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: open-design-cloud-api
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: 25m
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  tls:
+    - hosts: [{{ required "ingress.host required" .Values.ingress.host | quote }}]
+      secretName: {{ required "ingress.tlsSecret required" .Values.ingress.tlsSecret | quote }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- range list "/api" "/health" "/ready" }}
+          - path: {{ . }}
+            pathType: {{ if eq . "/api" }}Prefix{{ else }}Exact{{ end }}
+            backend:
+              service:
+                name: open-design-cloud
+                port: {number: 19000}
+          {{- end }}
+{{- end }}

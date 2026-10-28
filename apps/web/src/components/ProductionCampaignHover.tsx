@@ -5,7 +5,7 @@ import {
 } from "./TestCampaignModal";
 import { useI18n } from "../i18n";
 import { useCallback, useMemo, useRef } from "react";
-import { getOpenDesignHost } from "@open-design/host";
+import { supportsCampaigns } from "../runtime/campaign-support";
 import {
 	emitWebTouchpointDiagnostic,
 	supportsWebTouchpointCapabilities,
@@ -151,7 +151,7 @@ export function ProductionCampaignHover({
 		!testRuntime &&
 		authenticated &&
 		Boolean(sessionSubject) &&
-		getOpenDesignHost()?.client.type === "desktop" &&
+		supportsCampaigns() &&
 		Boolean(locale);
 	const load = useCallback(
 		async (

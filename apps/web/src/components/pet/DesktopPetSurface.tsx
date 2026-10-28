@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { setHostPetVisible } from '@open-design/host';
+import { setPetVisible } from '../../runtime/client-context';
 import { RUNS_CHANGED_EVENT, listProjectRunsWithScope } from '../../providers/daemon';
 import { loadConfig } from '../../state/config';
 import { listProjects } from '../../state/projects';
@@ -37,7 +37,7 @@ export function DesktopPetSurface() {
   }, []);
 
   useEffect(() => {
-    setHostPetVisible(Boolean(pet));
+    setPetVisible(Boolean(pet));
   }, [pet]);
 
   // `loadConfig` parses a fresh object on every config poll, so keying the

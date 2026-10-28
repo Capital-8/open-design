@@ -437,7 +437,24 @@ jobs:
         run: pnpm --filter @open-design/web build:sidecar
 
       - name: Web workspace tests
-        run: pnpm --filter @open-design/web exec vitest run -c vitest.config.ts --maxWorkers=2 --shard=${{ matrix.shard }}/2
+        run: pnpm --filter @open-design/web test --target desktop --shard=${{ matrix.shard }}/2
+
+      - name: Web target entry tests
+        run: pnpm --filter @open-design/web test --target web tests/targets --shard=${{ matrix.shard }}/2
+
+      # Keep the existing workload identities: shard 1 validates desktop and
+      # shard 2 validates web, including Next's target-specific type checking.
+      - name: Build target artifact
+        env:
+          WEB_BUILD_TARGET: ${{ matrix.shard == 1 && 'desktop' || 'web' }}
+          OD_WEB_OUTPUT_MODE: export
+        run: pnpm --filter @open-design/web build --target "$WEB_BUILD_TARGET"
+
+      - name: Verify target artifact
+        env:
+          WEB_BUILD_TARGET: ${{ matrix.shard == 1 && 'desktop' || 'web' }}
+          OD_WEB_VERIFY_BUILD: '1'
+        run: pnpm --filter @open-design/web test --target "$WEB_BUILD_TARGET" tests/build/production-artifact.test.ts
 
   e2e_vitest:
     name: E2E Vitest

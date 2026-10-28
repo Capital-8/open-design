@@ -22,6 +22,9 @@ vi.mock("../../src/analytics/provider", () => ({
 }));
 vi.mock("../../src/runtime/exports", async () => ({
 	...(await vi.importActual("../../src/runtime/exports")),
+  // These fixtures return native save acknowledgements and exercise the local
+  // save-to-share contract, independently of the suite's selected build target.
+  ...(await vi.importActual("../../src/runtime/exports/desktop")),
 	exportProjectAsHtml: seam.exportHtml,
 	exportAsPdf: seam.fallbackPdf,
   exportProjectImageDataUrl: seam.imageSnapshot,

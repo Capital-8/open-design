@@ -33,6 +33,13 @@ import type {
 } from '../../src/components/EntryShell';
 import { I18nProvider } from '../../src/i18n';
 import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
+import * as fundingModule from '../../src/runtime/amr-funding-feedback';
+import * as webFunding from '../../src/runtime/amr-funding-feedback/web';
+
+// These gate fixtures model the local funding endpoint. Browser-specific cases
+// below inject the web implementation instead of mutating a product flag.
+vi.mock('../../src/runtime/amr-funding-feedback', () => import('../../src/runtime/amr-funding-feedback/desktop'));
+
 import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
 import { useWorkspaceInvalidation } from '../../src/collab/workspace-events';
 import { advanceWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
@@ -439,6 +446,37 @@ describe('Home memory funding gate', () => {
       await waitFor(() => expect(billingReads).toBeGreaterThan(reads));
       expect(h.fundingReads()).toBe(3);
     } finally { now.mockRestore(); }
+  });
+
+  it.each(['allow', 'signed_out'] as const)('cloud POC ignores advisory zero balance while retaining the %s sign-in outcome', async (outcome) => {
+    const cached = vi.spyOn(fundingModule, 'cachedHomeAmrFundingBlock').mockImplementation(webFunding.cachedHomeAmrFundingBlock);
+    const check = vi.spyOn(fundingModule, 'checkAmrFundingFeedback').mockImplementation(webFunding.checkAmrFundingFeedback);
+    const context = personalContext();
+    memoryPreflight = {
+      schemaVersion: 1, workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId,
+      modelId: null, generatedAt: new Date().toISOString(), balanceUsd: '0', funding: 'gateway', modelCovered: null,
+      codingPlan: { workspaceId: context.workspaceId, generatedAt: new Date().toISOString(), eligible: false, tier: null, windows: [] },
+    };
+    try {
+      const h = harness('amr');
+      if (outcome === 'signed_out') h.setGate({ kind: 'hard', reason: 'signed_out', snapshot: { ...emptyWallet(), status: 'signed_out' } });
+      await waitForWalletInMemory();
+      await submitHome('Cloud POC zero balance regression check.');
+      expect(h.onBeginProjectCreation).toHaveBeenCalledTimes(1);
+      expect(mockedCheckAmrBalanceGate).toHaveBeenCalled();
+      if (outcome === 'allow') {
+        await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+        expect(screen.queryByTestId('amr-balance-dialog')).toBeNull();
+      } else {
+        await screen.findByTestId('amr-balance-dialog');
+        expect(h.onCreateProject).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByTestId('amr-balance-dialog-dismiss'));
+      }
+      expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => String(url).includes('/api/workspace/billing/preflight?'))).toBe(false);
+    } finally {
+      cached.mockRestore();
+      check.mockRestore();
+    }
   });
 
   it('restores #8240 from the displayed wallet and plan without an independent hint', async () => {

@@ -89,10 +89,10 @@ import type {
 } from '../types';
 import type { ArtifactManifest } from '../artifacts/types';
 import { GENERIC_DEPLOY_ENVELOPE_CODES } from '../analytics/deploy-error-code';
-import {
-  isOpenDesignHostAvailable,
-  openHostExternalUrl,
-} from '@open-design/host';
+import { openExternalUrl } from '../runtime/external-navigation';
+export { openExternalUrl } from '../runtime/external-navigation';
+import { createConnectorAuthorization } from '../runtime/connector-authorization';
+import type { ConnectorAuthorization } from '../runtime/connector-authorization/types';
 import {
   coalescedGet,
   evictCoalescedGet,
@@ -1433,51 +1433,6 @@ function popupBlockedMessage(): string {
   return 'Popup blocked. Allow popups for OpenDesign and try again.';
 }
 
-export async function openExternalUrl(url: string): Promise<boolean> {
-  const bridgedUrl = await bridgeFirstPartyUrl(url);
-  const targetUrl = bridgedUrl ?? url;
-  if (isOpenDesignHostAvailable()) {
-    const opened = await openHostExternalUrl(targetUrl);
-    if (opened.ok) return true;
-  }
-  try {
-    const resp = await fetch('/api/system/open-external', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: targetUrl }),
-    });
-    if (resp.ok) {
-      const json = (await resp.json().catch(() => null)) as { ok?: unknown } | null;
-      if (json?.ok === true) return true;
-    }
-  } catch {
-    // Fall through to current-tab navigation below.
-  }
-  try {
-    window.location.assign(targetUrl);
-  } catch {
-    return false;
-  }
-  return false;
-}
-
-async function bridgeFirstPartyUrl(url: string): Promise<string | null> {
-  try {
-    const target = new URL(url);
-    if (!['open-design.ai', 'www.open-design.ai', 'staging.open-design.ai'].includes(target.hostname)) return null;
-    const resp = await fetch('/api/attribution/bridge-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: target.toString() }),
-    });
-    if (!resp.ok) return null;
-    const body = await resp.json() as { url?: unknown };
-    return typeof body.url === 'string' ? body.url : null;
-  } catch {
-    return null;
-  }
-}
-
 async function decodeConnectorError(resp: Response): Promise<string> {
   try {
     const payload = (await resp.json()) as { error?: { message?: string } } | null;
@@ -1488,22 +1443,19 @@ async function decodeConnectorError(resp: Response): Promise<string> {
 }
 
 export async function connectConnector(connectorId: string): Promise<ConnectorActionResult> {
-  let authWindow: Window | null = null;
-  const useExternalBrowser = isOpenDesignHostAvailable();
+  let authorization: ConnectorAuthorization | null = null;
   try {
-    if (!useExternalBrowser) {
-      authWindow = window.open('about:blank', '_blank');
-      renderConnectorAuthLoading(authWindow, {
-        title: 'Initializing auth config…',
-        body: 'Creating or reusing the Composio auth configuration for this app. This can take a moment the first time.',
-      });
-    }
+    authorization = createConnectorAuthorization(openExternalUrl);
+    authorization.loading({
+      title: 'Initializing auth config…',
+      body: 'Creating or reusing the Composio auth configuration for this app. This can take a moment the first time.',
+    });
     const prepare = await prepareConnectorAuthConfig(connectorId);
     if (prepare.status !== 'ready') {
-      renderConnectorAuthError(authWindow, prepare.message);
+      authorization?.error(prepare.message);
       return { connector: null, error: prepare.message };
     }
-    renderConnectorAuthLoading(authWindow, {
+    authorization.loading({
       title: 'Opening authorization…',
       body: 'The auth config is ready. Preparing the provider authorization page.',
     });
@@ -1512,48 +1464,33 @@ export async function connectConnector(connectorId: string): Promise<ConnectorAc
     });
     if (!resp.ok) {
       const error = await decodeConnectorError(resp);
-      renderConnectorAuthError(authWindow, error);
+      authorization?.error(error);
       return { connector: null, error };
     }
     const json = (await resp.json()) as ConnectorConnectResponse;
     if (json.auth?.kind === 'redirect_required' && json.auth.redirectUrl) {
-      if (useExternalBrowser) {
-        const opened = await openHostExternalUrl(json.auth.redirectUrl);
-        if (!opened.ok) {
-          return {
-            connector: json.connector ?? null,
-            auth: json.auth,
-            error: popupBlockedMessage(),
-          };
-        }
-      } else if (authWindow) {
-        openConnectorAuthRedirect(authWindow, json.auth.redirectUrl);
-      } else {
-        // The embedded browser can block even the synchronous placeholder
-        // popup. Ask the local daemon to open the system browser; if that
-        // route is unavailable, openExternalUrl falls back to current-tab
-        // navigation.
-        await openExternalUrl(json.auth.redirectUrl);
+      if (!await authorization.redirect(json.auth.redirectUrl)) {
+        return { connector: json.connector ?? null, auth: json.auth, error: popupBlockedMessage() };
       }
     } else if (json.auth?.kind === 'connected') {
-      renderConnectorAuthInfo(authWindow, {
+      authorization.info({
         title: 'Already connected',
         body: 'This connector is already authorized. You can close this window.',
       });
     } else if (json.auth?.kind === 'pending') {
-      renderConnectorAuthInfo(authWindow, {
+      authorization.info({
         title: 'Authorization pending',
         body: 'Authorization is in progress but no redirect URL was returned. Watch for an email confirmation, or open the Composio dashboard to continue.',
       });
     } else {
-      renderConnectorAuthInfo(authWindow, {
+      authorization.info({
         title: 'No authorization URL returned',
         body: 'The connector responded without a redirect URL. If this seems wrong, retry from Settings → Connectors, and confirm your Composio API key.',
       });
     }
     return { connector: json.connector ?? null, ...(json.auth === undefined ? {} : { auth: json.auth }) };
   } catch (err) {
-    renderConnectorAuthError(authWindow, err instanceof Error && err.message ? err.message : 'Could not start connector authentication.');
+    authorization?.error(err instanceof Error && err.message ? err.message : 'Could not start connector authentication.');
     return {
       connector: null,
       error: err instanceof Error && err.message ? err.message : 'Could not start connector authentication.',
@@ -1575,85 +1512,6 @@ async function prepareConnectorAuthConfig(connectorId: string): Promise<{ status
   if (!result) return { status: 'error', message: 'Auth config initialization did not return a result.' };
   if (result.status === 'ready') return { status: 'ready' };
   return { status: 'error', message: result.message };
-}
-
-function openConnectorAuthRedirect(authWindow: Window | null, redirectUrl: string): void {
-  const parsed = new URL(redirectUrl);
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('Invalid connector authorization URL');
-  const safeUrl = parsed.href;
-  if (authWindow) {
-    renderConnectorAuthRedirect(authWindow, safeUrl);
-    try {
-      authWindow.location.replace(safeUrl);
-      return;
-    } catch {
-      // Some embedded browsers block async popup navigation. Leave the
-      // clickable fallback in the popup so the user can continue.
-    }
-  }
-  const opened = window.open(safeUrl, '_blank');
-  if (!opened) window.location.assign(safeUrl);
-}
-
-function connectorAuthPage(authWindow: Window, title: string, body: string, maxWidth: number): HTMLElement {
-  const doc = authWindow.document;
-  doc.title = title;
-  const main = doc.createElement('main');
-  main.style.cssText = "min-height:100vh;display:grid;place-items:center;margin:0;background:#0f1115;color:#f6f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;";
-  const content = doc.createElement('div');
-  content.style.cssText = 'display:grid;gap:14px;justify-items:center;text-align:center;padding:32px;';
-  const heading = doc.createElement('div');
-  heading.style.cssText = 'font-size:15px;font-weight:600;';
-  heading.textContent = title;
-  const description = doc.createElement('div');
-  description.style.cssText = `max-width:${maxWidth}px;color:rgba(246,247,251,.72);font-size:13px;line-height:1.5;`;
-  description.textContent = body;
-  content.append(heading, description);
-  main.append(content);
-  doc.body.replaceChildren(main);
-  return content;
-}
-
-function renderConnectorAuthLoading(authWindow: Window | null, copy: { title: string; body: string }): void {
-  if (!authWindow) return;
-  try {
-    const content = connectorAuthPage(authWindow, copy.title, copy.body, 300);
-    const spinner = authWindow.document.createElement('div');
-    spinner.setAttribute('aria-hidden', 'true');
-    spinner.style.cssText = 'width:28px;height:28px;border-radius:999px;border:3px solid rgba(255,255,255,.22);border-top-color:#fff;animation:od-spin .8s linear infinite;';
-    content.prepend(spinner);
-    const style = authWindow.document.createElement('style');
-    style.textContent = '@keyframes od-spin{to{transform:rotate(360deg)}}';
-    content.append(style);
-  } catch {
-    /* Popup may be unavailable or already navigated; ignore. */
-  }
-}
-
-function renderConnectorAuthInfo(authWindow: Window | null, copy: { title: string; body: string }): void {
-  if (!authWindow) return;
-  try { connectorAuthPage(authWindow, copy.title, copy.body, 360); }
-  catch { /* Popup may be unavailable or already navigated; ignore. */ }
-}
-
-function renderConnectorAuthRedirect(authWindow: Window, redirectUrl: string): void {
-  try {
-    const content = connectorAuthPage(authWindow, 'Continue authorization',
-      'If this window does not redirect automatically, use the button below.', 300);
-    const link = authWindow.document.createElement('a');
-    link.href = redirectUrl;
-    link.textContent = 'Open Composio';
-    link.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:164px;border-radius:8px;padding:9px 14px;background:#df7b56;color:#fff;text-decoration:none;font-size:13px;font-weight:600;';
-    content.append(link);
-  } catch {
-    /* Popup may already be cross-origin; navigation fallback still runs. */
-  }
-}
-
-function renderConnectorAuthError(authWindow: Window | null, message: string): void {
-  if (!authWindow) return;
-  try { connectorAuthPage(authWindow, 'Connection failed', message, 360); }
-  catch { /* Popup may be unavailable or already navigated; ignore. */ }
 }
 
 export async function disconnectConnector(connectorId: string): Promise<ConnectorDetail | null> {

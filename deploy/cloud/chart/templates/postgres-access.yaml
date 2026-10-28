@@ -1,0 +1,25 @@
+{{- if .Values.postgresAccess.enabled }}
+{{- if empty .Values.postgresAccess.podSelector }}
+{{- fail "postgresAccess.podSelector must select the existing business PostgreSQL pods" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-postgres-access
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml .Values.postgresAccess.podSelector | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [open-design-cloud, open-design-cloud-migrate]
+      ports:
+        - {protocol: TCP, port: 5432}
+{{- end }}

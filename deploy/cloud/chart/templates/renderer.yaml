@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-design-cloud-renderer
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-design-cloud-renderer
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-design-cloud-renderer
+        app.kubernetes.io/instance: {{ .Release.Name | quote }}
+        app.kubernetes.io/part-of: open-design-cloud
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 75
+      restartPolicy: Always
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: renderer
+          image: {{ include "cloud.image" .Values.renderer.image | quote }}
+          command: ["node", "dist/renderer-server.js"]
+          ports: [{name: http, containerPort: 19001}]
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: NODE_ENV, value: production}
+            - {name: OD_CLOUD_RENDERER_HOST, value: "0.0.0.0"}
+            - {name: OD_CLOUD_RENDERER_PORT, value: "19001"}
+            - {name: OD_CLOUD_CHROMIUM_PATH, value: /usr/bin/chromium}
+            - {name: OD_CLOUD_FFMPEG_PATH, value: /usr/bin/ffmpeg}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            {{- toYaml .Values.renderer.resources | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-design-cloud-renderer
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: open-design-cloud-renderer
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  ports:
+    - {name: http, port: 19001, targetPort: http}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-renderer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-design-cloud-renderer
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-design-cloud
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - {protocol: TCP, port: 19001}
+  egress: []

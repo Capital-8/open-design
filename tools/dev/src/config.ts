@@ -35,6 +35,7 @@ export type ToolDevOptions = {
   prod?: boolean;
   toolsDevRoot?: string;
   webPort?: number | string | null;
+  webTarget?: string;
 };
 
 export type ToolDevAppConfig = {
@@ -64,7 +65,14 @@ export type ToolDevConfig = {
   toolsDevRoot: string;
   tsxCliPath: string;
   workspaceRoot: string;
+  webTarget: "desktop" | "web";
 };
+
+export function resolveToolDevWebTarget(value: string | undefined): "desktop" | "web" {
+  const target = value ?? "desktop";
+  if (target !== "desktop" && target !== "web") throw new Error("--web-target / OD_WEB_TARGET must be desktop or web");
+  return target;
+}
 
 function resolveTsxCliPath(): string {
   const require = createRequire(import.meta.url);
@@ -146,6 +154,7 @@ export function parseParentPidOption(value: number | string | null | undefined):
 }
 
 export function resolveToolDevConfig(options: ToolDevOptions = {}): ToolDevConfig {
+  const webTarget = resolveToolDevWebTarget(options.webTarget ?? process.env.OD_WEB_TARGET);
   const namespace = resolveNamespace({ namespace: options.namespace, env: process.env, contract: OPEN_DESIGN_SIDECAR_CONTRACT });
   const toolsDevRoot = resolveSidecarBase({
     base: options.toolsDevRoot ?? process.env[SIDECAR_ENV.BASE] ?? resolveSourceRuntimeRoot({
@@ -182,8 +191,8 @@ export function resolveToolDevConfig(options: ToolDevOptions = {}): ToolDevConfi
       },
       web: {
         ...web,
-        nextDistDir: resolveAppRuntimePath({ app: APP_KEYS.WEB, namespaceRoot, fileName: "next", contract: OPEN_DESIGN_SIDECAR_CONTRACT }),
-        nextTsconfigPath: resolveAppRuntimePath({ app: APP_KEYS.WEB, namespaceRoot, fileName: "tsconfig.json", contract: OPEN_DESIGN_SIDECAR_CONTRACT }),
+        nextDistDir: path.join(resolveAppRuntimePath({ app: APP_KEYS.WEB, namespaceRoot, fileName: webTarget, contract: OPEN_DESIGN_SIDECAR_CONTRACT }), "next"),
+        nextTsconfigPath: path.join(resolveAppRuntimePath({ app: APP_KEYS.WEB, namespaceRoot, fileName: webTarget, contract: OPEN_DESIGN_SIDECAR_CONTRACT }), "tsconfig.json"),
         sidecarEntryPath: path.join(WORKSPACE_ROOT, "apps/web/sidecar/index.ts"),
       },
     },
@@ -192,5 +201,6 @@ export function resolveToolDevConfig(options: ToolDevOptions = {}): ToolDevConfi
     toolsDevRoot,
     tsxCliPath: resolveTsxCliPath(),
     workspaceRoot: WORKSPACE_ROOT,
+    webTarget,
   };
 }

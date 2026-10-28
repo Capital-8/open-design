@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 
 const webRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -37,4 +38,26 @@ describe('host bridge boundary', () => {
     });
     expect(offenders).toEqual([]);
   });
+});
+
+it('keeps runtime host access inside selected desktop implementations', () => {
+  const offenders: string[] = [];
+  for (const path of filesUnder(join(webRoot, 'src'))) {
+    if (/(?:^|\/)(?:desktop\.ts|Desktop\.tsx)$/.test(path)) continue;
+    const source = readFileSync(path, 'utf8');
+    const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+    for (const node of file.statements) {
+      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text === '@open-design/host') {
+        const clause = node.importClause;
+        if (clause?.isTypeOnly) continue;
+        const bindings = clause?.namedBindings;
+        // Protocol constants and type imports are shared; native actions/detection are not.
+        if (clause?.name || (bindings && (!ts.isNamedImports(bindings) || bindings.elements.some(binding => !binding.isTypeOnly && !binding.name.text.startsWith('OPEN_DESIGN_HOST_'))))) {
+          offenders.push(path.replace(`${webRoot}/`, ''));
+        }
+      }
+    }
+    if (source.includes('openDesignDesktop')) offenders.push(path.replace(`${webRoot}/`, ''));
+  }
+  expect(offenders).toEqual([]);
 });

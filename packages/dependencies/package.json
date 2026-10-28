@@ -1,0 +1,50 @@
+{
+  "name": "@open-design/dependencies",
+  "version": "0.25.1",
+  "private": true,
+  "type": "module",
+  "description": "Injected AMR platform, renderer, GitHub and Filesys protocol clients, independent of bridge and business layers.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./amr": {
+      "types": "./dist/amr/index.d.ts",
+      "default": "./dist/amr/index.js"
+    },
+    "./renderer": {
+      "types": "./dist/renderer/index.d.ts",
+      "default": "./dist/renderer/index.js"
+    },
+    "./github": {
+      "types": "./dist/github/index.d.ts",
+      "default": "./dist/github/index.js"
+    },
+    "./filesys": {
+      "types": "./dist/filesys/index.d.ts",
+      "default": "./dist/filesys/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/node": "24.12.2",
+    "vitest": "4.1.6"
+  },
+  "engines": {
+    "node": "~24"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  }
+}

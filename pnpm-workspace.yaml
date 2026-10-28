@@ -1,4 +1,6 @@
 packages:
+  - adapters
+  - biz
   - packages/*
   - apps/*
   - tools/*
@@ -26,3 +28,7 @@ onlyBuiltDependencies:
   - onnxruntime-node
   - protobufjs
   - sharp
+  - "@embedded-postgres/darwin-arm64"
+  - "@embedded-postgres/darwin-x64"
+  - "@embedded-postgres/linux-x64"
+  - "@embedded-postgres/linux-arm64"

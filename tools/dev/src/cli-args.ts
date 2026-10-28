@@ -1,4 +1,4 @@
-const CLI_COMMANDS = new Set(["start", "run", "status", "stop", "restart", "logs", "inspect", "check", "help"]);
+const CLI_COMMANDS = new Set(["start", "run", "status", "stop", "restart", "logs", "inspect", "check", "help", "cloud"]);
 const OPTIONS_WITH_VALUE = new Set([
   "--daemon-port",
   "--env-file",
@@ -11,6 +11,7 @@ const OPTIONS_WITH_VALUE = new Set([
   "--tools-dev-root",
   "--update-action",
   "--web-port",
+  "--web-target",
 ]);
 
 export function rewriteCliArgsForDefaultStart(args: readonly string[]): string[] {
