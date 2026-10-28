@@ -32,6 +32,7 @@ import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback, recentHomeAmrFundingInsufficiency } from '../../src/runtime/amr-funding-feedback';
 import { useWorkspaceInvalidation } from '../../src/collab/workspace-events';
 import { advanceWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
+import { clearWorkspaceRemoval, currentWorkspaceRemoval } from '../../src/collab/workspace-removal';
 import type { AgentInfo, AppConfig } from '../../src/types';
 import { EntryShellWithGateHost } from '../helpers/entry-shell-gate-host';
 import { setHomeHeroPrompt } from '../helpers/home-hero-lexical';
@@ -446,6 +447,54 @@ describe('OPEND-2614 · funded Home handoff precedes the remaining AMR sign-in g
       expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this draft until this click has valid funds.');
     },
   );
+
+  it('withdraws pending Home Send authority on an exact member-removal SSE before its 200 proof returns', async () => {
+    clearWorkspaceRemoval();
+    const sources: Array<EventTarget & { url: string }> = [];
+    class RemovalEventSource extends EventTarget {
+      onopen: ((event: Event) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      readonly url: string;
+      constructor(url: string) { super(); this.url = url; sources.push(this); }
+      close() {}
+    }
+    vi.stubGlobal('EventSource', RemovalEventSource);
+    const context = { ...personalContext(), role: 'member' as const,
+      permissions: buildWorkspacePermissions({ role: 'member', lifecycleState: 'active' }) };
+    const original = globalThis.fetch;
+    let sending = false;
+    let finish!: (response: Response) => void;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/workspace/directory')) return Promise.resolve(jsonResponse(workspaceDirectoryFixture([context])));
+      if (url.endsWith('/api/workspace/context')) return Promise.resolve(jsonResponse({ context }));
+      if (url.includes('/billing/preflight?') && sending) return new Promise<Response>(resolve => { finish = resolve; });
+      return original(input, init);
+    }) as typeof fetch;
+    const h = harness('amr');
+    try {
+      await screen.findByTestId('home-hero-input');
+      await checkAmrFundingFeedback(context, 'default');
+      sending = true;
+      await submitHome('Do not send this removed member draft.');
+      await waitFor(() => expect(finish).toBeTypeOf('function'));
+      const source = sources.find(source => source.url.includes('/api/workspace/events?')
+        && new URL(source.url, 'http://localhost').searchParams.get('workspaceId') === context.workspaceId);
+      expect(source, 'the real workspace hook must subscribe to the scoped SSE').toBeDefined();
+      await act(async () => {
+        source!.dispatchEvent(new MessageEvent('workspace-context-changed', { data: JSON.stringify({
+          type: 'workspace-context-changed', memberRemoval: { reason: 'member-removed',
+            workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId },
+        }) }));
+        expect(currentWorkspaceRemoval()).toMatchObject({ workspaceId: context.workspaceId,
+          workspaceMemberId: context.workspaceMemberId });
+        finish(jsonResponse({ preflight: homeFunding(context) }));
+      });
+      expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+      expect(h.onCreateProject).not.toHaveBeenCalled();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Do not send this removed member draft.');
+    } finally { clearWorkspaceRemoval(); vi.unstubAllGlobals(); }
+  });
 
   it('RUN-003 shows fresh Home insufficiency before a late Link hint and only retries on another click', async () => {
     const context = personalContext();
