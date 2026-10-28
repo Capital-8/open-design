@@ -566,6 +566,7 @@ function atomicWriteJson(filePath, value) {
 
 function durableRunState(run) {
   return {
+    ...(run.traceId ? { traceId: run.traceId } : {}),
     schemaVersion: RUN_STATE_SCHEMA_VERSION,
     id: run.id,
     projectId: run.projectId,
@@ -1525,6 +1526,7 @@ export function createChatRunService({
 
   const statusBody = (run) => ({
     id: run.id,
+    ...(run.traceId ? { traceId: run.traceId } : {}),
     projectId: run.projectId,
     conversationId: run.conversationId,
     assistantMessageId: run.assistantMessageId,

@@ -586,6 +586,7 @@ import {
 } from './strategies/od-next/frozen-skill-package.js';
 import { odNextExampleReferenceFact } from './strategies/od-next/example-skill-source.js';
 import { runtimeResumesSessionById } from './runtimes/types.js';
+import { createTechnicalTraces } from './observability/technical-traces.js';
 import {
   createRunLifecycleTracer,
   runLifecycleMarkersForStreamEvent,
@@ -7908,6 +7909,7 @@ export async function startServer({
   });
   const observeDiagnosticRun = createDiagnosticRunObserver();
   const stopEvidenceDelivery = startEvidenceDelivery(RUNTIME_DATA_DIR);
+  const technicalTraces = createTechnicalTraces();
   const strategyWriteEvidence = createStrategyRunWriteEvidenceRecorder(db);
   const codexThreadCleanupOwner = createCodexThreadCleanupOwner();
   const design = {
@@ -7925,6 +7927,7 @@ export async function startServer({
         if (incidentId) run.diagnosticIncidentIds = [...new Set([...(run.diagnosticIncidentIds ?? []), incidentId])].slice(-100);
       },
       onEventEmitted: (run, record) => {
+        if (record.event === 'end') technicalTraces.finish(run);
         if (record.event === 'start') automaticDiagnostics?.trackRun(run.id, {
           sourceId: `run:${run.id}:interrupted:${run.manualResumeAttemptCount ?? 0}:${record.timestamp}`,
           kind: 'active_run', at: record.timestamp, runId: run.id, agentId: run.agentId,
@@ -10884,6 +10887,7 @@ export async function startServer({
   };
 
   const startChatRun = async (chatBody, run) => {
+    technicalTraces.beginAttempt(run);
     const lifecycle = createRunLifecycleTracer(run);
     lifecycle.mark('chat_run_started');
     const pendingNativeSessionContinue =
@@ -14448,6 +14452,7 @@ export async function startServer({
         cleanupOdNextRunInputProjection();
         return;
       }
+      Object.assign(env, technicalTraces.runtimeEnv(run));
       spawnedAgentEnv = env;
       const invocation = createCommandInvocation({
         command: agentLaunch.launchPath,
@@ -18101,6 +18106,7 @@ export async function startServer({
       await terminalService.shutdownActive();
       await browserSessionService.shutdownActive();
       await design.analytics.shutdown();
+      await technicalTraces.flush();
     };
     let server;
     try {

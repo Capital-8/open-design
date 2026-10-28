@@ -709,6 +709,8 @@ export interface ChatRunExecutionDiagnostics {
 }
 
 export interface ChatRunStatusResponse {
+  /** Technical execution trace; a terminal Run resumed later receives a new trace. */
+  traceId?: string;
   id: string;
   projectId: string | null;
   conversationId: string | null;

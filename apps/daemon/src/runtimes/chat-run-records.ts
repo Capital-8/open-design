@@ -155,6 +155,7 @@ export interface SseClient {
 
 export interface ChatRun {
   id: string;
+  traceId?: string;
   diagnosticIncidentIds?: string[];
   projectId: string | null;
   conversationId: string | null;
