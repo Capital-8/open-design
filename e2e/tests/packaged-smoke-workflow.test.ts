@@ -1913,6 +1913,7 @@ process.stdin.on("end", () => {
     });
     expect(uiP0Groups["project-collab"].files).toEqual([
       "ui/workspace-multi-client-collab.test.ts",
+      "ui/share-mainline.test.ts",
     ]);
     expect(uiP0Groups["project-collab"].workers).toBe(1);
     expect(uiP0Groups["critical-extras"]).toEqual({
