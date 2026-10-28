@@ -241,6 +241,19 @@ it('OPEND-3894 retains same-scope rows on failed refresh and accepts a successfu
   };
   await waitFor(()=>expect(preview().previewCommentsState).toBe('success'));
   expect(preview().previewComments).toEqual([comment]);
+  // OPEND-3604: a slow background refresh must leave the last successful
+  // snapshot eligible for display/acknowledgement throughout queued reruns.
+  const pendingReads: Array<(rows: unknown[]) => void> = [];
+  fetchPreviewComments.mockImplementation(() => new Promise(resolve => { pendingReads.push(resolve); }));
+  let refresh!: Promise<void>;
+  act(() => { refresh = preview().onRetryPreviewComments(); });
+  expect(preview().previewCommentsState).toBe('success');
+  expect(preview().previewComments).toEqual([comment]);
+  act(() => { void preview().onRetryPreviewComments(); });
+  await act(async () => { pendingReads.shift()?.([comment]); await Promise.resolve(); });
+  expect(preview().previewCommentsState).toBe('success');
+  expect(preview().previewComments).toEqual([comment]);
+  await act(async () => { pendingReads.shift()?.([comment]); await refresh; });
   fetchPreviewComments.mockRejectedValue(new Error('offline'));
   await act(async()=>{await preview().onRetryPreviewComments();});
   expect(preview().previewCommentsState).toBe('error');
