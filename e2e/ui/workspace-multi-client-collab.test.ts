@@ -348,9 +348,11 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
     OD_WORKSPACE_CONTEXT_SOURCE: 'vela',
     VELA_API_URL: hub.url,
     VELA_BIN: velaBin,
+    AMR_HOME: testInfo.outputPath('empty-amr-home'),
   };
   let cluster: CollabCluster | undefined;
   let failed = false;
+  let releaseInitialConversations = () => {};
   try {
     cluster = await test.step('start isolated owner and member clients', async () =>
       await createCollabCluster(browser, testInfo, [
@@ -365,6 +367,12 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
       ]));
     const ownerPage = cluster.clients.owner!.page;
     const memberPage = cluster.clients.member!.page;
+    const memberConversationWrites: string[] = [];
+    memberPage.on('request', request => {
+      if (request.method() === 'POST' && /\/conversations$/.test(new URL(request.url()).pathname)) {
+        memberConversationWrites.push(request.url());
+      }
+    });
     await test.step('configure isolated workspace clients', async () => {
       await Promise.all([applyStandardMocks(ownerPage), applyStandardMocks(memberPage)]);
       await Promise.all([
@@ -376,7 +384,7 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
       await openHome(memberPage));
 
     const projectId = await createProject(ownerPage);
-    await writeHtml(ownerPage, projectId, htmlFor('Owner version 1'));
+    await writeHtml(ownerPage, projectId, htmlFor('Owner version 1', false));
 
     const share = await ownerPage.request.post(
       `/api/workspaces/${WORKSPACE_ID}/projects/${projectId}/move`,
@@ -417,6 +425,15 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
       `.recent-projects__card[data-project-id="${projectId}"]:visible`,
     );
     await expect(memberCard).toContainText(PROJECT_NAME);
+    // File preview is independently readable while the initial chat list is slow.
+    const initialConversationsGate = new Promise<void>(resolve => { releaseInitialConversations = resolve; });
+    let savingComment = false;
+    await memberPage.route(`**/api/projects/${projectId}/conversations`, async route => {
+      if (route.request().method() !== 'GET' || savingComment) return route.continue();
+      const response = await route.fetch();
+      await initialConversationsGate;
+      await route.fulfill({ response });
+    });
     await memberCard.locator('.recent-projects__card-main').click();
     await expect(memberPage).toHaveURL(new RegExp(`/projects/${projectId}`), {
       timeout: T.long,
@@ -472,15 +489,29 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
         firstConversationId(memberPage, projectId, MEMBER),
       ]);
       const commentStartedAt = Date.now();
-      const response = await memberPage.request.post(
-        `/api/projects/${projectId}/conversations/${memberConversationId}/comments`,
-        {
-          data: { target: COLLAB_COMMENT_TARGET, note: COLLAB_COMMENT_NOTE },
-          headers: workspaceHeaders(MEMBER),
-          timeout: T.long,
-        },
-      );
+      await memberPage.bringToFront();
+      await clickPreviewToolbarAction(memberPage, 'board-mode-toggle', /^Comment$/);
+      const commentFrame = memberPage.frameLocator(PREVIEW_SELECTOR);
+      await expect(commentFrame.locator('html[data-od-comment-mode]')).toHaveCount(1, { timeout: T.medium });
+      await commentFrame.getByRole('heading', { name: 'Owner version 1' }).click();
+      await expect(memberPage.getByTestId('comment-popover')).toBeVisible();
+      await memberPage.getByTestId('comment-popover-input').fill(COLLAB_COMMENT_NOTE);
+      const commentSaved = memberPage.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === `/api/projects/${projectId}/conversations/${memberConversationId}/comments`, { timeout: T.long });
+      void commentSaved.catch(() => {});
+      savingComment = true;
+      await memberPage.getByTestId('comment-popover-save').click();
+      // Saving waits for the existing read instead of reporting an unsaved note.
+      await expect(memberPage.getByTestId('comment-popover-save')).toBeDisabled();
+      releaseInitialConversations();
+      const response = await commentSaved;
       expect(response.ok(), await response.text()).toBeTruthy();
+      await expect(memberPage.getByTestId('comment-popover')).toHaveCount(0);
+      expect(memberConversationWrites).toEqual([]);
+      await memberPage.screenshot({ path: testInfo.outputPath('member-comment-saved.png'), animations: 'disabled' });
+      await testInfo.attach('member saves a comment from the read-only preview', {
+        path: testInfo.outputPath('member-comment-saved.png'), contentType: 'image/png',
+      });
       await hub.waitForCommand(
         (entry) =>
           entry.memberId === MEMBER.memberId
@@ -759,6 +790,7 @@ test('[P0] two isolated clients converge live content, presence, and owner unsha
     });
     throw error;
   } finally {
+    releaseInitialConversations();
     await cluster?.close({ preserve: failed });
     await hub.close();
   }
@@ -1722,8 +1754,8 @@ function isProjectCommentReadResponse(response: Response, projectId: string): bo
   return isProjectCommentReadRequest(response.request(), projectId);
 }
 
-function htmlFor(heading: string): string {
-  return `<!doctype html><html><body><main><h1 data-od-id="shared-heading">${heading}</h1></main></body></html>`;
+function htmlFor(heading: string, includeElementId = true): string {
+  return `<!doctype html><html><body><main><h1${includeElementId ? ' data-od-id="shared-heading"' : ''}>${heading}</h1></main></body></html>`;
 }
 
 function isProjectPull(args: readonly string[]): boolean {

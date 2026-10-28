@@ -6638,7 +6638,23 @@ export function ProjectView({
       images: File[] = [],
       commentId?: string,
     ) => {
-      const commentConversationId = activeConversationId ?? routeConversationId;
+      if (projectCollab.materializationPending) return null;
+      let commentConversationId = activeConversationId ?? routeConversationId;
+      if (!commentConversationId && sharedProjectScope && projectRunWorkspaceContext) {
+        // A read-only preview can be ready before its chat list. Resolve the
+        // existing server-owned route without creating a conversation or
+        // granting artifact-write permission to the commenter.
+        try {
+          const list = await listConversationsWithRetry(
+            project.id,
+            projectRunWorkspaceContext,
+            true,
+          );
+          commentConversationId = list[0]?.id ?? null;
+        } catch {
+          // Preserve the existing failure and draft when authority or reads fail.
+        }
+      }
       if (!commentConversationId) {
         setProjectActionsToast({
           message: t('project.previewCommentSaveFailedTitle'),
@@ -6648,7 +6664,6 @@ export function ProjectView({
         });
         return null;
       }
-      if (projectCollab.materializationPending) return null;
       // Upload any attached images first so the saved comment carries durable
       // file paths — this is what lets the comment list / re-opened popover
       // re-display the images instead of losing them on echo.
@@ -6713,6 +6728,7 @@ export function ProjectView({
       projectRunWorkspaceContext,
       t,
       projectCollab.materializationPending,
+      sharedProjectScope,
     ],
   );
 
