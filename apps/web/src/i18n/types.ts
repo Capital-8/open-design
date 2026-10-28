@@ -1143,6 +1143,9 @@ export interface Dict {
   'notify.failureTitle': string;
   'notify.successBody': string;
   'notify.failureBody': string;
+  'notify.needsReplyBody': string;
+  'notify.runFailedBody': string;
+  'notify.newReplyBody': string;
 
   // Desktop updater
   'updater.available': string;
@@ -5813,6 +5816,10 @@ export interface Dict {
   'chat.record.thinkingTokens': string;
   'chat.record.thoughts': string;
   'chat.record.done': string;
+  'chat.record.turnElapsed': string;
+  'chat.record.elapsedSeconds': string;
+  'chat.record.elapsedMinutes': string;
+  'chat.record.turnStopped': string;
   'chat.record.canceled': string;
   'chat.record.pending': string;
   /**
