@@ -1,0 +1,99 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-prompt-motion-gallery",
+  "title": "Prompt Motion Gallery",
+  "title_i18n": {
+    "en": "Prompt Motion Gallery",
+    "zh-CN": "Prompt Motion 作品浏览"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "Browse Prompt Motion and explore its morphing player and photo print demos.",
+  "description_i18n": {
+    "en": "Browse Prompt Motion and explore its morphing player and photo print demos.",
+    "zh-CN": "浏览 Prompt Motion 作品墙，打开播放器变形与图片打印演示。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "gallery",
+    "ui",
+    "morph",
+    "screen-recording"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "网站名称",
+        "default": "Prompt Motion"
+      },
+      {
+        "name": "headline",
+        "type": "string",
+        "label": "页面介绍",
+        "default": "A collection of motion videos made with Claude Opus 5.5, with the prompts and skills behind them."
+      },
+      {
+        "name": "wordmark",
+        "type": "string",
+        "label": "图片应用字标",
+        "default": "develop."
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Showcase {{brand}} with the introduction “{{headline}}” and a photo app called {{wordmark}}.",
+        "zh-CN": "为 {{brand}} 制作作品浏览演示，介绍为“{{headline}}”，图片应用字标为 {{wordmark}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Prompt Motion Gallery"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@0xMovez 原参考视频",
+      "url": "https://x.com/0xMovez/status/2108170313557016623"
+    }
+  ]
+}

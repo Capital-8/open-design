@@ -1,0 +1,88 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-semantic-color-stripes",
+  "title": "Semantic Color Stripes",
+  "title_i18n": {
+    "en": "Semantic Color Stripes",
+    "zh-CN": "词语生成色带"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "A live word-to-palette study, from tomato and neon tokyo to sunlight and stormclouds.",
+  "description_i18n": {
+    "en": "A live word-to-palette study, from tomato and neon tokyo to sunlight and stormclouds.",
+    "zh-CN": "输入 tomato、neon tokyo、sunlight 与 stormclouds，观看词语如何化为连续重排的色带。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "generative",
+    "color",
+    "typography"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "terms",
+        "type": "text",
+        "label": "配色词语（每行一个）",
+        "default": "tomato\ntomato on a vine\nneon\nneon tokyo\n80s\n80s disco\n80s pop\nretro\nbrowser\nbowser\nmario\nluigi\nwario\ncanada\nlondon\nlondon bus\nlondon pub\nroyalty\nindigo\nblue screen of death\nmatrix\nthe matrix\nbeach\nbeach sunset\nsunlight\nsunlight over the fields\nsunlight over the beach\nstormclouds"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a minimal word-to-palette exploration using these terms: {{terms}}.",
+        "zh-CN": "用这些词语制作极简的文字配色演示：{{terms}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Semantic Color Stripes"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "Matt DesLauriers (@mattdesl)",
+      "url": "https://x.com/mattdesl/status/2100899669802963060",
+      "note": "参考动画来源；未访问来源链接。"
+    }
+  ]
+}

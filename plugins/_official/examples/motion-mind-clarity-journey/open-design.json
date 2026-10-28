@@ -1,0 +1,119 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-mind-clarity-journey",
+  "title": "Mind Clarity Journey",
+  "title_i18n": {
+    "en": "Mind Clarity Journey",
+    "zh-CN": "清晰心智之旅"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "A silhouette film about clarity, growth and focus, from a sunlit mind to an open doorway.",
+  "description_i18n": {
+    "en": "A silhouette film about clarity, growth and focus, from a sunlit mind to an open doorway.",
+    "zh-CN": "通过太阳、植物、火柴和敞开的门，呈现清晰心智与专注成长的剪影短片。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "editorial",
+    "silhouette",
+    "mindfulness",
+    "abstract"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "mindLine",
+        "type": "string",
+        "label": "开场文案",
+        "default": "The mind"
+      },
+      {
+        "name": "growthLine",
+        "type": "string",
+        "label": "强调词",
+        "default": "thrives"
+      },
+      {
+        "name": "clarityLine",
+        "type": "string",
+        "label": "开场结语",
+        "default": "in clarity."
+      },
+      {
+        "name": "focusLine",
+        "type": "string",
+        "label": "专注文案",
+        "default": "Focus is"
+      },
+      {
+        "name": "fuelLine",
+        "type": "string",
+        "label": "专注结语",
+        "default": "the fuel."
+      },
+      {
+        "name": "portalArt",
+        "type": "string",
+        "label": "门内景象",
+        "default": "assets/portal-art.png"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a silhouette film about mental clarity with “{{mindLine}} / {{growthLine}} / {{clarityLine}}” and “{{focusLine}} / {{fuelLine}}”, using {{portalArt}} as the destination.",
+        "zh-CN": "制作一部心智成长剪影短片，文案为“{{mindLine}} / {{growthLine}} / {{clarityLine}}”与“{{focusLine}} / {{fuelLine}}”，以 {{portalArt}} 作为目的地景象。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Mind Clarity Journey"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "Higgsfield (@higgsfield)",
+      "url": "https://x.com/higgsfield/status/2055166020831301636",
+      "note": "参考视频来源；仅内部复刻评估，未访问源链接。"
+    }
+  ]
+}

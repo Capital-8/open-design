@@ -1,0 +1,99 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-sky-water-tessellation",
+  "title": "Sky and Water",
+  "title_i18n": {
+    "en": "Sky and Water",
+    "zh-CN": "天空与水的版画循环"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-28T00:00:00Z",
+  "description": "An engraved flock and school of fish flow through a black-and-cream tessellation.",
+  "description_i18n": {
+    "en": "An engraved flock and school of fish flow through a black-and-cream tessellation.",
+    "zh-CN": "鸟群与鱼群在黑白版画图案中连续运动，形成天空与水的正负形。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "tessellation",
+    "engraving",
+    "nature"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "fishLine",
+        "type": "string",
+        "label": "线刻鱼",
+        "default": "assets/fish-line.png"
+      },
+      {
+        "name": "fishScale",
+        "type": "string",
+        "label": "鳞片鱼",
+        "default": "assets/fish-scale.png"
+      },
+      {
+        "name": "fishFine",
+        "type": "string",
+        "label": "细鳞鱼",
+        "default": "assets/fish-fine.png"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create an engraved bird-and-fish loop using {{fishLine}}, {{fishScale}} and {{fishFine}} as the fish artwork.",
+        "zh-CN": "用 {{fishLine}}、{{fishScale}} 和 {{fishFine}} 作为鱼类图案，制作鸟鱼交错的版画循环动画。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Sky and Water"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@akella",
+      "url": "https://x.com/akella/status/2107764940954091531"
+    }
+  ]
+}

@@ -1,0 +1,372 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-windows-studio-launch",
+  "title": "Windows Studio Launch",
+  "title_i18n": {
+    "en": "Windows Studio Launch",
+    "zh-CN": "Windows 复古发布演示"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-27T00:00:00Z",
+  "description": "HyperFrames Studio launches on Windows through nostalgic desktops, community requests, an installer and playful error dialogs.",
+  "description_i18n": {
+    "en": "HyperFrames Studio launches on Windows through nostalgic desktops, community requests, an installer and playful error dialogs.",
+    "zh-CN": "HyperFrames Studio 用复古桌面、用户期待、安装向导和趣味报错窗口展示 Windows 版发布。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "motion",
+    "windows",
+    "retro",
+    "product-launch",
+    "desktop",
+    "hyperframes"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "brand",
+        "type": "string",
+        "label": "brand",
+        "default": "HyperFrames"
+      },
+      {
+        "name": "product",
+        "type": "string",
+        "label": "product",
+        "default": "Studio"
+      },
+      {
+        "name": "vendor",
+        "type": "string",
+        "label": "vendor",
+        "default": "HeyGen"
+      },
+      {
+        "name": "platform",
+        "type": "string",
+        "label": "platform",
+        "default": "Windows"
+      },
+      {
+        "name": "oldVendor",
+        "type": "string",
+        "label": "oldVendor",
+        "default": "Microsoft"
+      },
+      {
+        "name": "announcement",
+        "type": "string",
+        "label": "announcement",
+        "default": "HYPERFRAMES STUDIO\nNOW ON WINDOWS."
+      },
+      {
+        "name": "problem",
+        "type": "string",
+        "label": "problem",
+        "default": "Your PC ran into a problem."
+      },
+      {
+        "name": "solution",
+        "type": "string",
+        "label": "solution",
+        "default": "Until today, it didn’t have HyperFrames Studio."
+      },
+      {
+        "name": "asksTitle",
+        "type": "string",
+        "label": "asksTitle",
+        "default": "Hundreds of asks"
+      },
+      {
+        "name": "asksButton",
+        "type": "string",
+        "label": "asksButton",
+        "default": "finally a solution"
+      },
+      {
+        "name": "setupTitle",
+        "type": "string",
+        "label": "setupTitle",
+        "default": "Built for Windows"
+      },
+      {
+        "name": "system",
+        "type": "string",
+        "label": "system",
+        "default": "Windows 10"
+      },
+      {
+        "name": "count",
+        "type": "string",
+        "label": "count",
+        "default": "32"
+      },
+      {
+        "name": "prFirst",
+        "type": "string",
+        "label": "prFirst",
+        "default": "#1890"
+      },
+      {
+        "name": "prUpdate",
+        "type": "string",
+        "label": "prUpdate",
+        "default": "#3442"
+      },
+      {
+        "name": "feedbackHandle",
+        "type": "string",
+        "label": "feedbackHandle",
+        "default": "@Miguel07Code"
+      },
+      {
+        "name": "fixTitle",
+        "type": "string",
+        "label": "fixTitle",
+        "default": "We’ll fix them immediately."
+      },
+      {
+        "name": "fixNote",
+        "type": "string",
+        "label": "fixNote",
+        "default": "Well, depends on if @Miguel07Code is awake."
+      },
+      {
+        "name": "domain",
+        "type": "string",
+        "label": "domain",
+        "default": "hyperframes.dev"
+      },
+      {
+        "name": "primary",
+        "type": "string",
+        "label": "primary",
+        "default": "#30dfae"
+      },
+      {
+        "name": "brandSymbol",
+        "type": "string",
+        "label": "brandSymbol",
+        "default": "assets/brand-symbol.png"
+      },
+      {
+        "name": "editor",
+        "type": "string",
+        "label": "editor",
+        "default": "assets/editor.png"
+      },
+      {
+        "name": "launchUi",
+        "type": "string",
+        "label": "launchUi",
+        "default": "assets/launch-ui.png"
+      },
+      {
+        "name": "computer",
+        "type": "string",
+        "label": "computer",
+        "default": "assets/computer.png"
+      },
+      {
+        "name": "bin",
+        "type": "string",
+        "label": "bin",
+        "default": "assets/bin.png"
+      },
+      {
+        "name": "ask0",
+        "type": "string",
+        "label": "ask0",
+        "default": "assets/ask-0.png"
+      },
+      {
+        "name": "ask1",
+        "type": "string",
+        "label": "ask1",
+        "default": "assets/ask-1.png"
+      },
+      {
+        "name": "ask2",
+        "type": "string",
+        "label": "ask2",
+        "default": "assets/ask-2.png"
+      },
+      {
+        "name": "ask3",
+        "type": "string",
+        "label": "ask3",
+        "default": "assets/ask-3.png"
+      },
+      {
+        "name": "ask4",
+        "type": "string",
+        "label": "ask4",
+        "default": "assets/ask-4.png"
+      },
+      {
+        "name": "ask5",
+        "type": "string",
+        "label": "ask5",
+        "default": "assets/ask-5.png"
+      },
+      {
+        "name": "ask6",
+        "type": "string",
+        "label": "ask6",
+        "default": "assets/ask-6.png"
+      },
+      {
+        "name": "ask7",
+        "type": "string",
+        "label": "ask7",
+        "default": "assets/ask-7.png"
+      },
+      {
+        "name": "ask8",
+        "type": "string",
+        "label": "ask8",
+        "default": "assets/ask-8.png"
+      },
+      {
+        "name": "ask9",
+        "type": "string",
+        "label": "ask9",
+        "default": "assets/ask-9.png"
+      },
+      {
+        "name": "ask10",
+        "type": "string",
+        "label": "ask10",
+        "default": "assets/ask-10.png"
+      },
+      {
+        "name": "ask11",
+        "type": "string",
+        "label": "ask11",
+        "default": "assets/ask-11.png"
+      },
+      {
+        "name": "ask12",
+        "type": "string",
+        "label": "ask12",
+        "default": "assets/ask-12.png"
+      },
+      {
+        "name": "ask13",
+        "type": "string",
+        "label": "ask13",
+        "default": "assets/ask-13.png"
+      },
+      {
+        "name": "ask14",
+        "type": "string",
+        "label": "ask14",
+        "default": "assets/ask-14.png"
+      },
+      {
+        "name": "cloud0",
+        "type": "string",
+        "label": "cloud0",
+        "default": "assets/cloud-0.png"
+      },
+      {
+        "name": "cloud1",
+        "type": "string",
+        "label": "cloud1",
+        "default": "assets/cloud-1.png"
+      },
+      {
+        "name": "cloud2",
+        "type": "string",
+        "label": "cloud2",
+        "default": "assets/cloud-2.png"
+      },
+      {
+        "name": "cloud3",
+        "type": "string",
+        "label": "cloud3",
+        "default": "assets/cloud-3.png"
+      },
+      {
+        "name": "cloud4",
+        "type": "string",
+        "label": "cloud4",
+        "default": "assets/cloud-4.png"
+      },
+      {
+        "name": "cloud5",
+        "type": "string",
+        "label": "cloud5",
+        "default": "assets/cloud-5.png"
+      },
+      {
+        "name": "cloud6",
+        "type": "string",
+        "label": "cloud6",
+        "default": "assets/cloud-6.png"
+      },
+      {
+        "name": "cloud7",
+        "type": "string",
+        "label": "cloud7",
+        "default": "assets/cloud-7.png"
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a Windows-era launch film for {{brand}} {{product}}. Start with a waving {{platform}} flag above {{oldVendor}}, then transform into {{vendor}} and the brand mark {{brandSymbol}}. Move to a cloud desktop with {{computer}} and {{bin}}, and reveal {{announcement}}. Open the app {{launchUi}} and play the launch inside it. A blue error window says {{problem}} and {{solution}}. Populate it with fifteen user request cards, then reveal {{asksTitle}} and the button {{asksButton}}. A retro word processor plays the triangular mascot; dissolve into the app editor {{editor}} and make the mascot dance, wear headphones and throw confetti. Show an installer headed {{setupTitle}}, supporting {{system}}, with {{count}} Windows PRs, then {{prFirst}} and {{prUpdate}}, while blue progress blocks fill. Cascade warning dialogs and ask for feedback. Type {{feedbackHandle}}, display {{fixTitle}} and {{fixNote}}, show the report and its fix, then open the Start menu. Transition to a modern turquoise desktop and finish with the brand lettering, the dancing mascot in {{primary}}, and {{domain}}. Request-card assets: {{ask0}}, {{ask1}}, {{ask2}}, {{ask3}}, {{ask4}}, {{ask5}}, {{ask6}}, {{ask7}}, {{ask8}}, {{ask9}}, {{ask10}}, {{ask11}}, {{ask12}}, {{ask13}}, {{ask14}}. Cloud sprites: {{cloud0}}, {{cloud1}}, {{cloud2}}, {{cloud3}}, {{cloud4}}, {{cloud5}}, {{cloud6}}, {{cloud7}}.",
+        "zh-CN": "制作 {{brand}} {{product}} 的 Windows 复古发布片。云朵天空中，{{platform}} 旗帜在 {{oldVendor}} 字样上方摆动，随后变为 {{vendor}} 与品牌图形 {{brandSymbol}}。进入带 {{computer}} 和 {{bin}} 图标的桌面，逐步显示 {{announcement}}。打开产品窗口 {{launchUi}}，在其中播放发布内容。蓝屏窗口显示 {{problem}} 和 {{solution}}；十五张用户期待卡片依次铺满，随后叠加 {{asksTitle}} 与 {{asksButton}} 按钮。切到复古文字处理器里的三角吉祥物播放器，再以像素转场进入产品编辑器 {{editor}}，吉祥物跳舞、戴上耳机并撒出彩屑。安装向导显示 {{setupTitle}}、{{system}}、{{count}} 项 Windows PR，以及 {{prFirst}}、{{prUpdate}}，蓝色进度块逐格填满。报错窗口层叠，提示反馈；输入 {{feedbackHandle}}，弹出 {{fixTitle}} 和 {{fixNote}}，展示报告与修复结果，打开开始菜单。转入现代青绿桌面，最后以品牌文字、颜色为 {{primary}} 的跳舞吉祥物及 {{domain}} 收尾。 评论卡片素材：{{ask0}}, {{ask1}}, {{ask2}}, {{ask3}}, {{ask4}}, {{ask5}}, {{ask6}}, {{ask7}}, {{ask8}}, {{ask9}}, {{ask10}}, {{ask11}}, {{ask12}}, {{ask13}}, {{ask14}}。 云团素材：{{cloud0}}, {{cloud1}}, {{cloud2}}, {{cloud3}}, {{cloud4}}, {{cloud5}}, {{cloud6}}, {{cloud7}}。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Windows Studio Launch"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "@HyperFrames_",
+      "url": "https://x.com/HyperFrames_/status/2114773205651275793",
+      "note": "参考影片来源；仅用于本次内部复刻评审。"
+    }
+  ]
+}
