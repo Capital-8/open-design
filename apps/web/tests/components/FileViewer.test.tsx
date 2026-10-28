@@ -13737,8 +13737,9 @@ describe('FileViewer tweaks toolbar', () => {
     expect(screen.getByTestId('comment-side-item')).toHaveTextContent('不要github，换成微信');
     expect(screen.getByRole('button', { name: 'chat.comments.deselectAll' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
-    fireEvent.click(screen.getByText('不要github，换成微信').closest('[data-testid="comment-side-item"]')!);
-    expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'comment-1' }));
+    const replyOrigin = screen.getByTestId('comment-side-item');
+    fireEvent.click(replyOrigin);
+    expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'comment-1' }), replyOrigin);
 
     const hideComments = screen.getByRole('button', { name: /hide comments/i });
 

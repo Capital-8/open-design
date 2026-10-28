@@ -261,7 +261,8 @@ test('[P0] CV04 host and active preview respect native shortcut guards before ac
 });
 
 
-test('[P0] CV05 real small-element bounds and canvas intersections preserve selected geometry', async ({ page }, info) => {
+for (const zoom of [100, 75]) {
+test(`[P0] CV05 real small-element bounds and canvas intersections preserve selected geometry at ${zoom}%`, async ({ page }, info) => {
   const { id } = await seed(page, false, `<style>
     .cv05 { position:absolute; background:#e6b85c; padding:0; margin:0; }
     #tiny { left:80px; top:180px; width:4px; height:4px; }
@@ -275,12 +276,32 @@ test('[P0] CV05 real small-element bounds and canvas intersections preserve sele
     <div class="cv05" id="top-edge" data-od-id="top-edge">Top edge</div>
     <div class="cv05" id="bottom-edge" data-od-id="bottom-edge">Bottom edge</div>`);
   await open(page, id);
+  // CV05 uses exact screen rectangles. Pin the product's preview zoom as well
+  // as the browser zoom: auto-fit can choose a fractional scale (96% in CI),
+  // making transformed iframe bounds and laid-out overlays round differently.
+  await page.locator('.viewer-toolbar-zoom .zoom-trigger').click();
+  await page.getByRole('menuitem', { name: `${zoom}%`, exact: true }).click();
+  await expect(page.locator('.viewer-toolbar-zoom .zoom-trigger')).toHaveText(`${zoom}%`);
   const posts: string[] = [];
   page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/comments')) posts.push(request.url()); });
   await page.getByTestId('board-mode-toggle').click();
   await page.evaluate(async () => { await Promise.all(document.getAnimations().filter(animation => animation.effect?.getTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {}))); });
   const frame = page.frameLocator('iframe:visible');
   const outline = page.getByTestId('comment-target-overlay');
+  async function expectTargetBounds(expected: { x: number; y: number; width: number; height: number }) {
+    if (zoom === 100) {
+      await expect.poll(() => outline.boundingBox()).toEqual(expected);
+      return;
+    }
+    // At fractional preview zoom, iframe transforms retain fractions below
+    // Chromium's 1/64 CSS-pixel layout unit; the independently laid-out host
+    // overlay cannot retain those bits. Keep the original 100% oracle exact.
+    await expect.poll(async () => {
+      const actual = await outline.boundingBox();
+      if (!actual) return Infinity;
+      return Math.max(...(['x', 'y', 'width', 'height'] as const).map(key => Math.abs(actual[key] - expected[key])));
+    }).toBeLessThanOrEqual(1 / 64);
+  }
   for (const name of ['tiny', 'left-edge', 'right-edge', 'top-edge', 'bottom-edge']) {
     const target = frame.locator(`#${name}`);
     const rect = await target.boundingBox();
@@ -290,13 +311,13 @@ test('[P0] CV05 real small-element bounds and canvas intersections preserve sele
       width: Math.min(rect.x + rect.width, canvas.x + canvas.width) - Math.max(rect.x, canvas.x), height: Math.min(rect.y + rect.height, canvas.y + canvas.height) - Math.max(rect.y, canvas.y) };
     await page.mouse.move(expected.x + expected.width / 2, expected.y + expected.height / 2);
     await expect(outline).toBeVisible();
-    await expect.poll(() => outline.boundingBox()).toEqual(expected);
+    await expectTargetBounds(expected);
     await expect(page.getByTestId('comment-popover')).toHaveCount(0);
     expect(posts).toEqual([]);
     await page.screenshot({ path: info.outputPath(`CV05-${name}-hover.png`) });
     await page.mouse.click(expected.x + expected.width / 2, expected.y + expected.height / 2);
     await expect(page.getByTestId('comment-popover')).toBeVisible();
-    await expect.poll(() => outline.boundingBox()).toEqual(expected);
+    await expectTargetBounds(expected);
     await page.screenshot({ path: info.outputPath(`CV05-${name}-selected.png`) });
     expect(posts).toEqual([]);
     await page.getByTestId('comment-popover-input').focus();
@@ -304,3 +325,4 @@ test('[P0] CV05 real small-element bounds and canvas intersections preserve sele
     await expect(page.getByTestId('comment-popover')).toHaveCount(0);
   }
 });
+}
