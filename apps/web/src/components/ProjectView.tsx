@@ -11672,6 +11672,11 @@ export function ProjectView({
     if (!started) releaseCommentsOfSendWithoutRun(item);
     return started;
   }, [handleSend, releaseCommentsOfSendWithoutRun]);
+  // An awaited preflight may outlive the active run. Dispatch through the
+  // current render so handleSend sees its settled busy state, after the
+  // explicit item's scope/account/model guards have been checked again.
+  const startQueuedChatSendRef = useRef(startQueuedChatSend);
+  startQueuedChatSendRef.current = startQueuedChatSend;
 
   const sendQueuedChatSendNow = useCallback((id: string) => {
     const item = queuedChatSendsRef.current.find((candidate) => candidate.id === id);
@@ -11734,9 +11739,14 @@ export function ProjectView({
               stopAndPrioritize();
               return;
             }
-            armSlideNavForQueuedSend(item);
-            const started = await startQueuedChatSend(item);
-            if (started) removeQueuedChatSend(id);
+            setQueuedChatSendStarting(id, true);
+            try {
+              armSlideNavForQueuedSend(item);
+              const started = await startQueuedChatSendRef.current(item);
+              if (started) removeQueuedChatSend(id);
+            } finally {
+              setQueuedChatSendStarting(id, false);
+            }
           } finally {
             if (busyQueuedSendPreflightRef.current === id) busyQueuedSendPreflightRef.current = null;
           }
