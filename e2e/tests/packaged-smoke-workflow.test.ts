@@ -2552,6 +2552,17 @@ process.stdin.on("end", () => {
     }
   });
 
+  it("[P1] keeps product analytics configured in dogfood builds independently of channel publication", async () => {
+    const workflow = parseYaml(await readFile(releaseBetaWorkflowPath, "utf8"));
+    // These are the public ingest credentials baked into official installers.
+    // Runtime user consent still gates capture; source-map upload credentials
+    // remain restricted to published builds.
+    expect(workflow.env.POSTHOG_KEY).toBe("${{ secrets.POSTHOG_KEY }}");
+    expect(workflow.env.POSTHOG_HOST).toBe("${{ vars.POSTHOG_HOST }}");
+    expect(workflow.env.POSTHOG_CLI_API_KEY).toBe("${{ inputs.publish && secrets.POSTHOG_CLI_API_KEY || '' }}");
+    expect(workflow.env.POSTHOG_CLI_PROJECT_ID).toBe("${{ inputs.publish && vars.POSTHOG_CLI_PROJECT_ID || '' }}");
+  });
+
   it("[P2] makes a publish=false beta dispatch retrievable on all enabled desktop platforms without touching a channel", async () => {
     // A publish=false dispatch is the standing shape for dogfood/QA builds: they
     // must never enter the public beta feed. Every enabled desktop platform must

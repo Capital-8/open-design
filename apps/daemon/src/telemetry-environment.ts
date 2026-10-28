@@ -14,6 +14,10 @@ export function readTelemetryEnvironment(
   if (explicit) return explicit;
   if (env.NODE_ENV === 'test') return 'test';
   if (env.NODE_ENV === 'development') return 'development';
+  // Official QA installers use optimized assets too. Their baked AMR profile
+  // identifies the test deployment independently of NODE_ENV or app version.
+  const amrProfile = env.OPEN_DESIGN_AMR_PROFILE?.trim();
+  if (amrProfile === 'test' || amrProfile === 'feature-test') return 'test';
   if (normalizeTelemetryAppVersion(env.OD_APP_VERSION) || packagedRuntime) return 'production';
   if (env.NODE_ENV === 'production') return 'production';
   return DEFAULT_TELEMETRY_ENV;
