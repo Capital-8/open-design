@@ -1,4 +1,3 @@
-import { NESTED_COMMENT_HELPERS } from '@open-design/contracts';
 import { buildPreviewStorageBridge } from './preview-storage';
 import { injectMotionSourcePlayer, markMotionHostedPreview } from '@open-design/contracts/runtime/motion-source-player';
 /**
@@ -1985,7 +1984,6 @@ function injectSelectionBridge(
   }
 ${ANNOTATED_SELECTOR_HELPERS}
 ${COMMENT_IDENTITY_HELPERS}
-${NESTED_COMMENT_HELPERS}
   function domSelectorFor(el){
     if (!el || !el.tagName || el === document.documentElement || el === document.body) return null;
     var parts = [];
@@ -2073,7 +2071,6 @@ function meaningfulDomFallbackTarget(el) {
     return id === 'path-0' && el && el.parentElement === document.body && el.id === 'root';
   }
   function targetFrom(el, allowDomFallback, clickedEl, clickPoint, validateForSave){
-    if (el && nestedCommentAnchors.has(el)) return nestedCommentPayload(el);
     var id = annotatedElementIdFor(el);
     var selector = annotatedSelectorFor(el, esc);
     if ((validateForSave || (commentEnabled && !inspectEnabled)) && (!clickedEl || clickedEl === el) && el && el.hasAttribute('data-od-comment-id')) {
@@ -2135,11 +2132,6 @@ function meaningfulDomFallbackTarget(el) {
         items.push(item);
       }
     }
-    if (isNestedCommentAnchor(activeCommentElementId, activeCommentSelector)) {
-      var nested = resolveNestedComment(activeCommentElementId, activeCommentSelector);
-      var payload = nested && nestedCommentPayload(nested);
-      if (payload) items.push(payload);
-    }
     return items;
   }
   var postTargetsPending = false;
@@ -2199,7 +2191,6 @@ function meaningfulDomFallbackTarget(el) {
     window.parent.postMessage({ type: 'od:preview-scroll-request' }, '*');
   }
   function findCommentTargetByIdentity(elementId, selector){
-    if (isNestedCommentAnchor(elementId, selector)) return resolveNestedComment(elementId, selector);
     if (String(elementId || '').indexOf('cmt:') === 0 || commentSelectorClaimsIdentity(selector)) return strictCommentNode(elementId, selector);
     var el = null;
     if (selector) {
@@ -2699,7 +2690,7 @@ function meaningfulDomFallbackTarget(el) {
         }
         var payload = target && targetFrom(target, true, null, null, String(activeCommentElementId).indexOf('cmt:') === 0);
         if (payload) {
-          try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }); scrollNestedComment(target); } catch (_) {}
+          try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }); } catch (_) {}
           payload = targetFrom(target, true, null, null, String(activeCommentElementId).indexOf('cmt:') === 0);
           try { if (payload && activeCommentSelector && target.matches(activeCommentSelector)) payload.selector = activeCommentSelector; } catch (_) {}
         }
