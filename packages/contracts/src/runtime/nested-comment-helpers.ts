@@ -53,7 +53,7 @@ export const NESTED_COMMENT_HELPERS = String.raw`
       return node;
     } catch (_) { return null; }
   }
-  function nestedCommentPayload(node) {
+  function nestedCommentPayload(node, unclipped) {
     var anchor = node && nestedCommentAnchors.get(node);
     if (!anchor) return null;
     try {
@@ -62,6 +62,16 @@ export const NESTED_COMMENT_HELPERS = String.raw`
       if (!(width > 0 && height > 0)) return null;
       for (var i = anchor.frames.length - 1; i >= 0; i--) {
         var f = anchor.frames[i];
+        // Paint only the part visible through this child viewport before
+        // projecting it into the parent. The persisted wire anchor is unchanged.
+        var view = f.contentDocument && f.contentDocument.defaultView;
+        if (!view) return null;
+        if (!unclipped) {
+        var right = Math.min(view.innerWidth, x + width), bottom = Math.min(view.innerHeight, y + height);
+        x = Math.max(0, x); y = Math.max(0, y);
+        width = right - x; height = bottom - y;
+        if (!(width > 0 && height > 0)) return null;
+        }
         for (var n = f; n; n = n.parentElement) {
           var transform = n.ownerDocument.defaultView.getComputedStyle(n).transform;
           if (transform && transform !== 'none') {

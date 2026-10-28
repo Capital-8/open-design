@@ -2222,6 +2222,7 @@ function meaningfulDomFallbackTarget(el) {
     // source annotation gives that DOM node a newer attribute identity.
     try { if (payload && activeCommentSelector && el.matches(activeCommentSelector)) payload.selector = activeCommentSelector; } catch (_) {}
     if (payload) window.parent.postMessage(Object.assign({}, payload, { type: 'od:comment-active-target-update' }), '*');
+    else if (isNestedCommentAnchor(activeCommentElementId, activeCommentSelector)) schedulePostTargets();
   }
   function schedulePostActiveCommentTarget(){
     if (!active() || !activeCommentElementId || postActiveTargetPending) return;
@@ -2698,7 +2699,7 @@ function meaningfulDomFallbackTarget(el) {
           try { if (!target.matches(activeCommentSelector)) target = null; } catch (_) { target = null; }
         }
         var payload = target && targetFrom(target, true, null, null, String(activeCommentElementId).indexOf('cmt:') === 0);
-        if (payload) {
+        if (payload || (target && nestedCommentPayload(target, true))) {
           try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }); scrollNestedComment(target); } catch (_) {}
           payload = targetFrom(target, true, null, null, String(activeCommentElementId).indexOf('cmt:') === 0);
           try { if (payload && activeCommentSelector && target.matches(activeCommentSelector)) payload.selector = activeCommentSelector; } catch (_) {}

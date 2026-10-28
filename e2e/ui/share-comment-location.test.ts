@@ -2,7 +2,7 @@ import { expect, test } from '@/playwright/suite';
 import { mockAmrPersonalWorkspace, AMR_PERSONAL_WORKSPACE_CONTEXT } from '../lib/playwright/amr.js';
 import { T } from '@/timeouts';
 for (const nested of [false, true]) for (const forceInline of [false, true])
-    test(`[P1] Owner locates an old H2 again after scrolling away (srcdoc=${forceInline}, nested=${nested})`, async ({ page }) => {
+    test(`[P0] Owner locates an old H2 again after scrolling away (srcdoc=${forceInline}, nested=${nested})`, async ({ page }) => {
         test.setTimeout(T.xlong * 2);
         const team = { ...AMR_PERSONAL_WORKSPACE_CONTEXT, workspaceId: 'ws-ui-audit-team', workspaceName: 'UI audit team', workspaceType: 'team' as const, workspaceMemberId: 'mem-ui-audit-team', seatSummary: { seatLimit: 5, usedSeats: 1, availableSeats: 4, isSeatFull: false }, teamId: 'team-ui-audit', teamName: 'UI audit team', role: 'owner' as const };
         await page.addInitScript(() => {
@@ -121,8 +121,19 @@ for (const nested of [false, true]) for (const forceInline of [false, true])
             const expected = await target.boundingBox();
             return actual && expected ? Math.max(Math.abs(actual.y - expected.y), Math.abs(actual.height - expected.height)) : 999;
         }).toBeLessThan(3);
+        if (nested) {
+            const fullHeight = (await target.boundingBox())!.height;
+            await target.evaluate(element => {
+                const view = element.ownerDocument.defaultView!;
+                const rect = element.getBoundingClientRect();
+                view.scrollTo(0, view.scrollY + rect.top + rect.height / 2);
+            });
+            await expect.poll(async () => (await overlay.boundingBox())?.height ?? 0).toBeGreaterThan(0);
+            await expect.poll(async () => Math.abs(((await overlay.boundingBox())?.height ?? 0) - fullHeight / 2)).toBeLessThan(2);
+        }
         await targetFrame.evaluate(() => window.scrollTo(0, 0));
         await expect(target).not.toBeInViewport();
+        if (nested) await expect(page.getByTestId('comment-target-overlay')).toHaveCount(0);
         await row.click();
         await expect(target).toBeInViewport();
         await expect.poll(async () => {

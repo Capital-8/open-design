@@ -1097,6 +1097,7 @@ ${NESTED_COMMENT_HELPERS}
     if (!el) return;
     var payload = targetFrom(el, commentEnabled && mode === 'picker');
     if (payload) window.parent.postMessage(Object.assign({}, payload, { type: 'od:comment-active-target-update' }), '*');
+    else if (isNestedCommentAnchor(activeCommentElementId, activeCommentSelector)) schedulePostTargets();
   }
   function schedulePostActiveCommentTarget(){
     if (!active() || !activeCommentElementId || activeTargetPending) return;
@@ -1389,7 +1390,7 @@ ${NESTED_COMMENT_HELPERS}
       if ((isNestedCommentAnchor(activeCommentElementId, activeCommentSelector) || String(activeCommentElementId || '').indexOf('cmt:') === 0 || commentSelectorClaimsIdentity(activeCommentSelector)) && data.locate && typeof data.requestId === 'string') {
         var target = findCommentTargetByIdentity(activeCommentElementId, activeCommentSelector);
         var payload = target && targetFrom(target, true);
-        if (payload) {
+        if (payload || (target && nestedCommentPayload(target, true))) {
           try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }); scrollNestedComment(target); } catch (_) {}
           payload = targetFrom(target, true);
         }
