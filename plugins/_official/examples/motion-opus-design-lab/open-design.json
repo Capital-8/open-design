@@ -1,0 +1,152 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-motion-opus-design-lab",
+  "title": "Opus Motion Design Lab",
+  "title_i18n": {
+    "en": "Opus Motion Design Lab",
+    "zh-CN": "Opus 动效设计实验室"
+  },
+  "version": "0.1.0",
+  "publishedAt": "2026-10-27T00:00:00Z",
+  "description": "A 15-second interactive motion-design lab for OPUS 5.5, demonstrating spacing, typography, motion blur, easing, follow-through and anticipation before revealing motion designer CLAUDE.",
+  "description_i18n": {
+    "en": "A 15-second interactive motion-design lab for OPUS 5.5, demonstrating spacing, typography, motion blur, easing, follow-through and anticipation before revealing motion designer CLAUDE.",
+    "zh-CN": "一段 15 秒的 OPUS 5.5 互动动效设计实验室演示，依次展示间距、排版、运动模糊、缓动、跟随与预备动作，最后揭晓动效设计师 CLAUDE。"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io/open-design"
+  },
+  "homepage": "https://github.com/nexu-io/open-design",
+  "tags": [
+    "example",
+    "first-party",
+    "video",
+    "motion-design",
+    "creative-coding",
+    "portfolio",
+    "educational",
+    "web-interface",
+    "kinetic-typography"
+  ],
+  "od": {
+    "inputs": [
+      {
+        "name": "labTitle",
+        "type": "string",
+        "label": "Lab title",
+        "default": "OPUS 5.5 / YOUR F*CKING MOTION DESIGN LAB",
+        "required": false
+      },
+      {
+        "name": "heroCopy",
+        "type": "string",
+        "label": "Hero statement",
+        "default": "I MAKE THINGS MOVE.",
+        "required": false
+      },
+      {
+        "name": "designerRole",
+        "type": "string",
+        "label": "Designer role",
+        "default": "MOTION DESIGNER",
+        "required": false
+      },
+      {
+        "name": "designerName",
+        "type": "string",
+        "label": "Designer name",
+        "default": "CLAUDE.",
+        "required": false
+      },
+      {
+        "name": "accent",
+        "type": "string",
+        "label": "Electric blue",
+        "default": "#2F7BF6",
+        "required": false
+      },
+      {
+        "name": "warning",
+        "type": "string",
+        "label": "Signal red",
+        "default": "#F23B50",
+        "required": false
+      },
+      {
+        "name": "mascotColor",
+        "type": "string",
+        "label": "Mascot orange",
+        "default": "#DA7652",
+        "required": false
+      },
+      {
+        "name": "anthropicLogo",
+        "type": "file",
+        "label": "Anthropic logo card",
+        "default": "assets/anthropic-card.png",
+        "required": false
+      },
+      {
+        "name": "claudeCodeLogo",
+        "type": "file",
+        "label": "Claude Code logo card",
+        "default": "assets/claude-code-card.png",
+        "required": false
+      },
+      {
+        "name": "previewStrip",
+        "type": "file",
+        "label": "Delivery preview strip",
+        "default": "assets/preview-strip.png",
+        "required": false
+      }
+    ],
+    "useCase": {
+      "query": {
+        "en": "Create a 15-second creative-coding showcase titled {{labTitle}} inside a warm off-white browser workbench, placing {{anthropicLogo}} at top left and {{claudeCodeLogo}} at top right, using electric blue {{accent}}, signal red {{warning}} and an orange {{mascotColor}} pixel guide. Open with a blue ball demonstrating spacing through a traced bounce, then assemble the oversized statement {{heroCopy}} with staggered letters and an underline. Cut to a dark stage where STRETCH, SPIN and SNAP demonstrate motion blur, then return to a light graph where a linear path becomes an ease-in-out curve. Move into a dark dotted field where a blue particle body drags a red-and-blue follow-through trail, then morph it into a circular anticipation gauge that charges from 0% to 100%. Finish on a light stage where {{designerRole}} and the large name {{designerName}} lock into place with a blue period. Keep the six-control code panel and its {{previewStrip}} visible below the stage, and let the pixel guide hop to the active control throughout.",
+        "zh-CN": "制作一段 15 秒的创意编程作品展示，标题为 {{labTitle}}，置于暖白色浏览器工作台中，左上放置 {{anthropicLogo}}、右上放置 {{claudeCodeLogo}}，使用电蓝色 {{accent}}、信号红 {{warning}} 和橙色 {{mascotColor}} 像素向导。开场让蓝色小球沿带残影的弹跳轨迹演示间距，随后用错落字母和下划线组装巨型宣言 {{heroCopy}}。切到深色舞台，用 STRETCH、SPIN、SNAP 展示运动模糊；再回到浅色曲线图，让线性运动变为 ease-in-out 缓动。进入深色点阵场，让蓝色主体拖出红蓝跟随尾迹，再将其变形成从 0% 充到 100% 的圆形预备动作仪表。结尾回到浅色舞台，让 {{designerRole}} 与巨型姓名 {{designerName}} 锁定成版，并以蓝色句点收束。全过程保留下方六项控制代码面板及 {{previewStrip}}，并让像素向导持续跳到当前控制项。"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Opus Motion Design Lab"
+        }
+      ]
+    },
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "video",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "poster": "./assets/cover.jpg"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "motion-design"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  },
+  "credits": [
+    {
+      "name": "Original motion reference by @beamnxw",
+      "url": "https://x.com/beamnxw/status/2112180280110776797"
+    }
+  ]
+}
