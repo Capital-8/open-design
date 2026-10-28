@@ -30,6 +30,7 @@ export const id: Dict = {
 
   "collab.contentUpdate.available": "Versi cloud baru tersedia",
   "collab.contentUpdate.updating": "Memperbarui…",
+  "collab.contentUpdate.waitToEdit": "Proyek sedang disinkronkan. Harap tunggu.",
   "collab.contentUpdate.askAgain": "Pulihkan pemberitahuan pembaruan",
   "collab.contentUpdate.title": "Pembaruan cloud tersedia",
   "collab.contentUpdate.description": "Sinkronkan konten terbaru dari perangkat lain ke perangkat ini? Konten proyek lokal akan diganti. Halaman dapat dipulihkan dari riwayat versi lokal; gambar dan berkas lain mungkin tidak dapat dipulihkan.",

@@ -30,6 +30,7 @@ export const zhTW: Dict = {
 
   "collab.contentUpdate.available": "雲端有新版本",
   "collab.contentUpdate.updating": "正在更新…",
+  "collab.contentUpdate.waitToEdit": "專案同步中，請稍候",
   "collab.contentUpdate.askAgain": "恢復更新提示",
   "collab.contentUpdate.title": "雲端有新內容",
   "collab.contentUpdate.description": "是否將其他裝置的最新內容同步到本機？同步會覆寫本機專案內容。頁面可從本機版本歷史還原，圖片等其他檔案可能無法還原。",

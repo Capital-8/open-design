@@ -30,6 +30,7 @@ export const ja: Dict = {
 
   "collab.contentUpdate.available": "クラウドに新しいバージョンがあります",
   "collab.contentUpdate.updating": "更新中…",
+  "collab.contentUpdate.waitToEdit": "プロジェクトを同期中です。しばらくお待ちください。",
   "collab.contentUpdate.askAgain": "更新通知を再開",
   "collab.contentUpdate.title": "クラウドに更新があります",
   "collab.contentUpdate.description": "他のデバイスの最新内容をこのデバイスに同期しますか？ローカルのプロジェクト内容が上書きされます。ページはローカルのバージョン履歴から復元できますが、画像やその他のファイルは復元できない場合があります。",

@@ -30,6 +30,7 @@ export const fr: Dict = {
 
   "collab.contentUpdate.available": "Nouvelle version cloud",
   "collab.contentUpdate.updating": "Mise à jour…",
+  "collab.contentUpdate.waitToEdit": "Synchronisation du projet en cours, veuillez patienter.",
   "collab.contentUpdate.askAgain": "Réactiver les notifications de mise à jour",
   "collab.contentUpdate.title": "Mise à jour cloud disponible",
   "collab.contentUpdate.description": "Synchroniser le contenu récent d’un autre appareil sur celui-ci ? Le contenu local du projet sera remplacé. Les pages sont récupérables dans l’historique local des versions ; les images et autres fichiers peuvent ne pas l’être.",

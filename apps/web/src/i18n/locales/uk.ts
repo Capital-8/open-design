@@ -30,6 +30,7 @@ export const uk: Dict = {
 
   "collab.contentUpdate.available": "Нова версія в хмарі",
   "collab.contentUpdate.updating": "Оновлення…",
+  "collab.contentUpdate.waitToEdit": "Проєкт синхронізується. Зачекайте, будь ласка.",
   "collab.contentUpdate.askAgain": "Відновити сповіщення про оновлення",
   "collab.contentUpdate.title": "Доступне оновлення з хмари",
   "collab.contentUpdate.description": "Синхронізувати найновіший вміст з іншого пристрою на цей? Локальний вміст проєкту буде замінено. Сторінки можна відновити з локальної історії версій; зображення та інші файли можуть бути невідновними.",

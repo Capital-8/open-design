@@ -30,6 +30,7 @@ export const th: Dict = {
 
   "collab.contentUpdate.available": "มีเวอร์ชันใหม่บนคลาวด์",
   "collab.contentUpdate.updating": "กำลังอัปเดต…",
+  "collab.contentUpdate.waitToEdit": "กำลังซิงค์โปรเจกต์ โปรดรอสักครู่",
   "collab.contentUpdate.askAgain": "เปิดการแจ้งเตือนอัปเดตอีกครั้ง",
   "collab.contentUpdate.title": "มีการอัปเดตบนคลาวด์",
   "collab.contentUpdate.description": "ซิงค์เนื้อหาล่าสุดจากอุปกรณ์อื่นมายังอุปกรณ์นี้หรือไม่? เนื้อหาโครงการในเครื่องจะถูกแทนที่ หน้าเว็บกู้คืนได้จากประวัติเวอร์ชันในเครื่อง แต่รูปภาพและไฟล์อื่นอาจกู้คืนไม่ได้",

@@ -13,10 +13,20 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
   let pullStarted = false;
   let release!: () => void;
   const pullGate = new Promise<void>(resolve => { release = resolve; });
+  let holdInitialPull = true;
+  let initialPullStarted = false;
+  let releaseInitial!: () => void;
+  const initialPullGate = new Promise<void>(resolve => { releaseInitial = resolve; });
   const hub = await startFakeCollabHub({
     root: testInfo.outputPath('hub'), workspaceId, workspaceName: 'Owner sync', clients: [owner],
     beforeCommand: async ({ args }) => {
-      if (holdPull && args[0] === 'resource' && args[1] === 'pull' && args[2] === 'project') {
+      const ownerDownload = args[0] === 'resource' && args[1] === 'pull' && args[2] === 'project';
+      const firstDownload = args[0] === 'team-projects' && args[1] === 'pull' && !args.includes('--authorize-only');
+      if (holdInitialPull && (ownerDownload || firstDownload) && args.some(arg => arg.includes('/b/scratch/'))) {
+        initialPullStarted = true;
+        await initialPullGate;
+      }
+      if (holdPull && ownerDownload) {
         pullStarted = true;
         await pullGate;
       }
@@ -32,6 +42,17 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
     cluster = await createCollabCluster(browser, testInfo, [{ id: 'a', env }, { id: 'b', env }]);
     const a = cluster.clients.a!.page;
     const b = cluster.clients.b!.page;
+    let browserVersion = 0;
+    b.on('response', async response => {
+      if (new URL(response.url()).pathname === `/api/projects/${id}/collab/status` && response.ok()) {
+        const body = await response.json().catch(() => null);
+        browserVersion = body?.ownedContentUpdate?.latestVersion ?? browserVersion;
+      }
+    });
+    await b.addInitScript(() => {
+      localStorage.setItem('open-design:locale', 'zh-CN');
+      localStorage.setItem('open-design:locale-source', 'manual');
+    });
     for (const page of [a, b]) {
       await applyStandardMocks(page);
       const pin = await page.request.put('/api/workspace/active', { data: { workspaceId, workspaceMemberId: owner.memberId } });
@@ -47,13 +68,36 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
     await write('Initial content');
     const shared = await a.request.post(`/api/workspaces/${workspaceId}/projects/${id}/move`, { headers, data: { visibility: 'team' } });
     expect(shared.ok(), await shared.text()).toBeTruthy();
+    // Sharing schedules the first upload; do not start the other install's
+    // first download before the source has a durable published version.
     await expect.poll(async () => {
-      const response = await b.request.get(`/api/projects/${id}/collab/status`, { headers });
-      return response.ok() && !(await response.json()).awaitingFirstMaterialization;
-    }, { timeout: T.long }).toBe(true);
+      const response = await a.request.get(`/api/projects/${id}/collab/status`, { headers });
+      return (await response.json()).ownedContentUpdate?.localVersion ?? 0;
+    }, { timeout: T.long }).toBeGreaterThan(0);
+    const initialStatus = await b.request.get(`/api/projects/${id}/collab/status`, { headers });
+    expect(initialStatus.ok(), await initialStatus.text()).toBeTruthy();
+    await expect.poll(() => initialPullStarted, { timeout: T.long, message: 'first project download reaches the receiving daemon' }).toBe(true);
     await b.goto(`/projects/${id}/files/index.html`);
     const composer = b.getByTestId('chat-composer-input');
     const send = b.getByTestId('chat-send');
+    const syncHint = '项目同步中，请稍后';
+    await expect(composer).toHaveAttribute('aria-placeholder', syncHint);
+    await expect(b.getByText(syncHint, { exact: true }).first()).toBeVisible();
+    await expect(composer).toHaveAttribute('contenteditable', 'false');
+    await expect(send).toBeDisabled();
+    await b.screenshot({ path: testInfo.outputPath('initial-project-sync-hint.png'), animations: 'disabled' });
+    await testInfo.attach('Product-confirmed first-open synchronization hint', { path: testInfo.outputPath('initial-project-sync-hint.png'), contentType: 'image/png' });
+    holdInitialPull = false;
+    releaseInitial();
+    await expect(composer).toHaveAttribute('contenteditable', 'true', { timeout: T.long });
+    await expect(composer).not.toHaveAttribute('aria-placeholder', syncHint);
+    await expect.poll(async () => (await b.request.get(`/api/projects/${id}/raw/index.html`, { headers })).text(), { timeout: T.long }).toContain('Initial content');
+    let previousLocalVersion = 0;
+    await expect.poll(async () => {
+      const response = await a.request.get(`/api/projects/${id}/collab/status`, { headers });
+      previousLocalVersion = (await response.json()).ownedContentUpdate?.localVersion ?? 0;
+      return previousLocalVersion;
+    }, { timeout: T.long }).toBeGreaterThan(0);
     const draft = 'Keep this draft while the cloud version replaces the files';
     await composer.fill(draft);
     await expect(send).toBeEnabled();
@@ -62,24 +106,42 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
       if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs') runs.push(request.url());
     });
     await write('Replacement content');
-    const published = await a.request.post(`/api/projects/${id}/collab/publish`, { headers });
-    expect(published.ok(), await published.text()).toBeTruthy();
-    const dialog = b.getByRole('alertdialog', { name: 'Updates on another device' });
+    // The file watcher schedules publication. Wait for its durable receipt;
+    // an extra explicit flush can publish the same change twice and advance
+    // the exact head while the confirmation is being accepted.
+    let replacementVersion = previousLocalVersion;
+    await expect.poll(async () => {
+      const response = await a.request.get(`/api/projects/${id}/collab/status`, { headers });
+      replacementVersion = (await response.json()).ownedContentUpdate?.localVersion ?? 0;
+      return replacementVersion;
+    }, { timeout: T.long }).toBeGreaterThan(previousLocalVersion);
+    await expect.poll(async () => {
+      const response = await b.request.get(`/api/projects/${id}/collab/status`, { headers });
+      return (await response.json()).ownedContentUpdate?.latestVersion ?? 0;
+    }, { timeout: T.long }).toBeGreaterThanOrEqual(replacementVersion);
+    await expect.poll(() => browserVersion, { timeout: T.long, message: 'the rendered confirmation has consumed the new published head' }).toBeGreaterThanOrEqual(replacementVersion);
+    const dialog = b.getByRole('alertdialog', { name: '其他设备有更新' });
     await expect(dialog).toBeVisible({ timeout: T.long });
     holdPull = true;
-    await dialog.getByRole('button', { name: 'Sync and overwrite' }).click();
+    const accepted = b.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/projects/${id}/collab/update`);
+    await dialog.getByRole('button', { name: '同步并覆盖' }).click();
     await expect.poll(() => pullStarted, { timeout: T.medium, message: 'replacement reaches native resource download' }).toBe(true);
     await expect(dialog).toHaveCount(0, { timeout: T.long });
     const status = await b.request.get(`/api/projects/${id}/collab/status`, { headers });
     const during = (await status.json()).ownedContentUpdate;
     expect(during.state).toBe('downloading');
-    await expect(b.getByTestId('owned-content-update').getByRole('button', { name: 'Syncing…', exact: true })).toBeVisible();
+    await expect(b.getByTestId('owned-content-update').getByRole('button', { name: '正在同步…', exact: true })).toBeVisible();
     await expect(send).toBeDisabled();
+    await expect(composer).toHaveAttribute('contenteditable', 'false');
+    await expect(composer).toHaveAttribute('aria-placeholder', syncHint);
     await expect(composer).toHaveText(draft);
     await b.screenshot({ path: testInfo.outputPath('owner-sync-send-blocked.png'), animations: 'disabled' });
     await testInfo.attach('Sync holds send and preserves draft', { path: testInfo.outputPath('owner-sync-send-blocked.png'), contentType: 'image/png' });
     holdPull = false;
     release();
+    const acceptedResponse = await accepted;
+    expect(acceptedResponse.ok()).toBeTruthy();
+    await testInfo.attach('Accepted content head response', { body: JSON.stringify({ status: acceptedResponse.status(), request: acceptedResponse.request().postData(), response: await acceptedResponse.json() }, null, 2), contentType: 'application/json' });
     await expect(send).toBeEnabled({ timeout: T.long });
     await expect(composer).toHaveText(draft);
     const content = await b.request.get(`/api/projects/${id}/raw/index.html`, { headers });
@@ -96,5 +158,5 @@ test('[P1] OPEND-4492 owner replacement holds send until synchronization complet
     await b.screenshot({ path: testInfo.outputPath('owner-sync-send-restored.png'), animations: 'disabled' });
     await testInfo.attach('Sync completes without automatically sending the draft', { path: testInfo.outputPath('owner-sync-send-restored.png'), contentType: 'image/png' });
   } catch (error) { failed = true; throw error; }
-  finally { release(); await cluster?.close({ preserve: failed }); await hub.close(); }
+  finally { releaseInitial(); release(); await cluster?.close({ preserve: failed }); await hub.close(); }
 });

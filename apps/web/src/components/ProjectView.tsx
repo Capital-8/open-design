@@ -14558,7 +14558,7 @@ export function ProjectView({
               </button>
             </div>
           ) : null}
-          {activeConversationId || conversationLoadError || emptyConversationReadOnlySettled || seedConversationId !== null ? (
+          {activeConversationId || conversationLoadError || emptyConversationReadOnlySettled || seedConversationId !== null || projectCollab.materializationPending || projectCollab.contentUpdatePending ? (
             <ChatPane
               historyPortalTarget={historyPortalTarget}
               // The conversation id is part of the key so switching conversations
@@ -14596,8 +14596,8 @@ export function ProjectView({
               }
               viewerOnly={projectMutationReadOnly}
               composerPlaceholder={
-                projectCollab.materializationPending
-                  ? t('designFiles.syncing')
+                projectCollab.materializationPending || projectCollab.contentUpdatePending
+                  ? t('collab.contentUpdate.waitToEdit')
                   // Placeholder only EXPLAINS; `sendDisabled` above still keeps
                   // the composer inert from the fail-closed flag. Undefined
                   // here means "disabled, reason not yet known" -- the default

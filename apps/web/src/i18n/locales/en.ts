@@ -30,6 +30,7 @@ export const en: Dict = {
 
   "collab.contentUpdate.available": "Updates on another device",
   "collab.contentUpdate.updating": "Syncing…",
+  "collab.contentUpdate.waitToEdit": "Project is syncing. Please wait.",
   "collab.contentUpdate.askAgain": "Restore update prompts",
   "collab.contentUpdate.title": "Updates on another device",
   "collab.contentUpdate.description": "Sync the latest content from another device to this device? This replaces local project content. Pages can be restored from local version history; images and other files may not be recoverable.",

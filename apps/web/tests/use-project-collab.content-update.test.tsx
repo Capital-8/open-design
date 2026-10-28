@@ -43,6 +43,20 @@ describe('owned replacement state (OPEND-4492)', () => {
     expect(result.current.writerAuthority).toBe('allowed');
   });
 
+  it('allows the owner to keep writing during background uploads', async () => {
+    const fetchImpl = (async (input) => new URL(String(input), 'http://daemon.local').pathname.endsWith('/collab/status')
+      ? response({ syncState: 'pending_upload', ownerMemberId: 'owner', ownedContentUpdate: {
+        state: 'up_to_date', latestVersion: 1, localVersion: 1, promptSuppressedUntil: null, updatedAt: 1,
+      } }) : response({ present: [] })) as typeof fetch;
+    const { result } = renderHook(() => useProjectCollab('owner-project', { workspaceContext, fetch: fetchImpl }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.isOwner).toBe(true);
+    expect(result.current.syncState).toBe('pending_upload');
+    expect(result.current.materializationPending).toBe(false);
+    expect(result.current.contentUpdatePending).toBe(false);
+    expect(result.current.writerAuthority).toBe('allowed');
+  });
+
   it('suspends writes when a reload observes the daemon already downloading', async () => {
     const fetchImpl = (async (input) => new URL(String(input), 'http://daemon.local').pathname.endsWith('/collab/status')
       ? response({ syncState: 'synced', ownerMemberId: 'owner', ownedContentUpdate: {

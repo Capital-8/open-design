@@ -30,6 +30,7 @@ export const hu: Dict = {
 
   "collab.contentUpdate.available": "Új felhőverzió",
   "collab.contentUpdate.updating": "Frissítés…",
+  "collab.contentUpdate.waitToEdit": "A projekt szinkronizálása folyamatban. Kérjük, várjon.",
   "collab.contentUpdate.askAgain": "Frissítési értesítések visszaállítása",
   "collab.contentUpdate.title": "Felhőfrissítés érhető el",
   "collab.contentUpdate.description": "Szinkronizálja egy másik eszköz legújabb tartalmát erre az eszközre? A helyi projekttartalom lecserélődik. Az oldalak visszaállíthatók a helyi verzióelőzményekből; a képek és más fájlok esetleg nem.",

@@ -30,6 +30,7 @@ export const ar: Dict = {
 
   "collab.contentUpdate.available": "يتوفر إصدار سحابي جديد",
   "collab.contentUpdate.updating": "جارٍ التحديث…",
+  "collab.contentUpdate.waitToEdit": "تتم مزامنة المشروع، يُرجى الانتظار",
   "collab.contentUpdate.askAgain": "استعادة تنبيهات التحديث",
   "collab.contentUpdate.title": "يتوفر تحديث سحابي",
   "collab.contentUpdate.description": "هل تريد مزامنة أحدث محتوى من جهاز آخر إلى هذا الجهاز؟ سيُستبدل محتوى المشروع المحلي. يمكن استعادة الصفحات من سجل الإصدارات المحلي؛ وقد يتعذر استعادة الصور والملفات الأخرى.",

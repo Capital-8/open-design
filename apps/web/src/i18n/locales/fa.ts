@@ -30,6 +30,7 @@ export const fa: Dict = {
 
   "collab.contentUpdate.available": "نسخه جدید ابری موجود است",
   "collab.contentUpdate.updating": "در حال به‌روزرسانی…",
+  "collab.contentUpdate.waitToEdit": "پروژه در حال همگام‌سازی است، لطفاً صبر کنید",
   "collab.contentUpdate.askAgain": "فعال‌کردن دوباره اعلان‌های به‌روزرسانی",
   "collab.contentUpdate.title": "به‌روزرسانی ابری موجود است",
   "collab.contentUpdate.description": "آخرین محتوا از دستگاه دیگر با این دستگاه همگام شود؟ محتوای محلی پروژه جایگزین می‌شود. صفحه‌ها را می‌توان از تاریخچه نسخه‌های محلی بازیابی کرد؛ شاید تصاویر و فایل‌های دیگر قابل بازیابی نباشند.",

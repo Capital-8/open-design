@@ -30,6 +30,7 @@ export const ru: Dict = {
 
   "collab.contentUpdate.available": "Новая версия в облаке",
   "collab.contentUpdate.updating": "Обновление…",
+  "collab.contentUpdate.waitToEdit": "Проект синхронизируется. Пожалуйста, подождите.",
   "collab.contentUpdate.askAgain": "Возобновить уведомления об обновлениях",
   "collab.contentUpdate.title": "Доступно обновление из облака",
   "collab.contentUpdate.description": "Синхронизировать последние данные с другого устройства на это? Локальное содержимое проекта будет заменено. Страницы можно восстановить из локальной истории версий; изображения и другие файлы могут быть невосстановимы.",

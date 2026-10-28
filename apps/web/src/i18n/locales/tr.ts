@@ -30,6 +30,7 @@ export const tr: Dict = {
 
   "collab.contentUpdate.available": "Bulutta yeni sürüm var",
   "collab.contentUpdate.updating": "Güncelleniyor…",
+  "collab.contentUpdate.waitToEdit": "Proje senkronize ediliyor. Lütfen bekleyin.",
   "collab.contentUpdate.askAgain": "Güncelleme bildirimlerini geri aç",
   "collab.contentUpdate.title": "Bulut güncellemesi mevcut",
   "collab.contentUpdate.description": "Başka bir cihazdaki en güncel içerik bu cihaza eşitlensin mi? Yerel proje içeriği değiştirilecektir. Sayfalar yerel sürüm geçmişinden geri yüklenebilir; görseller ve diğer dosyalar geri yüklenemeyebilir.",

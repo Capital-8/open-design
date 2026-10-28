@@ -4120,6 +4120,7 @@ export interface Dict {
   'fileViewer.versions.sourceAi': string;
   'collab.contentUpdate.available': string;
   'collab.contentUpdate.updating': string;
+  'collab.contentUpdate.waitToEdit': string;
   'collab.contentUpdate.askAgain': string;
   'collab.contentUpdate.title': string;
   'collab.contentUpdate.description': string;

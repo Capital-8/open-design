@@ -30,6 +30,7 @@ export const ko: Dict = {
 
   "collab.contentUpdate.available": "클라우드에 새 버전이 있습니다",
   "collab.contentUpdate.updating": "업데이트 중…",
+  "collab.contentUpdate.waitToEdit": "프로젝트를 동기화하고 있습니다. 잠시만 기다려 주세요.",
   "collab.contentUpdate.askAgain": "업데이트 알림 복원",
   "collab.contentUpdate.title": "클라우드 업데이트가 있습니다",
   "collab.contentUpdate.description": "다른 기기의 최신 내용을 이 기기에 동기화할까요? 로컬 프로젝트 내용이 덮어써집니다. 페이지는 로컬 버전 기록에서 복원할 수 있지만 이미지와 다른 파일은 복원하지 못할 수 있습니다.",

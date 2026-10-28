@@ -30,6 +30,7 @@ export const zhCN: Dict = {
 
   "collab.contentUpdate.available": "其他设备有更新",
   "collab.contentUpdate.updating": "正在同步…",
+  "collab.contentUpdate.waitToEdit": "项目同步中，请稍后",
   "collab.contentUpdate.askAgain": "恢复更新提示",
   "collab.contentUpdate.title": "其他设备有更新",
   "collab.contentUpdate.description": "是否同步其他设备的最新内容到本机？同步将覆盖本机项目内容。页面可从本地历史版本恢复，图片等其他文件可能无法恢复。",

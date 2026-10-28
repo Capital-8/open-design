@@ -122,6 +122,7 @@ vi.mock('../../src/components/ChatComposer', () => ({
   // click the actual history menu/row, never a fabricated callback button.
   ChatComposer: forwardRef<HTMLDivElement, ComponentProps<typeof ChatComposer>>((props, ref) => (
     <div ref={ref}>
+      <output data-testid="access-copy-placeholder">{props.composerPlaceholder}</output>
       <button data-testid="access-copy-send" disabled={props.sendDisabled || props.inputDisabled}
         onClick={() => void props.onSend('QA explicit send', [], [])}>Send</button>
     </div>
@@ -222,6 +223,33 @@ afterEach(() => {
 });
 
 describe('approved access copy on the real ProjectView and ChatPane', () => {
+  it('keeps the disabled sync composer visible before an initial conversation exists', async () => {
+    authority.materializationPending = true;
+    authority.writerAuthority = 'pending';
+    conversationReads.mockImplementation(() => Response.json({ conversations: [] }));
+    render(view()); await tick();
+    expect(screen.getByTestId('access-copy-placeholder')).toHaveTextContent('项目同步中，请稍后');
+    expect(sendButton().disabled).toBe(true);
+    const { createConversation } = await import('../../src/state/projects');
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(streamViaDaemon).not.toHaveBeenCalled();
+  });
+
+  it.each(['materializationPending', 'contentUpdatePending'] as const)('shows the product-confirmed hint while %s, then restores the original access state', async (pending) => {
+    authority[pending] = true;
+    authority.writerAuthority = 'pending';
+    const mounted = render(view()); await tick();
+    expect(screen.getByTestId('access-copy-placeholder')).toHaveTextContent('项目同步中，请稍后');
+    expect(sendButton().disabled).toBe(true);
+    authority[pending] = false;
+    authority.viewerOnly = true;
+    authority.writerAuthority = 'denied';
+    mounted.rerender(view()); await tick();
+    expect(screen.getByTestId('access-copy-placeholder')).not.toHaveTextContent('项目同步中，请稍后');
+    expect(sendButton().disabled).toBe(true);
+    expect(streamViaDaemon).not.toHaveBeenCalled();
+  });
+
   it('disables send during accepted content replacement without claiming permission loss or automatically retrying', async () => {
     const original = structuredClone(failedHistory);
     const mounted = render(view()); await tick();
