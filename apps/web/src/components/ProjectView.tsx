@@ -2506,7 +2506,8 @@ export function ProjectView({
   // keyed to `projectCollab.viewerOnly` below so an owner reinstall sees a
   // syncing project, not the misleading “shared by someone else” notice.
   const projectMutationReadOnly =
-    projectCollab.viewerOnly || projectCollab.materializationPending;
+    projectCollab.viewerOnly || projectCollab.materializationPending
+    || projectCollab.contentUpdatePending;
   const { resolve: resolvePresenceMember } = useTeamMembers(
     currentUserDirectoryEntry(projectRunWorkspaceContext),
     projectRunWorkspaceContext,

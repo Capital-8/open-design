@@ -126,6 +126,8 @@ export async function startFakeCollabHub(options: {
   includePersonalWorkspace?: boolean;
   /** Opt into the producer-health contract used by authority-cache E2E. */
   strictAuthorityEvents?: boolean;
+  /** Hold upstream I/O at a deterministic boundary without bypassing daemon sync. */
+  beforeCommand?: (command: CommandLog) => Promise<void>;
 }): Promise<FakeCollabHub> {
   const resourcesRoot = join(options.root, 'resources');
   await mkdir(resourcesRoot, { recursive: true });
@@ -335,6 +337,7 @@ export async function startFakeCollabHub(options: {
           : [];
         const stdin = typeof body.stdin === 'string' ? body.stdin : '';
         commandLog.push({ args, memberId: identity.memberId, workspaceId });
+        await options.beforeCommand?.({ args, memberId: identity.memberId, workspaceId });
         const stdout = await handleCommand({
           args,
           stdin,

@@ -20,6 +20,7 @@ const conversationReads = vi.fn<() => Response>();
 const authority = vi.hoisted(() => ({
   viewerOnly: false,
   materializationPending: false,
+  contentUpdatePending: false,
   writerAuthority: 'allowed' as 'allowed' | 'denied' | 'pending',
 }));
 const workspace = vi.hoisted(() => ({
@@ -196,6 +197,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   window.localStorage.clear(); window.sessionStorage.clear();
   authority.viewerOnly = false; authority.materializationPending = false;
+  authority.contentUpdatePending = false;
   authority.writerAuthority = 'allowed';
   messageReads.mockReset().mockImplementation(() => Response.json({ messages: failedHistory }));
   conversationReads.mockReset().mockImplementation(() => Response.json({ conversations: [conversation] }));
@@ -220,6 +222,25 @@ afterEach(() => {
 });
 
 describe('approved access copy on the real ProjectView and ChatPane', () => {
+  it('disables send during accepted content replacement without claiming permission loss or automatically retrying', async () => {
+    const original = structuredClone(failedHistory);
+    const mounted = render(view()); await tick();
+    expect(sendButton().disabled).toBe(false);
+    authority.contentUpdatePending = true;
+    authority.writerAuthority = 'pending';
+    mounted.rerender(view()); await tick();
+    expect(sendButton().disabled).toBe(true);
+    expect(screen.queryByText(READ_ONLY_TITLE)).toBeNull();
+    fireEvent.click(sendButton());
+    expect(streamViaDaemon).not.toHaveBeenCalled();
+    authority.contentUpdatePending = false;
+    authority.writerAuthority = 'allowed';
+    mounted.rerender(view()); await tick();
+    expect(sendButton().disabled).toBe(false);
+    expect(streamViaDaemon).not.toHaveBeenCalled();
+    expect(failedHistory).toEqual(original);
+  });
+
   it('confirmed read-only replaces the blocked recovery card title/body without enabling run actions', async () => {
     authority.viewerOnly = true; authority.writerAuthority = 'denied';
     render(view()); await tick();
