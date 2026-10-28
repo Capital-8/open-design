@@ -1,5 +1,6 @@
 import { useWorkspaceJourney } from '../analytics/use-workspace-journey';
 import { workspaceAnalyticsDimensions } from '../analytics/workspace';
+import type { WorkspaceJourneySurfaceProps } from '@open-design/contracts/analytics';
 import { Button, Dialog } from '@open-design/components';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import { useT } from '../i18n';
@@ -11,8 +12,9 @@ import styles from './AmrConcurrencyDialog.module.css';
 
 /** A real Link request rejection, never a local task-slot reservation. Closing
  * or changing plans only dismisses the notice; sending again is always manual. */
-export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consoleOrigin, upgradeAllowed = true, pageName = 'chat_panel', onClose }: {
+export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consoleOrigin, upgradeAllowed = true, pageName = 'chat_panel', stage = 'unknown', onClose }: {
   pageName?: 'home' | 'chat_panel';
+  stage?: WorkspaceJourneySurfaceProps['stage'];
   branch: AmrBalanceBranch;
   upgradeAllowed?: boolean;
   workspaceContext: WorkspaceCollabContext | null;
@@ -21,7 +23,7 @@ export function AmrConcurrencyDialog({ branch, workspaceContext, profile, consol
   onClose: () => void;
 }) {
   const t = useT();
-  const journey = useWorkspaceJourney({ page_name: pageName, area: 'concurrency_limit_dialog', reason: 'concurrency_limit', stage: 'mid_run', ...workspaceAnalyticsDimensions(workspaceContext) });
+  const journey = useWorkspaceJourney({ page_name: pageName, area: 'concurrency_limit_dialog', reason: 'concurrency_limit', stage, ...workspaceAnalyticsDimensions(workspaceContext) });
   const close = () => { journey.click('close'); onClose(); };
   const upgradeUrl = upgradeAllowed && branch.audience === 'owner' && branch.tier !== 'max' && workspaceContext
     ? workspaceUpgradeUrl(workspaceContext, null, { fallbackProfile: profile, consoleOrigin }) : null;

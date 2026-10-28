@@ -12,6 +12,15 @@ import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { invalidateAmrFundingFeedback } from '../../src/runtime/amr-funding-feedback';
 import type { AgentInfo, AppConfig } from '../../src/types';
 
+const concurrencyAnalytics = vi.hoisted(() => ({ track: vi.fn() }));
+beforeEach(() => concurrencyAnalytics.track.mockClear());
+vi.mock('../../src/analytics/provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/analytics/provider')>();
+  return { ...actual, useAnalytics: () => ({ ...actual.useAnalytics(), track: concurrencyAnalytics.track }) };
+});
+function concurrencyViews() {
+  return concurrencyAnalytics.track.mock.calls.filter(([event, props]) => event === 'surface_view' && props.area === 'concurrency_limit_dialog');
+}
 vi.mock('../../src/runtime/amr-balance-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/runtime/amr-balance-gate')>()), checkAmrBalanceGate: vi.fn(),
 }));
@@ -353,6 +362,7 @@ describe('RUN014 same-send plan with a full request counter', () => {
     const home = await mountHome({ role, tier });
     try {
       const dialog = await home.submit();
+      expect(concurrencyViews().at(-1)?.[1]).toMatchObject({ page_name: 'home', stage: 'before_run' });
       expect(Boolean(screen.queryByTestId('amr-concurrency-upgrade'))).toBe(upgrade);
       if (role !== 'owner') expect(dialog).toHaveTextContent('Ask the team workspace Owner');
       if (upgrade) {

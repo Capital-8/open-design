@@ -2975,6 +2975,7 @@ export function ProjectView({
     conversationId: string; authorityKey: string; accountGeneration: number; requestId: string;
     branch: AmrBalanceBranch; workspaceContext: WorkspaceCollabContext | null;
     preflight: WorkspaceBillingPreflight | null;
+    stage: 'before_run' | 'mid_run' | 'unknown';
     draft: RejectedComposerSend | null;
     initialHomeSend: boolean;
   } | null>(null);
@@ -9108,6 +9109,7 @@ export function ProjectView({
             branch: amrBalanceBranchRef.current,
             workspaceContext: fundingDialogContextRef.current.workspaceContext,
             preflight: null,
+            stage: 'before_run',
             initialHomeSend: meta?.initialHomeSend === true,
             draft: meta?.initialHomeSend ? {
               nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
@@ -10545,6 +10547,7 @@ export function ProjectView({
                 branch: amrBalanceBranchRef.current,
                 workspaceContext: fundingDialogContextRef.current.workspaceContext,
                 preflight: null,
+                stage: unstarted ? 'before_run' : 'mid_run',
                 initialHomeSend: meta?.initialHomeSend === true,
                 draft: (meta?.composerOwnedDraft || meta?.initialHomeSend) && unstarted ? {
                   nonce: clientRequestId, text: prompt, attachments: effectiveAttachments,
@@ -14651,6 +14654,8 @@ export function ProjectView({
                     workspaceContext: projectRunBillingAuthorityContext,
                     preflight: null,
                     draft: null,
+                    // A restored card has no reliable observation of when work began.
+                    stage: 'unknown',
                     initialHomeSend: false,
                   });
                 }
@@ -15105,6 +15110,7 @@ export function ProjectView({
         && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
         && config.mode === 'daemon' && config.agentId === 'amr' ? (
         <AmrConcurrencyDialog branch={{ ...concurrencyRejection.branch, tier: concurrencyPresentation.branch.tier }}
+          stage={concurrencyRejection.stage}
           upgradeAllowed={concurrencyPresentation.upgradeAllowed && concurrencyRejection.branch.audience === 'owner'}
           workspaceContext={concurrencyRejection.workspaceContext}
           profile={workspaceQuotaStatus?.profile?.trim() || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null}

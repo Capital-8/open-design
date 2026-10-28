@@ -117,6 +117,15 @@ const projectCollabMocks = vi.hoisted(() => ({
   viewerOnly: false,
 }));
 
+const concurrencyAnalytics = vi.hoisted(() => ({ track: vi.fn() }));
+beforeEach(() => concurrencyAnalytics.track.mockClear());
+vi.mock('../../src/analytics/provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/analytics/provider')>();
+  return { ...actual, useAnalytics: () => ({ ...actual.useAnalytics(), track: concurrencyAnalytics.track }) };
+});
+function concurrencyViews() {
+  return concurrencyAnalytics.track.mock.calls.filter(([event, props]) => event === 'surface_view' && props.area === 'concurrency_limit_dialog');
+}
 vi.mock('../../src/i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/i18n')>();
   return {
@@ -916,6 +925,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
       [{ path: 'counter-brief.txt', name: 'counter-brief.txt', kind: 'file' }], []); });
     expect(counterRead).toHaveBeenCalledOnce();
     expect(outcome).toBe('restore-draft');
+    expect(concurrencyViews().at(-1)?.[1]).toMatchObject({ stage: 'before_run' });
     expect(mockedStreamViaDaemon).not.toHaveBeenCalled();
     expect(saveMessage).not.toHaveBeenCalled();
     expect(chatPaneSpy.mock.calls.at(-1)![0].messages).toEqual([]);
@@ -1274,6 +1284,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
     });
     const dialog = await screen.findByTestId('amr-concurrency-dialog');
     expect(dialog).toBeTruthy();
+    expect(concurrencyViews().at(-1)?.[1]).toMatchObject({ stage: 'before_run' });
     const props = chatPaneSpy.mock.calls.at(-1)![0];
     expect(props.rejectedComposerSend).toMatchObject({ text: 'keep exact draft', attachments });
     expect(screen.queryByTestId('amr-concurrency-upgrade') !== null).toBe(role === 'owner');
@@ -1464,6 +1475,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
     });
     if (['partial', 'thinking', 'tool', 'artifact'].includes(mode)) {
       expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+      expect(concurrencyViews().at(-1)?.[1]).toMatchObject({ stage: 'mid_run' });
       expect(screen.queryByTestId('amr-concurrency-upgrade')).toBeNull();
       expect(chatPaneSpy.mock.calls.at(-1)![0].rejectedComposerSend).toBeUndefined();
     } else if (mode === 'disconnect') {
@@ -1515,6 +1527,7 @@ describe('Link request concurrency rejection preserves the original send', () =>
       expect(composerText().trim()).toBe('');
     } else {
       expect(await screen.findByTestId('amr-concurrency-dialog')).toBeTruthy();
+      expect(concurrencyViews().at(-1)?.[1]).toMatchObject({ stage: draft === 'partial-output' ? 'mid_run' : 'before_run' });
       expect(composerText().trim()).toBe(draft === 'empty' ? 'original model-independent concurrency draft'
         : draft === 'new-text' ? 'keep the newer draft' : '');
       const attachments = within(screen.queryByTestId('staged-attachments') ?? document.createElement('div'));

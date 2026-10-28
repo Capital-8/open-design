@@ -2165,7 +2165,7 @@ export function EntryShell({
   return (
     <div className={`entry-shell entry-shell--no-header${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
       {homeConcurrencyBlock && homeConcurrencyPresentation && homeConcurrencyBlock.identity === homeFundingIdentity ? (
-        <AmrConcurrencyDialog pageName="home" branch={homeConcurrencyPresentation.branch}
+        <AmrConcurrencyDialog pageName="home" stage="before_run" branch={homeConcurrencyPresentation.branch}
           upgradeAllowed={homeConcurrencyPresentation.upgradeAllowed}
           workspaceContext={homeConcurrencyBlock.workspaceContext}
           profile={amrRegistrationStatus?.profile?.trim() || amrProfile}

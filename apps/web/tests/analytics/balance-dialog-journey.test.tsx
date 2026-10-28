@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { StrictMode } from 'react';
+import { buildWorkspacePermissions } from '@open-design/contracts';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { AmrConcurrencyDialog } from '../../src/components/AmrConcurrencyDialog';
 import { AmrBalanceDialog } from '../../src/components/AmrBalanceDialog';
 import { HomeAmrBalanceGateDialogs, type HomeAmrBalanceGateBlock } from '../../src/components/HomeAmrBalanceGateDialogs';
 import { AmrOwnerTopUpDialog } from '../../src/components/chat/AmrOwnerTopUpDialog';
@@ -12,7 +14,7 @@ vi.mock('../../src/collab/useWorkspaceContext', () => ({
   useWorkspaceContext: () => ({ context: mocks.context(), loading: false }),
   useWorkspaceBilling: () => null,
 }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 beforeEach(() => {
   mocks.track.mockReset();
   mocks.context.mockReturnValue(workspaceContextFixture({ workspaceId: 'home-workspace', workspaceMemberId: 'member' }));
@@ -54,4 +56,24 @@ it('does not count the inline design catalogue as a member interruption', () => 
   render(<AmrOwnerTopUpDialog inline onClose={vi.fn()} />);
   fireEvent.click(screen.getByTestId('amr-balance-owner-dismiss'));
   expect(mocks.track).not.toHaveBeenCalled();
+});
+
+it.each(['before_run', 'mid_run', 'unknown'] as const)('keeps concurrency %s on exposure, upgrade and dismissal', (stage) => {
+  vi.stubGlobal('open', vi.fn());
+  const context = workspaceContextFixture({ workspaceId: 'payer', workspaceMemberId: 'owner', role: 'owner',
+    permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) });
+  render(<StrictMode><AmrConcurrencyDialog branch={{ audience: 'owner', tier: 'below_max' }}
+    workspaceContext={context} stage={stage} profile="local" onClose={vi.fn()} /></StrictMode>);
+  expect(views()).toHaveLength(1);
+  expect(views()[0]![1]).toMatchObject({ stage, reason: 'concurrency_limit', workspace_key: 'payer' });
+  fireEvent.click(screen.getByTestId('amr-concurrency-upgrade'));
+  fireEvent.click(screen.getByTestId('amr-concurrency-close'));
+  expect(clicks().map((call) => call[1])).toEqual([
+    expect.objectContaining({ stage, element: 'upgrade', block_id: views()[0]![1].block_id }),
+    expect.objectContaining({ stage, element: 'close', block_id: views()[0]![1].block_id }),
+  ]);
+});
+it('does not infer a running task when historical concurrency stage is unavailable', () => {
+  render(<AmrConcurrencyDialog branch={{ audience: 'owner', tier: 'max' }} workspaceContext={null} onClose={vi.fn()} />);
+  expect(views()[0]![1]).toMatchObject({ stage: 'unknown' });
 });
