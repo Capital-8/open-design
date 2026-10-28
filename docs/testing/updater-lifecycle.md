@@ -105,6 +105,8 @@ floor or Electron version.
 | Node | Coverage | Owning tests |
 | --- | --- | --- |
 | Namespace lock precedes state writes; same-version cover install adopts host | U | launcher `hosted-launcher.test.ts` |
+| Installer adoption preserves failed newer attempts and compatible last-good code, including a missing failed payload | U | launcher `hosted-launcher.test.ts` |
+| Cached-entry redirect checks LaunchServices exit status before retiring the caller | U | launcher `relaunch.test.ts` |
 | Hosted selection, delegated confirm, missing/corrupt entry fallback, later release recovery | U | launcher `hosted-launcher.test.ts` |
 | Manifest Electron/host compatibility and canonical path containment | U | launcher `hosted-launcher.test.ts` |
 | Headless duplicate-instance restore and unchanged installed identity | U, P, M | launcher + packaged managed-headless tests; mac full spec real LaunchServices headless restore; signed Dock acceptance required |
@@ -155,7 +157,9 @@ contract tests, not Windows/Linux native acceptance. Only macOS packaging opts
 into hosting in this delivery; Windows and historical outers retain legacy
 assembly, state handling and executable handoff. An old outer receiving a new
 payload remains legacy, while same-version installer replacement claims the new
-host contract and retains a newer compatible payload. Electron and the installer
+host contract and retains a newer compatible payload. Adoption preserves a failed
+newer generation's attempt and compatible last-successful pointer, so replacement
+does not silently retry that failed update. Electron and the installer
 version floor are unchanged.
 
 Review the hosted path in this order: `tools/pack/src/mac/{app,payload,prebundle}.ts`

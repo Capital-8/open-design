@@ -20,3 +20,15 @@ it("opens the installed app after predecessor exit with update overrides and no 
   expect(options.env.OD_SIDECAR_SUPERVISED_CONTEXT).toBeUndefined();
   expect(options.detached).toBe(true);
 });
+
+it.each([0, 1])("checks LaunchServices request completion before retiring a cached entry (exit=%s)", async code => {
+  mock.spawn.mockImplementation(() => {
+    const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+    queueMicrotask(() => { child.emit("spawn"); child.emit("close", code, null); });
+    return child;
+  });
+  const { createMacLauncherPlatform } = await import("../src/platforms/macos/index.js");
+  const opened = createMacLauncherPlatform("41.3.0", "arm64").openInstalled("/Applications/Open Design.app", []);
+  if (code === 0) await expect(opened).resolves.toBeUndefined();
+  else await expect(opened).rejects.toThrow("LaunchServices");
+});

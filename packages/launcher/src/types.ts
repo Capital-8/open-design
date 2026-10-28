@@ -23,4 +23,3 @@ export type LauncherEntryOptions = {
   publish?: (host: LauncherHost) => void;
 };
 export type LauncherEntry = { entry: string; source: "bundled" | "payload" | "legacy" };
-

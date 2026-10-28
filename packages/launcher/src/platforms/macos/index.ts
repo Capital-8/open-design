@@ -14,9 +14,14 @@ function updateEnvironmentArgs(): string[] {
 
 async function openInstalled(path: string, argv: readonly string[]): Promise<void> {
   const args = [...updateEnvironmentArgs(), ...(argv.includes("--headless") ? ["-g", "-j"] : []), path, ...(argv.length === 0 ? [] : ["--args", ...argv])];
-  const child = spawn("/usr/bin/open", args, { stdio: "ignore", detached: true });
-  await new Promise<void>((resolve, reject) => { child.once("error", reject); child.once("spawn", resolve); });
-  child.unref();
+  const child = spawn("/usr/bin/open", args, { stdio: "ignore", timeout: 10_000 });
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`LaunchServices open failed (${signal ?? code}) for ${path}`));
+    });
+  });
 }
 export async function relaunchInstalledApp(path: string, request: LauncherRelaunch): Promise<void> {
   if (!Number.isSafeInteger(request.predecessorPid) || request.predecessorPid <= 0) throw new Error("invalid launcher predecessor pid");

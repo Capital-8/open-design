@@ -164,22 +164,36 @@ function loadOrAdoptInstallation(installation: Installation, environment: Launch
 
   // Same-version replacement is an architecture migration. Keep newer code
   // only when it is compatible; never silently downgrade newer application data.
+  let attempt: LauncherAttemptDescriptor | null = null;
   if (runtime.active != null && compareLauncherVersions(runtime.active.version, version) > 0) {
-    resolvePayload(paths, runtime.active.version, environment);
-    runtime = { ...runtime, lastSuccessful: baselinePointer };
+    attempt = readAttempt(paths);
+    // Installer adoption must not retry a generation that already failed.
+    // Validate the selected code before changing any migration journals.
+    const selected = selectLauncherRuntimeTarget({ runtime, attempted: attempt });
+    if (selected.selected && compareLauncherVersions(selected.pointer.version, version) > 0) {
+      resolvePayload(paths, selected.pointer.version, environment);
+    }
+    let lastSuccessful = baselinePointer;
+    if (runtime.lastSuccessful != null && compareLauncherVersions(runtime.lastSuccessful.version, version) > 0) {
+      try {
+        resolvePayload(paths, runtime.lastSuccessful.version, environment);
+        lastSuccessful = runtime.lastSuccessful;
+      } catch { /* Only a compatible fallback can run inside this host. */ }
+    }
+    runtime = { ...runtime, lastSuccessful };
   } else {
     runtime = baseline;
   }
   writeJson(paths.cleanupPath, inventoryLegacyPayloads(paths, version));
   writeJson(paths.runtimePath, runtime);
-  rmSync(paths.attemptsPath, { force: true });
+  if (attempt == null) rmSync(paths.attemptsPath, { force: true });
   rmSync(paths.handoffPath, { force: true });
   writeJson(paths.installPath, { schemaVersion: LAUNCHER_SCHEMA_VERSION, ...expected, launchPath: installedAppPath });
   writeJson(bindingPath, {
     contractVersion: LAUNCHER_HOST_CONTRACT_VERSION,
     installedAppPath, outerVersion: version, electronVersion: environment.electronVersion,
   } satisfies HostBinding);
-  return { runtime, attempt: null };
+  return { runtime, attempt };
 }
 
 function inventoryLegacyPayloads(paths: LauncherPaths, boundVersion: string): LauncherCleanupDescriptor {

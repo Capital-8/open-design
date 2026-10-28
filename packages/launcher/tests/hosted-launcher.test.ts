@@ -124,3 +124,23 @@ it("inventories orphaned legacy caches without scheduling newer versions or fore
  const cleanup=JSON.parse(await readFile(join(f.launcher,"state","cleanup.json"),"utf8"));
  expect(cleanup.versions.map((entry:{version:string})=>entry.version).sort()).toEqual(["0.8.0","1.0.0"]);
 });
+
+it.each([false, true])("preserves a failed newer generation and compatible fallback during installer adoption (missing=%s)", async missing => {
+  const f = await fixture();
+  await addPayload(f, "1.1.0");
+  const failed = await addPayload(f, "1.2.0");
+  await mkdir(join(f.launcher, "state"), { recursive: true });
+  const active = { version: "1.2.0", generation: 4 };
+  const lastSuccessful = { version: "1.1.0", generation: 3 };
+  await writeFile(join(f.launcher, "runtime.json"), JSON.stringify({ schemaVersion: 1, channel: "stable", namespace: "default", active, lastSuccessful }));
+  const attemptPath = join(f.launcher, "state", "attempt.json");
+  await writeFile(attemptPath, JSON.stringify({ schemaVersion: 1, channel: "stable", namespace: "default", ...active, startedAt: new Date().toISOString() }));
+  if (missing) await rm(failed.versionRoot, { recursive: true });
+  const host = await boot(f);
+  expect(host.running.version).toBe("1.1.0");
+  expect(host.rolledBackFromVersion).toBe("1.2.0");
+  await host.reportReady();
+  expect(host.snapshot().lastSuccessful).toEqual(lastSuccessful);
+  expect(JSON.parse(await readFile(attemptPath, "utf8"))).toMatchObject(active);
+  expect((await boot(f)).running.version).toBe("1.1.0");
+});
