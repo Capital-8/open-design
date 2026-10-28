@@ -8857,7 +8857,7 @@ export async function startServer({
         workspaceId,
         account: currentTeamSnapshotIdentity(),
         currentIdentity: () => velaWorkspaceDirectoryIdentity(readVelaControlApiContext, configuredAmrEnv()),
-        fetchDirectory: fetchFreshMutationWorkspaceDirectory,
+        fetchDirectory: fetchWorkspaceDirectory,
         hasSnapshot: (account, id) => teamMembershipSnapshots.has(account, id),
         snapshotMember: (account, id) => teamMembershipSnapshots.member(account, id),
         expectedMemberId: memberId,
