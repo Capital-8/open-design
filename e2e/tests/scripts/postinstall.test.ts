@@ -333,7 +333,14 @@ describe("postinstall script contract", () => {
         ], { cwd: workspaceRoot, encoding: "utf8" });
         expect(result.status, result.stderr).toBe(0);
         const plannedTargets = JSON.parse(readFileSync(output, "utf8")).requestedTargets;
-        if (requestedTargets === "all") expect(plannedTargets).toEqual(postinstallBuildTargetList());
+        if (requestedTargets === "all") {
+          expect(plannedTargets).toEqual(postinstallBuildTargetList());
+          // Clean CI must materialize the cloud imports' dist declarations,
+          // including root-level workspaces outside apps/packages/tools.
+          expect(plannedTargets).toEqual(expect.arrayContaining([
+            "packages/bridge", "packages/dependencies", "biz", "adapters", "apps/cloud",
+          ]));
+        }
         else expect(plannedTargets).toEqual(requestedTargets);
       }
     } finally {
