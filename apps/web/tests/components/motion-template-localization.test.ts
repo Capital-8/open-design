@@ -42,6 +42,16 @@ describe('replicated Motion template localization', () => {
     }
   });
 
+  it('translates Ukrainian instructions completely and names the mascot color clearly', () => {
+    const read = (slug: string) => JSON.parse(readFileSync(fileURLToPath(new URL(`../../../../plugins/_official/examples/motion-${slug}/open-design.json`, import.meta.url)), 'utf8'));
+    expect(read('opus-design-lab').od.useCase.query.uk).not.toMatch(/Finish on a light stage|Keep the six-control/);
+    expect(read('claude-agent-lab').od.useCase.query.uk).not.toContain('end inside the live interface');
+    const primary = read('windows-studio-launch').od.inputs.find((field: { name: string }) => field.name === 'primary');
+    expect(primary.label).toBe('Primary color');
+    expect(primary.label_i18n['zh-CN']).toBe('主色');
+    expect(primary.label_i18n['zh-TW']).toBe('主色');
+  });
+
   it('preserves legacy labels and uses localized labels when supplied', () => {
     expect(localizePluginInputLabel('fr', { name: 'brand', label: 'Brand' })).toBe('Brand');
     expect(localizePluginInputLabel('fr', { name: 'brand', label: 'Brand', label_i18n: { en: 'Brand', fr: 'Marque' } })).toBe('Marque');

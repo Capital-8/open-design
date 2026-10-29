@@ -3,7 +3,7 @@
 **Arc:** 番茄 → 霓虹 → 年代与游戏词语 → 城市 → 蓝色语义 → 自然意象
 
 ## 文件
-复制 `example.html`、`assets/gsap.min.js`、`assets/motion-data.js`、`assets/NotoSansMono-variable.ttf` 与 `assets/NotoSansMono-OFL.txt`，保持相对路径。声音结构见 `references/sound.json`。封面为 `assets/cover.jpg`。
+复制 `example.html`、`assets/gsap.min.js`、`assets/motion-data.js`、`assets/NotoSansMono-variable.woff2` 与 `assets/NotoSansMono-OFL.txt`，保持相对路径。声音结构见 `references/sound.json`。封面为 `assets/cover.jpg`。
 
 ## 场景结构
 文字、色带、插入点与鼠标指针均由纯函数 `render(t)` 重建；不加载参考视频，不使用整帧背景。`assets/motion-data.js` 仅存放色带编号、边界坐标、按键文字、输入选区和首场鼠标轨迹的矢量关键帧。首场鼠标先以箭头滑入，进入输入区后变成 I 形，再在输入前隐藏；时间跟随 `tomato-typing`，与文字插入点独立。画布颜色含实测 H.264 导出补偿（每通道 0–2 级），以导出后的参考色为准。修改时间只改 `CFG.scenes`，场景起点自动累计，所有出场通过 `from: "end"` 的 cue 定位。
