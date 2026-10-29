@@ -277,10 +277,19 @@ export function registerPluginAssetRoutes(app: Express, deps: RegisterPluginAsse
       const value = String(rawValue).trim();
       return isCacheableExternalUrl(value) ? `${quote}${assetCacheRewriteUrl(value)}${quote}` : match;
     });
-    return withQuoted.replace(/url\(\s*(https?:\/\/[^)'"\s]+)\s*\)/gi, (match, rawValue) => {
+    const rewritten = withQuoted.replace(/url\(\s*(https?:\/\/[^)'"\s]+)\s*\)/gi, (match, rawValue) => {
       const value = String(rawValue).trim();
       return isCacheableExternalUrl(value) ? `url(${assetCacheRewriteUrl(value)})` : match;
     });
+    // Script-created Image/src URLs resolve against the document, not against
+    // the inline script or the rewritten static attributes. Keep CFG strings
+    // untouched (templates also use them to identify image fields).
+    const directory = safeBase ? `${safeBase.split('/').map(encodeURIComponent).join('/')}/` : '';
+    const base = `<base href="/api/plugins/${encodeURIComponent(pluginId)}/asset/${directory}">`;
+    if (/<head\b[^>]*>/i.test(rewritten)) {
+      return rewritten.replace(/<head\b[^>]*>/i, head => `${head}${base}`);
+    }
+    return rewritten.replace(/^(\s*<!doctype[^>]*>)?/i, prefix => `${prefix}${base}`);
   }
 
   function collectPluginPreviewCandidates(plugin: InstalledPluginLike): string[] {
