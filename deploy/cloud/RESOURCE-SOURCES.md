@@ -8,7 +8,7 @@ the normal pinned `resources:prepare` path, not a relaxed local bundle.
 | `examples/guizang-ppt/example.html` | The same plugin's `assets/template.html`, inserting `assets/example-slides.html` at `SLIDES_HERE` and supplying its OpenDesign product title |
 | `examples/html-ppt/example.html` | `examples/html-ppt-pitch-deck/example.html`, a complete authored deck in the same HTML-PPT system |
 | `examples/replit-deck/example.html` | `design-templates/replit-deck/examples/example-atlas.html`, unchanged |
-| `scenarios/od-plugin-authoring/examples/generated-plugin/` | `plugins/spec/examples/refine-critique-loop/{SKILL.md,open-design.json}`, normalized trailing newline only |
+| `scenarios/od-plugin-authoring/examples/generated-plugin/` | `plugins/spec/examples/refine-critique-loop/{SKILL.md,open-design.json}`, normalized trailing newline and added `publishedAt` for the bundled copy's authoring time |
 
 The first three paths are relative to `plugins/_official/`; their preview,
 example output and context asset references all point to `example.html`.
