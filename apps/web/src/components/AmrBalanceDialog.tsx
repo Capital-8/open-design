@@ -1,6 +1,9 @@
+import { useWorkspaceJourney } from '../analytics/use-workspace-journey';
+import { workspaceAnalyticsDimensions } from '../analytics/workspace';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Dialog } from '@open-design/components';
+import type { WorkspaceJourneySurfaceProps } from '@open-design/contracts/analytics';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import { useT } from '../i18n';
 import { useAnalytics } from '../analytics/provider';
@@ -32,6 +35,8 @@ interface Props {
   reason: 'insufficient' | 'signed_out';
   /** Funding recovery may dismiss the prompt without authorizing a send. */
   manualSendOnRecovery?: boolean;
+  /** When the caller observed the funding refusal, independent of recovery behavior. */
+  stage?: WorkspaceJourneySurfaceProps['stage'];
   modelId?: string | null;
   fundingScope?: AmrBalanceGateScope;
   /**
@@ -97,6 +102,7 @@ interface Props {
 export function AmrBalanceDialog({
   reason,
   manualSendOnRecovery = false,
+  stage = 'unknown',
   modelId,
   fundingScope,
   profile,
@@ -134,6 +140,8 @@ export function AmrBalanceDialog({
   const workspaceContextLoading =
     workspaceContextOverride !== undefined ? false : ambientWorkspaceContextLoading;
   const workspaceBilling = useWorkspaceBilling();
+  const journey = useWorkspaceJourney({ page_name: entrySource === 'home_balance_gate_upgrade' ? 'home' : 'chat_panel', area: 'credit_exhausted_dialog', reason: 'credit_exhausted', stage, ...workspaceAnalyticsDimensions(workspaceContext) }, !signedOut && !workspaceContextLoading);
+  const close = () => { journey.click('close'); onClose(); };
   // A Max classification cannot fall back to selling the same plan. The
   // frozen funding dialog has no auto-recharge shortcut for any Owner.
   const upgradeUrl = workspaceContextLoading || upgradeIntent === 'auto_recharge'
@@ -196,6 +204,7 @@ export function AmrBalanceDialog({
     // the consent-gated device id, and open the console for the profile.
     const attribution = recordAmrEntry(analytics.track, entrySource, new Date(), {
       metricsConsent,
+      blockContext: { block_id: journey.id, ...(workspaceContext ? { workspace_key: workspaceContext.workspaceId } : {}), reason: 'credit_exhausted', stage },
     });
     const deviceId = amrHandoffDeviceId({
       metricsConsent,
@@ -218,7 +227,7 @@ export function AmrBalanceDialog({
     <Dialog
       role="alertdialog"
       ariaLabel={signedOut ? t('chat.amrBalanceGate.signedOutTitle') : t('chat.amrBalanceGate.title')}
-      onClose={onClose}
+      onClose={close}
       closeOnEscape
       className={signedOut ? styles.panel : `${styles.panel} ${styles.frozenPanel}`}
       backdropClassName={signedOut ? undefined : styles.frozenBackdrop}
@@ -227,7 +236,7 @@ export function AmrBalanceDialog({
       <button
         type="button"
         className={styles.closeButton}
-        onClick={onClose}
+        onClick={close}
         aria-label={t('common.close')}
       >
         <Icon name="close" size={14} />
@@ -271,7 +280,7 @@ export function AmrBalanceDialog({
       {/* Dismissal first in DOM so it lands on the left of the row and focus
           order matches the reading order; the CTA follows on the right. */}
       <div className={styles.actions}>
-        <Button variant="ghost" className={signedOut ? styles.later : `${styles.later} ${styles.frozenLater}`} onClick={onClose}>
+        <Button variant="ghost" className={signedOut ? styles.later : `${styles.later} ${styles.frozenLater}`} onClick={close}>
           {t('chat.amrBalanceGate.laterCta')}
         </Button>
         {signedOut ? (

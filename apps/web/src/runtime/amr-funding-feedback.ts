@@ -118,18 +118,38 @@ export function invalidateAmrFundingFeedback(): void {
   recentHomeInsufficiency.clear();
 }
 
-/** One uncached, exact-member/model funding observation. Home uses this
- * before project creation; display-wallet state and a previous positive cannot
- * authorize handing off a new Home draft. Link still owns final admission. */
-export async function readFreshAmrFundingEvidence(
+/** Cacheable/recovery observations remain fenced by billing invalidation;
+ * an older response must not restore a retired Home block or reusable hint. */
+export function readFreshAmrFundingEvidence(
   scope: AmrBalanceGateScope,
   modelId: string | null,
   isCurrent: () => boolean = () => true,
 ): Promise<FundingEvidence> {
+  const requestGeneration = cacheGeneration;
+  return readAmrFundingObservation(scope, modelId, () =>
+    isCurrent() && requestGeneration === cacheGeneration);
+}
+
+/** Each explicit Send makes its own no-store HTTP request for the current
+ * account/member/model, without reusing client display positives. Display-cache
+ * refreshes cannot supersede it. The caller fences route/draft changes; Link
+ * still owns final admission. */
+export function readSendTimeAmrFundingEvidence(
+  scope: AmrBalanceGateScope,
+  modelId: string | null,
+  isCurrent: () => boolean = () => true,
+): Promise<FundingEvidence> {
+  return readAmrFundingObservation(scope, modelId, isCurrent);
+}
+
+async function readAmrFundingObservation(
+  scope: AmrBalanceGateScope,
+  modelId: string | null,
+  isCurrent: () => boolean,
+): Promise<FundingEvidence> {
   const unknown = { kind: 'unknown' as const, preflight: null };
   if (!isCurrent()) return unknown;
   const generation = currentWorkspaceAccountGeneration();
-  const requestGeneration = cacheGeneration;
   try {
     const query = new URLSearchParams({ workspaceId: scope.workspaceId });
     if (modelId) query.set('modelId', modelId);
@@ -140,7 +160,7 @@ export async function readFreshAmrFundingEvidence(
     const { preflight } = await response.json() as WorkspaceBillingPreflightResponse;
     const age = Date.now() - Date.parse(preflight?.generatedAt);
     if (!isCurrent() || generation !== currentWorkspaceAccountGeneration()
-      || requestGeneration !== cacheGeneration || !preflight
+      || !preflight
       || preflight.schemaVersion !== 1 || preflight.workspaceId !== scope.workspaceId
       || preflight.workspaceMemberId !== scope.workspaceMemberId || preflight.modelId !== modelId
       || !Number.isFinite(age) || age < -5_000 || age > 30_000) return unknown;

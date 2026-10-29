@@ -25,6 +25,7 @@ import {
 import {
   deriveConfigureGlobals,
   projectKindFromMetadataToTracking,
+  projectIntentFromMetadataToTracking,
   fidelityToTracking,
 } from '@open-design/contracts/analytics';
 import type {
@@ -197,6 +198,7 @@ import { isMacPlatform } from './utils/platform';
 import { randomUUID } from './utils/uuid';
 import { summarizeProjectNameFromPrompt } from './utils/projectName';
 import { armCompletionFeedbackOnFirstGesture } from './utils/notifications';
+import { useGlobalRunNotices } from './hooks/useGlobalRunNotices';
 import {
   amrBalanceGateScopeForWorkspaceContext,
   amrBalanceGateScopesMatch,
@@ -260,7 +262,7 @@ import {
   removeProjectFromDisplaySnapshots,
   writeProjectDisplaySnapshot,
 } from './state/project-display-cache';
-import { getOpenDesignHost, type OpenDesignHostProjectImportSuccess } from '@open-design/host';
+import { getOpenDesignHost, isOpenDesignHostAvailable, type OpenDesignHostProjectImportSuccess } from '@open-design/host';
 import { useI18n } from './i18n';
 import { liveArtifactTabId } from './types';
 import type {
@@ -1085,6 +1087,15 @@ function AppInner() {
   const latestPersistedConfigRef = useRef(config);
   latestPersistedConfigRef.current = config;
   const settingsDraftConfigRef = useRef<AppConfig | null>(null);
+  // P0-24 N10: system notifications for turns that end anywhere on this
+  // machine, wherever the user is. Desktop only; the web keeps the
+  // per-conversation notifier in ProjectView.
+  useGlobalRunNotices({
+    enabled: isOpenDesignHostAvailable(),
+    workspaceContext,
+    notifications: config.notifications ?? DEFAULT_NOTIFICATIONS,
+    t,
+  });
   const completionFeedbackGestureConsumedRef = useRef(false);
   useEffect(() => {
     const notifications = config.notifications ?? DEFAULT_NOTIFICATIONS;
@@ -1487,6 +1498,9 @@ function AppInner() {
   }
   const locallyDeletedProjectIdsRef = useRef<Map<string, number>>(new Map());
   const projectListMutationVersionRef = useRef(0);
+  const pendingProjectRecencyRef = useRef(new Map<string, {
+    sentAt: number;
+  }>());
   const projectRenameStatesRef = useRef<Map<string, QueuedProjectRenameState>>(new Map());
   const pendingProjectNameProjectionsRef = useRef<Map<string, PendingProjectNameProjection>>(
     new Map(),
@@ -1805,6 +1819,15 @@ function AppInner() {
         request.scopeKey,
         project.id,
       ]);
+      const recency = pendingProjectRecencyRef.current.get(key);
+      if (recency) {
+        if ((project.lastUserQueryAt ?? 0) >= recency.sentAt) {
+          // Retire only when the read observes this durable acceptance or a newer one.
+          pendingProjectRecencyRef.current.delete(key);
+        } else {
+          project = { ...project, lastUserQueryAt: Math.max(project.lastUserQueryAt ?? 0, recency.sentAt) };
+        }
+      }
       const pending = pendingProjectNameProjectionsRef.current.get(key);
       if (!pending) return project;
       if (
@@ -3577,6 +3600,7 @@ function AppInner() {
             project_source: 'create_button',
             project_id: null,
             project_kind: projectKindFromMetadataToTracking(metadata),
+            project_intent: projectIntentFromMetadataToTracking(metadata),
             fidelity,
             result: 'failed',
             error_code: errorCode,
@@ -3602,6 +3626,7 @@ function AppInner() {
             project_source: 'create_button',
             project_id: null,
             project_kind: projectKindFromMetadataToTracking(metadata),
+            project_intent: projectIntentFromMetadataToTracking(metadata),
             fidelity,
             ...(input.pluginId ? { plugin_id: input.pluginId } : {}),
             ...(input.pluginType ? { plugin_type: input.pluginType } : {}),
@@ -3756,6 +3781,7 @@ function AppInner() {
             project_source: 'create_button',
             project_id: result.project.id,
             project_kind: projectKindFromMetadataToTracking(metadata),
+            project_intent: projectIntentFromMetadataToTracking(metadata),
             fidelity,
             ...(input.pluginId ? { plugin_id: input.pluginId } : {}),
             ...(input.pluginType ? { plugin_type: input.pluginType } : {}),
@@ -4691,24 +4717,36 @@ function AppInner() {
     void patchProject(projectId, { pendingPrompt: null }, mutationContext);
   }, [route]);
 
-  const handleTouchProject = useCallback(() => {
+  // Capture the sending principal at render time, never at a delayed completion.
+  const recencyContext = projectRouteWorkspaceContextRef.current ?? workspaceContextRef.current;
+  const recencyGeneration = currentWorkspaceAccountGeneration();
+  const handleTouchProject = useCallback((sentAt = Date.now()) => {
+    if (recencyGeneration !== currentWorkspaceAccountGeneration()) return;
     const projectId = route.kind === 'project' ? route.projectId : null;
     if (!projectId) return;
-    const updatedAt = Date.now();
-    setProjects((curr) =>
-      curr.map((p) => (p.id === projectId ? { ...p, updatedAt } : p)),
-    );
-    const mutationContext = workspaceContextRef.current;
+    const mutationContext = recencyContext;
+    const key = JSON.stringify([
+      currentWorkspaceAccountGeneration(), projectListScopeKey(mutationContext), projectId,
+    ]);
+    const pending: { sentAt: number } = {
+      sentAt: Math.max(pendingProjectRecencyRef.current.get(key)?.sentAt ?? 0, sentAt),
+    };
+    pendingProjectRecencyRef.current.set(key, pending);
+    projectListMutationVersionRef.current += 1;
+    const recordSend = (project: Project): Project => project.id === projectId
+      ? { ...project, lastUserQueryAt: Math.max(project.lastUserQueryAt ?? 0, sentAt) }
+      : project;
+    setProjects((curr) => curr.map(recordSend));
     if (mutationContext) {
       patchProjectDisplaySnapshots({
         accountGeneration: currentWorkspaceAccountGeneration(),
         context: mutationContext,
-        patch: (cachedProjects) => cachedProjects.map((project) =>
-          project.id === projectId ? { ...project, updatedAt } : project),
+        patch: (cachedProjects) => cachedProjects.map(recordSend),
       });
     }
-    void patchProject(projectId, { updatedAt }, mutationContext);
-  }, [route]);
+    if (mutationContext) invalidateWorkspaceProjectLists(mutationContext, recencyGeneration);
+    // Keep this durable receipt projected until a list observes the same or newer time.
+  }, [route, recencyContext, recencyGeneration]);
 
   const handleProjectChange = useCallback((updated: Project) => {
     // ProjectView is pinned to the opened project's persisted Workspace, which
@@ -4743,7 +4781,7 @@ function AppInner() {
     if (routeSnapshotMatches) {
       routeProjectSnapshotRef.current = {
         ...routeSnapshot,
-        project: updated,
+        project: { ...updated, lastUserQueryAt: Math.max(routeSnapshot.project.lastUserQueryAt ?? 0, updated.lastUserQueryAt ?? 0) || null },
       };
       setRouteProjectSnapshotRevision((current) => current + 1);
     }
@@ -4759,14 +4797,16 @@ function AppInner() {
       ) {
         iframeKeepAlivePool.evictProject(updated.id, { includeActive: true });
       }
-      return curr.map((p) => (p.id === updated.id ? updated : p));
+      return curr.map((p) => (p.id === updated.id
+        ? { ...updated, lastUserQueryAt: Math.max(p.lastUserQueryAt ?? 0, updated.lastUserQueryAt ?? 0) || null } : p));
     });
     if (projectContext) {
       patchProjectDisplaySnapshots({
         accountGeneration,
         context: projectContext,
         patch: (cachedProjects) => cachedProjects.map((project) =>
-          project.id === updated.id ? { ...project, ...updated } : project),
+          project.id === updated.id ? { ...project, ...updated,
+            lastUserQueryAt: Math.max(project.lastUserQueryAt ?? 0, updated.lastUserQueryAt ?? 0) || null } : project),
       });
     }
   }, [iframeKeepAlivePool]);
@@ -5191,6 +5231,9 @@ function AppInner() {
         && openingWitness.accountGeneration === accountGeneration
           ? openingWitness.context
           : null;
+      // A refresh has no card witness. Let its scoped catalog supply the
+      // binding before probing a Team project without request authority.
+      if (!exactOpenContext && (projectsLoading || workspaceContextLoading)) return;
       const bootstrap = await bootstrapProjectRoute(projectId, {
         accountGeneration,
         exactContext: exactOpenContext,
@@ -5353,6 +5396,7 @@ function AppInner() {
     currentProjectListScope,
     activeAccountGeneration,
     projectsLoading,
+    workspaceContextLoading,
     daemonLive,
     deepLinkRetryRevision,
     beginProjectListRequest,
@@ -6297,7 +6341,7 @@ function AppInner() {
       ) : null}
       {homeConcurrencyRejection && route.kind === 'home'
         && homeConcurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration() ? (
-        <AmrConcurrencyDialog branch={homeConcurrencyRejection.branch}
+        <AmrConcurrencyDialog pageName="home" stage="before_run" branch={homeConcurrencyRejection.branch}
           workspaceContext={homeConcurrencyRejection.workspaceContext}
           profile={amrLoginStatus?.profile?.trim() || amrProfileForConfig(config)}
           consoleOrigin={amrLoginStatus?.consoleOrigin}

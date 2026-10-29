@@ -81,12 +81,18 @@ export function createLocalCommentFiles(db: Database.Database) {
     }
     return ensureWorkspaceArtifactForPath(db, { projectId, path: filePath, kind: 'html' }).id;
   }
+  function needsCatalogIdentity(projectId: string, filePath: string): boolean {
+    assertCommentFileNotPending(db, projectId, { filePath });
+    const state = parseCommentFileState(getProject(db, projectId)?.metadata?._commentFiles);
+    // An existing or retired local lifetime must never adopt another identity.
+    return !state?.files.some(fact => fact.sourceFilePath === filePath);
+  }
   async function admit(input: {
     projectId: string; workspaceId: string; creatorMemberId: string; resourceId: string; versionId: string;
     paths: Array<{ sourceFilePath: string; entryPath: string; sourceFileId?: string }>; run: typeof runVelaCommand;
   }) {
     creator(input.projectId, input.workspaceId, input.creatorMemberId);
-    const recoveries = new Map<string, string>();
+    const localLifetimes = new Map<string, string | null>();
     const files = input.paths.map(file => {
       if (!canonicalCommentFilePath(file.sourceFilePath)) throw new Error('COMMENT_FILE_AUTHORITY_UNAVAILABLE');
       assertCommentFileNotPending(db, input.projectId, { filePath: file.sourceFilePath });
@@ -94,11 +100,8 @@ export function createLocalCommentFiles(db: Database.Database) {
         .some(fact => fact.sourceFilePath === file.sourceFilePath);
       const sourceFileId = !known && file.sourceFileId ? file.sourceFileId : identity(input.projectId, file.sourceFilePath);
       if (file.sourceFileId && file.sourceFileId !== sourceFileId) throw new Error('COMMENT_FILE_LIFETIME_CONFLICT');
-      const local = !known && file.sourceFileId ? getLiveWorkspaceArtifactByPath(db, input.projectId, file.sourceFilePath) : null;
-      if (local && local.id !== sourceFileId) {
-        assertCommentFileNotPending(db, input.projectId, { sourceFileId: local.id });
-        recoveries.set(file.sourceFilePath, local.id);
-      }
+      const local = getLiveWorkspaceArtifactByPath(db, input.projectId, file.sourceFilePath);
+      localLifetimes.set(file.sourceFilePath, local?.id ?? null);
       return { sourceFilePath: file.sourceFilePath, entryPath: file.entryPath, sourceFileId, retired: false };
     });
     if (!files.length) return;
@@ -108,8 +111,13 @@ export function createLocalCommentFiles(db: Database.Database) {
       const previous = parseCommentFileState(getProject(db, input.projectId)?.metadata?._commentFiles);
       const adopted = commentFilesAtReceipt(previous, state, input);
       for (const file of files) {
-        const localSourceFileId = recoveries.get(file.sourceFilePath);
-        if (!localSourceFileId) continue;
+        // Cloud admission yields: a local comment can establish its first
+        // artifact lifetime while we wait. Read it again inside adoption's
+        // transaction, including on a retry of a previously missed recovery.
+        const localSourceFileId = getLiveWorkspaceArtifactByPath(db, input.projectId, file.sourceFilePath)?.id;
+        const startedLifetime = localLifetimes.get(file.sourceFilePath);
+        if (startedLifetime && startedLifetime !== localSourceFileId) throw new Error('COMMENT_FILE_LIFETIME_CONFLICT');
+        if (!localSourceFileId || localSourceFileId === file.sourceFileId) continue;
         assertCommentFileNotPending(db, input.projectId, { filePath: file.sourceFilePath, sourceFileId: localSourceFileId });
         if (getLiveWorkspaceArtifactByPath(db, input.projectId, file.sourceFilePath)?.id !== localSourceFileId
           || previous?.files.some(fact => fact.sourceFileId === localSourceFileId)
@@ -156,5 +164,5 @@ export function createLocalCommentFiles(db: Database.Database) {
   }) {
     await retireMany({ ...input, facts: [input.fact] });
   }
-  return { identity, admit, retire, retireMany };
+  return { identity, needsCatalogIdentity, admit, retire, retireMany };
 }

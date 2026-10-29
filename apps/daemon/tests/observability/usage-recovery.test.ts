@@ -177,11 +177,17 @@ describe('recorded cumulative usage durable recovery', () => {
       expect(status.status).toBe('succeeded');
       const messagesUrl = `/api/projects/${projectId}/conversations/${conversationId}/messages`;
       const readMessage = async (origin: string) => {
+        const readStartedAt = Date.now();
         const result = await fetch(origin + messagesUrl);
         expect(result.ok).toBe(true);
         const body = await result.json() as { messages: Row[] };
         const message = body.messages.find(item => item.id === assistantMessageId);
         expect(message).toBeTruthy();
+        // Each HTTP projection observes the durable task at its own read time.
+        const observedAt = message?.taskDisplay?.observedAt;
+        expect(observedAt).toEqual(expect.any(Number));
+        expect(observedAt).toBeGreaterThanOrEqual(readStartedAt);
+        expect(observedAt).toBeLessThanOrEqual(Date.now());
         return message!;
       };
       const before = await readMessage(url);
@@ -213,7 +219,10 @@ describe('recorded cumulative usage durable recovery', () => {
       const restored = sse(await hydrated.text());
       expect(restored).toEqual(live);
       expect(usageProjection(restored)).toEqual(projected);
-      expect(await readMessage(running.url)).toEqual(before);
+      expect(await readMessage(running.url)).toEqual({
+        ...before,
+        taskDisplay: { ...before.taskDisplay, observedAt: expect.any(Number) },
+      });
       expect(await readFile(upstream.calls, 'utf8'), 'Reading/reconnecting must not invoke another model turn').toBe(callsBefore);
       if (process.env.USE016_DURABLE_EVIDENCE_DIR) {
         const evidence = { variant, runId, projectId, assistantMessageId, traceSHA256: createHash('sha256').update(rawFixture).digest('hex'),

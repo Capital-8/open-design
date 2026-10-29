@@ -1,3 +1,7 @@
+import { useAnalytics } from '../analytics/provider';
+import { trackWorkspaceJourneyClick } from '../analytics/events';
+import { workspaceAnalyticsDimensions } from '../analytics/workspace';
+import { useWorkspaceJourney } from '../analytics/use-workspace-journey';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useCloudSignIn } from './use-cloud-sign-in';
 import { createPortal } from 'react-dom';
@@ -13,8 +17,10 @@ const OPEN_INVITE = 'od:workspace-invite-open';
 
 export function HomeInviteTrigger({ context, signedOut = false }: { context: WorkspaceCollabContext | null; signedOut?: boolean }) {
   const { t } = useI18n();
+  const analytics = useAnalytics();
+  const [surfaceId] = useState(() => crypto.randomUUID());
   if (!signedOut && (!context || !context.permissions.canInviteMembers || context.memberStatus !== 'active' || context.lifecycleState !== 'active')) return null;
-  return <Button className={styles.trigger} onClick={() => window.dispatchEvent(new CustomEvent(OPEN_INVITE, { detail: signedOut ? { signedOut: true } : { workspaceId: context?.workspaceId, workspaceMemberId: context?.workspaceMemberId } }))}><InvitePersonIcon /> {t('homeInvite.invite')}</Button>;
+  return <Button className={styles.trigger} onClick={() => { trackWorkspaceJourneyClick(analytics.track, { page_name: 'home', area: 'home_invite_header', element: 'invite_teammates', entry_from: 'home_header', surface_instance_id: surfaceId, ...workspaceAnalyticsDimensions(context) }); window.dispatchEvent(new CustomEvent(OPEN_INVITE, { detail: signedOut ? { signedOut: true } : { workspaceId: context?.workspaceId, workspaceMemberId: context?.workspaceMemberId } })); }}><InvitePersonIcon /> {t('homeInvite.invite')}</Button>;
 }
 
 function InvitePersonIcon() {
@@ -42,6 +48,9 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
     try { return storageKey && window.localStorage.getItem(storageKey) === '1' ? storageKey : null; } catch { return null; }
   });
   const [open, setOpen] = useState(false);
+  const [entryFrom, setEntryFrom] = useState<'home_banner' | 'home_header'>('home_banner');
+  const eligible = signedOut || Boolean(context && context.memberStatus === 'active' && context.lifecycleState === 'active' && context.permissions.canInviteMembers);
+  const bannerJourney = useWorkspaceJourney({ page_name: 'home', area: 'home_invite_banner', entry_from: 'home_banner', ...workspaceAnalyticsDimensions(context) }, Boolean(eligible && active && storageKey && dismissal !== storageKey));
   const [pendingSignInInvite, setPendingSignInInvite] = useState(false);
   const { state: signInState, status: signInStatus, begin, cancel } = useCloudSignIn({ onLoginSuccess: () => setPendingSignInInvite(true) });
   const [sent, setSent] = useState(0);
@@ -65,6 +74,7 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
 
   useEffect(() => {
     function onOpen(event: Event) {
+      setEntryFrom('home_header');
       const detail = (event as CustomEvent).detail;
       if (signedOut && detail?.signedOut) { requestSignIn(); return; }
       if (context && detail?.workspaceId === context.workspaceId && detail?.workspaceMemberId === context.workspaceMemberId) setOpen(true);
@@ -109,6 +119,7 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
     };
   }, [active, storageKey, dismissal, principal, signedOut, context?.permissions.canInviteMembers, context?.memberStatus, context?.lifecycleState]);
   function dismiss() {
+    bannerJourney.click('close');
     if (!storageKey) return;
     setDismissal(storageKey);
     try { window.localStorage.setItem(storageKey, '1'); } catch { /* session state still applies */ }
@@ -134,19 +145,19 @@ export function HomeInviteSurface({ accountId, context, active, signedOut = fals
   if (!signedOut && (!context || context.memberStatus !== 'active'
     || context.lifecycleState !== 'active' || !context.permissions.canInviteMembers)) return null;
   const banner = active && storageKey && dismissal !== storageKey ? (
-    <div ref={bannerRef} className={styles.banner} role="region" aria-label={t('homeInvite.invite')}>
+    <div ref={bannerRef} className={styles.banner} data-home-invite-row role="region" aria-label={t('homeInvite.invite')}>
       <span className={styles.copy}>{t('homeInvite.banner')}</span>
-      <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => signedOut ? requestSignIn() : setOpen(true)}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
+      <Button variant="ghost" className={styles.invite} disabled={signInState === 'signing'} onClick={() => { setEntryFrom('home_banner'); bannerJourney.click('invite_teammates'); signedOut ? requestSignIn() : setOpen(true); }}>{t(signInState === 'signing' ? 'settings.amrSigningIn' : 'homeInvite.invite')}</Button>
       <Button variant="ghost" className={styles.close} aria-label={t('homeInvite.dismiss')} onClick={dismiss}><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="m4.5 4.5 7 7m0-7-7 7" /></svg></Button>
     </div>
   ) : null;
   return (
     <>
-      {banner ?? (active ? <div className={styles.bannerSpace} data-dismissed={dismissal === storageKey ? "true" : undefined} aria-hidden="true" /> : null)}
+      {banner ?? (active ? <div className={styles.bannerSpace} data-home-invite-row data-dismissed={dismissal === storageKey ? "true" : undefined} aria-hidden="true" /> : null)}
       {signedOut && signInState === 'error' ? <p role="alert">{t('settings.amrLoginErrorCompact')}</p> : null}
       {signedOut && signInState === 'signing' ? <div role="status">{signInStatus?.activationUrl ? <a href={signInStatus.activationUrl} target="_blank" rel="noopener noreferrer">{t('settings.amrActivationOpen')}</a> : null}<Button onClick={() => void cancel()}>{t('settings.amrCancelSignIn')}</Button></div> : null}
       {sent ? <Toast key={sentGeneration} className={styles.toast} message={t('homeInvite.sent', { n: sent })} tone="success" placement="top" portalToBody ttlMs={4000} onDismiss={() => setSent(0)} /> : null}
-      {open && !signedOut && context ? createPortal(<InviteDialog open={open} onClose={() => setOpen(false)} workspaceContext={context} canAssignRoles={context.role === 'owner'} />, document.body) : null}
+      {open && !signedOut && context ? createPortal(<InviteDialog entryFrom={entryFrom} open={open} onClose={() => setOpen(false)} workspaceContext={context} canAssignRoles={context.role === 'owner'} />, document.body) : null}
     </>
   );
 }

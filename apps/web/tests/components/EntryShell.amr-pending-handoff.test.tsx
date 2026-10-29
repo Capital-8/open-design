@@ -32,6 +32,7 @@ import { checkAmrBalanceGate } from '../../src/runtime/amr-balance-gate';
 import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, invalidateAmrFundingFeedback, recentHomeAmrFundingInsufficiency } from '../../src/runtime/amr-funding-feedback';
 import { useWorkspaceInvalidation } from '../../src/collab/workspace-events';
 import { advanceWorkspaceAccountGeneration } from '../../src/collab/workspace-identity';
+import { clearWorkspaceRemoval, currentWorkspaceRemoval } from '../../src/collab/workspace-removal';
 import type { AgentInfo, AppConfig } from '../../src/types';
 import { EntryShellWithGateHost } from '../helpers/entry-shell-gate-host';
 import { setHomeHeroPrompt } from '../helpers/home-hero-lexical';
@@ -366,6 +367,133 @@ describe('OPEND-2614 · funded Home handoff precedes the remaining AMR sign-in g
     expect(onBeginProjectCreation).not.toHaveBeenCalled();
     expect(onCreateProject).not.toHaveBeenCalled();
     expect(screen.getByTestId('home-hero-input').textContent).toContain('Keep this original Home prompt');
+  });
+
+  it('VIEW-015 confirms this explicit Send despite wallet warm publications without another send proof', async () => {
+    const context = personalContext();
+    const h = harness('amr');
+    await screen.findByTestId('home-hero-input');
+    await checkAmrFundingFeedback(context, 'default');
+    const original = globalThis.fetch;
+    const sendReplies: Array<(response: Response) => void> = [];
+    let publishing = false;
+    let warmReads = 0;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/billing/preflight?')) {
+        if (publishing) {
+          warmReads++;
+          return Promise.resolve(jsonResponse({ preflight: homeFunding(context) }));
+        }
+        return new Promise<Response>((resolve) => sendReplies.push(resolve));
+      }
+      return original(input, init);
+    }) as typeof fetch;
+    try {
+      await submitHome('Keep this explicit draft through wallet refresh.');
+      await waitFor(() => expect(sendReplies).toHaveLength(1));
+      const handlers = [...vi.mocked(useWorkspaceInvalidation).mock.calls].reverse().find(
+        ([handlers]) => handlers['team-project-content-ready'],
+      )![0];
+      await act(async () => {
+        publishing = true;
+        for (let i = 0; i < 99; i++) handlers['wallet-balance-changed']!({
+          type: 'wallet-balance-changed', workspaceId: context.workspaceId,
+          workspaceMemberId: context.workspaceMemberId, revision: 'same-wallet-revision',
+        });
+        window.dispatchEvent(new Event('od:workspace-billing-refresh'));
+        await Promise.resolve();
+        publishing = false;
+      });
+      expect(warmReads).toBeGreaterThan(0);
+      expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+      expect(h.onCreateProject).not.toHaveBeenCalled();
+      await act(async () => sendReplies[0]!(jsonResponse({ preflight: homeFunding(context) })));
+      await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
+      expect(h.onBeginProjectCreation).toHaveBeenCalledTimes(1);
+      expect(sendReplies).toHaveLength(1);
+      expect(h.onCreateProject.mock.calls[0]![0]).toMatchObject({
+        pendingPrompt: 'Keep this explicit draft through wallet refresh.',
+      });
+    } finally {
+      for (const resolve of sendReplies) resolve(jsonResponse({ preflight: { ...homeFunding(context), fundingCheck: 'unknown' } }));
+    }
+  });
+
+  it.each(['insufficient', 'unknown', 'forbidden', 'timeout'] as const)(
+    'VIEW-015 keeps the draft without creating after explicit %s proof during display refresh', async (result) => {
+      const context = personalContext();
+      const h = harness('amr');
+      await screen.findByTestId('home-hero-input');
+      await checkAmrFundingFeedback(context, 'default');
+      const original = globalThis.fetch;
+      let finish!: (response: Response | Error) => void;
+      globalThis.fetch = vi.fn((input, init) => String(input).includes('/billing/preflight?')
+        ? new Promise<Response>((resolve, reject) => { finish = response => response instanceof Response ? resolve(response) : reject(response); })
+        : original(input, init));
+      await submitHome('Keep this draft until this click has valid funds.');
+      await waitFor(() => expect(finish).toBeTypeOf('function'));
+      await act(async () => {
+        window.dispatchEvent(new Event('od:workspace-billing-refresh'));
+        let response: Response | Error;
+        if (result === 'forbidden') response = new Response(null, { status: 403 });
+        else if (result === 'timeout') response = new DOMException('funding timeout', 'TimeoutError');
+        else response = jsonResponse({ preflight: { ...homeFunding(context), fundingCheck: result } });
+        finish(response);
+      });
+      if (result === 'insufficient') await screen.findByTestId('amr-balance-dialog');
+      else await screen.findByText("Couldn't confirm your OpenDesign Cloud balance. Try sending again.");
+      expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+      expect(h.onCreateProject).not.toHaveBeenCalled();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Keep this draft until this click has valid funds.');
+    },
+  );
+
+  it('withdraws pending Home Send authority on an exact member-removal SSE before its 200 proof returns', async () => {
+    clearWorkspaceRemoval();
+    const sources: Array<EventTarget & { url: string }> = [];
+    class RemovalEventSource extends EventTarget {
+      onopen: ((event: Event) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      readonly url: string;
+      constructor(url: string) { super(); this.url = url; sources.push(this); }
+      close() {}
+    }
+    vi.stubGlobal('EventSource', RemovalEventSource);
+    const context = { ...personalContext(), role: 'member' as const,
+      permissions: buildWorkspacePermissions({ role: 'member', lifecycleState: 'active' }) };
+    const original = globalThis.fetch;
+    let sending = false;
+    let finish!: (response: Response) => void;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/workspace/directory')) return Promise.resolve(jsonResponse(workspaceDirectoryFixture([context])));
+      if (url.endsWith('/api/workspace/context')) return Promise.resolve(jsonResponse({ context }));
+      if (url.includes('/billing/preflight?') && sending) return new Promise<Response>(resolve => { finish = resolve; });
+      return original(input, init);
+    }) as typeof fetch;
+    const h = harness('amr');
+    try {
+      await screen.findByTestId('home-hero-input');
+      await checkAmrFundingFeedback(context, 'default');
+      sending = true;
+      await submitHome('Do not send this removed member draft.');
+      await waitFor(() => expect(finish).toBeTypeOf('function'));
+      const source = sources.find(source => source.url.includes('/api/workspace/events?')
+        && new URL(source.url, 'http://localhost').searchParams.get('workspaceId') === context.workspaceId);
+      expect(source, 'the real workspace hook must subscribe to the scoped SSE').toBeDefined();
+      await act(async () => {
+        source!.dispatchEvent(new MessageEvent('workspace-context-changed', { data: JSON.stringify({
+          type: 'workspace-context-changed', memberRemoval: { reason: 'member-removed',
+            workspaceId: context.workspaceId, workspaceMemberId: context.workspaceMemberId },
+        }) }));
+        expect(currentWorkspaceRemoval()).toMatchObject({ workspaceId: context.workspaceId,
+          workspaceMemberId: context.workspaceMemberId });
+        finish(jsonResponse({ preflight: homeFunding(context) }));
+      });
+      expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+      expect(h.onCreateProject).not.toHaveBeenCalled();
+      expect(screen.getByTestId('home-hero-input')).toHaveTextContent('Do not send this removed member draft.');
+    } finally { clearWorkspaceRemoval(); vi.unstubAllGlobals(); }
   });
 
   it('RUN-003 shows fresh Home insufficiency before a late Link hint and only retries on another click', async () => {
@@ -794,30 +922,31 @@ describe('Home memory funding gate', () => {
     expect(h.onCreateProject).not.toHaveBeenCalled();
   });
 
-  it('re-reads within one manual Send after two successive invalidations without using either old proof', async () => {
+  it("uses this click's fresh proof after repeated focus publications without another read", async () => {
     const h = harness('amr');
     await waitForWalletInMemory();
     const context = personalContext();
     const original = globalThis.fetch;
-    const releases: Array<(response: Response) => void> = [];
+    let release!: (response: Response) => void;
     let reads = 0;
     globalThis.fetch = vi.fn((input, init) => {
       if (String(input).includes('/api/workspace/billing/preflight?')) {
         reads++;
-        if (reads <= 2) return new Promise<Response>(resolve => { releases.push(resolve); });
-        return Promise.resolve(jsonResponse({ preflight: homeFunding(context, 'available') }));
+        return new Promise<Response>(resolve => { release = resolve; });
       }
       return original(input, init);
     }) as typeof fetch;
     await submitHome('Send only from this click.');
-    await waitFor(() => expect(releases).toHaveLength(1));
-    await act(async () => window.dispatchEvent(new Event('focus')));
-    await act(async () => releases[0]!(jsonResponse({ preflight: homeFunding(context, 'available') })));
-    await waitFor(() => expect(releases).toHaveLength(2));
-    await act(async () => window.dispatchEvent(new Event('focus')));
-    await act(async () => releases[1]!(jsonResponse({ preflight: homeFunding(context, 'available') })));
+    await waitFor(() => expect(release).toBeTypeOf('function'));
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(h.onBeginProjectCreation).not.toHaveBeenCalled();
+    expect(h.onCreateProject).not.toHaveBeenCalled();
+    await act(async () => release(jsonResponse({ preflight: homeFunding(context, 'available') })));
     await waitFor(() => expect(h.onCreateProject).toHaveBeenCalledTimes(1));
-    expect(reads).toBe(3);
+    expect(reads).toBe(1);
     expect(h.calls).toEqual(['begin', 'gate', 'create']);
   });
 
