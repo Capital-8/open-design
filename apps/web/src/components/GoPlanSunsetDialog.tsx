@@ -45,6 +45,11 @@ export function GoPlanSunsetDialog({
   const descriptionId = useId();
 
   useEffect(() => {
+    if (!active) return;
+    return lockWebModalScroll();
+  }, [active]);
+
+  useEffect(() => {
     if (!active) {
       exposureTrackedRef.current = false;
       setDismissing(false);

@@ -80,6 +80,8 @@ export function AmrArtifactUpgradeDialog({
   const descriptionId = useId();
   const [offerCountdown, setOfferCountdown] = useState<OfferCountdown | null>(null);
 
+  useEffect(() => lockWebModalScroll(), []);
+
   useEffect(() => {
     const updateCountdown = () => setOfferCountdown(recurringOfferCountdown(Date.now()));
     updateCountdown();

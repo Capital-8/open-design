@@ -46,6 +46,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { coalescedGet, evictCoalescedGet } from '../lib/coalesced-get';
+import { compareRecentProjects } from '../lib/project-order';
 import {
   canReachWorkspaceBillingEntrance,
   workspaceSeatCapacityState,
