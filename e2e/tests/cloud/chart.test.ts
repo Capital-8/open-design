@@ -171,6 +171,16 @@ describe.skipIf(!installed)(
         ),
       ).toBe(true);
     });
+    it("supports the explicit OD test target and complete cloud routing", () => {
+      const docs = render("--namespace", "od-test", "--set", "target=od-e2e,amr.privateHttp=true,ingress.enabled=true");
+      const config = docs.find(d => d.kind === "ConfigMap")!;
+      expect(config.data.OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP).toBe("true");
+      expect(config.data.OD_CLOUD_AMR_PRIVATE_NAMESPACE).toBe("od-test");
+      const ingress = docs.find(d => d.kind === "Ingress")!;
+      expect(ingress.spec.rules[0].http.paths.map((p: any) => [p.path,p.pathType])).toEqual([
+        ["/api","Prefix"],["/artifacts","Prefix"],["/frames","Prefix"],["/version","Exact"],["/health","Exact"],["/ready","Exact"]
+      ]);
+    });
     it("does not manage database networking for an external database", () => {
       expect(
         render("--set", "postgresAccess.enabled=false").filter(
@@ -181,6 +191,7 @@ describe.skipIf(!installed)(
     it.each([
       ["--namespace", "default"],
       ["--set", "target=other"],
+      ["--set", "target=od-e2e"],
       ["--set", "image.digest="],
       ["--set", "renderer.image.digest=latest"],
       ["--set", "secrets.application="],

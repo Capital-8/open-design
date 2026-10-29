@@ -9,6 +9,21 @@ export function mainConfig(env: NodeJS.ProcessEnv = process.env) {
   const privateHttp = env.OD_CLOUD_RENDERER_ALLOW_PRIVATE_HTTP ?? "false";
   if (!["true", "false"].includes(privateHttp))
     throw new Error("Invalid OD_CLOUD_RENDERER_ALLOW_PRIVATE_HTTP");
+  const amrHttp = env.OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP ?? "false";
+  if (!["true", "false"].includes(amrHttp))
+    throw new Error("Invalid OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP");
+  const namespace = env.OD_CLOUD_AMR_PRIVATE_NAMESPACE ?? "";
+  if (amrHttp === "true" && !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(namespace))
+    throw new Error("Invalid OD_CLOUD_AMR_PRIVATE_NAMESPACE");
+  const privateAmr = (name: string, u: URL) => {
+    const parts = u.hostname.split(".");
+    return amrHttp === "true" &&
+      ["OD_CLOUD_VELA_API_URL", "OD_CLOUD_AMR_URL"].includes(name) &&
+      /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(parts[0] ?? "") &&
+      parts[1] === namespace &&
+      (parts.slice(2).join(".") === "svc" || parts.slice(2).join(".") === "svc.cluster.local") &&
+      u.pathname === "/";
+  };
   const url = (name: string) => {
     const value = required(name),
       u = new URL(value);
@@ -23,6 +38,7 @@ export function mainConfig(env: NodeJS.ProcessEnv = process.env) {
     if (
       u.protocol !== "https:" &&
       !["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) &&
+      !privateAmr(name, u) &&
       !(
         name === "OD_CLOUD_RENDERER_URL" &&
         privateHttp === "true" &&

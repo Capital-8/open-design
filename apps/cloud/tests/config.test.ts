@@ -16,20 +16,7 @@ it("renderer config requires no database or provider secrets", () => {
   ).toThrow();
 });
 it("main rejects missing persistent keys and non-HTTPS upstream origins", () => {
-  const env = {
-    OD_CLOUD_PROFILE: "test",
-    OD_CLOUD_CREDENTIAL_KEY_ID: "v1",
-    OD_CLOUD_CREDENTIAL_KEYS: JSON.stringify({
-      v1: Buffer.alloc(32, 1).toString("base64"),
-    }),
-    OD_CLOUD_DATABASE_URL: "postgres://test",
-    OD_CLOUD_RESOURCE_DIR: "/resources",
-    OD_CLOUD_WEB_URL: "https://app.test",
-    OD_CLOUD_VELA_API_URL: "https://api.test",
-    OD_CLOUD_VELA_WEB_URL: "https://login.test",
-    OD_CLOUD_AMR_URL: "https://amr.test",
-    OD_CLOUD_RENDERER_URL: "http://127.0.0.1:19001",
-  };
+  const env = environment();
   expect(mainConfig(env).secureCookies).toBe(true);
   const internal = {
     ...env,
@@ -61,4 +48,40 @@ it("main rejects missing persistent keys and non-HTTPS upstream origins", () => 
   expect(() =>
     mainConfig({ ...env, OD_CLOUD_AMR_URL: "http://untrusted.test" }),
   ).toThrow();
+});
+
+function environment() {
+  return {
+    OD_CLOUD_PROFILE: "test",
+    OD_CLOUD_CREDENTIAL_KEY_ID: "v1",
+    OD_CLOUD_CREDENTIAL_KEYS: JSON.stringify({
+      v1: Buffer.alloc(32, 1).toString("base64"),
+    }),
+    OD_CLOUD_DATABASE_URL: "postgres://test",
+    OD_CLOUD_RESOURCE_DIR: "/resources",
+    OD_CLOUD_WEB_URL: "https://app.test",
+    OD_CLOUD_VELA_API_URL: "https://api.test",
+    OD_CLOUD_VELA_WEB_URL: "https://login.test",
+    OD_CLOUD_AMR_URL: "https://amr.test",
+    OD_CLOUD_RENDERER_URL: "http://127.0.0.1:19001",
+  };
+}
+
+it("permits explicitly enabled AMR services only in the configured private namespace", () => {
+ const env = { ...environment(), OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP: "true", OD_CLOUD_AMR_PRIVATE_NAMESPACE: "od-test", OD_CLOUD_VELA_API_URL: "http://od-e2e-api.od-test.svc:18080", OD_CLOUD_AMR_URL: "http://od-e2e-harness.od-test.svc.cluster.local:18082" };
+ expect(mainConfig(env)).toMatchObject({velaApiUrl:env.OD_CLOUD_VELA_API_URL,amrUrl:env.OD_CLOUD_AMR_URL,secureCookies:true});
+ for (const override of [
+  { OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP:"false" },
+  { OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP:"yes" },
+  { OD_CLOUD_AMR_PRIVATE_NAMESPACE:"" },
+  { OD_CLOUD_AMR_PRIVATE_NAMESPACE:"other" },
+  { OD_CLOUD_AMR_PRIVATE_NAMESPACE:"od-test.svc" },
+  { OD_CLOUD_AMR_URL:"http://harness.other.svc:18082" },
+  { OD_CLOUD_AMR_URL:"http://harness.od-test.svc.attacker.test:18082" },
+  { OD_CLOUD_AMR_URL:"http://public.example.test" },
+  { OD_CLOUD_AMR_URL:"http://user:secret@harness.od-test.svc:18082" },
+  { OD_CLOUD_AMR_URL:"http://harness.od-test.svc:18082/prefix" },
+  { OD_CLOUD_WEB_URL:"http://web.od-test.svc" },
+  { OD_CLOUD_VELA_WEB_URL:"http://login.od-test.svc/cloud" },
+ ]) expect(()=>mainConfig({...env,...override})).toThrow();
 });

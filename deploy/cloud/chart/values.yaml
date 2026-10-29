@@ -8,6 +8,8 @@ amr:
   runtime: ""
   id: ""
   supportsRecovery: false
+  # Opt in only for API/runtime services in this release namespace. Browser URLs stay HTTPS.
+  privateHttp: false
 image:
   repository: ""
   digest: ""

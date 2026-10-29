@@ -1,5 +1,7 @@
-{{- if not (and (eq .Values.target "spark-amr") (eq .Release.Namespace "od-amr-4114")) }}
-{{- fail "Only spark-amr/od-amr-4114 is supported; verify cluster context separately" }}
+{{- $legacy := and (eq .Values.target "spark-amr") (eq .Release.Namespace "od-amr-4114") -}}
+{{- $test := and (eq .Values.target "od-e2e") (eq .Release.Namespace "od-test") -}}
+{{- if not (or $legacy $test) }}
+{{- fail "Supported target/namespace pairs: spark-amr/od-amr-4114, od-e2e/od-test; verify cluster context separately" }}
 {{- end }}
 {{- if not (has .Values.profile (list "test" "prod")) }}
 {{- fail "profile must be test or prod" }}
@@ -21,6 +23,8 @@ data:
   OD_CLOUD_WEB_URL: {{ required "webUrl required" .Values.webUrl | quote }}
   OD_CLOUD_VELA_API_URL: {{ required "amr.api required" .Values.amr.api | quote }}
   OD_CLOUD_VELA_WEB_URL: {{ required "amr.web required" .Values.amr.web | quote }}
+  OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP: {{ .Values.amr.privateHttp | default false | quote }}
+  OD_CLOUD_AMR_PRIVATE_NAMESPACE: {{ .Release.Namespace | quote }}
   OD_CLOUD_AMR_URL: {{ required "amr.runtime required" .Values.amr.runtime | quote }}
   OD_CLOUD_RUNTIME_ID: {{ required "amr.id required" .Values.amr.id | quote }}
   OD_CLOUD_RUNTIME_RECOVERY: {{ .Values.amr.supportsRecovery | quote }}
