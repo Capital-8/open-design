@@ -35,7 +35,8 @@ od:
     requires: false
   craft:
     requires:
-      - typographic-rhythm
+      - typography
+      - typography-hierarchy
       - pixel-discipline
 inputs:
   - id: brand

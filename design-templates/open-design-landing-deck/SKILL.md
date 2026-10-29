@@ -39,7 +39,8 @@ od:
     entry: index.html
   craft:
     requires:
-      - typographic-rhythm
+      - typography
+      - typography-hierarchy
       - pixel-discipline
   category: "marketing-gtm"
   scenario: "marketing"

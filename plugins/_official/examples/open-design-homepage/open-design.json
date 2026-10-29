@@ -91,7 +91,8 @@
       },
       "craft": [
         "pixel-discipline",
-        "typographic-rhythm"
+        "typography",
+        "typography-hierarchy"
       ],
       "assets": [
         "./example.html",

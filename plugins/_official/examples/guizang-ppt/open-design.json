@@ -62,7 +62,8 @@
     "surface": "web",
     "preview": {
       "type": "html",
-      "entry": "./index.html"
+      "entry": "./example.html",
+      "motion": "deck"
     },
     "useCase": {
       "query": {
@@ -88,6 +89,7 @@
         }
       ],
       "assets": [
+        "./example.html",
         "./assets/example-slides.html",
         "./assets/template.html",
         "./references/checklist.md",

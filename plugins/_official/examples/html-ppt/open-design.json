@@ -64,7 +64,8 @@
     "surface": "web",
     "preview": {
       "type": "html",
-      "entry": "./index.html"
+      "entry": "./example.html",
+      "motion": "deck"
     },
     "useCase": {
       "query": {
@@ -90,6 +91,7 @@
         }
       ],
       "assets": [
+        "./example.html",
         "./assets/base.css",
         "./assets/fonts.css",
         "./assets/runtime.js",

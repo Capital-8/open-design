@@ -28,7 +28,8 @@ od:
   craft:
     requires:
       - pixel-discipline
-      - typographic-rhythm
+      - typography
+      - typography-hierarchy
 inputs:
   - id: brand
     label: Brand identity
