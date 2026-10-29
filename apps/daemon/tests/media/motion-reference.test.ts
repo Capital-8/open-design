@@ -25,6 +25,11 @@ describe('motion reference parsing', () => {
     expect(parseProbe(PROBE.replace(/\n.*Audio:.*$/m, '')).hasAudio).toBe(false);
   });
 
+  it('does not take a text file that an older ffmpeg opens as tty for a video', () => {
+    const tty = `Input #0, tty, from 'notes.txt':\n  Duration: 00:00:00.04, bitrate: 2 kb/s\n  Stream #0:0: Video: ansi, pal8, 640x400, 25 fps, 25 tbr`;
+    expect(parseProbe(tty).hasVideo).toBe(false);
+  });
+
   it('keeps cuts inside the film, drops near-duplicates', () => {
     const log = ['pts_time:0.02', 'pts_time:2.5', 'pts_time:2.6', 'pts_time:6.25', 'pts_time:14.99'].map((t) => `[Parsed_showinfo_1] n:0 ${t} pos`).join('\n');
     expect(parseCuts(log, 15)).toEqual([2.5, 6.25]);

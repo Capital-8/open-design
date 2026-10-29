@@ -144,7 +144,10 @@ export async function compareMotionFilms(input: {
   const candidateProbe = await run(ff, ['-hide_banner', '-i', candidate], 60_000);
   const referenceDurationSec = parseDuration(referenceProbe.stderr);
   const candidateDurationSec = parseDuration(candidateProbe.stderr);
-  if (!referenceDurationSec || !candidateDurationSec) {
+  // Older ffmpeg builds open any .txt as "tty" (ANSI art) with a duration.
+  const textAsVideo = /Input #\d+, (?:tty|ansi)\b/;
+  if (!referenceDurationSec || !candidateDurationSec
+    || textAsVideo.test(referenceProbe.stderr) || textAsVideo.test(candidateProbe.stderr)) {
     throw new MotionCompareError('NO_VIDEO', 'Both the reference and the produced film must be readable videos.');
   }
 

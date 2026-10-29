@@ -310,8 +310,7 @@ does not replace the MP4. Words like 同款, 照着做, 参考这个风格 or a 
 "复刻这个视频" are video requests even when the user never says "秒" or "视频".
 The only exceptions are when the user asks for a webpage, a prototype or an
 interactive demo instead, or asks only to look at the reference.
-If the renderer is unavailable, say so as a blocker and name what is missing;
-the composition still has to be film-shaped, and an HTML-only deliverable is
+The composition has to be film-shaped either way: an HTML-only deliverable is
 not a completed replication.
 
 1. Measure it with the host:

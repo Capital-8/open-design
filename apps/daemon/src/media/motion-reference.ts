@@ -19,6 +19,7 @@ const MIN_FRAME_GAP_SECONDS = 0.4;
 const SCENE_THRESHOLD = 0.3;
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv']);
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const TEXT_AS_VIDEO = /Input #\d+, (?:tty|ansi)\b/;
 
 export class MotionReferenceError extends Error {
   constructor(public code: 'BAD_REQUEST' | 'NEEDS_UPLOAD' | 'TOO_LARGE' | 'TOO_LONG' | 'NOT_VIDEO' | 'PROBE_FAILED', message: string, public status = 400) {
@@ -81,7 +82,9 @@ export function parseProbe(stderr: string): { durationSec: number; width: number
     height: size ? Number(size[2]) : 0,
     fps: fps ? Math.round(Number(fps[1]) * 100) / 100 : 0,
     hasAudio: /Stream #\S+.*?Audio:/.test(stderr),
-    hasVideo: Boolean(video),
+    // Older ffmpeg builds open any .txt/.nfo as "tty" (ANSI art) and report a
+    // video stream for it. That is a text file, not a reference video.
+    hasVideo: Boolean(video) && !TEXT_AS_VIDEO.test(stderr),
   };
 }
 
