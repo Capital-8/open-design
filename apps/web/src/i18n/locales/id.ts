@@ -58,7 +58,7 @@ export const id: Dict = {
   'invite.landing.invitedEmail': "Invited email",
   'invite.landing.expires': "Expires",
   'invite.role.admin': "Admin",
-  'invite.role.member': "Member",
+  'invite.role.member': "Anggota",
   'invite.role.admin.desc': "Can manage members, seats, and all project settings.",
   'invite.role.member.desc': "Can create your own projects, and view and comment on shared team projects.",
   'invite.accept.cta': "Accept invitation",

@@ -57,7 +57,7 @@ export const fr: Dict = {
   'invite.landing.roleLabel': "Rôle",
   'invite.landing.invitedEmail': "E-mail invité",
   'invite.landing.expires': "Expire le",
-  'invite.role.admin': "Admin",
+  'invite.role.admin': "Administrateur",
   'invite.role.member': "Membre",
   'invite.role.admin.desc': "Peut gérer les membres, les sièges et tous les paramètres du projet.",
   'invite.role.member.desc': "Peut créer ses propres projets, ainsi que consulter et commenter les projets d'équipe partagés.",
