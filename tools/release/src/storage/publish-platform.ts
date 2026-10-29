@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import {
   bool,
@@ -13,7 +13,7 @@ import {
   writeJson,
 } from "./common.ts";
 import { assertCurrentVersionReservation, versionLockObjectKey } from "./beta-version-reservation.ts";
-import { putStorageObject } from "./s3-upload.ts";
+import { getStorageObject, putStorageObject, putStorageObjectWithStatus } from "./s3-upload.ts";
 import { releaseChannelDescriptor } from "@open-design/release";
 
 type AssetEntry = {
@@ -127,6 +127,40 @@ async function upload(path: string, objectKey: string, cacheControl: string): Pr
     contentType: contentType(path),
     objectKey,
   });
+}
+
+// Versioned asset URLs are served with an immutable cache policy. Replacing one
+// after a failed or repeated release can leave clients with the old artifact and
+// the new checksum sidecar, so only the first writer may create the object.
+async function uploadImmutableAsset(path: string, objectKey: string): Promise<void> {
+  if (!publishSideEffectsEnabled) {
+    console.log(`[dry-run:${dryRunMode || "plan"}] would upload ${path} to ${objectKey}`);
+    return;
+  }
+  if (storage == null) throw new Error("storage config is required to upload release assets");
+
+  const body = readFileSync(path);
+  const result = await putStorageObjectWithStatus({
+    ...storage,
+    body,
+    cacheControl: "public, max-age=31536000, immutable",
+    contentType: contentType(path),
+    headers: { "if-none-match": "*" },
+    objectKey,
+  });
+  if (result.ok) return;
+  if (result.status !== 412) {
+    throw new Error(`PUT ${result.url} failed with HTTP ${result.status}${result.body.length > 0 ? `: ${result.body}` : ""}`);
+  }
+
+  const existing = await getStorageObject({ ...storage, objectKey });
+  if (existing == null) {
+    throw new Error(`release asset disappeared after immutable PUT conflict: ${objectKey}`);
+  }
+  if (!existing.bytes.equals(body)) {
+    throw new Error(`immutable release asset already exists with different content: ${objectKey}`);
+  }
+  console.log(`reused immutable release asset ${objectKey}`);
 }
 
 async function uploadReport(reportDirectory: string): Promise<Record<string, unknown> | null> {
@@ -250,7 +284,7 @@ function targetConfig(): TargetConfig {
 
 const config = targetConfig();
 for (const name of config.assetNames) {
-  await upload(join(releaseAssetsDir, name), `${versionPrefix}/${name}`, "public, max-age=31536000, immutable");
+  await uploadImmutableAsset(join(releaseAssetsDir, name), `${versionPrefix}/${name}`);
 }
 
 const report = config.reportDirectory == null ? null : await uploadReport(config.reportDirectory);
