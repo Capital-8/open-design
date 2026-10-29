@@ -6,6 +6,7 @@ import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { spawn } from 'node:child_process';
 import { resolveYtDlp } from './yt-dlp.js';
 import { assertPublicAssetUrl, fetchPublicAsset } from '../public-asset-fetch.js';
+import { startEgressProxy } from './egress-proxy.js';
 import { createWriteStream } from 'node:fs';
 import { copyFile, lstat, mkdir, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -177,11 +178,22 @@ async function downloadUrl(url: string, dir: string, toolsDir: string | null, fe
   const ytdlp = viaDownloader ? await resolveYtDlp(toolsDir) : null;
   if (ytdlp) {
     const out = path.join(dir, 'reference.%(ext)s');
-    const result = await run(ytdlp, [
-      '--ignore-config', '--no-playlist', '--no-progress', '--match-filter', `!is_live & duration <= ${MOTION_REFERENCE_MAX_SECONDS}`,
-      '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4',
-      '--max-filesize', String(MOTION_REFERENCE_MAX_BYTES), '-o', out, url,
-    ], 300_000);
+    // yt-dlp resolves redirects and extractor URLs itself, so the only way to
+    // hold the no-private-egress boundary is to constrain its connections:
+    // every request it makes goes through a loopback proxy that applies the
+    // same public-address policy, including each redirect hop.
+    const proxy = await startEgressProxy();
+    let result;
+    try {
+      result = await run(ytdlp, [
+        '--ignore-config', '--no-playlist', '--no-progress', '--match-filter', `!is_live & duration <= ${MOTION_REFERENCE_MAX_SECONDS}`,
+        '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4',
+        '--max-filesize', String(MOTION_REFERENCE_MAX_BYTES), '-o', out,
+        '--proxy', proxy.url, url,
+      ], 300_000);
+    } finally {
+      await proxy.close().catch(() => {});
+    }
     const saved = (await readdir(dir)).find((name) => name.startsWith('reference.') && VIDEO_EXTENSIONS.has(path.extname(name).toLowerCase()));
     if (result.code === 0 && saved) return path.join(dir, saved);
     // A direct video file link carries no page metadata, so the downloader

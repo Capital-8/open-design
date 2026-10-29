@@ -2,6 +2,7 @@ import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
+import { connect } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -164,6 +165,50 @@ describe('buildMotionReference', () => {
     expect(isDownloaderHost('https://www.youtube.com/watch?v=1')).toBe(true);
     expect(isDownloaderHost('https://x.com.evil.example/post')).toBe(false);
     expect(isDownloaderHost('http://127.0.0.1/clip')).toBe(false);
+  });
+
+  it('denies the downloader a loopback destination and passes it the proxy', async () => {
+    // QA, 2026-10-29: the host allowlist only vetted the entry URL; yt-dlp then
+    // followed redirects itself, so a local sink could receive a request before
+    // the run ended in NEEDS_UPLOAD. Every downloader connection now goes
+    // through an egress proxy that applies the public-address policy.
+    let sinkHits = 0;
+    const sink = http.createServer((_req, res) => { sinkHits += 1; res.writeHead(200, { 'content-type': 'video/mp4' }); res.end('x'); });
+    await new Promise<void>((resolve) => sink.listen(0, '127.0.0.1', resolve));
+    const sinkPort = (sink.address() as AddressInfo).port;
+    const argsFile = path.join(project, 'ytdlp-args.txt');
+    const fake = path.join(project, 'args-ytdlp.sh');
+    await writeFile(fake, `#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "${argsFile}"\nexit 1\n`, { mode: 0o755 });
+    const { startEgressProxy } = await import('../../src/media/egress-proxy.js');
+    const proxy = await startEgressProxy();
+    try {
+      // CONNECT to a loopback address is refused, and the sink stays untouched.
+      const verdict = await new Promise<string>((resolve) => {
+        const socket = connect(Number(new URL(proxy.url).port), '127.0.0.1', () => {
+          socket.write(`CONNECT 127.0.0.1:${sinkPort} HTTP/1.1\r\nHost: 127.0.0.1:${sinkPort}\r\n\r\n`);
+        });
+        let reply = '';
+        socket.on('data', (chunk) => { reply += chunk.toString('latin1'); });
+        socket.on('close', () => resolve(/\b403\b/.test(reply) ? 'blocked' : reply ? 'allowed' : 'closed'));
+        socket.on('error', () => resolve('closed'));
+        setTimeout(() => { socket.destroy(); resolve(/\b403\b/.test(reply) ? 'blocked' : 'timeout'); }, 3000);
+      });
+      expect(verdict).toBe('blocked');
+      expect(sinkHits).toBe(0);
+
+      // The real download path hands the downloader the proxy, not a bare URL.
+      process.env.OD_YTDLP_PATH = fake;
+      await buildMotionReference({ projectDir: project, source: 'https://x.com/a/status/1', id: 'sink' }).catch(() => null);
+      const args = await readFile(argsFile, 'utf8');
+      expect(args).toContain('--proxy');
+      // The downloader gets a loopback proxy (its own instance per run), never a
+      // bare connection to the caller's URL.
+      expect(args).toMatch(/--proxy\nhttp:\/\/127\.0\.0\.1:\d+\n/);
+    } finally {
+      delete process.env.OD_YTDLP_PATH;
+      await proxy.close();
+      sink.close();
+    }
   });
 
   it('refuses paths outside the project and non-video files', async () => {
