@@ -51,7 +51,8 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              component: harness
+              app.kubernetes.io/name: harness
+              app.kubernetes.io/instance: od-e2e-harness
               delivery: opend-4356-ns-e2e
       ports: [{protocol: TCP, port: 18082}]
     - to:
