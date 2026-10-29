@@ -37,7 +37,7 @@ function harness(finishCaptureResult: unknown = {
   status: 'queued',
   acknowledgement: 'local_buffer',
   errorType: null,
-}, db: unknown = {}, workspaceContext?: RunAnalyticsLifecycleDeps['workspaceContext'], runs?: ReturnType<typeof createChatRunService>) {
+}, db: unknown = {}, workspaceContext?: RunAnalyticsLifecycleDeps['workspaceContext'], runs?: ReturnType<typeof createChatRunService>, detectAgents: RunAnalyticsLifecycleDeps['agents']['detectAgents'] = async () => []) {
   const captured: Captured[] = [];
   const captureWaiters = new Map<string, Array<{ occurrence: number; resolve(event: Captured): void }>>();
   const signalCapture = (event: Captured) => {
@@ -54,6 +54,8 @@ function harness(finishCaptureResult: unknown = {
   const completed: string[] = [];
   const deliveryBegun: string[] = [];
   const deliveryFinalized: Array<{ runId: string; result: unknown }> = [];
+  let signalDeliveryFinalized: () => void = () => {};
+  const currentDeliveryFinalized = new Promise<void>((resolve) => { signalDeliveryFinalized = resolve; });
   let settle: (status: { status: string; errorCode?: string | null; exitCode?: number | null }) => void = () => {};
   const terminal = new Promise<{ status: string }>((resolve) => {
     settle = (status) => resolve(status as { status: string });
@@ -78,8 +80,7 @@ function harness(finishCaptureResult: unknown = {
         finalizeAnalyticsDelivery: (run, result) => {
           runs?.finalizeAnalyticsDelivery(run, result);
           deliveryFinalized.push({ runId: run.id, result });
-          const finished = captured.find((event) => event.eventName === 'run_finished');
-          if (finished) signalCapture(finished);
+          signalDeliveryFinalized();
         },
         markAnalyticsCompleted: (run) => { runs?.markAnalyticsCompleted(run); completed.push(run.id); },
         setDeliverableValidation: () => {},
@@ -87,7 +88,7 @@ function harness(finishCaptureResult: unknown = {
       analytics: {
         capture: (args) => {
           captured.push(args as Captured);
-          if (args.eventName !== 'run_finished') signalCapture(args as Captured);
+          signalCapture(args as Captured);
           return args.eventName === 'run_finished'
             ? finishCaptureResult
             : { status: 'queued', acknowledgement: 'local_buffer', errorType: null };
@@ -96,7 +97,7 @@ function harness(finishCaptureResult: unknown = {
       getAppVersion: () => '0.0.0-test',
     },
     paths: { PROJECTS_DIR: '/nonexistent/projects', RUNTIME_DATA_DIR: '/nonexistent/data' },
-    agents: { detectAgents: async () => [] },
+    agents: { detectAgents },
     ...(workspaceContext ? { workspaceContext } : {}),
     telemetry: {
       reportRunCompletionTelemetryFallback: () => {},
@@ -114,6 +115,8 @@ function harness(finishCaptureResult: unknown = {
     lifecycle,
     recoveries,
     settle,
+    // Historical attempts still emit their event, but cannot finalize the current run.
+    waitForCurrentDeliveryFinalized: () => currentDeliveryFinalized,
     waitForCapture(eventName: string, occurrence = 1): Promise<Captured> {
       const found = captured.filter((event) => event.eventName === eventName)[occurrence - 1];
       if (found) return Promise.resolve(found);
@@ -146,8 +149,10 @@ function fakeRun(overrides: Record<string, unknown> = {}): ChatRun {
 
 const CONTEXT = { deviceId: 'device-1', sessionId: 'session-1', clientType: 'web', locale: 'en' };
 
-function settled(h: ReturnType<typeof harness>, eventName: string) {
-  return h.waitForCapture(eventName);
+async function settled(h: ReturnType<typeof harness>, eventName: string) {
+  const captured = await h.waitForCapture(eventName);
+  if (eventName === 'run_finished') await h.waitForCurrentDeliveryFinalized();
+  return captured;
 }
 
 const WORKSPACE_SCOPE = {
@@ -177,6 +182,23 @@ function workspaceContext(overrides: Partial<WorkspaceCollabContext> = {}): Work
 }
 
 describe('run analytics lifecycle', () => {
+  it('freezes persisted Motion intent for creation, terminal and recovery independently of discovery routing', async () => {
+    const project = { id: 'motion-project', name: 'Motion', metadataJson: JSON.stringify({ kind: 'video', videoModel: 'hyperframes-html', intent: 'motion-design' }) };
+    const db = { prepare: () => ({ get: () => project }) };
+    const h = harness(undefined, db);
+    h.lifecycle.install({
+      run: fakeRun({ projectId: project.id }),
+      body: { projectId: project.id, analyticsHints: { projectKind: 'hyperframes' } },
+      requestAnalyticsContext: CONTEXT as never,
+    });
+    expect((await settled(h, 'run_created')).properties.project_intent).toBe('motion-design');
+    project.metadataJson = JSON.stringify({ intent: 'hyperframes' });
+    h.settle({ status: 'succeeded' });
+    expect((await settled(h, 'run_finished')).properties.project_intent).toBe('motion-design');
+    expect(h.recoveries).toHaveLength(2);
+    expect(h.recoveries.every((row) => row.properties.project_intent === 'motion-design')).toBe(true);
+  });
+
   it.each([
     { attachments: undefined, expected: undefined },
     { attachments: [], expected: [] },
@@ -341,7 +363,7 @@ describe('run analytics lifecycle', () => {
     expect(h.captured[1]?.insertId).toBe(`${created.insertId}-finish`);
   });
 
-  it('keeps a late workspace response on its original attempt after finish and resume', async () => {
+  it.each(['natural', 'current-first', 'original-first'] as const)('keeps a late workspace response on its original attempt after finish and resume (%s)', async (finishOrder) => {
     const runs = createChatRunService({
       createSseResponse: () => ({ send: vi.fn(), end: vi.fn(), cleanup: vi.fn() }),
       createSseErrorPayload: (code: string, message: string) => ({ error: { code, message } }),
@@ -349,7 +371,15 @@ describe('run analytics lifecycle', () => {
     let resolveContext: (context: ReturnType<typeof workspaceContext>) => void = () => {};
     const context = new Promise<ReturnType<typeof workspaceContext>>((resolve) => { resolveContext = resolve; });
     const resolveExact = vi.fn(() => context);
-    const h = harness(undefined, {}, { resolveExact }, runs);
+    let releaseConfiguration: () => void = () => {};
+    const heldConfiguration = new Promise<void>((resolve) => { releaseConfiguration = resolve; });
+    let configurationReads = 0;
+    const h = harness(undefined, {}, { resolveExact }, runs, async () => {
+      const read = configurationReads++;
+      if ((finishOrder === 'current-first' && read === 0)
+        || (finishOrder === 'original-first' && read === 1)) await heldConfiguration;
+      return [];
+    });
     const run = runs.create({ projectId: 'project-a', agentId: 'amr', workspaceScope: WORKSPACE_SCOPE, clientRequestId: 'original-request' });
     const perRequestUsageLedger = createRunPerRequestUsageLedger();
     foldEventIntoPerRequestUsageLedger(perRequestUsageLedger, {
@@ -372,7 +402,13 @@ describe('run analytics lifecycle', () => {
     h.lifecycle.install({ ...input, resumed: true });
     runs.finish(run, 'succeeded', 0, null);
     resolveContext(workspaceContext());
+    if (finishOrder !== 'natural') {
+      const first = await h.waitForCapture('run_finished');
+      expect(first.properties.run_attempt).toBe(finishOrder === 'current-first' ? 1 : 0);
+      releaseConfiguration();
+    }
     await h.waitForCapture('run_finished', 2);
+    await h.waitForCurrentDeliveryFinalized();
     const created = h.captured.filter((event) => event.eventName === 'run_created');
     const finished = h.captured.filter((event) => event.eventName === 'run_finished');
     expect(created).toHaveLength(2);

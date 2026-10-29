@@ -113,6 +113,15 @@ const workspaceTabsHarness = vi.hoisted(() => ({
   projectIds: new Set<string>(),
 }));
 
+const concurrencyAnalytics = vi.hoisted(() => ({ track: vi.fn() }));
+beforeEach(() => concurrencyAnalytics.track.mockClear());
+vi.mock('../../src/analytics/provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/analytics/provider')>();
+  return { ...actual, useAnalytics: () => ({ ...actual.useAnalytics(), track: concurrencyAnalytics.track }) };
+});
+function concurrencyViews() {
+  return concurrencyAnalytics.track.mock.calls.filter(([event, props]) => event === 'surface_view' && props.area === 'concurrency_limit_dialog');
+}
 vi.mock('../../src/collab/workspace-events', () => ({
   useWorkspaceInvalidation: vi.fn((
     handlers: Record<string, (payload: any) => void>,
@@ -978,7 +987,7 @@ describe('App project creation routing', () => {
     workspaceInvalidationHarness.onActive.length = 0;
   });
 
-  it('returns a first request rejected by Link to Home with the original files, without deleting the created project', async () => {
+  it('returns a first request rejected by Link concurrency to Home with the original files, without deleting the created project', async () => {
     mockedListProjects.mockResolvedValue([]);
     let createdId = '';
     mockedCreateProject.mockImplementation(async (input) => {
@@ -999,6 +1008,7 @@ describe('App project creation routing', () => {
     expect(restored).toBe(true);
     expect(await screen.findByTestId('entry-home-surface')).toBeTruthy();
     expect(screen.getByTestId('amr-concurrency-dialog')).toBeTruthy();
+    expect(concurrencyViews().at(-1)?.[1]).toMatchObject({ page_name: 'home', stage: 'before_run' });
     expect(window.localStorage.getItem('open-design:home-composer:prompt')).toContain('Build the retained artifact prompt');
     const files = peekHomeComposerAttachments();
     expect(files.map((f) => f.name)).toEqual(['brief.txt']);

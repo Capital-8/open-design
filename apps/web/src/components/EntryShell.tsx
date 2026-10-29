@@ -131,7 +131,7 @@ import {
   retryUnavailableAmrBalanceGate,
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
-import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, confirmHomeAmrFundingAvailable, currentAmrFundingFeedbackGeneration, invalidateAmrFundingFeedback, noteHomeAmrFundingBlockPresented, readFreshAmrFundingEvidence, recentHomeAmrFundingInsufficiency, retireHomeAmrFundingBlock, takeHomeAmrFundingFastBlock } from '../runtime/amr-funding-feedback';
+import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, confirmHomeAmrFundingAvailable, invalidateAmrFundingFeedback, noteHomeAmrFundingBlockPresented, readSendTimeAmrFundingEvidence, recentHomeAmrFundingInsufficiency, retireHomeAmrFundingBlock, takeHomeAmrFundingFastBlock } from '../runtime/amr-funding-feedback';
 import { ReferralNotice } from './ReferralNotice';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
 import { HomeInviteSurface, HomeInviteTrigger } from './HomeInviteSurface';
@@ -1683,18 +1683,8 @@ export function EntryShell({
       // now, but never wait for it when the counter already proves full.
       // Consume late failures even if an identity change or full counter exits.
       const fundingEvidence = scope
-        ? (async () => {
-          // Focus, the wallet SSE and its billing publication can supersede
-          // successive reads during one explicit Send. Retry only those
-          // invalidated reads, with a hard bound and no stale authorization.
-          for (let attempt = 0; attempt < 3; attempt++) {
-            const generation = currentAmrFundingFeedbackGeneration();
-            const evidence = await readFreshAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent);
-            if (!fundingIsCurrent()) return { kind: 'unknown' as const, preflight: null };
-            if (generation === currentAmrFundingFeedbackGeneration()) return evidence;
-          }
-          return { kind: 'unknown' as const, preflight: null };
-        })().catch(() => ({ kind: 'unknown' as const, preflight: null }))
+        ? readSendTimeAmrFundingEvidence(scope, amrModelId ?? null, fundingIsCurrent)
+          .catch(() => ({ kind: 'unknown' as const, preflight: null }))
         : null;
       const hintRequest = readAmrRequestConcurrency(scope);
       // Either current, exact-scope refusal can settle this click. A confirmed
@@ -2166,7 +2156,7 @@ export function EntryShell({
   return (
     <div className={`entry-shell entry-shell--no-header${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
       {homeConcurrencyBlock && homeConcurrencyPresentation && homeConcurrencyBlock.identity === homeFundingIdentity ? (
-        <AmrConcurrencyDialog branch={homeConcurrencyPresentation.branch}
+        <AmrConcurrencyDialog pageName="home" stage="before_run" branch={homeConcurrencyPresentation.branch}
           upgradeAllowed={homeConcurrencyPresentation.upgradeAllowed}
           workspaceContext={homeConcurrencyBlock.workspaceContext}
           profile={amrRegistrationStatus?.profile?.trim() || amrProfile}

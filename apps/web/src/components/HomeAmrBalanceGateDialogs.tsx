@@ -51,11 +51,12 @@ export function HomeAmrBalanceGateDialogs({ block, runtimeProfile, consoleOrigin
      * 主按钮取自 `workspaceUpgradeUrl` —— 对这类成员返回 `null`,于是
      * 弹窗上只剩一颗「暂不需要」(§6.Y)。这张弹窗至少给得出一条路。
      */
-    return <AmrOwnerTopUpDialog onClose={() => block.resolve('dismiss')} />;
+    return <AmrOwnerTopUpDialog pageName="home" stage="before_run" onClose={() => block.resolve('dismiss')} />;
   }
   return (
     <AmrBalanceDialog
       reason={block.reason}
+      stage="before_run"
       manualSendOnRecovery={block.reason === 'insufficient'}
       modelId={block.modelId}
       fundingScope={block.fundingScope}

@@ -32,6 +32,7 @@ const summary = {
 	shareBlockReason: "free",
 	inviteUrl: null,
 	inviterIssuedCount: 0,
+	inviterRewardLimit: 5,
 	inviteeIssuedCount: 0,
 	availableCardCount: 0,
 	invitee: {
@@ -87,6 +88,9 @@ test.beforeEach(async ({ page }) => {
 				account: { plan: "go", balanceUsd: "106.00" },
 			},
 		}),
+	);
+	await page.route("**/api/integrations/vela/referral-account", (route) =>
+		route.fulfill({ json: { appUserId: "invitation-qa" } }),
 	);
 	await page.route("**/api/workspace/directory", (route) =>
 		route.fulfill({
@@ -180,6 +184,7 @@ test("[P1] quota invitation uses the active environment independent page and pre
 			json: {
 				...summary,
 				canShare: true,
+				inviteUrl: "https://example.com/login?ref=test",
 				shareBlockReason: null,
 				invitee: null,
 			},
@@ -196,6 +201,6 @@ test("[P1] quota invitation uses the active environment independent page and pre
 	await notice.getByRole("button", { name: "邀请好友" }).click();
 	await expect
 		.poll(() => opened)
-		.toBe("http://localhost:5173/reset?source=open_design");
+		.toBe("http://localhost:5173/reset?source=open_design&expectedAppUserId=invitation-qa");
 	await capture(page, "client-exhausted-desktop");
 });

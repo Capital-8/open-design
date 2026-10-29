@@ -666,6 +666,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         ? activeProjectFileName
         : null;
     const activeFileDisplayName = activeFileContext ? lastPathSegment(activeFileContext) : null;
+    const disabledInputPlaceholder = inputDisabled ? composerPlaceholder : undefined;
     const [draft, setDraft] = useState(() => initialDraft ?? loadComposerDraft(draftStorageKey) ?? "");
     /*
      * 刷新之后要回来的**整份**负载。读一次就够 —— 会话一换,`ProjectView` 会拿
@@ -3678,13 +3679,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               draft={draft}
               inputDisabled={inputDisabled}
               placeholder={
-                activeFileDisplayName
+                disabledInputPlaceholder ?? (activeFileDisplayName
                   ? t('chat.activeFilePlaceholder', { file: activeFileDisplayName })
                   : placeholderCarouselActive
                     ? ''
-                    : composerPlaceholder ?? t('chat.composerPlaceholder')
+                    : composerPlaceholder ?? t('chat.composerPlaceholder'))
               }
-              title={activeFileDisplayName ?? composerPlaceholder ?? t('chat.composerPlaceholder')}
+              title={disabledInputPlaceholder ?? activeFileDisplayName ?? composerPlaceholder ?? t('chat.composerPlaceholder')}
               knownEntities={composerMentionEntities}
               onChange={handleEditorChange}
               onTrigger={handleEditorTrigger}
