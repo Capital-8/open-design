@@ -1351,6 +1351,13 @@
       "durationMs": 1267,
       "holdMs": 1267,
       "hash": "4c1eda0ef2bd6059"
+    },
+    "example-motion-superx-audience-growth": {
+      "video": "example-motion-superx-audience-growth/7418fad0fa63c84c/preview.mp4",
+      "poster": "example-motion-superx-audience-growth/7418fad0fa63c84c/poster.jpg",
+      "durationMs": 5800,
+      "holdMs": 2500,
+      "hash": "7418fad0fa63c84c"
     }
   }
 }
