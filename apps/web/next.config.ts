@@ -2,9 +2,13 @@ import type { NextConfig } from 'next';
 import { existsSync, realpathSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
+import { createRequire } from 'node:module';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { nextTargetResolution, parseWebTarget } from './build/target.ts';
+// Next's CJS config loader may run from the operator's working directory.
+// Resolve local helpers from this config's filename, independently of cwd.
+const sourceRequire = createRequire(import.meta.url);
+const { nextTargetResolution, parseWebTarget } = sourceRequire('./build/target.ts') as typeof import('./build/target.ts');
 
 // Daemon port the local Express server binds to (see apps/daemon/src/cli.ts). The
 // dev-all launcher overrides OD_PORT after probing for a free port; we read
