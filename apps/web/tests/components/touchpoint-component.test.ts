@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+	focusWebTouchpointModal,
 	hasWebTouchpointCloseControl,
 	lockWebTouchpointModalScroll,
 	resolveWebTouchpointLocale,
@@ -316,6 +317,46 @@ describe("modal tab traversal", () => {
       modal.remove();
     }
   });
+});
+
+describe("modal keyboard stack ownership", () => {
+	it.each([false, true])("ignores a covered CMS even without inert (higher first: %s)", higherFirst => {
+		const campaign = document.createElement("div");
+		campaign.setAttribute("role", "dialog");
+		campaign.setAttribute("aria-modal", "true");
+		Object.assign(campaign.style, { position: "fixed", zIndex: "1000" });
+		const modal = document.createElement("div");
+		modal.tabIndex = -1;
+		const action = document.createElement("button");
+		modal.append(action);
+		campaign.append(modal);
+		const higher = document.createElement("div");
+		higher.setAttribute("role", "alertdialog");
+		higher.setAttribute("aria-modal", "true");
+		higher.tabIndex = -1;
+		Object.assign(higher.style, { position: "fixed", zIndex: "1700" });
+		document.body.append(...(higherFirst ? [higher, campaign] : [campaign, higher]));
+		try {
+			higher.focus();
+			focusWebTouchpointModal(modal);
+			for (const shiftKey of [false, true]) {
+				const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey, cancelable: true });
+				trapWebTouchpointModalFocus(event, modal);
+				expect(event.defaultPrevented).toBe(false);
+				expect(document.activeElement).toBe(higher);
+			}
+			higher.remove();
+			focusWebTouchpointModal(modal);
+			expect(document.activeElement).toBe(action);
+			const tab = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
+			trapWebTouchpointModalFocus(tab, modal);
+			expect(tab.defaultPrevented).toBe(true);
+			expect(document.activeElement).toBe(action);
+		} finally {
+			campaign.remove();
+			higher.remove();
+		}
+	});
 });
 
 describe("lockWebTouchpointModalScroll", () => {

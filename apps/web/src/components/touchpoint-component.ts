@@ -1,3 +1,4 @@
+import { getTopModalDialog } from "@open-design/components";
 import {
 	type TouchpointComponentV2Manifest as ContentPackageManifest,
 	TouchpointComponentV2ManifestSchema as contentPackageManifestSchema,
@@ -667,6 +668,13 @@ function composedActiveElement(): Element | null {
 
 export { lockWebModalScroll as lockWebTouchpointModalScroll } from "./modal-scroll-lock";
 
+/** Share keyboard ownership with Dialog, including its CSS stacking order. */
+export function ownsWebTouchpointModalKeyboard(modal: HTMLElement | null): boolean {
+	if (!modal) return false;
+	const top = getTopModalDialog(modal.ownerDocument);
+	return !top || top === modal || top.contains(modal);
+}
+
 /**
  * Gives a host-owned modal its initial focus in composed-tree order, so the
  * first control inside the component's ShadowRoot (a light-DOM query cannot
@@ -674,7 +682,7 @@ export { lockWebModalScroll as lockWebTouchpointModalScroll } from "./modal-scro
  * content offers no control at all.
  */
 export function focusWebTouchpointModal(modal: HTMLElement | null) {
-	if (!modal) return;
+	if (!modal || !ownsWebTouchpointModalKeyboard(modal)) return;
 	// A control can still refuse focus (a style this check cannot see); the
 	// next one is tried, and the container keeps focus inside the modal last.
 	for (const candidate of composedFocusableElements(modal)) {
@@ -689,7 +697,7 @@ export function trapWebTouchpointModalFocus(
 	event: KeyboardEvent,
 	modal: HTMLElement | null,
 ) {
-	if (event.key !== "Tab" || !modal) return;
+	if (event.key !== "Tab" || !modal || !ownsWebTouchpointModalKeyboard(modal)) return;
 	const focusable = composedFocusableElements(modal);
 	const active = composedActiveElement();
 	const ordered = event.shiftKey ? [...focusable].reverse() : focusable;
