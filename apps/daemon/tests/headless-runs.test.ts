@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { startServer } from '../src/server.js';
 
@@ -20,6 +20,7 @@ describe('POST /api/runs headless fallbacks', () => {
   const oldAgentHome = process.env.OD_AGENT_HOME;
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.resolve(started?.shutdown?.());
     if (started?.server) {
       await new Promise<void>((resolve) => started?.server.close(() => resolve()));
@@ -543,6 +544,9 @@ describe('POST /api/runs headless fallbacks', () => {
     expect(beforeIds.indexOf(newer.projectId)).toBeLessThan(beforeIds.indexOf(older.projectId));
 
     await delay(5);
+    let clock = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => ++clock);
+    const prompt = `activity bump seed ${randomUUID()}`;
     const runResponse = await fetch(`${started.url}/api/runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -550,7 +554,7 @@ describe('POST /api/runs headless fallbacks', () => {
         agentId: `missing-agent-${randomUUID()}`,
         projectId: older.projectId,
         conversationId: older.conversationId,
-        message: `activity bump seed ${randomUUID()}`,
+        message: prompt,
         userMessageId,
       }),
     });
@@ -569,10 +573,44 @@ describe('POST /api/runs headless fallbacks', () => {
     expect(project.lastUserQueryAt).toEqual(expect.any(Number));
     const messages = await fetch(`${started.url}/api/projects/${older.projectId}/conversations/${older.conversationId}/messages`);
     const { messages: transcript } = await messages.json() as import('@open-design/contracts').MessagesResponse;
-    expect(transcript.find(message => message.role === 'user')?.createdAt)
-      .toBeLessThanOrEqual(project.lastUserQueryAt!);
+    const user = transcript.find(message => message.role === 'user');
+    expect(user?.content).toBe(prompt);
+    if (userMessageId) expect(user?.id).toBe(userMessageId);
+    expect(user?.startedAt).toBe(project.lastUserQueryAt);
+    // Separate clock reads deliberately cross a millisecond boundary.
+    expect(user?.createdAt).toBeGreaterThan(project.lastUserQueryAt!);
     const accepted = await runResponse.json() as import('@open-design/contracts').ChatRunCreateResponse;
     expect(accepted.userSubmission?.acceptedAt).toBe(project.lastUserQueryAt);
+  });
+
+  it.each([false, true])('replays a submission without duplicate messages (explicit conversation: %s)', async (explicitConversation) => {
+    started = await startTestServer();
+    const { projectId, conversationId } = await createProject(started.url, 'Lost response replay');
+    const body = { agentId: `missing-${randomUUID()}`, projectId,
+      ...(explicitConversation ? { conversationId } : {}),
+      message: 'replay this accepted request', clientRequestId: randomUUID(),
+      submission: { id: randomUUID(), source: 'user' } };
+    const post = (input: object) => fetch(`${started!.url}/api/runs`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+    });
+    const first = await post(body);
+    expect(first.status).toBe(202);
+    const accepted = await first.json() as ChatRunCreateResponse;
+    const replay = await post(body);
+    expect(replay.status).toBe(202);
+    const repeated = await replay.json() as ChatRunCreateResponse;
+    expect(repeated.runId).toBe(accepted.runId);
+    expect(repeated.userSubmission).toEqual(accepted.userSubmission);
+    expect(repeated.userSubmission).toMatchObject({ projectId, conversationId, id: body.submission.id });
+    const transcript = await (await fetch(`${started.url}/api/projects/${projectId}/conversations/${conversationId}/messages`)).json() as import('@open-design/contracts').MessagesResponse;
+    expect(transcript.messages.filter(message => message.role === 'user')).toHaveLength(1);
+    expect(transcript.messages.find(message => message.role === 'user')?.content).toBe(body.message);
+    const detail = await (await fetch(`${started.url}/api/projects/${projectId}`)).json() as ProjectResponse;
+    expect(detail.project.lastUserQueryAt).toBe(accepted.userSubmission!.acceptedAt);
+    const otherConversationId = await createConversation(started.url, projectId, 'Wrong conversation');
+    expect((await post({ ...body, conversationId: otherConversationId })).status).toBe(409);
+    const other = await createProject(started.url, 'Wrong submission scope');
+    expect((await post({ ...body, projectId: other.projectId, conversationId: other.conversationId })).status).toBe(409);
   });
 
   it('OPEND-4047/4043 records human acceptance once and never records automatic repair', async () => {

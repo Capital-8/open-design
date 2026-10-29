@@ -1450,8 +1450,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       authorizedBoundMutation = authorization.authorizedBoundMutation;
     }
     const previousSubmission = submission ? getProjectUserSubmission(db, submission.id as string) : undefined;
-    if (previousSubmission && (previousSubmission.projectId !== requestBody.projectId
-      || previousSubmission.conversationId !== requestBody.conversationId)) {
+    if (previousSubmission && previousSubmission.projectId !== requestBody.projectId) {
       return sendApiError(res, 409, 'IDEMPOTENCY_CONFLICT', 'submission belongs to another conversation');
     }
     if (submission?.source === 'queue' && !previousSubmission) {
@@ -2090,6 +2089,11 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       ) {
         return sendApiError(res, 404, 'CONVERSATION_NOT_FOUND', 'conversation not found for project');
       }
+    }
+    // Compare against the actual binding, including the project-only fallback.
+    // Replaying an accepted request may still omit conversationId on the wire.
+    if (previousSubmission && previousSubmission.conversationId !== meta.conversationId) {
+      return sendApiError(res, 409, 'IDEMPOTENCY_CONFLICT', 'submission belongs to another conversation');
     }
     // Resolve session mode before omit-pin seed so the user turn stores the
     // same mode the run will use (matches web PUT /messages persistence).
