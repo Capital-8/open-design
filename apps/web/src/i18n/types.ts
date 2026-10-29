@@ -33,6 +33,7 @@ export interface Dict {
   "referral.notice.label": string;
   "referral.notice.registered": string;
   "referral.notice.pending": string;
+  "referral.notice.pendingAt": string;
   "referral.notice.exhausted": string;
   "referral.notice.remaining": string;
   "referral.notice.invite": string;

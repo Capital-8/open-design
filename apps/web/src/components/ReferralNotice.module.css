@@ -17,3 +17,13 @@
 :global(.home-view) > :global(.home-hero):has(.slot){padding-top:60px}
 .dismissed{visibility:hidden;pointer-events:none}
 @media(max-width:760px){:global(.home-view) > :global(.home-hero):has(.slot){padding-top:64px}}
+
+/* The design uses one home reminder slot; the top invitation trigger remains. */
+.inviteSurface{display:contents}
+:global(.home-hero):has(.slot) > .inviteSurface{display:none}
+
+/* Match the supplied 700px client state while keeping all content in flow. */
+@media(min-width:601px) and (max-width:760px){
+  :global(.home-view) > :global(.home-hero):has(.slot){padding-top:132px}
+  .slot{margin-bottom:16px}
+}

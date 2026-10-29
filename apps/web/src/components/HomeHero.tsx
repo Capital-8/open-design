@@ -1,3 +1,4 @@
+import referralNoticeStyles from './ReferralNotice.module.css';
 // Lovart-style centered hero for the entry Home view.
 //
 // The prompt textarea is the canonical creation surface: the user
@@ -1559,7 +1560,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
       }
     >
       {isDock ? null : referralNotice}
-      {isDock ? null : inviteSurface}
+      {isDock ? null : <div className={referralNoticeStyles.inviteSurface} data-home-invite-surface>{inviteSurface}</div>}
       {/* Hero header: one plain question. The animated pixel-scan wordmark that
           used to stand here is gone (per product) — the headline carries the
           moment instead, with no motion behind it. */}

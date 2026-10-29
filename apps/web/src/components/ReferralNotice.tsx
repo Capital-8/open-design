@@ -30,7 +30,7 @@ export function ReferralNotice({
 	context: WorkspaceCollabContext | null;
 	billing: WorkspaceBillingResponse | null;
 }) {
-	const { t } = useI18n();
+	const { t, locale } = useI18n();
 	const scopeKey = `${profile}:${accountId}`;
 	const currentScope = useRef(scopeKey);
 	currentScope.current = scopeKey;
@@ -139,7 +139,9 @@ export function ReferralNotice({
 				data-state={kind}
 			>
 				<span className={styles.copy}>
-					{t(`referral.notice.${kind}`)}
+					{kind === "pending" && data?.invitee?.dueAt
+            ? t("referral.notice.pendingAt", { time: new Intl.DateTimeFormat(locale, {dateStyle: "medium", timeStyle: "short"}).format(new Date(data.invitee.dueAt)) })
+            : t(`referral.notice.${kind}`)}
 					{kind === "registered" && data?.invitee?.purchaseDeadline ? (
 						<span className={styles.countdown}>
 							{t("referral.notice.remaining", {
