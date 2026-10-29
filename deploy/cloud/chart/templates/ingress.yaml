@@ -18,9 +18,9 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
-          {{- range list "/api" "/health" "/ready" }}
+          {{- range list "/api" "/artifacts" "/frames" "/version" "/health" "/ready" }}
           - path: {{ . }}
-            pathType: {{ if eq . "/api" }}Prefix{{ else }}Exact{{ end }}
+            pathType: {{ if has . (list "/api" "/artifacts" "/frames") }}Prefix{{ else }}Exact{{ end }}
             backend:
               service:
                 name: open-design-cloud

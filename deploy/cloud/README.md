@@ -58,3 +58,26 @@ HELM_BIN=helm corepack pnpm --filter @open-design/e2e exec vitest run tests/clou
 ```
 
 如需预览 migration/Ingress，给 template 加 `--set migration.enabled=true,migration.runId=review,ingress.enabled=true`。数据库访问许可需要先于单独执行的 Job 生效；模板顺序不代表执行顺序。真实值来自既有环境，不从测试 fixture 推导。此次不执行 Helm install/upgrade、kubectl apply、数据库迁移、镜像推送或集群故障演练。
+
+
+## OD test namespace
+
+The additional supported target/namespace pair is `od-e2e` / `od-test`.
+The default `spark-amr` / `od-amr-4114` pair remains available. These are render
+constraints; operators must separately verify their kube context and resource
+ownership. The application chart still does not create its DB, Secrets or PVC.
+
+`amr.privateHttp=true` enables cloud's account API and Harness backchannel only
+for Kubernetes Service roots in the release namespace (`service.namespace.svc`
+or `service.namespace.svc.cluster.local`). It sets
+`OD_CLOUD_AMR_ALLOW_PRIVATE_HTTP=true` and `OD_CLOUD_AMR_PRIVATE_NAMESPACE`.
+The direct process configuration defaults to HTTPS and rejects a missing/invalid
+private namespace, external/lookalike hosts, credentials and non-root internal
+paths. Browser `webUrl` and `amr.web` retain HTTPS. Renderer keeps its separate
+existing private-Service setting.
+
+Optional ingress covers `/api`, `/artifacts`, `/frames` as prefixes and
+`/version`, `/health`, `/ready` as exact routes. When the environment already
+owns an ingress for the same host, keep chart ingress disabled and update that
+owner rather than create a second route owner. Migration remains a separate
+explicit step before enabling cloud workloads; no automatic DDL is added.
