@@ -4804,6 +4804,7 @@ export function CommentSidePanel({
   queueOnSend = false,
   sendDisabled = false,
   sendDisabledReason,
+  sendError,
   allowSendToChat = true,
   renderCreateForm = true,
   t,
@@ -4848,6 +4849,7 @@ export function CommentSidePanel({
   queueOnSend?: boolean;
   sendDisabled?: boolean;
   sendDisabledReason?: string;
+  sendError?: string;
   allowSendToChat?: boolean;
   renderCreateForm?: boolean;
   t: TranslateFn;
@@ -5038,6 +5040,30 @@ export function CommentSidePanel({
           </button>
         </div>
       ) : null}
+      {selectedCount > 0 ? (
+        <div className="comment-side-selectbar" data-testid="comment-side-selectbar">
+          <span className="comment-side-selectcount">{t('chat.comments.nSelected', { n: selectedCount })}</span>
+          <Button variant="ghost" onClick={onClearSelection}>
+            {t('chat.comments.clear')}
+          </Button>
+          {allowSendToChat ? (
+            <Button
+              variant="primary"
+              data-testid="comment-side-send-claude"
+              disabled={sending || sendDisabled}
+              title={sendDisabled ? sendDisabledReason : undefined}
+              onClick={() => void onSendSelected()}
+            >
+              {sending
+                ? t('chat.comments.sending')
+                : queueOnSend
+                  ? t('chat.annotationQueue')
+                  : t('chat.comments.sendToChat')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {selectedCount > 0 && (sendError || (sendDisabled && sendDisabledReason)) ? <p role="alert" className="comment-side-submit-error" data-testid="comment-side-submit-error">{sendError || sendDisabledReason}</p> : null}
       <div
         className="comment-side-list"
         onDragLeave={(event) => {
@@ -5117,7 +5143,7 @@ export function CommentSidePanel({
               <CommentListBody key={comment.note} note={comment.note} t={t} />
               {unavailableCommentId === comment.id ? (
                 <span role="status" data-testid="comment-location-unavailable">
-                  {t('comment.anchorState.lost')}
+                  {t('comment.locationUnavailable')}
                 </span>
               ) : null}
               {unavailableCommentId !== comment.id && locationNotices?.get(comment.id) ? (
@@ -5153,29 +5179,6 @@ export function CommentSidePanel({
           );
         })}
       </div>
-      {selectedCount > 0 ? (
-        <div className="comment-side-selectbar" data-testid="comment-side-selectbar">
-          <span className="comment-side-selectcount">{t('chat.comments.nSelected', { n: selectedCount })}</span>
-          <Button variant="ghost" onClick={onClearSelection}>
-            {t('chat.comments.clear')}
-          </Button>
-          {allowSendToChat ? (
-            <Button
-              variant="primary"
-              data-testid="comment-side-send-claude"
-              disabled={sending || sendDisabled}
-              title={sendDisabled ? sendDisabledReason : undefined}
-              onClick={() => void onSendSelected()}
-            >
-              {sending
-                ? t('chat.comments.sending')
-                : queueOnSend
-                  ? t('chat.annotationQueue')
-                  : t('chat.comments.sendToChat')}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
       {composer ? <div className="comment-side-composer">{composer}</div> : null}
       {renderCreateForm && onCreateComment ? (
         <form
@@ -5319,6 +5322,7 @@ function CommentSideDock({
   queueOnSend = false,
   sendDisabled = false,
   sendDisabledReason,
+  sendError,
   allowSendToChat = true,
   renderCreateForm = true,
   t,
@@ -5356,6 +5360,7 @@ function CommentSideDock({
   queueOnSend?: boolean;
   sendDisabled?: boolean;
   sendDisabledReason?: string;
+  sendError?: string;
   allowSendToChat?: boolean;
   renderCreateForm?: boolean;
   t: TranslateFn;
@@ -5416,6 +5421,7 @@ function CommentSideDock({
         queueOnSend={queueOnSend}
         sendDisabled={sendDisabled}
         sendDisabledReason={sendDisabledReason}
+        sendError={sendError}
         allowSendToChat={allowSendToChat}
         renderCreateForm={renderCreateForm}
         t={t}
@@ -6163,12 +6169,14 @@ function CommentPreviewOverlays({
   targetsReady,
   onLostAnchors,
   onOpenComment,
+  onMarkerScroll,
   canvas,
   draftColor,
   hoverPreview,
   t,
 }: {
   canvas: CommentCanvasRect;
+  onMarkerScroll: () => void;
   draftColor: ReturnType<typeof commentAuthorAvatarColor>;
   hoverPreview: ReturnType<typeof useCommentHoverPreview>;
   comments: PreviewComment[];
@@ -6228,9 +6236,8 @@ function CommentPreviewOverlays({
           return {
             comment,
             markerNumber,
-            snapshot: resolution ? (resolution.state === 'lost' ? null : resolution.snapshot)
-              : liveSnapshotForComment(comment, liveTargets),
-            anchorState: 'anchored' as PreviewCommentAnchorState,
+            snapshot: resolution ? resolution.snapshot : liveSnapshotForComment(comment, liveTargets),
+            anchorState: resolution?.state ?? 'anchored' as PreviewCommentAnchorState,
           };
         })
         .filter(
@@ -6276,24 +6283,36 @@ function CommentPreviewOverlays({
   const markerGroups = groupCommentMarkers(visibleComments.map(item => ({
     ...item, id: item.comment.id, target: preserveCommentPoint(item.comment, item.snapshot),
   })), { scale, offset: overlayOffset }, canvas);
-  const savedMarkers = markerGroups.flatMap(group => group.visibleMembers.map((item, index) => {
-    const { comment, markerNumber, target, anchorState } = item;
-    const pin = group.layout.avatars[index]!;
+  const renderMarker = (item: typeof visibleComments[number], pin: CommentCanvasRect, lost = false) => {
+    const { comment, markerNumber, snapshot, anchorState } = item;
     const pinColor = commentAuthorAvatarColor(comment.authorKey ?? '');
     const label = commentTargetDisplayName(comment);
     return <div key={comment.id} className="comment-saved-marker"
-      style={{ left: pin.left, top: pin.top, width: pin.width, height: pin.height }}
+      style={pin}
       data-comment-id={comment.id} data-testid={`comment-saved-marker-${comment.elementId}`} data-pin-number={markerNumber} data-anchor-state={anchorState}>
-      <button type="button" className="comment-saved-pin"
-        style={{ background: pinColor.bg, color: pinColor.fg, left: 0, top: 0 }}
-        onMouseEnter={event => hoverPreview.show(comment, event.currentTarget)} onMouseLeave={hoverPreview.leave}
-        onFocus={event => hoverPreview.show(comment, event.currentTarget)} onBlur={hoverPreview.leave}
-        onClick={event => { event.stopPropagation(); hoverPreview.dismiss(); onOpenCommentRef.current(comment, target, event.currentTarget); }}
+      <button type="button" className={`comment-saved-pin${lost ? ' comment-lost-pin' : ''}${activeExistingCommentId === comment.id ? ' is-selected' : ''}`}
+        aria-current={activeExistingCommentId === comment.id ? 'true' : undefined}
+        style={lost ? undefined : { background: pinColor.bg, color: pinColor.fg }}
+        onMouseEnter={event => { if (!lost) hoverPreview.show(comment, event.currentTarget); }} onMouseLeave={hoverPreview.leave}
+        onFocus={event => { if (!lost) hoverPreview.show(comment, event.currentTarget); }} onBlur={hoverPreview.leave}
+        onClick={event => { event.stopPropagation(); hoverPreview.dismiss(); onOpenCommentRef.current(comment, preserveCommentPoint(comment, snapshot), event.currentTarget); }}
         title={`${label}: ${comment.note}`} aria-label={`Open comment for ${label}`}>
         <CommentAuthorIdentity comment={comment} currentUser={currentUser} displayNumber={markerNumber} initialOnly t={t} />
       </button>
     </div>;
-  }));
+  };
+  const savedMarkers = markerGroups.map(group => <div key={group.members[0]!.id}
+    className="comment-marker-cluster" data-testid="comment-marker-cluster"
+    style={{ left: group.layout.left, top: group.layout.top, width: group.layout.width, height: group.layout.height, overflow: group.layout.height < group.layout.contentHeight ? 'auto' : 'visible' }}
+    onScroll={() => { hoverPreview.dismiss(); onMarkerScroll(); }}>
+    <div style={{ position: 'relative', width: group.layout.contentWidth, height: group.layout.contentHeight }}>
+      {group.visibleMembers.map((item, index) => {
+        const pin = group.layout.avatars[index]!;
+        return renderMarker(item, { ...pin, left: pin.left - group.layout.left, top: pin.top - group.layout.top });
+      })}
+    </div>
+  </div>);
+  const lostComments = targetsReady ? visibleComments.filter(item => item.anchorState === 'lost') : [];
   const activeSavedIndex = activeExistingCommentId
     ? comments.findIndex((comment) => comment.id === activeExistingCommentId)
     : -1;
@@ -6314,6 +6333,10 @@ function CommentPreviewOverlays({
   return (
     <div className="comment-overlay-layer" aria-hidden={false}>
       {savedMarkers}
+      {lostComments.length > 0 ? <div className="comment-lost-markers" data-testid="comment-lost-markers"
+        style={{ left: canvas.left + 16, top: canvas.top + canvas.height - 44, maxWidth: Math.max(0, canvas.width - 32) }}>
+        {lostComments.map(item => renderMarker(item, { left: 0, top: 0, width: 28, height: 28 }, true))}
+      </div> : null}
       {targetOverlay && podDisplayMembers(targetOverlay).length === 0 ? (
         <CommentCanvasTarget snapshot={targetOverlay} scale={scale} offset={overlayOffset} canvas={canvas} selected={Boolean(activeTarget)} color={activePinColor ?? draftColor} />
       ) : targetOverlay ? (
@@ -9579,6 +9602,9 @@ function HtmlViewer({
   const [boardImagePreviews, setBoardImagePreviews] = useState<{ file: File; url: string }[]>([]);
   const [boardPreviewIndex, setBoardPreviewIndex] = useState<number | null>(null);
   const [sendingBoardBatch, setSendingBoardBatch] = useState(false);
+  const [commentBatchError, setCommentBatchError] = useState(false);
+  const [, setCommentMarkerScrollRevision] = useState(0);
+  const [composerMarkerHidden, setComposerMarkerHidden] = useState(false);
   const [commentSaveError, setCommentSaveError] = useState(false);
   useEffect(() => {
     const next = boardImages.map((file) => ({ file, url: URL.createObjectURL(file) }));
@@ -12804,7 +12830,7 @@ function HtmlViewer({
   // Only a current target report or a paired locate failure can establish loss.
   // Saved boxes/text never supply location evidence; an unwitnessed document is pending.
   const selectedLocationComment = previewComments.find(comment => comment.id === activePreviewCommentId
-    && comment.filePath === file.name && commentUsesIdentity(comment) && ownerCommentNeedsLocation(comment, collab.enabled));
+    && comment.filePath === file.name && ownerCommentNeedsLocation(comment, collab.enabled));
   const lostSelectedCommentId = selectedLocationComment && commentTargetsReadyKey === commentTargetsKey
     && (resolveOwnerCommentAnchor(selectedLocationComment, liveCommentTargets, collab.publishedVersion ?? undefined).state === 'lost'
       || (missingCommentLocation?.commentId === selectedLocationComment.id && missingCommentLocation.previewKey === commentTargetsKey
@@ -16505,10 +16531,12 @@ function HtmlViewer({
     if (commentTargetsReadyKey !== commentTargetsKey) return notices;
     for (const comment of creationSortedSideComments) {
       const state = resolveOwnerCommentAnchor(comment, liveCommentTargets, collab.publishedVersion ?? undefined).state;
-      if (state === 'reanchored' || state === 'stale') notices.set(comment.id, anchorStateLabel(state, t));
+      if (state === 'lost' && ownerCommentNeedsLocation(comment, collab.enabled) && !comment.elementId.startsWith('file-comment-'))
+        notices.set(comment.id, t('comment.locationUnavailable'));
+      else if (state === 'reanchored' || state === 'stale') notices.set(comment.id, anchorStateLabel(state, t));
     }
     return notices;
-  }, [creationSortedSideComments, liveCommentTargets, collab.publishedVersion, commentTargetsReadyKey, commentTargetsKey, t]);
+  }, [creationSortedSideComments, liveCommentTargets, collab.enabled, collab.publishedVersion, commentTargetsReadyKey, commentTargetsKey, t]);
   // Provisional number for the next (not-yet-saved) pin. Computed over the
   // file's comments across ALL statuses — a resolved/attached/failed comment
   // keeps its pin_seq row in the daemon DB, so its number stays retired even
@@ -16988,12 +17016,25 @@ function HtmlViewer({
   const canDeleteActiveComment = canDeleteComment(activeComposerComment, commentAuthority);
   const canSendActiveComment = canSendCommentToAgentPure(activeComposerComment, commentAuthority);
   useLayoutEffect(() => {
+    if (!activePreviewCommentId) return;
+    const marker = Array.from(commentPreviewCanvasNode?.querySelectorAll<HTMLElement>('.comment-saved-marker') ?? [])
+      .find(node => node.dataset.commentId === activePreviewCommentId);
+    const cluster = marker?.closest<HTMLElement>('.comment-marker-cluster');
+    if (!marker || !cluster) return;
+    if (marker.offsetTop < cluster.scrollTop) cluster.scrollTop = marker.offsetTop;
+    else if (marker.offsetTop + marker.offsetHeight > cluster.scrollTop + cluster.clientHeight)
+      cluster.scrollTop = marker.offsetTop + marker.offsetHeight - cluster.clientHeight;
+  }, [activePreviewCommentId, commentTargetsReadyKey, commentSidePanelCollapsed, commentPreviewCanvasNode]);
+  useLayoutEffect(() => {
     const canvas = commentPreviewCanvasNode;
     const host = commentComposerHost ?? canvas;
     const marker = activePreviewCommentId
       ? Array.from(canvas?.querySelectorAll<HTMLElement>('.comment-saved-marker') ?? []).find(node => node.dataset.commentId === activePreviewCommentId)
       : canvas?.querySelector<HTMLElement>('.comment-active-pin');
     const rect = marker?.getBoundingClientRect();
+    const clusterRect = marker?.closest('.comment-marker-cluster')?.getBoundingClientRect();
+    setComposerMarkerHidden(Boolean(rect && clusterRect && clusterRect.height > 0
+      && (rect.bottom <= clusterRect.top || rect.top >= clusterRect.bottom)));
     const hostRect = host?.getBoundingClientRect();
     const next = rect && hostRect && rect.width > 0 && rect.height > 0
       ? { left: rect.left - hostRect.left + (host?.scrollLeft ?? 0), top: rect.top - hostRect.top + (host?.scrollTop ?? 0), width: rect.width, height: rect.height }
@@ -17033,12 +17074,15 @@ function HtmlViewer({
       },
     };
   })();
-  const commentComposerNode = boardMode && activeCommentTarget ? (
+  // Lost-comment details use saved content, but never restore a target selection.
+  const composerTarget = activeCommentTarget ?? (lostSelectedCommentId && activeComposerComment
+    ? resolveOwnerCommentAnchor(activeComposerComment, liveCommentTargets, collab.publishedVersion ?? undefined).snapshot : null);
+  const commentComposerNode = boardMode && composerTarget && !composerMarkerHidden ? (
     <BoardComposerPopover
-      target={activeCommentTarget}
+      target={composerTarget}
       markerRect={composerMarkerRect}
       existing={activeComposerComment}
-      locationNotice={activeComposerComment ? commentLocationNotices.get(activeComposerComment.id) : undefined}
+      locationNotice={lostSelectedCommentId ? t('comment.locationUnavailable') : activeComposerComment ? commentLocationNotices.get(activeComposerComment.id) : undefined}
       canEditComment={canEditActiveComment}
       canDeleteComment={canDeleteActiveComment}
       canSendToAgent={canSendActiveComment}
@@ -17107,8 +17151,8 @@ function HtmlViewer({
       } : undefined}
       sending={sendingBoardBatch}
       queueOnSend={commentQueueOnSend}
-      sendDisabled={commentSendDisabled || viewerOnly}
-      sendDisabledReason={viewerOnly ? viewerOnlyDisabledTitle : undefined}
+      sendDisabled={commentSendDisabled || viewerOnly || Boolean(lostSelectedCommentId)}
+      sendDisabledReason={viewerOnly ? viewerOnlyDisabledTitle : lostSelectedCommentId ? t('comment.locationUnavailable') : undefined}
       allowSendToChat={!viewerOnly}
       t={t}
       scale={overlayPreviewScale}
@@ -17187,6 +17231,7 @@ function HtmlViewer({
       // disclosure always preserves this mounted dock as a reversible rail.
       onDismiss={commentPortalHost ? dismissFloatingCommentPanel : undefined}
       onToggleSelect={(commentId) => {
+        setCommentBatchError(false);
         setSelectedSideCommentIds((current) => {
           const next = new Set(current);
           if (next.has(commentId)) next.delete(commentId);
@@ -17194,16 +17239,17 @@ function HtmlViewer({
           return next;
         });
       }}
-      onSelectAll={() =>
+      onSelectAll={() => {
+        setCommentBatchError(false);
         setSelectedSideCommentIds(
           new Set(
             visibleSideComments
               .filter((comment) => canSendCommentToAgent(comment))
               .map((comment) => comment.id),
           ),
-        )
-      }
-      onClearSelection={() => setSelectedSideCommentIds(new Set())}
+        );
+      }}
+      onClearSelection={() => { setSelectedSideCommentIds(new Set()); setCommentBatchError(false); }}
       onReorder={(orderedIds, draggedId) => {
         const sortKey = computeReorderedSortKey(visibleSideComments, orderedIds, draggedId);
         void onReorderPreviewComment?.(draggedId, sortKey);
@@ -17250,11 +17296,13 @@ function HtmlViewer({
         if (selected.length === 0) return;
         fireCommentPopoverClick('send_to_chat', selected);
         setSendingBoardBatch(true);
+        setCommentBatchError(false);
         try {
           const result = await onSendBoardCommentAttachments(
             commentsToAttachments(selected),
           );
           const completedIds = new Set(result.commentIds);
+          setCommentBatchError(!commentSendSucceeded(result));
           if (completedIds.size === 0) return;
           setSelectedSideCommentIds((current) => {
             const next = new Set(current);
@@ -17264,6 +17312,8 @@ function HtmlViewer({
           setActivePreviewCommentId((current) => (
             current && completedIds.has(current) ? null : current
           ));
+        } catch {
+          setCommentBatchError(true);
         } finally {
           setSendingBoardBatch(false);
         }
@@ -17272,9 +17322,10 @@ function HtmlViewer({
       canSendComment={canSendCommentToAgent}
       currentUser={commentAuthorSelf}
       sending={sendingBoardBatch}
+      sendError={commentBatchError ? t('comment.agentSubmitFailed') : undefined}
       queueOnSend={commentQueueOnSend}
       sendDisabled={commentSendDisabled || viewerOnly}
-      sendDisabledReason={viewerOnly ? viewerOnlyDisabledTitle : undefined}
+      sendDisabledReason={viewerOnly ? viewerOnlyDisabledTitle : commentSendDisabled ? t('comment.agentSubmitUnavailable') : undefined}
       allowSendToChat={!viewerOnly}
       renderCreateForm={false}
       t={t}
@@ -18449,6 +18500,7 @@ function HtmlViewer({
                   t={t}
                   driftLadder={collab.enabled}
                   currentVersion={collab.publishedVersion ?? undefined}
+                  onMarkerScroll={() => setCommentMarkerScrollRevision(value => value + 1)}
                   targetsReady={commentTargetsReadyKey === commentTargetsKey}
                   {...(collab.onLostAnchors ? { onLostAnchors: collab.onLostAnchors } : {})}
                   liveTargets={liveCommentTargets}

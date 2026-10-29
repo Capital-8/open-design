@@ -162,7 +162,7 @@ it.each(['initially-lost', 'saved', 'typed', 'cleared', 'whitespace-only', 'fres
     fireEvent.click(screen.getByTestId('probe-queue'));
   }
   await dispatch({ type: 'od:comment-targets', targets: [] });
-  if (['initially-lost', 'saved'].includes(state)) expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('anchor lost');
+  if (['initially-lost', 'saved'].includes(state)) expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('Unable to locate this element. The page may have changed.');
   if (!['typed', 'fresh-image', 'queued'].includes(state)) expect(screen.queryByTestId('comment-active-pin')).toBeNull();
   fireEvent.click(await screen.findByRole('button', { name: /^share$/i }));
   const update = await screen.findByRole('button', { name: /update link/i });
@@ -173,7 +173,7 @@ it.each(['initially-lost', 'saved', 'typed', 'cleared', 'whitespace-only', 'fres
   expect(screen.queryByTestId('comment-identity-revalidate')).toBeNull();
   if (['typed', 'fresh-image', 'queued'].includes(state)) expect(screen.getByTestId('probe-draft')).toBeInTheDocument();
   else expect(screen.queryByTestId('probe-draft')).toBeNull();
-  if (['initially-lost', 'saved'].includes(state)) expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('anchor lost');
+  if (['initially-lost', 'saved'].includes(state)) expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('Unable to locate this element. The page may have changed.');
   if (!['typed', 'fresh-image', 'queued'].includes(state)) expect(screen.queryByTestId('comment-active-pin')).toBeNull();
   expect(route.writes.mock.calls.some(call => String(call[0]).endsWith('/comment-identities/prepare'))).toBe(false);
 });

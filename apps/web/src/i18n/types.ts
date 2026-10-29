@@ -1199,6 +1199,9 @@ export interface Dict {
   'comment.saveTargetMissing': string;
   'comment.savePreviewNotReady': string;
   'comment.anchorState.lost': string;
+  'comment.locationUnavailable': string;
+  'comment.agentSubmitFailed': string;
+  'comment.agentSubmitUnavailable': string;
   'collabPresence.viewingFileSelf': string;
   'collabPresence.viewingFileOther': string;
   'collabPresence.viewingProjectSelf': string;

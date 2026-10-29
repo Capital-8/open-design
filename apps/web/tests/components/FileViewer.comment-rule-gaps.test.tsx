@@ -112,3 +112,31 @@ it.each([
   const popover = await screen.findByTestId('comment-popover');
   expect(within(popover).getByText(notice)).toBeVisible();
 });
+
+
+it.each([
+  ['pod', { ...comment, elementId: 'pod-saved', selectionKind: 'pod' as const }],
+  ['file comment', { ...comment, elementId: 'file-comment-saved', selector: '' }],
+] as const)('does not mark a valid %s as lost when the document has no DOM targets', async (_kind, saved) => {
+  render(viewer([saved], true));
+  fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+  await report([]);
+  const row = screen.getByTestId('comment-side-item');
+  expect(row).toHaveTextContent(saved.note);
+  expect(within(row).queryByText('Unable to locate this element. The page may have changed.')).toBeNull();
+  expect(within(row).queryByTestId('comment-location-notice')).toBeNull();
+  expect(within(row).queryByTestId('comment-location-unavailable')).toBeNull();
+});
+
+it('keeps a currently observed offscreen comment distinct from a lost anchor', async () => {
+  const saved = { ...comment, elementId: 'offscreen-target', selector: '[data-od-id="offscreen-target"]', anchoredVersion: 2 };
+  render(viewer([saved], true));
+  fireEvent.click(screen.getByTestId('comment-panel-toggle'));
+  await report([{ ...saved, position: { x: 20, y: 1200, width: 200, height: 80 } }]);
+  const row = screen.getByTestId('comment-side-item');
+  expect(row).toHaveTextContent(saved.note);
+  expect(within(row).queryByText('Unable to locate this element. The page may have changed.')).toBeNull();
+  expect(within(row).queryByTestId('comment-location-notice')).toBeNull();
+  expect(screen.queryByTestId('comment-saved-marker-' + saved.elementId)).toBeNull();
+  expect(document.querySelector('.comment-lost-pin')).toBeNull();
+});

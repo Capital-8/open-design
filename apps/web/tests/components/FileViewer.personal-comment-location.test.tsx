@@ -25,6 +25,17 @@ const html = `<html><body><p data-od-comment-id="${uuid}">Target</p></body></htm
 const tree = (currentFile = file, content = html, comments = [comment], enabled = false) => <CollabProvider value={enabled ? { ...personal, enabled: true, publishedVersion: 2 } : personal}>
   <FileViewer projectId="p" projectKind="prototype" file={currentFile} liveHtml={content} previewComments={comments} />
 </CollabProvider>;
+
+function markerCanvasStyle(marker: HTMLElement) {
+  const cluster = marker.closest<HTMLElement>('[data-testid="comment-marker-cluster"]');
+  return {
+    left: `${Number.parseFloat(cluster?.style.left ?? '0') + Number.parseFloat(marker.style.left)}px`,
+    top: `${Number.parseFloat(cluster?.style.top ?? '0') + Number.parseFloat(marker.style.top)}px`,
+    width: marker.style.width,
+    height: marker.style.height,
+  };
+}
+
 beforeEach(() => {
   const original = HTMLElement.prototype.getBoundingClientRect;
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -84,7 +95,7 @@ it('Personal: explicitly locates a cmt row and scrolls an untagged URL reply onl
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
   await dispatch({ ...target, type: 'od:comment-active-target-update', position: { ...target.position, y: 80 } });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveStyle({ left: '57px', top: '52px', width: '28px', height: '28px' });
+  expect(markerCanvasStyle(screen.getByTestId(`comment-saved-marker-${comment.elementId}`))).toMatchObject({ left: '57px', top: '52px', width: '28px', height: '28px' });
   expect(screen.getByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
   const count = post.mock.calls.filter(call => call[0]?.locate).length;
   await selectRow();
@@ -103,13 +114,13 @@ it.each(['missing', 'duplicate', 'wrong-selector'] as const)('Personal: %s cmt i
   await selectRow();
   const request = post.mock.calls.map(call => call[0]).find(data => data?.locate);
   expect(request).toBeDefined();
-  expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('anchor lost');
+  expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('Unable to locate this element. The page may have changed.');
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.queryByTestId(`comment-saved-marker-${comment.elementId}`)).toBeNull();
+  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveAttribute('data-anchor-state', 'lost');
   await dispatch({ ...target, type: 'od:comment-active-target-update' });
   await dispatch({ ...target, type: 'od:comment-active-target-update', requestId: request.requestId });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.queryByTestId(`comment-saved-marker-${comment.elementId}`)).toBeNull();
+  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveAttribute('data-anchor-state', 'lost');
   expect(post.mock.calls.filter(call => call[0]?.type === 'od:preview-scroll-by')).toHaveLength(0);
 });
 it('Personal: srcDoc acknowledgement is request-scoped and cannot reveal after a file boundary', async () => {
@@ -121,7 +132,7 @@ it('Personal: srcDoc acknowledgement is request-scoped and cannot reveal after a
   await dispatch({ ...target, type: 'od:comment-active-target-update', requestId: request.requestId,
     position: { ...target.position, y: 80 } });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveStyle({ top: '52px' });
+  expect(markerCanvasStyle(screen.getByTestId(`comment-saved-marker-${comment.elementId}`))).toMatchObject({ top: '52px' });
   await dispatch({ ...target, type: 'od:comment-active-target-update' });
   expect(post.mock.calls.filter(call => call[0]?.type === 'od:preview-scroll-by')).toHaveLength(0);
   view.rerender(tree({ ...file, name: 'other.html', path: 'other.html' }, html.replace('Target', 'Other')));
@@ -174,7 +185,7 @@ it.each([false, true])('URL locate (collab=%s): consumes an initially visible re
   expect(request).toBeDefined();
   await dispatch({ ...target, type: 'od:comment-active-target-update', position: { ...target.position, y: 80 } });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveStyle({ top: '52px' });
+  expect(markerCanvasStyle(screen.getByTestId(`comment-saved-marker-${comment.elementId}`))).toMatchObject({ top: '52px' });
   // A later tracking box follows the owner's scroll, not another locate intent.
   await dispatch({ ...target, type: 'od:comment-active-target-update' });
   expect(post.mock.calls.filter(call => call[0]?.type === 'od:preview-scroll-by')).toHaveLength(0);
@@ -207,7 +218,7 @@ it('Personal: an unresolved request cannot reveal through a later valid report; 
   await selectRow();
   const unresolved = post.mock.calls.map(call => call[0]).find(data => data?.locate);
   expect(unresolved).toBeDefined();
-  expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('anchor lost');
+  expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('Unable to locate this element. The page may have changed.');
   await dispatch({ type: 'od:comment-targets', targets: [target] });
   expect(screen.queryByTestId('comment-location-unavailable')).toBeNull();
   await dispatch({ ...target, type: 'od:comment-active-target-update', requestId: unresolved.requestId });
@@ -222,7 +233,7 @@ it('Personal: an unresolved request cannot reveal through a later valid report; 
   await dispatch({ ...target, type: 'od:comment-active-target-update', requestId: current.requestId,
     position: { ...target.position, y: 80 } });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveStyle({ top: '52px' });
+  expect(markerCanvasStyle(screen.getByTestId(`comment-saved-marker-${comment.elementId}`))).toMatchObject({ top: '52px' });
 });
 it('Personal: changing a pending selection prevents old tagged or untagged replies from revealing it', async () => {
   const nextComment = { ...comment, id: 'next-comment', elementId: 'cmt:11111111-1111-4111-8111-111111111111',
@@ -246,7 +257,7 @@ it('Personal: changing a pending selection prevents old tagged or untagged repli
   expect(post.mock.calls.filter(call => call[0]?.type === 'od:preview-scroll-by')).toHaveLength(0);
   await dispatch({ ...nextTarget, type: 'od:comment-active-target-update' });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${nextComment.elementId}`)).toHaveStyle({ left: '100px', top: '92px' });
+  expect(markerCanvasStyle(screen.getByTestId(`comment-saved-marker-${nextComment.elementId}`))).toMatchObject({ left: '100px', top: '92px' });
   expect(screen.getByTestId('comment-popover-detail')).toHaveTextContent(nextComment.note);
 });
 it('Personal: paired missing feedback rejects foreign/future replies, clears on repeat selection and restoration', async () => {
@@ -263,7 +274,7 @@ it('Personal: paired missing feedback rejects foreign/future replies, clears on 
     expect(screen.queryByTestId('comment-location-unavailable')).toBeNull();
   } finally { foreignFrame.remove(); }
   await dispatch({ type: 'od:comment-location-missing', requestId: first.requestId });
-  expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('anchor lost');
+  expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('Unable to locate this element. The page may have changed.');
   await selectRow(row);
   expect(screen.queryByTestId('comment-location-unavailable')).toBeNull();
   const second = post.mock.calls.map(call => call[0]).filter(data => data?.locate).at(-1);
@@ -281,7 +292,7 @@ it('Personal: paired missing feedback rejects foreign/future replies, clears on 
   await dispatch({ ...target, type: 'od:comment-active-target-update', requestId: restored.requestId,
     position: { ...target.position, y: 80 } });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveStyle({ top: '52px' });
+  expect(markerCanvasStyle(screen.getByTestId(`comment-saved-marker-${comment.elementId}`))).toMatchObject({ top: '52px' });
   await dispatch({ type: 'od:comment-location-missing', requestId: restored.requestId });
   expect(screen.queryByTestId('comment-location-unavailable')).toBeNull();
 });

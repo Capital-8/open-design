@@ -27,17 +27,31 @@ describe('current comment canvas geometry', () => {
     expect(layoutCommentMarkerCluster(projectCommentPoint(scrolled, { scale: 1 }), 1, canvas)).toBeNull();
     expect(commentPointInCanvas({ x: -0.01, y: 30 }, canvas)).toBe(false);
   });
-  it('keeps same-point comments together, at most five, and separates distinct targets and points', () => {
+  it('keeps every same-point comment in rows of at most five, and separates distinct targets and points', () => {
     const items = Array.from({ length: 8 }, (_, i) => ({ id: String(i), target }));
     const groups = groupCommentMarkers([...items, { id: 'other', target: { ...target, elementId: 'cmt:b' } }, { id: 'point', target: { ...target, hoverPoint: { x: 300, y: 300 }, position: { ...target.position, anchor: { u: .5, v: .5 } } } }], { scale: 1 }, canvas);
-    expect(groups).toHaveLength(3); expect(groups[0]?.members).toHaveLength(8); expect(groups[0]?.visibleMembers).toHaveLength(5);
+    expect(groups).toHaveLength(3); expect(groups[0]?.members).toHaveLength(8); expect(groups[0]?.visibleMembers).toHaveLength(8);
     expect(groups[0]?.layout.width).toBe(116); expect(groups[0]?.layout.avatars[1]?.left).toBe(222);
+    expect(groups[0]?.layout).toMatchObject({ height: 64, contentHeight: 64, columns: 5, rows: 2 });
+    expect(groups[0]?.layout.avatars[5]).toEqual({ left: 200, top: 268, width: 28, height: 28 });
+    expect(groups[0]?.visibleMembers.map(item => item.id)).toEqual(items.map(item => item.id));
   });
   it('recomputes a whole cluster when the dock reduces space, never shrinking avatars', () => {
     const layout = layoutCommentMarkerCluster({ x: 89, y: 60 }, 8, { left: 0, top: 0, width: 100, height: 100 })!;
-    expect(layout.visibleCount).toBe(2); expect(layout.width).toBe(50); expect(layout.left).toBe(34);
+    expect(layout.visibleCount).toBe(8); expect(layout.width).toBe(50); expect(layout.left).toBe(34);
+    expect(layout).toMatchObject({ top: 16, height: 68, contentWidth: 50, contentHeight: 136, columns: 2, rows: 4 });
+    expect(layout.avatars[7]).toEqual({ left: 56, top: 124, width: 28, height: 28 });
     expect(layout.avatars.every(rect => rect.width === 28)).toBe(true);
     expect(layoutCommentMarkerCluster({ x: 10, y: 10 }, 1, { ...canvas, width: 59 })).toBeNull();
+  });
+  it('keeps sixty markers in twelve full-size rows and exposes scroll content on a short canvas', () => {
+    const point = { x: 790, y: 590 };
+    const layout = layoutCommentMarkerCluster(point, 60, { ...canvas, top: 500, height: 100 })!;
+    expect(layout).toMatchObject({ left: 668, top: 516, width: 116, height: 68, contentWidth: 116, contentHeight: 424, columns: 5, rows: 12, visibleCount: 60, point });
+    expect(layout.avatars).toHaveLength(60);
+    expect(layout.avatars[59]).toEqual({ left: 756, top: 912, width: 28, height: 28 });
+    expect(layout.avatars.every(rect => rect.width === 28 && rect.height === 28)).toBe(true);
+    expect(layoutCommentMarkerCluster(point, 0, canvas)).toBeNull();
   });
   it('hides lost and offscreen at rendering only, leaving the source rows untouched', () => {
     const items = [{ id: 'lost', target, anchorState: 'lost' }, { id: 'ok', target }, { id: 'outside', target: { ...target, position: { ...target.position, y: 900 } } }];

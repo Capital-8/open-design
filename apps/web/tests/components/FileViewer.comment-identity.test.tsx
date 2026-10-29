@@ -83,6 +83,16 @@ for (const authorKind of ['user', 'member'] as const) {
   });
 }
 
+function markerCanvasStyle(marker: HTMLElement) {
+  const cluster = marker.closest<HTMLElement>('[data-testid="comment-marker-cluster"]');
+  return {
+    left: `${Number.parseFloat(cluster?.style.left ?? '0') + Number.parseFloat(marker.style.left)}px`,
+    top: `${Number.parseFloat(cluster?.style.top ?? '0') + Number.parseFloat(marker.style.top)}px`,
+    width: marker.style.width,
+    height: marker.style.height,
+  };
+}
+
 it('reprojects a Viewer left/top position and fractional anchor through current DOM movement and resize', async () => {
   stubAccount(async () => account('other'));
   // This is the public Viewer wire shape persisted by the existing relay, without x/y.
@@ -100,14 +110,14 @@ it('reprojects a Viewer left/top position and fractional anchor through current 
   await report(target.position);
   const marker = await screen.findByTestId('comment-saved-marker-pin');
   // True point = (70, 100), and the 28px avatar extends upward from it.
-  expect(marker).toHaveStyle({ left: '70px', top: '72px', width: '28px', height: '28px' });
+  expect(markerCanvasStyle(marker)).toMatchObject({ left: '70px', top: '72px', width: '28px', height: '28px' });
   fireEvent.click(marker.querySelector('button')!);
   expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
   expect(screen.getByTestId('comment-target-overlay')).toHaveStyle({ left: '20px', top: '40px', width: '200px', height: '80px' });
   // A selected saved comment keeps one avatar rather than adding a draft avatar.
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
   await report({ x: 100, y: 80, width: 400, height: 160 });
-  expect(screen.getByTestId('comment-saved-marker-pin')).toHaveStyle({ left: '200px', top: '172px', width: '28px', height: '28px' });
+  expect(markerCanvasStyle(screen.getByTestId('comment-saved-marker-pin'))).toMatchObject({ left: '200px', top: '172px', width: '28px', height: '28px' });
   expect(screen.getByTestId('comment-target-overlay')).toHaveStyle({ left: '100px', top: '80px', width: '400px', height: '160px' });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
   expect(viewerPosition).not.toHaveProperty('x');

@@ -8,6 +8,7 @@ export interface CommentCanvasPoint { x: number; y: number }
 export interface CommentCanvasTransform { scale: number; offset?: CommentCanvasPoint }
 export const COMMENT_MARKER_SIZE = 28;
 export const COMMENT_MARKER_STEP = 22;
+export const COMMENT_MARKER_ROW_STEP = 36;
 export const COMMENT_MARKER_INSET = 16;
 
 export function projectCommentPoint(target: PreviewCommentSnapshot, transform: CommentCanvasTransform): CommentCanvasPoint {
@@ -30,18 +31,25 @@ export function clippedCommentTarget(target: PreviewCommentSnapshot, transform: 
 }
 
 /** The first avatar extends right/up from its true point. Only display rectangles
- * move inward; source snapshots and fractional element anchors are never changed. */
+ * move inward; source snapshots and fractional element anchors are never changed.
+ * width/height describe the inset scroll viewport; contentWidth/contentHeight
+ * describe its full contents. Avatar rectangles remain in overlay coordinates:
+ * subtract left/top when rendering them inside the scroll content container. */
 export function layoutCommentMarkerCluster(point: CommentCanvasPoint, count: number, canvas: CommentCanvasRect) {
   if (!commentPointInCanvas(point, canvas)) return null;
   const availableWidth = canvas.width - 2 * COMMENT_MARKER_INSET;
-  if (availableWidth < COMMENT_MARKER_SIZE || canvas.height < COMMENT_MARKER_SIZE + 2 * COMMENT_MARKER_INSET) return null;
-  const visibleCount = Math.min(count, 5, 1 + Math.floor((availableWidth - COMMENT_MARKER_SIZE) / COMMENT_MARKER_STEP));
-  if (visibleCount <= 0) return null;
-  const width = COMMENT_MARKER_SIZE + (visibleCount - 1) * COMMENT_MARKER_STEP;
+  const availableHeight = canvas.height - 2 * COMMENT_MARKER_INSET;
+  if (count <= 0 || availableWidth < COMMENT_MARKER_SIZE || availableHeight < COMMENT_MARKER_SIZE) return null;
+  const columns = Math.min(count, 5, 1 + Math.floor((availableWidth - COMMENT_MARKER_SIZE) / COMMENT_MARKER_STEP));
+  const rows = Math.ceil(count / columns);
+  const width = COMMENT_MARKER_SIZE + (columns - 1) * COMMENT_MARKER_STEP;
+  const contentHeight = COMMENT_MARKER_SIZE + (rows - 1) * COMMENT_MARKER_ROW_STEP;
+  const height = Math.min(contentHeight, availableHeight);
   const left = Math.max(canvas.left + COMMENT_MARKER_INSET, Math.min(point.x, canvas.left + canvas.width - COMMENT_MARKER_INSET - width));
-  const top = Math.max(canvas.top + COMMENT_MARKER_INSET, Math.min(point.y - COMMENT_MARKER_SIZE, canvas.top + canvas.height - COMMENT_MARKER_INSET - COMMENT_MARKER_SIZE));
-  return { left, top, width, height: COMMENT_MARKER_SIZE, visibleCount, point,
-    avatars: Array.from({ length: visibleCount }, (_, index) => ({ left: left + index * COMMENT_MARKER_STEP, top, width: COMMENT_MARKER_SIZE, height: COMMENT_MARKER_SIZE })) };
+  const top = Math.max(canvas.top + COMMENT_MARKER_INSET, Math.min(point.y - COMMENT_MARKER_SIZE, canvas.top + canvas.height - COMMENT_MARKER_INSET - height));
+  return { left, top, width, height, contentWidth: width, contentHeight, columns, rows, visibleCount: count, point,
+    avatars: Array.from({ length: count }, (_, index) => ({ left: left + (index % columns) * COMMENT_MARKER_STEP,
+      top: top + Math.floor(index / columns) * COMMENT_MARKER_ROW_STEP, width: COMMENT_MARKER_SIZE, height: COMMENT_MARKER_SIZE })) };
 }
 
 export interface CommentMarkerInput { id: string; target: PreviewCommentSnapshot; anchorState?: string }

@@ -467,7 +467,7 @@ export function BoardComposerPopover({
               menuRef.current?.togglePopover();
             }}>···</button>
             <div ref={menuRef} popover="auto" role="menu" className={browseStyles.menuItems} style={menuPosition}>
-              {canSendToAgent && allowSendToChat ? <button type="button" data-testid="comment-add-send" disabled={sendBlocked} title={sendDisabled ? sendDisabledReason : undefined} onClick={() => void onSendBatch()}>{primaryLabel}</button> : null}
+              {!existing && canSendToAgent && allowSendToChat ? <button type="button" data-testid="comment-add-send" disabled={sendBlocked} title={sendDisabled ? sendDisabledReason : undefined} onClick={() => void onSendBatch()}>{primaryLabel}</button> : null}
               {existing && onDeleteComment && canDeleteComment ? <button type="button" className={browseStyles.deleteAction} disabled={sending} onClick={() => void onDeleteComment(existing.id)}>{t('common.delete')}</button> : null}
               {isPodSelection && canEditComment && !existing ? <button type="button" data-testid="comment-popover-add-note" disabled={!draft.trim() || sending || overLimit} onClick={onAddDraft}>{t('chat.comments.addNote')}</button> : null}
             </div>
@@ -501,6 +501,15 @@ export function BoardComposerPopover({
           <div className={browseStyles.author}>
             {author ?? existing.authorDisplayName ?? t('comment.unknownAuthor')}
           </div>
+          {canSendToAgent && allowSendToChat ? <button
+            type="button"
+            className={browseStyles.iconButton}
+            data-testid="comment-add-send"
+            disabled={sendBlocked}
+            title={sendDisabled ? sendDisabledReason : primaryLabel}
+            aria-label={primaryLabel}
+            onClick={() => void onSendBatch()}
+          ><Icon name="send" size={16} /></button> : null}
           {actionsMenu}
           <button type="button" className={browseStyles.iconButton} aria-label={t('common.close')} onClick={onClose}><Icon name="close" size={14} /></button>
         </div>

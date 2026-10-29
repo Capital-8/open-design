@@ -103,23 +103,22 @@ export function CommentAvatarRail({ comments, activeId, unreadIds, renderAvatar,
   toggleRef: React.RefObject<HTMLButtonElement>;
   hover: ReturnType<typeof useCommentHoverPreview>;
 }) {
-  const hidden = Math.max(0, comments.length - 5);
+  const sortedComments = [...comments].sort((a, b) => b.createdAt - a.createdAt);
+  const hidden = Math.max(0, sortedComments.length - 5);
   return <aside className={`${styles.rail} comment-side-rail`} data-testid="comment-side-collapsed-rail">
     <button ref={toggleRef} className={styles.toggle} type="button" onClick={onExpand} aria-expanded={false} aria-label={expandLabel} title={expandLabel}>
       <Icon name="chevron-left" size={14} /><Icon name="chevron-left" size={14} />
     </button>
     <div className={styles.avatars}>
-      {comments.slice(0, 5).map(comment => <button key={comment.id} type="button"
-        className={`${styles.avatar}${activeId === comment.id ? ` ${styles.active}` : ''}`}
+      {sortedComments.slice(0, 5).map(comment => <button key={comment.id} type="button"
+        className={styles.avatar}
         aria-label={label(comment)} aria-current={activeId === comment.id ? 'true' : undefined}
-        onMouseEnter={event => hover.show(comment, event.currentTarget, true)} onMouseLeave={hover.leave}
-        onFocus={event => hover.show(comment, event.currentTarget, true)} onBlur={hover.leave}
         onClick={event => { hover.dismiss(); onOpen(comment, event.currentTarget); }}>
         {renderAvatar(comment)}{unreadIds.has(comment.id) ? <i className={styles.unread} /> : null}
       </button>)}
-      {hidden > 0 ? <span className={styles.more} aria-label={moreLabel(hidden)} title={moreLabel(hidden)}>+{Math.min(99, hidden)}
-        {comments.slice(5).some(comment => unreadIds.has(comment.id)) ? <i className={styles.unread} /> : null}
-      </span> : null}
+      {hidden > 0 ? <button type="button" className={styles.more} aria-expanded={false} aria-label={moreLabel(hidden)} title={moreLabel(hidden)} onClick={onExpand}>+{Math.min(99, hidden)}
+        {sortedComments.slice(5).some(comment => unreadIds.has(comment.id)) ? <i className={styles.unread} /> : null}
+      </button> : null}
     </div>
   </aside>;
 }

@@ -13543,6 +13543,8 @@ describe('FileViewer tweaks toolbar', () => {
     expect(removed).toEqual([]);
     expect(screen.getByText('First queued comment')).toBeTruthy();
     expect(screen.getByText('Second rejected comment')).toBeTruthy();
+    expect(screen.getByTestId('comment-side-submit-error')).toHaveTextContent('Submission failed. Please try again.');
+    expect(screen.getByTestId('comment-side-send-claude')).not.toBeDisabled();
   });
 
   it('offers no second hand-off for a comment that is already applying', async () => {
@@ -13683,6 +13685,58 @@ describe('FileViewer tweaks toolbar', () => {
         pagePosition: { x: 36, y: 48, width: 220, height: 52 },
       }),
     ]));
+  });
+
+  it('shows batch send errors inline and leaves the selected comments available to retry', () => {
+    const onSendSelected = vi.fn();
+    const comment: PreviewComment = {
+      id: 'batch-error', projectId: 'project-1', conversationId: 'conversation-1',
+      filePath: 'preview.html', elementId: 'hero', selector: '#hero', label: 'Hero',
+      text: '', htmlHint: '', position: { x: 0, y: 0, width: 100, height: 30 },
+      note: 'Keep selected for retry', status: 'open', createdAt: 1, updatedAt: 1,
+    };
+    const props = {
+      comments: [comment], selectedIds: new Set([comment.id]), activeCommentId: null,
+      collapsed: false, onCollapsedChange: () => {}, onToggleSelect: () => {},
+      onSelectAll: () => {}, onClearSelection: () => {}, onReply: () => {},
+      onSendSelected, sending: false, t,
+    };
+    const { rerender } = render(<CommentSidePanel {...props} sendError="Unable to queue these comments. Try again." />);
+    expect(screen.getByText('Unable to queue these comments. Try again.')).toBeVisible();
+    expect(screen.getByTestId('comment-side-item')).toHaveTextContent(comment.note);
+    expect(screen.getByRole('button', { name: 'chat.comments.deselect' })).toHaveAttribute('aria-pressed', 'true');
+    const send = screen.getByTestId('comment-side-send-claude');
+    expect(send).not.toBeDisabled();
+    fireEvent.click(send);
+    expect(onSendSelected).toHaveBeenCalledOnce();
+    rerender(<CommentSidePanel {...props} />);
+    expect(screen.queryByText('Unable to queue these comments. Try again.')).toBeNull();
+    expect(screen.getByTestId('comment-side-item')).toHaveTextContent(comment.note);
+  });
+
+  it('explains disabled batch sending inline and keeps send-to-chat permission authoritative', () => {
+    const onSendSelected = vi.fn();
+    const comment: PreviewComment = {
+      id: 'batch-disabled', projectId: 'project-1', conversationId: 'conversation-1',
+      filePath: 'preview.html', elementId: 'hero', selector: '#hero', label: 'Hero',
+      text: '', htmlHint: '', position: { x: 0, y: 0, width: 100, height: 30 },
+      note: 'Selected comment', status: 'open', createdAt: 1, updatedAt: 1,
+    };
+    const props = {
+      comments: [comment], selectedIds: new Set([comment.id]), activeCommentId: null,
+      collapsed: false, onCollapsedChange: () => {}, onToggleSelect: () => {},
+      onSelectAll: () => {}, onClearSelection: () => {}, onReply: () => {},
+      onSendSelected, sending: false, t,
+    };
+    const { rerender } = render(<CommentSidePanel {...props} sendDisabled sendDisabledReason="Wait for the current task to finish." />);
+    expect(screen.getByText('Wait for the current task to finish.')).toBeVisible();
+    const send = screen.getByTestId('comment-side-send-claude');
+    expect(send).toBeDisabled();
+    fireEvent.click(send);
+    expect(onSendSelected).not.toHaveBeenCalled();
+    rerender(<CommentSidePanel {...props} allowSendToChat={false} />);
+    expect(screen.queryByTestId('comment-side-send-claude')).toBeNull();
+    expect(onSendSelected).not.toHaveBeenCalled();
   });
 
   it('moves focus between comment side panel toggles when collapsing and expanding without a pre-focused click target', async () => {
@@ -15708,9 +15762,13 @@ describe('LiveArtifactRefreshHistoryPanel', () => {
   it.each([
     ['reanchored', 'versioned', '基于旧版本', { anchoredVersion: 1 }, { elementId: 'versioned', selector: '[data-od-id="versioned"]' }],
     ['stale', 'moved', '锚点可能已移动', {}, { elementId: 'moved-now', selector: '[data-od-id="moved"]' }],
-    ['lost', 'lost', '锚点已丢失', {}, null],
+    ['lost', 'lost', '无法定位此元素，页面可能已变化。', {}, null],
   ] as const)('preserves %s anchor state on the rendered avatar marker', async (_state, elementId, _expected, extra, target) => {
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => testRect(0, 0, 900, 700));
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('.viewer-body, .comment-preview-canvas')) return testRect(0, 0, 900, 700);
+      if (this.matches('[data-testid="comment-popover"]')) return testRect(0, 0, 320, 160);
+      return testRect(24, 32, 28, 28);
+    });
     const comment: PreviewComment = {
       id: `comment-${elementId}`,
       projectId: 'project-1',
@@ -15757,10 +15815,14 @@ describe('LiveArtifactRefreshHistoryPanel', () => {
       const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
       act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, data: { type: 'od:comment-targets', targets: [] } })));
       fireEvent.click(screen.getByTestId('comment-side-item'));
-      expect(screen.queryByTestId('comment-saved-marker-cmt:lost')).toBeNull();
+      const lostMarker = await screen.findByTestId('comment-saved-marker-cmt:lost');
+      expect(lostMarker).toHaveAttribute('data-anchor-state', 'lost');
       expect(screen.queryByTestId('comment-active-pin')).toBeNull();
+      expect(screen.queryByTestId('comment-target-overlay')).toBeNull();
       expect(screen.getByTestId('comment-side-item')).toHaveTextContent(comment.note);
-      expect(await screen.findByTestId('comment-location-unavailable')).toHaveTextContent(_expected);
+      expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
+      expect(within(screen.getByTestId('comment-popover')).getByText(_expected)).toHaveAttribute('role', 'status');
+      expect(screen.queryByTestId('comment-popover-input')).toBeNull();
       return;
     }
 
@@ -15783,7 +15845,7 @@ describe('LiveArtifactRefreshHistoryPanel', () => {
   it('keeps D1–D4 marker and deck-page presentation on the rendered selectors', () => {
     const css = readFileSync(join(process.cwd(), 'src/styles/viewer/core.css'), 'utf8');
     expect(css).toMatch(/\.comment-saved-pin,\s*\.comment-active-pin[\s\S]*?width: 28px;[\s\S]*?height: 28px;[\s\S]*?border: 0;[\s\S]*?background: #282828;[\s\S]*?font-size: 12px;/);
-    expect(css).not.toContain('.comment-saved-marker--lost .comment-saved-pin');
+    expect(css).toContain('.comment-lost-pin');
     expect(css).not.toContain('.comment-side-slide {');
   });
 });

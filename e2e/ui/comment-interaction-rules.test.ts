@@ -80,7 +80,7 @@ test('[P0] D05 native menu Escape retains visible image and draft then restores 
   await page.screenshot({ path: testInfo.outputPath('D05-second-escape.png') });
 });
 
-test('[P0] B08 actual 240px resizer preserves full author title, wrapped timestamp and mixed RTL without overflow; D06 list and pin restore exact openers', async ({ page }, testInfo) => {
+test('[P0] B08 actual 240px resizer preserves full author title, same-line timestamp and mixed RTL without overflow; D06 list and pin restore exact openers', async ({ page }, testInfo) => {
   const { id, conversationId } = await seed(page);
   const saved = await page.request.post(`/api/projects/${id}/conversations/${conversationId}/comments`, { data: { target: { filePath: 'index.html', elementId: 'hero', selector: '[data-od-id="hero"]', label: 'h1', text: '让反馈成为下一步行动', htmlHint: '<h1>', position: { x: 80, y: 80, width: 350, height: 48 } }, note: NOTE } });
   expect(saved.ok(), await saved.text()).toBeTruthy();
@@ -127,11 +127,12 @@ test('[P0] B08 actual 240px resizer preserves full author title, wrapped timesta
   const metrics = await row.evaluate(node => {
     const name = node.querySelector('strong')!;
     const time = node.querySelector('.comment-side-time')!;
-    return { overflow: node.scrollWidth > node.clientWidth, nameClipped: name.scrollWidth > name.clientWidth, nameBottom: name.getBoundingClientRect().bottom, timeTop: time.getBoundingClientRect().top, time: time.textContent, timeTitle: time.getAttribute('title'), timeOverflow: time.scrollWidth > time.clientWidth };
+    return { overflow: node.scrollWidth > node.clientWidth, nameClipped: name.scrollWidth > name.clientWidth, nameTop: name.getBoundingClientRect().top, nameBottom: name.getBoundingClientRect().bottom, timeTop: time.getBoundingClientRect().top, timeBottom: time.getBoundingClientRect().bottom, time: time.textContent, timeTitle: time.getAttribute('title'), timeOverflow: time.scrollWidth > time.clientWidth };
   });
   expect(metrics.overflow).toBe(false);
   expect(metrics.nameClipped).toBe(true);
-  expect(metrics.timeTop).toBeGreaterThanOrEqual(metrics.nameBottom);
+  expect(metrics.timeTop).toBeLessThan(metrics.nameBottom);
+  expect(metrics.timeBottom).toBeGreaterThan(metrics.nameTop);
   expect(metrics.time).toMatch(/2025/);
   expect(metrics.timeTitle).toMatch(/2025/);
   expect(metrics.timeOverflow).toBe(false);
@@ -140,6 +141,11 @@ test('[P0] B08 actual 240px resizer preserves full author title, wrapped timesta
   await row.click();
   const detail = page.getByTestId('comment-popover');
   await expect(detail.getByTestId('comment-popover-detail')).toContainText(NOTE);
+  // Persisted details are read-only, while sending has its own permission.
+  await expect(detail.locator('textarea')).toHaveCount(0);
+  await expect(detail.getByTestId('comment-add-send')).toBeVisible();
+  await expect(detail.getByRole('menu')).toBeHidden();
+  await testInfo.attach('Oct28-independent-send-action', { body: await detail.screenshot({ path: testInfo.outputPath('Oct28-independent-send-action.png') }), contentType: 'image/png' });
   await detail.getByRole('button', { name: '更多评论操作' }).focus();
   await expect(row).not.toBeFocused();
   await detail.getByRole('button', { name: '更多评论操作' }).click();
@@ -159,6 +165,92 @@ test('[P0] B08 actual 240px resizer preserves full author title, wrapped timesta
   await page.keyboard.press('Escape');
   await expect(detail).toHaveCount(0);
   await expect(pin).toBeFocused();
+});
+
+
+test('[P0] Oct28 rail opens canvas detail without hover and +N exposes the full 60-comment list; five-column cluster remains accessible in a short viewport', async ({ page }, testInfo) => {
+  test.setTimeout(T.xlong * 2);
+  const { id, conversationId } = await seed(page);
+  const commentIds: string[] = [];
+  for (let index = 0; index < 60; index++) {
+    const response = await page.request.post(`/api/projects/${id}/conversations/${conversationId}/comments`, { data: {
+      target: { filePath: 'index.html', elementId: 'hero', selector: '[data-od-id="hero"]', label: 'h1', text: '让反馈成为下一步行动', htmlHint: '<h1>', position: { x: 80, y: 80, width: 350, height: 48 } },
+      note: `Oct28 cluster comment ${String(index + 1).padStart(2, '0')}`,
+    } });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    const body = await response.json() as { comment: { id: string } };
+    commentIds.push(body.comment.id);
+  }
+  // Presentation-only named author fixture; the 60 writes/ids remain real.
+  const authors = ['Mia', 'You', 'Alex', 'Nina', 'Leo'];
+  await page.route(`**/api/projects/${id}/conversations/*/comments`, async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ response, json: { ...body, comments: body.comments.map((comment: object, index: number) => ({
+      ...comment, authorDisplayName: authors[index % authors.length], authorKey: `fixture:oct28:${authors[index % authors.length]}`,
+    })) } });
+  });
+  await testInfo.attach('Oct28-controlled-author-fixture', { body: JSON.stringify({ authors, evidence: 'Presentation fixture only; real daemon comment writes and ids; no real identity claim' }), contentType: 'application/json' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await open(page, id);
+  await page.getByTestId('comment-panel-toggle').click();
+  await expect(page.getByTestId('comment-side-item')).toHaveCount(60);
+  // The iframe's live-target report arrives independently of comment loading.
+  // Require the canvas actions to exist before asking the rail to locate one.
+  await expect(page.getByTestId('comment-marker-cluster').locator('.comment-saved-marker')).toHaveCount(60);
+  await testInfo.attach('Oct28-cluster-normal-viewport', { body: await page.screenshot({ path: testInfo.outputPath('Oct28-cluster-normal-viewport.png') }), contentType: 'image/png' });
+  await page.setViewportSize({ width: 1100, height: 520 });
+  await page.locator('.comment-side-collapse').click();
+  const rail = page.getByTestId('comment-side-collapsed-rail');
+  await expect(rail).toBeVisible();
+  const railAvatar = rail.locator('button').filter({ has: page.locator('.comment-side-avatar') }).first();
+  // A keyboard click reaches the rail action without a pointer-hover preview.
+  await railAvatar.focus();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await railAvatar.press('Enter');
+  const detail = page.getByTestId('comment-popover');
+  await expect(detail).toBeVisible();
+  await expect(detail).toContainText('Oct28 cluster comment');
+  await expect(rail).toBeVisible();
+  await expect(page.getByTestId('comment-side-panel')).toHaveCount(0);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await testInfo.attach('Oct28-rail-direct-canvas-detail', { body: await page.screenshot({ path: testInfo.outputPath('Oct28-rail-direct-canvas-detail.png') }), contentType: 'image/png' });
+  await detail.getByRole('button', { name: '更多评论操作' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(detail).toHaveCount(0);
+  await rail.getByRole('button', { name: /55/ }).click();
+  await expect(page.getByTestId('comment-side-item')).toHaveCount(60);
+  const lastRow = page.getByTestId('comment-side-item').filter({ hasText: 'Oct28 cluster comment 60' });
+  await lastRow.scrollIntoViewIfNeeded();
+  await expect(lastRow).toBeInViewport();
+  await testInfo.attach('Oct28-overflow-full-list', { body: await page.screenshot({ path: testInfo.outputPath('Oct28-overflow-full-list.png') }), contentType: 'image/png' });
+  await page.locator('.comment-side-collapse').click();
+  const cluster = page.getByTestId('comment-marker-cluster');
+  const markers = cluster.locator('.comment-saved-marker');
+  await expect(markers).toHaveCount(60);
+  const geometry = await cluster.evaluate(node => {
+    const rects = [...node.querySelectorAll<HTMLElement>('.comment-saved-marker')].map(marker => ({ id: marker.dataset.commentId, x: marker.offsetLeft, y: marker.offsetTop }));
+    return { ids: rects.map(rect => rect.id), columns: new Set(rects.map(rect => rect.x)).size, rows: new Set(rects.map(rect => rect.y)).size,
+      scrollHeight: node.scrollHeight, clientHeight: node.clientHeight, overflow: getComputedStyle(node).overflowY };
+  });
+  expect(geometry.ids.sort()).toEqual([...commentIds].sort());
+  expect(geometry.columns).toBe(5);
+  expect(geometry.rows).toBe(12);
+  expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+  expect(geometry.overflow).toMatch(/auto|scroll/);
+  await testInfo.attach('Oct28-cluster-geometry', { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
+  await testInfo.attach('Oct28-cluster-short-viewport', { body: await page.screenshot({ path: testInfo.outputPath('Oct28-cluster-short-viewport.png') }), contentType: 'image/png' });
+  // Every member remains a reachable action, including the final scroll row.
+  const lastMarker = markers.last().getByRole('button');
+  const lastNote = await lastMarker.getAttribute('title');
+  await lastMarker.scrollIntoViewIfNeeded();
+  await expect(lastMarker).toBeInViewport();
+  await lastMarker.click();
+  await expect(detail).toBeVisible();
+  await expect(detail).toContainText(lastNote!.split(': ').slice(1).join(': '));
+  await testInfo.attach('Oct28-cluster-final-comment-detail', { body: await page.screenshot({ path: testInfo.outputPath('Oct28-cluster-final-comment-detail.png') }), contentType: 'image/png' });
+
 });
 
 clusterTest('[P0] CV19 authoritative published version and real DOM report uncertainty in list and detail', async ({ browser }, testInfo) => {
@@ -195,10 +287,46 @@ clusterTest('[P0] CV19 authoritative published version and real DOM report uncer
       const saved = await page.request.post(`/api/projects/${id}/conversations/${conversationId}/comments`, { headers, data: { target: { ...target, elementId }, note } });
       expect(saved.ok(), await saved.text()).toBeTruthy();
     }
+    // Keep CV19's fuzzy legacy relocation above, and add a truly absent target
+    // whose selector, markup and text cannot match either current DOM node.
+    const lostSaved = await page.request.post(`/api/projects/${id}/conversations/${conversationId}/comments`, { headers, data: {
+      target: { ...target, elementId: 'removed-figure', selector: '[data-od-id="removed-figure"]', label: 'figure', text: 'Removed illustration unavailable in current version', htmlHint: '<figure data-od-id="removed-figure">', position: { x: 450, y: 500, width: 90, height: 90 } },
+      note: 'Lost removed illustration',
+    } });
+    expect(lostSaved.ok(), await lostSaved.text()).toBeTruthy();
     await open(page, id);
     await page.getByTestId('comment-panel-toggle').click();
     const authority = await page.request.get(`/api/projects/${id}/collab/status`, { headers });
     await testInfo.attach('CV19-authoritative-publication', { body: JSON.stringify(await authority.json()), contentType: 'application/json' });
+    const lostGroup = page.getByTestId('comment-lost-markers');
+    const lostMarker = lostGroup.locator('[data-anchor-state="lost"]');
+    await expect(lostMarker).toHaveCount(1);
+    const lostGeometry = await lostGroup.evaluate(node => {
+      const marker = node.querySelector<HTMLElement>('[data-anchor-state="lost"]')!;
+      const button = marker.querySelector('button')!;
+      const group = node.getBoundingClientRect();
+      const canvas = node.closest('.comment-overlay-layer')!.getBoundingClientRect();
+      const style = getComputedStyle(button);
+      return { left: group.left, bottom: group.bottom, canvasLeft: canvas.left, canvasBottom: canvas.bottom,
+        borderStyle: style.borderTopStyle, background: style.backgroundColor };
+    });
+    expect(lostGeometry.borderStyle).toBe('dashed');
+    const grayChannels = lostGeometry.background.match(/\d+/g)!.slice(0, 3).map(Number);
+    expect(Math.max(...grayChannels) - Math.min(...grayChannels)).toBeLessThanOrEqual(10);
+    expect(lostGeometry.left).toBeGreaterThanOrEqual(lostGeometry.canvasLeft);
+    expect(lostGeometry.bottom).toBeLessThanOrEqual(lostGeometry.canvasBottom);
+    expect(lostGeometry.left - lostGeometry.canvasLeft).toBeLessThanOrEqual(24);
+    expect(lostGeometry.canvasBottom - lostGeometry.bottom).toBeLessThanOrEqual(24);
+    await lostMarker.getByRole('button').click();
+    const lostDetail = page.getByTestId('comment-popover');
+    await expect(lostDetail).toContainText('Lost removed illustration');
+    await expect(lostDetail.getByRole('status')).toContainText('无法定位此元素，页面可能已变化。');
+    await expect(page.getByTestId('comment-target-overlay')).toHaveCount(0);
+    await testInfo.attach('Oct28-lost-bottom-left-detail', { body: await page.screenshot({ path: testInfo.outputPath('Oct28-lost-bottom-left-detail.png') }), contentType: 'image/png' });
+    await testInfo.attach('Oct28-lost-marker-geometry', { body: JSON.stringify(lostGeometry, null, 2), contentType: 'application/json' });
+    await lostDetail.getByRole('button', { name: '更多评论操作' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(lostDetail).toHaveCount(0);
     for (const [note, notice] of [['Earlier published version', '基于旧版本'], ['Moved legacy anchor', '锚点可能已移动']] as const) {
       const row = page.getByTestId('comment-side-item').filter({ hasText: note });
       await expect(row.getByTestId('comment-location-notice')).toContainText(notice);

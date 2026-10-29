@@ -9,6 +9,17 @@ import type { PreviewComment, PreviewCommentTarget, ProjectFile } from '../../sr
 vi.mock('../../src/comments/validate-save-target', () => ({
   validateCommentSaveTarget: async (_frame: unknown, target: unknown) => target,
 }));
+
+function markerCanvasStyle(marker: HTMLElement) {
+  const cluster = marker.closest<HTMLElement>('[data-testid="comment-marker-cluster"]');
+  return {
+    left: `${Number.parseFloat(cluster?.style.left ?? '0') + Number.parseFloat(marker.style.left)}px`,
+    top: `${Number.parseFloat(cluster?.style.top ?? '0') + Number.parseFloat(marker.style.top)}px`,
+    width: marker.style.width,
+    height: marker.style.height,
+  };
+}
+
 beforeEach(() => {
   const original = HTMLElement.prototype.getBoundingClientRect;
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -58,15 +69,15 @@ it('keeps a failed draft, then saves at its click point, exits picking and reope
   await waitFor(() => expect(viewingPost).toHaveBeenCalledWith(expect.objectContaining({ type: 'od:comment-mode', enabled: false, observe: true }), '*')); 
   await act(async () => { window.dispatchEvent(new MessageEvent('message', { source: viewingFrame.contentWindow, data: { type: 'od:comment-targets', targets: [target] } })); });
   const marker = screen.getByTestId('comment-saved-marker-title');
-  expect(marker).toHaveStyle({ left: '70.75px', top: '32.75px', width: '28px', height: '28px' });
-  expect(marker.querySelector('button')).toHaveStyle({ left: '0px', top: '0px' });
+  expect(markerCanvasStyle(marker)).toMatchObject({ left: '70.75px', top: '32.75px', width: '28px', height: '28px' });
+  expect(marker).toHaveStyle({ left: '0px', top: '0px' });
   view.unmount();
   render(<Fixture />);
   fireEvent.click(screen.getByTestId('board-mode-toggle'));
   const refreshedFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
   const movedTarget = { ...target, position: { x: 100.5, y: 80.25, width: 400, height: 160 } };
   await act(async () => { window.dispatchEvent(new MessageEvent('message', { source: refreshedFrame.contentWindow, data: { type: 'od:comment-targets', targets: [movedTarget] } })); });
-  expect(screen.getByTestId('comment-saved-marker-title')).toHaveStyle({ left: '201px', top: '93.25px', width: '28px', height: '28px' });
+  expect(markerCanvasStyle(screen.getByTestId('comment-saved-marker-title'))).toMatchObject({ left: '201px', top: '93.25px', width: '28px', height: '28px' });
   fireEvent.click(screen.getByTestId('comment-side-item'));
   expect(screen.getByTestId('comment-popover-detail')).toHaveTextContent('Please improve this');
   expect(screen.queryByTestId('comment-popover-input')).toBeNull();

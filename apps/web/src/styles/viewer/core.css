@@ -2131,7 +2131,7 @@
   bottom: -2px;
 }
 .comment-side-item-head {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3021,12 +3021,12 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
 /* Collaboration comment panel resize affordance. */
 .comment-side-resizer { position:absolute; z-index:3; left:-4px; top:8px; bottom:8px; width:8px; cursor:col-resize; touch-action:none; }
 .comment-side-resizer:focus-visible { outline:2px solid var(--text-muted); outline-offset:1px; }
-.comment-side-time { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.comment-side-time { flex: 0 0 auto; white-space: nowrap; }
 .comment-side-author-copy { min-width:0; }
 .comment-side-author-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-.comment-side-author { flex: 0 1 auto; }
-.comment-side-author-copy { flex: 0 1 auto; }
+.comment-side-author { flex: 1 1 auto; overflow: hidden; }
+.comment-side-author-copy { flex: 1 1 auto; overflow: hidden; }
 .comment-side-check { margin-left: auto; }
 
 .comment-side-item { font-weight: 500; }
@@ -3036,3 +3036,16 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
 .comment-side-select-all[aria-pressed="true"]::before { content: '✓'; color: white; background: #333; border-color: #333; font-size: 11px; line-height: 12px; text-align: center; }
 .comment-detail-author { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .comment-detail-time { flex-shrink: 0; font-size: 10px; font-weight: 500; color: #a3a3a3; }
+
+/* Comment clusters preserve source anchors; only this display viewport scrolls. */
+.comment-marker-cluster { position:absolute; overflow:auto; pointer-events:auto; scrollbar-width:none; }
+.comment-marker-cluster::-webkit-scrollbar { display:none; }
+.comment-marker-cluster:has(.is-selected) { z-index:3; }
+.comment-saved-pin.is-selected { box-shadow:inset 0 0 0 2px #fff, 0 2px 6px #0003; }
+.comment-saved-pin:focus:not(:focus-visible) { outline:none; }
+.comment-saved-pin:focus-visible { outline:2px solid #333; outline-offset:3px; }
+.comment-lost-markers { position:absolute; display:flex; gap:8px; overflow:auto; pointer-events:auto; }
+.comment-lost-markers .comment-saved-marker { position:relative; flex:0 0 28px; }
+.comment-saved-pin.comment-lost-pin { border:1px dashed #999; background:#f4f4f4; color:#888; }
+.comment-side-submit-error { margin:0; padding:0 14px 12px; text-align:start; color:var(--red, #d63c35); font-size:12px; overflow-wrap:anywhere; }
+.comment-detail-time { white-space:nowrap; }
