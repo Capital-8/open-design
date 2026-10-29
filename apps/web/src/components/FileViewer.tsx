@@ -17974,6 +17974,7 @@ function HtmlViewer({
                     * 下面两块面板一行都没动 —— 这正是「一份实现」的意思。
                     */
                   <AnchoredMenuShell
+                    stablePlacement={unifiedActionTab === 'share'}
                     anchorId={menuAnchorId ?? toolbarMenuAnchorId}
                     wrapperClassName="share-menu chrome-share-menu chrome-share-menu--unified"
                     className={

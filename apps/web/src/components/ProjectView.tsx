@@ -6375,7 +6375,9 @@ export function ProjectView({
     if (!activeConversationId) return;
     const commentsGeneration = ++previewCommentsGenerationRef.current;
     const commentsReadSeq = ++previewCommentsReadSeq.current;
-    setPreviewCommentsState('loading');
+    // Poll/SSE refreshes keep the committed list visible and eligible for
+    // acknowledgement. Only an unconfirmed identity needs the loading gate.
+    setPreviewCommentsState(current => current === 'success' ? current : 'loading');
     try {
       const next = await fetchPreviewComments(project.id, activeConversationId, projectRunWorkspaceContext, true);
       if (previewCommentsReadSeq.current !== commentsReadSeq) return;
