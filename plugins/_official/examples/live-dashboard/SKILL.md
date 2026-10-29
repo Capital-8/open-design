@@ -30,7 +30,7 @@ od:
     requires: true
     sections: [color, typography, layout, components, anti-patterns]
   craft:
-    requires: [typography, color, anti-ai-slop, motion-discipline, state-coverage]
+    requires: [typography, color, anti-ai-slop, animation-discipline, state-coverage]
   inputs:
     - name: workspace_name
       type: string
