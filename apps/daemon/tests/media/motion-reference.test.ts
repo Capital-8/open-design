@@ -8,6 +8,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildMotionReference,
+  isDownloaderHost,
   MotionReferenceError,
   parseCuts,
   parseProbe,
@@ -142,6 +143,27 @@ describe('buildMotionReference', () => {
     const made = await buildMotionReference({ projectDir: project, source: `${base}/clip.mp4`, id: 'ssrf' })
       .then(() => null, (err: { code?: string }) => err.code ?? 'unknown');
     expect(made).toBe('NEEDS_UPLOAD');
+  });
+
+  it('never hands a private or non-video-site link to the downloader', async () => {
+    // yt-dlp makes its own requests outside the public-address guard, so a
+    // loopback target or an arbitrary page must not reach it at all.
+    const marker = path.join(project, 'ytdlp-called');
+    const fake = path.join(project, 'spy-ytdlp.sh');
+    await writeFile(fake, `#!/bin/sh\ntouch "${marker}"\nexit 1\n`, { mode: 0o755 });
+    process.env.OD_YTDLP_PATH = fake;
+    try {
+      for (const [source, id] of [[`${base}/clip.mp4`, 'p1'], ['http://127.0.0.1:1/watch', 'p2'], ['https://x.com.evil.example/post', 'p3']] as const) {
+        await buildMotionReference({ projectDir: project, source, id }).catch(() => null);
+      }
+      expect(await readFile(marker).then(() => true, () => false)).toBe(false);
+    } finally {
+      delete process.env.OD_YTDLP_PATH;
+    }
+    expect(isDownloaderHost('https://x.com/a/status/1')).toBe(true);
+    expect(isDownloaderHost('https://www.youtube.com/watch?v=1')).toBe(true);
+    expect(isDownloaderHost('https://x.com.evil.example/post')).toBe(false);
+    expect(isDownloaderHost('http://127.0.0.1/clip')).toBe(false);
   });
 
   it('refuses paths outside the project and non-video files', async () => {

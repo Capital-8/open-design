@@ -5,7 +5,7 @@
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { spawn } from 'node:child_process';
 import { resolveYtDlp } from './yt-dlp.js';
-import { fetchPublicAsset } from '../public-asset-fetch.js';
+import { assertPublicAssetUrl, fetchPublicAsset } from '../public-asset-fetch.js';
 import { createWriteStream } from 'node:fs';
 import { copyFile, lstat, mkdir, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -153,8 +153,28 @@ async function fetchDirect(url: string, dir: string, fetcher: LinkFetcher = fetc
   return target;
 }
 
+/**
+ * Video sites yt-dlp is trusted to fetch from. yt-dlp makes its own requests
+ * and follows its own redirects, outside the public-address guard, so it only
+ * ever sees a link to one of these public platforms whose host has also passed
+ * that guard. Any other link is fetched only as a direct file, through the guard.
+ */
+const DOWNLOADER_HOSTS = [
+  'x.com', 'twitter.com', 'youtube.com', 'youtu.be', 'vimeo.com', 'bilibili.com', 'b23.tv',
+  'tiktok.com', 'douyin.com', 'instagram.com', 'facebook.com', 'fb.watch', 'linkedin.com',
+  'reddit.com', 'v.redd.it', 'dribbble.com', 'behance.net', 'threads.net', 'xiaohongshu.com', 'weibo.com',
+];
+
+export function isDownloaderHost(url: string): boolean {
+  let host: string;
+  try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+  return DOWNLOADER_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
 async function downloadUrl(url: string, dir: string, toolsDir: string | null, fetcher?: LinkFetcher): Promise<string> {
-  const ytdlp = await resolveYtDlp(toolsDir);
+  const viaDownloader = isDownloaderHost(url)
+    && await assertPublicAssetUrl(url).then(() => true, () => false);
+  const ytdlp = viaDownloader ? await resolveYtDlp(toolsDir) : null;
   if (ytdlp) {
     const out = path.join(dir, 'reference.%(ext)s');
     const result = await run(ytdlp, [
@@ -174,10 +194,10 @@ async function downloadUrl(url: string, dir: string, toolsDir: string | null, fe
     if (direct) return direct;
     throw new MotionReferenceError('NEEDS_UPLOAD', `Could not download the link (${blocked ?? 'the download failed'}). Download the video and attach the file instead.`);
   }
-  // Without yt-dlp only a direct video file link can be fetched.
+  // Any other link is fetched only as a direct video file, through the guard.
   const direct = await fetchDirect(url, dir, fetcher);
   if (direct) return direct;
-  throw new MotionReferenceError('NEEDS_UPLOAD', 'This link is a web page, not a video file, and no video downloader is installed. Download the video and attach the file instead.');
+  throw new MotionReferenceError('NEEDS_UPLOAD', 'This link is not a video file or a supported video site. Download the video and attach the file instead.');
 }
 
 async function resolveProjectFile(projectDir: string, source: string): Promise<string> {
