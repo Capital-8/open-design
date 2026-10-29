@@ -133,6 +133,12 @@ describe('cloud delivery contracts', () => {
     await fixture(async (directory) => {
       const app = join(directory, 'apps/cloud'), bundle = join(directory, 'bundle');
       await mkdir(app, { recursive: true });
+      // The real publisher starts Corepack from the repository root. Its
+      // fixture must pin that root too, before pnpm interprets --dir.
+      await writeFile(join(directory, 'package.json'), JSON.stringify({
+        private: true,
+        packageManager: JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).packageManager,
+      }));
       await writeFile(join(app, 'package.json'), JSON.stringify({
         private: true, type: 'module', packageManager: 'pnpm@10.33.2',
         scripts: {
