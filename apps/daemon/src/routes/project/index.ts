@@ -5192,7 +5192,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     const { id, conversationId, submittedAt } = req.body ?? {};
     if (typeof id !== 'string' || !isSafeId(id) || typeof conversationId !== 'string'
       || getConversation(db, conversationId)?.projectId !== req.params.id
-      || !Number.isSafeInteger(submittedAt) || submittedAt < 0 || submittedAt > Date.now()) {
+      || !Number.isSafeInteger(submittedAt) || submittedAt < 0) {
       return sendApiError(res, 400, 'BAD_REQUEST', 'invalid queued submission');
     }
     const existing = getProjectUserSubmission(db, id);
@@ -5200,7 +5200,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       return sendApiError(res, 409, 'IDEMPOTENCY_CONFLICT', 'submission belongs to another conversation');
     }
     const userSubmission = acceptProjectUserSubmission(db, {
-      id, projectId: req.params.id, conversationId, acceptedAt: submittedAt,
+      // Preserve enqueue time, but never let a fast client clock put activity
+      // in the future. The ledger retains this first receipt on every replay.
+      id, projectId: req.params.id, conversationId, acceptedAt: Math.min(submittedAt, Date.now()),
     });
     return res.json({ userSubmission });
   });
