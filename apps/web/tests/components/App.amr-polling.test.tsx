@@ -120,6 +120,7 @@ vi.mock('../../src/components/SettingsDialog', () => ({
       <button onClick={() => void onRefreshAgents({ agentCliEnv: initial.agentCliEnv ?? {} })}>
         rescan same environment
       </button>
+      <button onClick={() => void onRefreshAgents()}>background agent probe</button>
       <button
         onClick={() =>
           void onRefreshAgents({
@@ -838,22 +839,43 @@ describe('App AMR polling', () => {
     expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2);
   });
 
-  it('retries a stopped scoped catalog read when the user rescans the same environment', async () => {
+  it('refreshes a stopped scoped catalog once before polling after a user rescan', async () => {
+    vi.useFakeTimers();
     const selected = workspaceContextFixture({ workspaceId: 'paid-a', workspaceMemberId: 'member-a' });
     vi.spyOn(workspaceContextModule, 'useWorkspaceContext').mockReturnValue({ context: selected, loading: false });
-    mockedFetchAmrModels.mockReset()
-      .mockResolvedValueOnce({ source: 'preset', refreshing: false, remoteError: 'remote unavailable', models: [] })
-      .mockResolvedValue({
-        source: 'remote', refreshing: false,
-        models: [{ id: 'recovered-model', label: 'Recovered model' }],
-      });
-    render(<App />);
-    await waitFor(() => expect(mockedFetchAmrModels).toHaveBeenCalledTimes(1));
+    let refreshed = false;
+    mockedFetchAmrModels.mockReset().mockImplementation(async (_context, options) => {
+      if (options?.refresh) {
+        refreshed = true;
+        return { source: 'preset', refreshing: true, models: [] };
+      }
+      if (refreshed) {
+        return {
+          source: 'remote', refreshing: false,
+          models: [{ id: 'recovered-model', label: 'Recovered model' }],
+        };
+      }
+      // An ordinary cache get can start a new background refresh while still
+      // exposing the prior error. Only explicit invalidation clears that error.
+      return { source: 'preset', refreshing: true, remoteError: 'previous remote failure', models: [] };
+    });
+    await act(async () => { render(<App />); });
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByText('open settings'));
+    for (let probe = 0; probe < 4; probe += 1) {
+      await act(async () => { fireEvent.click(screen.getByText('background agent probe')); });
+    }
+    await advanceTestClock(1_000);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(1);
     await act(async () => { fireEvent.click(screen.getByText('rescan same environment')); });
+    await advanceTestClock(250);
+    expect(screen.getByTestId('settings-amr-model').textContent).toBe('none');
+    await advanceTestClock(1_000);
     expect(screen.getByTestId('settings-amr-model').textContent).toBe('recovered-model');
-    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(2);
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(3);
+    expect(mockedFetchAmrModels).toHaveBeenNthCalledWith(2, selected, { refresh: true });
     expect(mockedFetchAmrModels).toHaveBeenLastCalledWith(selected);
+    expect(mockedFetchAmrModels.mock.calls.filter(([, options]) => options?.refresh)).toHaveLength(1);
   });
 
   it('clears the old scoped catalog and reads the new AMR environment after a rescan', async () => {

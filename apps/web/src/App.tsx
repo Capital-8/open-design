@@ -3312,9 +3312,9 @@ function AppInner() {
         } else if (amrCatalogScopeRef.current.scoped && (
           amrModelsRef.current?.source !== 'remote' || amrModelsRef.current.models.length === 0
         )) {
-          // A user rescan can retry a stopped read. Background agent probes
-          // omit agentCliEnv and must not each restart the scoped model poll.
-          setAmrPollRestartToken((token) => token + 1);
+          // Clear a prior remote error for this exact scope once, then follow
+          // its background refresh. Automatic agent probes omit agentCliEnv.
+          queueAmrModelRefresh(amrCatalogScopeRef.current.identity);
         }
         saveConfig(nextConfig);
         setConfig(nextConfig);
@@ -3352,7 +3352,7 @@ function AppInner() {
         return [];
       }
     },
-    [beginAgentStreamRequest, isCurrentAgentStreamRequest],
+    [beginAgentStreamRequest, isCurrentAgentStreamRequest, queueAmrModelRefresh],
   );
 
   useEffect(() => {
