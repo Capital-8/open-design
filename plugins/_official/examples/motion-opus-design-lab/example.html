@@ -268,7 +268,7 @@ function render(t){t=clamp(Number(t)||0,0,CFG.duration);const idx=sceneAt(t);dra
 const tl=gsap.timeline({paused:true,onUpdate:()=>render(tl.time())});tl.to({}, {duration:CFG.duration,ease:'none'});
 window.__odRenderAt=t=>{tl.pause();tl.time(clamp(Number(t)||0,0,CFG.duration),false);render(t)};
 const main=document.getElementById('main'),viewport=document.getElementById('viewport'),playBtn=document.getElementById('playBtn'),scrub=document.getElementById('scrub'),tc=document.getElementById('tc');
-function fit(){if(document.documentElement.classList.contains('od-export'))return;const s=Math.min(innerWidth/720,innerHeight/916);main.style.transform=`translate(-50%,-50%) scale(${s})`}
+function fit(){if(window.__odMotionSourcePlayer||document.documentElement.classList.contains('od-export'))return;const s=Math.min(innerWidth/720,innerHeight/916);main.style.transform=`translate(-50%,-50%) scale(${s})`}
 function ui(){scrub.value=tl.time();tc.textContent=`${tl.time().toFixed(2)} / ${CFG.duration.toFixed(2)}`;playBtn.textContent=tl.paused()?'PLAY':'PAUSE';requestAnimationFrame(ui)}
 playBtn.addEventListener('click',()=>tl.paused()?tl.play():tl.pause());scrub.addEventListener('input',()=>{tl.pause();window.__odRenderAt(+scrub.value)});tl.eventCallback('onComplete',()=>{tl.pause(0);render(0)});addEventListener('resize',fit);
 Promise.all([document.fonts.ready,assetReady,new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))]).then(()=>{window.__timelines={main:tl};fit();render(0);document.documentElement.dataset.odPreviewReady='true';ui()});
