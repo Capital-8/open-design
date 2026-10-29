@@ -1,4 +1,3 @@
-import { ReferralEntry } from './ReferralEntry';
 import { homeAutoSendIdentity, stableIdentityDigest, type HomeRequestConcurrencyRejection } from '../runtime/home-auto-send-identity';
 import { withLiveArtifactDeliveries } from '../runtime/live-artifact-delivery';
 import { readAmrRequestConcurrency } from '../runtime/amr-request-concurrency';
@@ -14903,7 +14902,6 @@ export function ProjectView({
               <CenteredLoader />
             </div>
           )}
-          <ReferralEntry />
         </div>
         {/* The comment panel is a floating card over the workspace in EVERY
             state (per product: 任何状态下评论卡片都在这个位置). It used to dock

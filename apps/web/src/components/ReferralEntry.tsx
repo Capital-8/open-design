@@ -42,7 +42,7 @@ export function ReferralEntry({ compact = false }: { compact?: boolean }) {
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
   useEffect(() => setFailed(false), [scopeKey, active]);
-  if (!active) return null;
+  if (!active || compact) return null;
   const zh = locale === 'zh-CN' || locale === 'zh-TW';
   const [title, subtitle] = getReferralEntryCopy(locale);
   const open = async () => {
@@ -51,5 +51,5 @@ export function ReferralEntry({ compact = false }: { compact?: boolean }) {
       if (currentScope.current === scopeKey) setFailed(!accepted);
     } catch { if (currentScope.current === scopeKey) setFailed(true); }
   };
-  return <div className={`${styles.slot} ${compact ? styles.compact : ''}`}><button type="button" className={styles.card} data-testid="referral-entry" aria-label={`${title} — ${subtitle}`} title={`${title} — ${subtitle}`} onClick={() => void open()}><span className={styles.art} aria-hidden="true" /><span className={styles.copy}><strong>{title}</strong><span>{subtitle}</span></span></button>{failed ? <span role="alert">{zh ? '无法打开页面，请重试。' : 'Unable to open the page. Please try again.'}</span> : null}</div>;
+  return <div className={styles.slot}><button type="button" className={styles.card} data-testid="referral-entry" aria-label={`${title} — ${subtitle}`} title={`${title} — ${subtitle}`} onClick={() => void open()}><span className={styles.art} aria-hidden="true" /><span className={styles.copy}><strong>{title}</strong><span>{subtitle}</span></span></button>{failed ? <span role="alert">{zh ? '无法打开页面，请重试。' : 'Unable to open the page. Please try again.'}</span> : null}</div>;
 }

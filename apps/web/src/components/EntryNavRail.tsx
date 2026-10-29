@@ -2701,7 +2701,6 @@ export function EntryNavRail({
         priorityAnnouncementMetricsConsent={priorityAnnouncementMetricsConsent}
       />
     </nav>
-    {isHome && referralCompact ? <ReferralEntry compact /> : null}
     </>
   );
 }

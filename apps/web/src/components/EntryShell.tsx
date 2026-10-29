@@ -2282,7 +2282,7 @@ export function EntryShell({
               <HomeView
                 {...homeViewProps}
                 isActive={view === 'home'}
-                referralNotice={<ReferralNotice accountId={amrLoggedIn === true ? amrAccountId : null} profile={amrRegistrationStatus?.profile?.trim() || amrProfile} active={view === 'home'} context={homeFundingContext} billing={workspaceBillingResponse} />}
+                referralNotice={<ReferralNotice accountId={amrLoggedIn === true ? amrAccountId : null} profile={amrRegistrationStatus?.profile?.trim() || amrProfile} consoleOrigin={amrRegistrationStatus?.consoleOrigin} active={view === 'home'} context={homeFundingContext} billing={workspaceBillingResponse} />}
                 inviteSurface={<HomeInviteSurface signedOut={amrLoggedIn === false} identityReady={!workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure} accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} onSignInRequested={() => { setInviteSignInRequest('start'); navigate({ kind: 'home', view: 'onboarding' }); }} openAfterSignIn={inviteSignInRequest === 'waiting'} onSignInInviteConsumed={() => setInviteSignInRequest(null)} />}
                 /* Home is the one composer in the shell and consumes the page
                    handoff. The community view used to dock a second HomeView

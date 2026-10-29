@@ -35,3 +35,14 @@ it('does not infer activity from an incomplete summary or failed response', asyn
  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledOnce());
  expect(screen.queryByTestId('referral-entry')).toBeNull();
 });
+
+it('hides while navigation is collapsed and restores the entry on expansion', async () => {
+  globalThis.fetch = vi.fn(async () => Response.json(summary)) as typeof fetch;
+  const view = (compact: boolean) => <I18nProvider initial="en"><ReferralEntryProvider accountId="a" profile="local"><ReferralEntry compact={compact} /></ReferralEntryProvider></I18nProvider>;
+  const { rerender } = render(view(false));
+  await screen.findByTestId('referral-entry');
+  rerender(view(true));
+  expect(screen.queryByTestId('referral-entry')).toBeNull();
+  rerender(view(false));
+  expect(screen.getAllByTestId('referral-entry')).toHaveLength(1);
+});

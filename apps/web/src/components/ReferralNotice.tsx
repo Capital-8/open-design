@@ -20,12 +20,14 @@ const dismissed = new Set<string>();
 export function ReferralNotice({
 	accountId,
 	profile,
+	consoleOrigin,
 	active,
 	context,
 	billing,
 }: {
 	accountId: string | null;
 	profile: string | null;
+	consoleOrigin?: string | null;
 	active: boolean;
 	context: WorkspaceCollabContext | null;
 	billing: WorkspaceBillingResponse | null;
@@ -118,7 +120,7 @@ export function ReferralNotice({
                 if (!accepted && currentScope.current === scopeKey) setFailed(true);
                 return;
             }
-            const url = new URL(amrConsoleUrlForProfile(profile));
+            const url = new URL(amrConsoleUrlForProfile(profile, consoleOrigin));
 			url.searchParams.set("source", "open_design");
 			url.searchParams.set("billing", AMR_CONSOLE_UPGRADE_INTENT);
 			const accepted = await openExternalUrl(url.toString());

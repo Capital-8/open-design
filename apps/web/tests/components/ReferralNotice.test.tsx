@@ -37,3 +37,17 @@ it('uses a truthful pending fallback when the server has no due time',async()=>{
  render(<I18nProvider initial="en"><ReferralNotice accountId="missing" profile="local" active context={null} billing={null}/></I18nProvider>);
  expect((await screen.findByTestId('referral-notice')).textContent).toContain('awaiting issuance');
 });
+
+it('opens the selected environment for the subscription action', async () => {
+ const openExternalUrl = vi.spyOn(await import('../../src/providers/registry'), 'openExternalUrl').mockResolvedValue(true);
+ vi.stubGlobal('fetch', vi.fn(async () => Response.json({...base, invitee: {...base.invitee, status:'registered', purchaseDeadline: new Date(Date.now() + 60000).toISOString(), dueAt:null}})));
+ render(<I18nProvider initial="en"><ReferralNotice accountId="env-test" profile="local" consoleOrigin="http://localhost:5173" active context={null} billing={null} /></I18nProvider>);
+ const { fireEvent, waitFor } = await import('@testing-library/react');
+ fireEvent.click(await screen.findByRole('button', {name: 'Subscribe'}));
+ await waitFor(() => expect(openExternalUrl).toHaveBeenCalled());
+ const url = new URL(openExternalUrl.mock.calls[0]?.[0] ?? '');
+ expect(url.origin).toBe('http://localhost:5173');
+ expect(url.searchParams.get('billing')).toBe('plan');
+ expect(url.searchParams.get('source')).toBe('open_design');
+ openExternalUrl.mockRestore();
+});
