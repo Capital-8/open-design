@@ -44,6 +44,15 @@ function onboardingSentences(text: string, locale: Locale) {
     <span className={styles.sentence} dir="auto" key={index}>{segment}</span>
   ));
 }
+const emptyRow = (): Row => ({ email: '', role: 'member', idempotencyKey: crypto.randomUUID() });
+const validEmail = (value: string) => {
+  const input = document.createElement('input');
+  input.type = 'email';
+  input.required = true;
+  input.value = value.trim();
+  return input.validity.valid;
+};
+const canonicalRole = (role: string): WorkspaceInviteRole => role === 'admin' || role === '管理员' ? 'admin' : 'member';
 
 /** The local form retains authoritative per-row results and never retries sent recipients. */
 export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAssignRoles = true, entryFrom: requestedEntry = 'workspace_switcher', variant = 'dialog', onFinish }: Props) {

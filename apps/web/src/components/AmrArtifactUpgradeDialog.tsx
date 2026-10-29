@@ -1,3 +1,4 @@
+import { lockWebModalScroll } from './modal-scroll-lock';
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Dialog, VisuallyHidden } from '@open-design/components';

@@ -491,7 +491,7 @@ function RailRecentSection({
   // rest from the rail entirely). The LIST scrolls past ~11 rows, not the rail
   // — see `.entry-nav-rail__recent-list` in entry-layout.css.
   const items = useMemo(
-    () => [...projects].sort((a, b) => b.updatedAt - a.updatedAt),
+    () => [...projects].sort(compareRecentProjects),
     [projects],
   );
   // Run status for the rows' leading glyph. `Project.status` cannot serve it —
