@@ -1,6 +1,10 @@
 {
   "name": "@open-design/packaged",
+<<<<<<< HEAD
   "version": "0.27.0",
+=======
+  "version": "0.26.2",
+>>>>>>> 6ab98c4b13 ([OPEND-3102] feat: 集成席位放开一期客户端与共享计费 (#9120))
   "private": true,
   "type": "module",
   "main": "./dist/index.mjs",
