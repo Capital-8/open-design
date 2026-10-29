@@ -1237,7 +1237,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
   app.post(MOTION_REFERENCE_TOOL_ENDPOINT, async (req, res) => {
     const grant = authorizeToolRequest(req, res, 'media:reference', { endpoint: MOTION_REFERENCE_TOOL_ENDPOINT });
     if (!grant) return;
-    if (!await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' })) return;
+    if (!await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' }, grant.runId)) return;
     await handleMotionReference(req, res, grant.projectId);
   });
 
@@ -1284,7 +1284,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
   app.post(MOTION_COMPARE_TOOL_ENDPOINT, async (req, res) => {
     const grant = authorizeToolRequest(req, res, 'media:compare', { endpoint: MOTION_COMPARE_TOOL_ENDPOINT });
     if (!grant) return;
-    if (!await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' })) return;
+    if (!await ctx.authorizeProjectToolRequest(res, grant.projectId, { mode: 'write', capability: 'writeFiles' }, grant.runId)) return;
     await handleMotionCompare(req, res, grant.projectId);
   });
 

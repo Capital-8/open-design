@@ -123,6 +123,29 @@ export function pickFrameTimes(cuts: number[], durationSec: number): number[] {
   return Array.from({ length: MAX_FRAMES }, (_, i) => spaced[Math.round(i * step)]!);
 }
 
+/**
+ * Save a link that serves a video file directly. Returns null when the link is
+ * not a video file or cannot be reached, so the caller decides what to say.
+ * A too-large video is still refused outright: falling back cannot help there.
+ */
+async function fetchDirect(url: string, dir: string): Promise<string | null> {
+  let response: Response;
+  try { response = await fetch(url, { redirect: 'follow' }); } catch { return null; }
+  const type = response.headers.get('content-type') ?? '';
+  if (!response.ok || !response.body || !/^video\//i.test(type)) return null;
+  const length = Number(response.headers.get('content-length') ?? 0);
+  if (length > MOTION_REFERENCE_MAX_BYTES) throw new MotionReferenceError('TOO_LARGE', 'The video is larger than 200 MB.');
+  const ext = type.includes('webm') ? '.webm' : type.includes('quicktime') ? '.mov' : '.mp4';
+  const target = path.join(dir, `reference${ext}`);
+  let bytes = 0;
+  const counted = Readable.fromWeb(response.body as any).on('data', (chunk: Buffer) => {
+    bytes += chunk.length;
+    if (bytes > MOTION_REFERENCE_MAX_BYTES) counted.destroy(new MotionReferenceError('TOO_LARGE', 'The video is larger than 200 MB.'));
+  });
+  try { await pipeline(counted, createWriteStream(target)); } catch { return null; }
+  return target;
+}
+
 async function downloadUrl(url: string, dir: string, toolsDir: string | null): Promise<string> {
   const ytdlp = await resolveYtDlp(toolsDir);
   if (ytdlp) {
@@ -134,31 +157,20 @@ async function downloadUrl(url: string, dir: string, toolsDir: string | null): P
     ], 300_000);
     const saved = (await readdir(dir)).find((name) => name.startsWith('reference.') && VIDEO_EXTENSIONS.has(path.extname(name).toLowerCase()));
     if (result.code === 0 && saved) return path.join(dir, saved);
-    const reason = /login|sign in|cookies|private/i.test(result.stderr) ? 'the site requires a login'
+    // A direct video file link carries no page metadata, so the downloader
+    // filters it out before writing anything. Fall through to a plain fetch
+    // instead of telling the user to upload; only give up when that fails too.
+    const blocked = /login|sign in|cookies|private/i.test(result.stderr) ? 'the site requires a login'
       : /does not pass filter|is_live|duration/i.test(result.stderr) ? `it is live or longer than ${MOTION_REFERENCE_MAX_SECONDS} seconds`
-        : 'the download failed';
-    throw new MotionReferenceError('NEEDS_UPLOAD', `Could not download the link (${reason}). Download the video and attach the file instead.`);
+        : null;
+    const direct = await fetchDirect(url, dir);
+    if (direct) return direct;
+    throw new MotionReferenceError('NEEDS_UPLOAD', `Could not download the link (${blocked ?? 'the download failed'}). Download the video and attach the file instead.`);
   }
   // Without yt-dlp only a direct video file link can be fetched.
-  let response: Response;
-  try { response = await fetch(url, { redirect: 'follow' }); } catch {
-    throw new MotionReferenceError('NEEDS_UPLOAD', 'Could not reach the link. Download the video and attach the file instead.');
-  }
-  const type = response.headers.get('content-type') ?? '';
-  if (!response.ok || !response.body || !/^video\//i.test(type)) {
-    throw new MotionReferenceError('NEEDS_UPLOAD', 'This link is a web page, not a video file, and no video downloader is installed. Download the video and attach the file instead.');
-  }
-  const length = Number(response.headers.get('content-length') ?? 0);
-  if (length > MOTION_REFERENCE_MAX_BYTES) throw new MotionReferenceError('TOO_LARGE', 'The video is larger than 200 MB.');
-  const ext = type.includes('webm') ? '.webm' : type.includes('quicktime') ? '.mov' : '.mp4';
-  const target = path.join(dir, `reference${ext}`);
-  let bytes = 0;
-  const counted = Readable.fromWeb(response.body as any).on('data', (chunk: Buffer) => {
-    bytes += chunk.length;
-    if (bytes > MOTION_REFERENCE_MAX_BYTES) counted.destroy(new MotionReferenceError('TOO_LARGE', 'The video is larger than 200 MB.'));
-  });
-  await pipeline(counted, createWriteStream(target));
-  return target;
+  const direct = await fetchDirect(url, dir);
+  if (direct) return direct;
+  throw new MotionReferenceError('NEEDS_UPLOAD', 'This link is a web page, not a video file, and no video downloader is installed. Download the video and attach the file instead.');
 }
 
 async function resolveProjectFile(projectDir: string, source: string): Promise<string> {

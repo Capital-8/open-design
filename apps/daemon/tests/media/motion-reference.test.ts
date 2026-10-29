@@ -106,6 +106,21 @@ describe('buildMotionReference', () => {
     expect(r.durationSec).toBeCloseTo(4, 0);
   });
 
+  it('still takes a direct video link when a downloader is installed but filters it out', async () => {
+    // A direct file link has no page metadata, so yt-dlp rejects it before
+    // writing anything. The plain fetch has to pick it up rather than telling
+    // the user to upload a file they already linked.
+    const fake = path.join(project, 'fake-ytdlp.sh');
+    await writeFile(fake, '#!/bin/sh\necho "does not pass filter" >&2\nexit 1\n', { mode: 0o755 });
+    process.env.OD_YTDLP_PATH = fake;
+    try {
+      const r = await buildMotionReference({ projectDir: project, source: `${base}/clip.mp4`, id: 'g2' });
+      expect(r.durationSec).toBeCloseTo(4, 0);
+    } finally {
+      delete process.env.OD_YTDLP_PATH;
+    }
+  });
+
   it('asks for an upload when the link is a web page and no downloader exists', async () => {
     await expect(buildMotionReference({ projectDir: project, source: `${base}/post/1`, id: 'c' }))
       .rejects.toMatchObject({ code: 'NEEDS_UPLOAD' });

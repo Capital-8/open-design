@@ -95,6 +95,11 @@ export function pickCompareTimes(durationSec: number, requested?: number[], cuts
   return Array.from({ length: MAX_TIMES }, (_, i) => sorted[Math.round(i * step)]!);
 }
 
+function within(root: string, target: string): boolean {
+  const rel = path.relative(root, target);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
 async function resolveVideo(projectDir: string, source: string): Promise<string> {
   const trimmed = source?.trim();
   if (!trimmed) throw new MotionCompareError('BAD_REQUEST', 'a video path is required');
@@ -107,7 +112,14 @@ async function resolveVideo(projectDir: string, source: string): Promise<string>
   if (!info || info.isSymbolicLink() || !info.isFile()) {
     throw new MotionCompareError('BAD_REQUEST', `${trimmed} is not a file in the project`);
   }
-  return target;
+  // A symlinked parent directory resolves outside the project even though the
+  // leaf itself is a real file, so re-check the resolved path.
+  const resolved = await realpath(target).catch(() => null);
+  const root = await realpath(projectDir).catch(() => projectDir);
+  if (!resolved || !within(root, resolved)) {
+    throw new MotionCompareError('BAD_REQUEST', `${trimmed} resolves outside the project`);
+  }
+  return resolved;
 }
 
 export async function compareMotionFilms(input: {

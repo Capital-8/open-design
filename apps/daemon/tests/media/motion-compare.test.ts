@@ -1,6 +1,6 @@
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -103,6 +103,18 @@ describe('compareMotionFilms', () => {
       .rejects.toBeInstanceOf(MotionCompareError);
     await expect(compareMotionFilms({ projectDir: project, reference: 'ref.mp4', candidate: 'notes.txt' }))
       .rejects.toMatchObject({ code: 'NO_VIDEO' });
+  });
+
+  it('refuses a video reached through a symlinked parent directory', async () => {
+    const outside = path.join(project, 'outside-secret');
+    await mkdir(outside, { recursive: true });
+    await copyFile(path.join(project, 'ref.mp4'), path.join(outside, 'ref.mp4'));
+    const inside = path.join(project, 'symlink-case');
+    await mkdir(inside, { recursive: true });
+    await copyFile(path.join(project, 'same.mp4'), path.join(inside, 'same.mp4'));
+    await symlink(outside, path.join(inside, 'outside-dir'));
+    await expect(compareMotionFilms({ projectDir: inside, reference: 'outside-dir/ref.mp4', candidate: 'same.mp4', times: [0.5], id: 'e' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it('works in a project whose only files sit at the top level', async () => {
