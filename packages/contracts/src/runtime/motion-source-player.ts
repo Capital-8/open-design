@@ -54,7 +54,7 @@ function createMotionAudioSync(audio) {
 // Shared by URL previews, srcdoc previews and the persisted editable source.
 // The renderer installs its flag before author scripts; it never sees chrome,
 // layout scaling, poster seeking, or wall-clock playback from this runtime.
-const PLAYER = `<script data-od-motion-source-player="10">
+const PLAYER = `<script data-od-motion-source-player="11">
 ${MOTION_TIMELINE_CHECK_SCRIPT}
 (function () {
 ${MOTION_AUDIO_SYNC_RUNTIME}
@@ -135,11 +135,16 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
     fit(); window.addEventListener('resize', fit);
     var started = Date.now();
     function connect() {
+      if (!stage.isConnected) return;
       var tl = window.__timelines && window.__timelines[root.dataset.compositionId];
       if (!tl || typeof tl.seek !== 'function' || typeof tl.play !== 'function' || !(tl.duration() > 0)) {
         if (Date.now()-started < 15000) { setTimeout(connect, 100); return; }
-        notice('动效未就绪，请检查时间轴或依赖文件'); return;
+        notice('动效未就绪，请检查时间轴或依赖文件');
+        // Late fonts/images may still register the timeline after the notice.
+        // Keep watching while mounted, so a slow load can recover by itself.
+        setTimeout(connect, 1000); return;
       }
+      notice('');
       var timingError = window.__odValidateMotionTimeline(root, tl);
       if (timingError) { tl.pause(); notice(timingError); return; }
       var duration = tl.duration(), applied = false;
@@ -205,7 +210,7 @@ export function injectMotionSourcePlayer(html: string): string {
   const existing = findRealTagOffset(html, /<script\b[^>]*\bdata-od-motion-source-player\b/i);
   if (existing >= 0) {
     const script = /^<script\b[^>]*>[\s\S]*?<\/script\s*>/i.exec(html.slice(existing));
-    if (!script || /data-od-motion-source-player="10"/.test(script[0])) return html;
+    if (!script || /data-od-motion-source-player="11"/.test(script[0])) return html;
     return html.slice(0, existing) + PLAYER + html.slice(existing + script[0].length);
   }
   const end = findRealTagOffset(html, HTML_TAG_PATTERNS.bodyClose);
