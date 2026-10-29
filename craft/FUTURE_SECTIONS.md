@@ -5,5 +5,4 @@ These slugs are intentionally referenced by skills before their matching
 forward references while still failing on unlisted typos.
 
 - motion-discipline
-- pixel-discipline
 - typographic-rhythm

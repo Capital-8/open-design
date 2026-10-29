@@ -82,7 +82,7 @@ export async function buildBundledCatalog(
         }
     }
     for (const path of [...entries.keys()].sort()) {
-      if (/^plugins\/_official\/.+\/open-design\.json$/.test(path)) {
+      if (/^plugins\/_official\/(?:[^/]+\/)?[^/]+\/open-design\.json$/.test(path)) {
         const bytes = await read(path),
           manifest = bundledManifest.parse(JSON.parse(bytes.toString()));
         const root = posix.dirname(path),

@@ -24,7 +24,10 @@ const UPDATE_SURFACE_FILES = [
   'src/components/EntryShell.tsx',
   'src/components/UpdaterPopup.tsx',
   'src/components/WhatsNewPopup.tsx',
-  'src/lib/updater.ts',
+  'src/lib/updater/index.ts',
+  'src/lib/updater/shared.ts',
+  'src/lib/updater/desktop.ts',
+  'src/lib/updater/web.ts',
   'src/lib/whats-new.ts',
 ];
 

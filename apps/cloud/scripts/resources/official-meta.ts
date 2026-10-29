@@ -23,7 +23,7 @@ export async function generateMeta(
     let type: ResourceSelection["type"];
     let data: any;
     let id: string;
-    if (/^plugins\/_official\/.+\/open-design\.json$/.test(path)) {
+    if (/^plugins\/_official\/(?:[^/]+\/)?[^/]+\/open-design\.json$/.test(path)) {
       type = "plugin";
       data = JSON.parse(await readFile(resolve(root, path), "utf8"));
       id = data.name;

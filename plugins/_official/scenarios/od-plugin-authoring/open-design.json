@@ -119,8 +119,8 @@
       },
       "exampleOutputs": [
         {
-          "path": "./examples/generated-plugin/open-design.json",
-          "title": "Generated plugin manifest"
+          "path": "./examples/generated-plugin/open-design.example.json",
+          "title": "Generated plugin manifest example"
         }
       ]
     },

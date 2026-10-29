@@ -105,7 +105,8 @@
         }
       ],
       "craft": [
-        "typographic-rhythm",
+        "typography",
+        "typography-hierarchy",
         "pixel-discipline"
       ],
       "assets": [
