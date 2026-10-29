@@ -5,6 +5,7 @@
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { spawn } from 'node:child_process';
 import { resolveYtDlp } from './yt-dlp.js';
+import { fetchPublicAsset } from '../public-asset-fetch.js';
 import { createWriteStream } from 'node:fs';
 import { copyFile, lstat, mkdir, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -131,9 +132,12 @@ export function pickFrameTimes(cuts: number[], durationSec: number): number[] {
  * not a video file or cannot be reached, so the caller decides what to say.
  * A too-large video is still refused outright: falling back cannot help there.
  */
-async function fetchDirect(url: string, dir: string): Promise<string | null> {
+async function fetchDirect(url: string, dir: string, fetcher: LinkFetcher = fetchPublicAsset): Promise<string | null> {
+  // `source` is user- or agent-supplied, so both the URL and every redirect hop
+  // go through the shared public-address guard: a public link must not be able
+  // to make the daemon reach loopback, link-local or private-network services.
   let response: Response;
-  try { response = await fetch(url, { redirect: 'follow' }); } catch { return null; }
+  try { response = await fetcher(url); } catch { return null; }
   const type = response.headers.get('content-type') ?? '';
   if (!response.ok || !response.body || !/^video\//i.test(type)) return null;
   const length = Number(response.headers.get('content-length') ?? 0);
@@ -149,7 +153,7 @@ async function fetchDirect(url: string, dir: string): Promise<string | null> {
   return target;
 }
 
-async function downloadUrl(url: string, dir: string, toolsDir: string | null): Promise<string> {
+async function downloadUrl(url: string, dir: string, toolsDir: string | null, fetcher?: LinkFetcher): Promise<string> {
   const ytdlp = await resolveYtDlp(toolsDir);
   if (ytdlp) {
     const out = path.join(dir, 'reference.%(ext)s');
@@ -166,12 +170,12 @@ async function downloadUrl(url: string, dir: string, toolsDir: string | null): P
     const blocked = /login|sign in|cookies|private/i.test(result.stderr) ? 'the site requires a login'
       : /does not pass filter|is_live|duration/i.test(result.stderr) ? `it is live or longer than ${MOTION_REFERENCE_MAX_SECONDS} seconds`
         : null;
-    const direct = await fetchDirect(url, dir);
+    const direct = await fetchDirect(url, dir, fetcher);
     if (direct) return direct;
     throw new MotionReferenceError('NEEDS_UPLOAD', `Could not download the link (${blocked ?? 'the download failed'}). Download the video and attach the file instead.`);
   }
   // Without yt-dlp only a direct video file link can be fetched.
-  const direct = await fetchDirect(url, dir);
+  const direct = await fetchDirect(url, dir, fetcher);
   if (direct) return direct;
   throw new MotionReferenceError('NEEDS_UPLOAD', 'This link is a web page, not a video file, and no video downloader is installed. Download the video and attach the file instead.');
 }
@@ -187,7 +191,14 @@ async function resolveProjectFile(projectDir: string, source: string): Promise<s
   return target;
 }
 
-export async function buildMotionReference(input: { projectDir: string; source: string; id?: string; toolsDir?: string; rulesFile?: string }): Promise<MotionReferenceResult> {
+/**
+ * Fetcher used for a pasted link. Defaults to the shared public-address guard,
+ * so a public link can never redirect the daemon into loopback or private
+ * space. Tests inject their own loopback server.
+ */
+export type LinkFetcher = (url: string, init?: RequestInit) => Promise<Response>;
+
+export async function buildMotionReference(input: { projectDir: string; source: string; id?: string; toolsDir?: string; rulesFile?: string; fetchLink?: LinkFetcher }): Promise<MotionReferenceResult> {
   const source = input.source?.trim();
   if (!source) throw new MotionReferenceError('BAD_REQUEST', 'source is required (a project file path or an http(s) link)');
   const id = input.id?.trim() || `ref-${Date.now().toString(36)}`;
@@ -202,7 +213,7 @@ export async function buildMotionReference(input: { projectDir: string; source: 
 
   const isUrl = /^https?:\/\//i.test(source);
   let video: string;
-  if (isUrl) video = await downloadUrl(source, dir, input.toolsDir ?? null);
+  if (isUrl) video = await downloadUrl(source, dir, input.toolsDir ?? null, input.fetchLink);
   else {
     const file = await resolveProjectFile(projectDir, source);
     video = path.join(dir, `reference${path.extname(file).toLowerCase() || '.mp4'}`);

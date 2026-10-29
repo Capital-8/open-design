@@ -52,6 +52,11 @@ describe('buildMotionReference', () => {
   const savedYtDlp = process.env.OD_YTDLP_PATH;
   const savedPath = process.env.PATH;
 
+  // The production fetcher refuses loopback on purpose (SSRF guard); these
+  // fixtures serve a video from 127.0.0.1, so they inject a plain fetch.
+  const loopbackFetch: import('../../src/media/motion-reference.js').LinkFetcher =
+    (url, init) => fetch(url, { ...init, redirect: 'follow' });
+
   beforeAll(async () => {
     project = await mkdtemp(path.join(os.tmpdir(), 'motion-ref-'));
     // Two 2-second colour shots with a hard cut and a tone: a measurable reference.
@@ -106,7 +111,7 @@ describe('buildMotionReference', () => {
   });
 
   it('downloads a direct video link without a downloader', async () => {
-    const r = await buildMotionReference({ projectDir: project, source: `${base}/clip.mp4`, id: 'b' });
+    const r = await buildMotionReference({ projectDir: project, source: `${base}/clip.mp4`, id: 'b', fetchLink: loopbackFetch });
     expect(r.source.kind).toBe('url');
     expect(r.durationSec).toBeCloseTo(4, 0);
   });
@@ -119,7 +124,7 @@ describe('buildMotionReference', () => {
     await writeFile(fake, '#!/bin/sh\necho "does not pass filter" >&2\nexit 1\n', { mode: 0o755 });
     process.env.OD_YTDLP_PATH = fake;
     try {
-      const r = await buildMotionReference({ projectDir: project, source: `${base}/clip.mp4`, id: 'g2' });
+      const r = await buildMotionReference({ projectDir: project, source: `${base}/clip.mp4`, id: 'g2', fetchLink: loopbackFetch });
       expect(r.durationSec).toBeCloseTo(4, 0);
     } finally {
       delete process.env.OD_YTDLP_PATH;
@@ -127,8 +132,16 @@ describe('buildMotionReference', () => {
   });
 
   it('asks for an upload when the link is a web page and no downloader exists', async () => {
-    await expect(buildMotionReference({ projectDir: project, source: `${base}/post/1`, id: 'c' }))
+    await expect(buildMotionReference({ projectDir: project, source: `${base}/post/1`, id: 'c', fetchLink: loopbackFetch }))
       .rejects.toMatchObject({ code: 'NEEDS_UPLOAD' });
+  });
+
+  it('refuses a link that redirects into loopback instead of following it', async () => {
+    // The default fetcher is the shared public-address guard: a public URL must
+    // not be able to steer the daemon at a host-local service.
+    const made = await buildMotionReference({ projectDir: project, source: `${base}/clip.mp4`, id: 'ssrf' })
+      .then(() => null, (err: { code?: string }) => err.code ?? 'unknown');
+    expect(made).toBe('NEEDS_UPLOAD');
   });
 
   it('refuses paths outside the project and non-video files', async () => {
@@ -138,7 +151,7 @@ describe('buildMotionReference', () => {
 
   it('works in a brand-new project whose folder does not exist yet', async () => {
     const fresh = path.join(project, 'not-created-yet');
-    const r = await buildMotionReference({ projectDir: fresh, source: `${base}/clip.mp4`, id: 'f' });
+    const r = await buildMotionReference({ projectDir: fresh, source: `${base}/clip.mp4`, id: 'f', fetchLink: loopbackFetch });
     expect(r.durationSec).toBeCloseTo(4, 0);
   });
 });
