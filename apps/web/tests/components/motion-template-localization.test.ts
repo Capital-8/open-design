@@ -9,7 +9,7 @@ import { pluginPresetQuery } from '../../src/components/plugins-home/presetSeedP
 
 const slugs = [
   'semantic-color-stripes', 'sky-water-tessellation', 'prompt-motion-gallery',
-  'mind-clarity-journey', 'opus-motion-studio', 'windows-studio-launch',
+  'mind-clarity-journey', 'windows-studio-launch',
   'claude-agent-lab', 'opus-design-lab', 'superx-audience-growth',
   'kinetic-motion-designer', 'tixfox-ticket-promo', 'flowdrive-motion-reel',
   'distilbook-explainer', 'claude-design-team',

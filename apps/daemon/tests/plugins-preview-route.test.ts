@@ -39,11 +39,12 @@ beforeEach(async () => {
   const folder = path.join(pluginRoot, PLUGIN_ID);
   await mkdir(path.join(folder, 'preview', 'assets'), { recursive: true });
   await writeFile(path.join(folder, 'preview', 'assets', 'dynamic.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  await writeFile(path.join(folder, 'preview', 'assets', 'font.ttf'), 'bundled font bytes');
   await mkdir(path.join(folder, 'examples', 'desk-warm'), { recursive: true });
   await mkdir(path.join(folder, 'examples', 'wrapped'), { recursive: true });
   await writeFile(
     path.join(folder, 'preview', 'index.html'),
-    '<!DOCTYPE html><!-- <head> --><head data-note=">"><title>preview</title></head><p>preview body</p><script>const CFG={image:"assets/dynamic.svg"};if(CFG.image.startsWith("assets/")){const image=new Image();image.src=CFG.image}</script>',
+    '<!DOCTYPE html><!-- <head> --><head data-note=">"><title>preview</title><style>@font-face{font-family:F;src:url(assets/font.ttf)}</style></head><p>preview body</p><script>const CFG={image:"assets/dynamic.svg"};if(CFG.image.startsWith("assets/")){const image=new Image();image.src=CFG.image}</script>',
   );
   await writeFile(
     path.join(folder, 'examples', 'desk-warm', 'index.html'),
@@ -149,6 +150,7 @@ describe('GET /api/plugins/:id/preview', () => {
     expect(resp.headers.get('x-content-type-options')).toBe('nosniff');
     const body = await resp.text();
     expect(body).toContain('preview body');
+    expect(body).toContain(`data:font/ttf;base64,${Buffer.from('bundled font bytes').toString('base64')}`);
   });
 
   it('resolves script-created image paths against the actual preview directory', async () => {

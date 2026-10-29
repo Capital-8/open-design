@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import type * as BetterSqlite3 from 'better-sqlite3';
 import path from 'node:path';
+import { inlinePluginPreviewFonts } from './preview-fonts.js';
 import { findRealTagEnd, HTML_TAG_PATTERNS, prependAfterDoctype } from '@open-design/contracts/runtime/html-injection-points';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import {
@@ -199,11 +200,13 @@ export function registerPluginAssetRoutes(app: Express, deps: RegisterPluginAsse
       const ct = ext === '.html' ? 'text/html; charset=utf-8' : ext === '.js' ? 'application/javascript; charset=utf-8' : ext === '.css' ? 'text/css; charset=utf-8' : ext === '.json' ? 'application/json; charset=utf-8' : ext === '.md' || ext === '.markdown' ? 'text/markdown; charset=utf-8' : ext === '.svg' ? 'image/svg+xml' : ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
       res.setHeader('Content-Type', ct);
       if (ext === '.html' && typeof contentRel === 'string') {
+        const documentDir = path.posix.dirname(contentRel.replace(/\\/g, '/'));
+        const htmlWithFonts = await inlinePluginPreviewFonts(buf.toString('utf8'), plugin.fsPath, documentDir);
         buf = Buffer.from(
           rewritePluginAssetUrls(
-            buf.toString('utf8'),
+            htmlWithFonts,
             routeParam(req.params.id),
-            path.posix.dirname(contentRel.replace(/\\/g, '/')),
+            documentDir,
             navigationScopeQuery(authority),
           ),
           'utf8',

@@ -1,7 +1,44 @@
 import { describe, expect, it } from 'vitest';
+import { runInNewContext } from 'node:vm';
 import { injectMotionSourcePlayer, markMotionFrameRender } from '../src/runtime/motion-source-player';
 
 describe('motion source player boundaries', () => {
+  it('fits the authored composition once and restores it after author resize handlers', () => {
+    const properties: Record<string, string> = {};
+    const root = {
+      dataset: { width: '1080', height: '1080', compositionId: 'main' },
+      style: { setProperty: (key: string, value: string) => { properties[key] = value; } },
+      parentNode: { insertBefore() {} },
+    };
+    const elements: Array<{ style: { cssText: string }; setAttribute(): void; appendChild(): void }> = [];
+    const listeners: Record<string, () => void> = {};
+    const sandbox = {
+      URL, location: { href: 'http://localhost/preview' }, innerWidth: 1600, innerHeight: 900,
+      setTimeout() {},
+      addEventListener: (type: string, callback: () => void) => { listeners[type] = callback; },
+      document: {
+        readyState: 'complete',
+        querySelector: (selector: string) => selector.startsWith('meta') ? { content: 'video' } : root,
+        querySelectorAll: () => [],
+        head: { appendChild() {} }, body: { appendChild() {} },
+        createElement: () => {
+          const element = { style: { cssText: '' }, setAttribute() {}, appendChild() {} };
+          elements.push(element); return element;
+        },
+      },
+    };
+    const html = injectMotionSourcePlayer('<meta name="od-motion-output" content="video"><main data-composition-id="main"></main>');
+    const code = /<script data-od-motion-source-player="9">([\s\S]*?)<\/script>/.exec(html)![1]!;
+    runInNewContext(code, Object.assign(sandbox, { window: sandbox }));
+    expect(properties).toMatchObject({ width: '1080px', height: '1080px', left: '0', top: '0', transform: 'none' });
+    expect(elements[2]!.style.cssText).toContain('left:350px;top:0px;');
+    // An author fit() callback ran before the host's resize callback.
+    properties.transform = 'translate(-50%,-50%) scale(.5)';
+    sandbox.innerWidth = 900; sandbox.innerHeight = 1600;
+    listeners.resize!();
+    expect(properties.transform).toBe('none');
+    expect(elements[2]!.style.cssText).toContain('left:0px;top:350px;');
+  });
   it('leaves ordinary documents and code samples unchanged', () => {
     for (const html of ['<html><body>Prototype</body></html>', '<html><body><script>const sample = \'<div data-composition-id="main">\';</script></body></html>']) {
       expect(injectMotionSourcePlayer(html)).toBe(html);
@@ -39,7 +76,7 @@ describe('motion audio contract isolation', () => {
     const source = '<meta name="od-motion-output" content="video"><div data-composition-id="main"></div><script data-od-motion-source-player="6">oldPlayer();</script>';
     const result = injectMotionSourcePlayer(source);
     expect(result).not.toContain('oldPlayer');
-    expect(result).toContain('data-od-motion-source-player="8"');
+    expect(result).toContain('data-od-motion-source-player="9"');
     expect(injectMotionSourcePlayer(result)).toBe(result);
   });
 });
