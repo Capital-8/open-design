@@ -643,6 +643,10 @@ export function renderCommentAttachmentHint(
       lines.push(`motionReferenceTime: ${item.motion.timeSeconds}s / ${item.motion.durationSeconds}s`,
         ...(item.motion.fps ? [`motionFrame: ${Math.round(item.motion.timeSeconds * item.motion.fps)} at ${item.motion.fps}fps`] : []),
         `motionSourceFingerprint: ${item.motion.sourceFingerprint}`,
+        ...(item.motion.range ? [
+          `motionFeedbackRange: ${item.motion.range.startSeconds}s–${item.motion.range.endSeconds}s`,
+          'The selected range is feedback context, not an enforced boundary or a guarantee that other times remain unchanged.',
+        ] : []),
         'The time and screenshot identify the reference moment. They do not restrict the requested change to one frame; follow the user\'s intended time range.');
     }
     const imageAttachments = normalizePreviewCommentImageAttachments(item.imageAttachments);

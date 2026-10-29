@@ -1,12 +1,12 @@
 .scenes { position: relative; height: 32px; margin-top: 0; }
-.scene { position: absolute; top: 3px; height: 25px; box-sizing: border-box; display: flex; align-items: center; gap: 5px; min-width: 4px; overflow: hidden; padding: 0 7px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-subtle); color: var(--text-muted); font: inherit; font-size: 9px; cursor: pointer; text-align: left; }
+.scene { position: absolute; top: 3px; height: 25px; box-sizing: border-box; display: flex; align-items: center; gap: 5px; min-width: 4px; overflow: hidden; padding: 0 7px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-subtle); color: var(--text-muted); font: inherit; font-size: 10px; cursor: pointer; text-align: left; }
 .scene b { flex-shrink: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
 .scene span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scene:hover:not(:disabled), .current { background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel)); color: var(--accent); border-color: var(--accent); }
 .scene:disabled, .media:disabled { opacity: .5; cursor: default; }
 .mediaScroll { position: relative; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
 .mediaInner { position: relative; }
-.media { position: absolute; min-width: 4px; height: 23px; border: 1px solid var(--border); border-radius: 3px; display: flex; align-items: center; gap: 4px; padding: 0 6px; overflow: hidden; color: var(--text-muted); background: var(--bg-subtle); font: inherit; font-size: 9px; cursor: pointer; }
+.media { position: absolute; min-width: 4px; height: 23px; border: 1px solid var(--border); border-radius: 3px; display: flex; align-items: center; gap: 4px; padding: 0 6px; overflow: hidden; color: var(--text-muted); background: var(--bg-subtle); font: inherit; font-size: 10px; cursor: pointer; }
 .media span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .audio { background: color-mix(in srgb, var(--accent) 7%, var(--bg-panel)); }
 .caption { border-style: dashed; }
@@ -17,7 +17,7 @@
 .context small { color: var(--text-soft); font-size: 9px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .modify { margin-left: auto; display: flex; gap: 4px; height: 23px; font-size: 10px; padding: 0 6px; white-space: nowrap; }
 .texts { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: thin; height: 27px; align-items: center; }
-.texts > button { flex-shrink: 0; max-width: 95%; display: flex; gap: 5px; align-items: center; padding: 2px 6px; height: 22px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); background: var(--bg-panel); font: inherit; font-size: 10px; cursor: pointer; }
+.texts > button { flex-shrink: 0; max-width: 95%; display: flex; gap: 5px; align-items: center; padding: 2px 6px; height: 22px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); background: var(--bg-panel); font: inherit; font-size: 11px; cursor: pointer; }
 .texts > button span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .texts > button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel)); }
 .empty { font-size: 10px; color: var(--text-faint); }

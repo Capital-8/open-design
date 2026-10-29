@@ -7,7 +7,7 @@ export interface MotionTimelineComment {
   note: string;
 }
 
-export const MOTION_DOCK_HEIGHT = 204;
+export const MOTION_DOCK_HEIGHT = 144;
 
 /** Overlapping sounds stay individually reachable without growing the whole dock. */
 export function motionMediaLanes(items: readonly MotionStructureItem[]) {
@@ -23,17 +23,19 @@ export function motionMediaLanes(items: readonly MotionStructureItem[]) {
 export function motionMediaTrackHeight(items: readonly MotionStructureItem[]) {
   return items.length ? Math.min(2, Math.max(...motionMediaLanes(items).map(item => item.lane + 1))) * 26 + 4 : 0;
 }
-export function motionDockHeight(structure?: MotionStructureResponse | null) {
-  return MOTION_DOCK_HEIGHT + (structure?.scenes.length ? 32 : 0)
-    + (structure && (structure.scenes.length || structure.texts.length) ? 62 : 0)
-    + motionMediaTrackHeight(structure?.audio ?? []) + motionMediaTrackHeight(structure?.captions ?? []);
+export function motionDockHeight(_structure?: MotionStructureResponse | null) {
+  // Structure navigation is shown on demand; it does not allocate permanent tracks.
+  return MOTION_DOCK_HEIGHT;
 }
 
 export function motionCompositionSize(source: string) {
   const root = new DOMParser().parseFromString(source, 'text/html').querySelector('[data-composition-id][data-duration][data-width][data-height]');
   if (!root) return null;
   const width = Number(root.getAttribute('data-width')), height = Number(root.getAttribute('data-height'));
-  return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0 ? { width, height } : null;
+  const duration = Number(root.getAttribute('data-duration'));
+  return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
+    && Number.isFinite(duration) && duration > 0 && root.getAttribute('data-composition-id')?.trim()
+    ? { width, height } : null;
 }
 
 /** One host transform fits the authored output viewport into the remaining canvas. */

@@ -31,12 +31,12 @@ it('keeps selection and modification separate, and blocks all new requests durin
   expect(screen.getByRole('button', { name: 'motion.selectText Feature title' })).toBeDisabled();
 });
 it('only adds media rows for real items and keeps overlapping sounds reachable in separate lanes', () => {
-  expect(motionDockHeight(structure)).toBe(298);
+  expect(motionDockHeight(structure)).toBe(144);
   expect(motionMediaTrackHeight([])).toBe(0);
   const audio = [{ id: 'voice', kind: 'audio' as const, label: 'Voice', start: 1, duration: 5 }, { id: 'music', kind: 'audio' as const, label: 'Music', start: 0, duration: 12 }];
   expect(motionMediaLanes(audio).map(item => item.lane)).toEqual([0, 1]);
   expect(motionMediaTrackHeight(audio)).toBe(56);
-  expect(motionDockHeight({ ...structure, audio })).toBe(354);
+  expect(motionDockHeight({ ...structure, audio })).toBe(144);
   render(<MotionStructureTracks {...props} structure={{ ...structure, audio }} />);
   fireEvent.click(screen.getByRole('button', { name: 'Voice' }));
   expect(props.onSelect).toHaveBeenLastCalledWith(audio[0]);
@@ -45,5 +45,5 @@ it('falls back cleanly for absent scenes and selects the declared interval at a 
   expect(motionSceneAt(structure, 5)?.id).toBe('b');
   expect(motionSceneAt(structure, 12)?.id).toBe('b');
   expect(motionSceneAt({ ...structure, scenes: [] }, 5)).toBeUndefined();
-  expect(motionDockHeight(null)).toBe(204);
+  expect(motionDockHeight(null)).toBe(144);
 });

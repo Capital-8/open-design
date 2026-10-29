@@ -25,6 +25,7 @@ export interface MotionPlayerState {
 export type MotionPlayerControl =
   | { action: 'play' | 'pause' | 'replay' }
   | { action: 'seek'; time: number }
+  | { action: 'loop'; range: { start: number; end: number } | null }
   | { action: 'mute' | 'lock'; value: boolean };
 
 export interface MotionPlayerRestore {
@@ -91,7 +92,7 @@ function createMotionAudioSync(audio) {
 // Shared by URL previews, srcdoc previews and the persisted editable source.
 // The renderer installs its flag before author scripts; it never sees chrome,
 // layout scaling, poster seeking, or wall-clock playback from this runtime.
-const PLAYER = `<script data-od-motion-source-player="11">
+const PLAYER = `<script data-od-motion-source-player="12">
 ${MOTION_TIMELINE_CHECK_SCRIPT}
 (function () {
 ${MOTION_AUDIO_SYNC_RUNTIME}
@@ -152,11 +153,12 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
         if (!readyPlayer || data.clientId !== clientId || data.instance !== instance || typeof data.requestId !== 'string' || !data.requestId) return;
         var control = data.control, error = null;
         if (!control || typeof control.action !== 'string') error = 'Invalid Motion control.';
-        else if (locked && (control.action === 'play' || control.action === 'seek' || control.action === 'replay')) error = 'Motion preview is locked for annotation.';
+        else if (locked && (control.action === 'play' || control.action === 'seek' || control.action === 'replay' || control.action === 'loop')) error = 'Motion preview is locked for annotation.';
         else if (control.action === 'pause') readyPlayer.pause();
         else if (control.action === 'play') readyPlayer.play();
         else if (control.action === 'replay') readyPlayer.replay();
         else if (control.action === 'seek' && typeof control.time === 'number' && Number.isFinite(control.time)) readyPlayer.seek(control.time);
+        else if (control.action === 'loop') { if (!readyPlayer.setLoop(control.range)) error = 'Invalid Motion loop range.'; }
         else if (control.action === 'mute' && typeof control.value === 'boolean') readyPlayer.setMuted(control.value);
         else if (control.action === 'lock' && typeof control.value === 'boolean') readyPlayer.setLocked(control.value);
         else error = 'Invalid Motion control.';
@@ -216,7 +218,7 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
       }
       var timingError = window.__odValidateMotionTimeline(root, tl);
       if (timingError) { tl.pause(); playerError = timingError; notice(timingError); sendState(connectRequest); return; }
-      var duration = tl.duration(), applied = false;
+      var duration = tl.duration(), applied = false, loopRange = null;
       var fpsValue = Number(root.getAttribute('data-fps'));
       var fps = Number.isFinite(fpsValue) && fpsValue > 0 && fpsValue <= 240 ? fpsValue : undefined;
       applyPlayback = function () {
@@ -226,7 +228,7 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
         clearTimeout(updateTimer); updateTimer = null;
         playing = nextPlaying;
         if (playing) {
-          if (tl.time() >= duration) tl.seek(0, false);
+          if (loopRange ? tl.time() < loopRange.start || tl.time() >= loopRange.end : tl.time() >= duration) tl.seek(loopRange ? loopRange.start : 0, false);
           tl.play(); syncAudio(tl.time(), true, true); update();
         } else { tl.pause(); syncAudio(tl.time(), false, false); }
         sendState(null);
@@ -234,9 +236,21 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
       function play() { if (locked) return; wantsPlay = true; applyPlayback(); }
       function pause() { wantsPlay = false; applyPlayback(); }
       function seek(time) { if (locked || typeof time !== 'number' || !Number.isFinite(time)) return; pause(); tl.seek(Math.max(0, Math.min(duration, time)), false); syncAudio(tl.time(), false, true); sendState(null); }
-      function replay() { if (locked) return; seek(0); play(); }
+      function replay() { if (locked) return; seek(loopRange ? loopRange.start : 0); play(); }
+      // A preview-only interval. Never mutate the authored timeline's duration,
+      // timeScale or repeat, and allow paused seeking outside the interval.
+      function setLoop(range) {
+        if (!hosted || locked) return false;
+        if (range !== null && (!range || typeof range.start !== 'number' || typeof range.end !== 'number' || !Number.isFinite(range.start) || !Number.isFinite(range.end) || range.start < 0 || range.start >= range.end || range.end > duration)) return false;
+        loopRange = range === null ? null : {start:range.start,end:range.end};
+        if (playing && loopRange && (tl.time() < loopRange.start || tl.time() >= loopRange.end)) {
+          tl.seek(loopRange.start, false); tl.play(); syncAudio(loopRange.start, true, true);
+        }
+        sendState(null); return true;
+      }
       window.__odMotionPlayer = {
         play: play, pause: pause, seek: seek, replay: replay,
+        setLoop: setLoop,
         setMuted: function (value) { muted = thumbnail || !!value; syncAudio(tl.time(), playing, false); sendState(null); },
         setLocked: function (value) { locked = !!value; if (locked) wantsPlay = false; applyPlayback(); sendState(null); },
         state: function () { return { playing: playing, active: active, time: tl.time(), duration: duration, muted: muted || hostMuted, userMuted: muted, locked: locked, fps: fps,
@@ -256,7 +270,10 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
       function update() {
         if (!stage.isConnected) { active = false; applyPlayback(); return; }
         if (!active || !pageActive || !playing) return;
-        if (playing && tl.time() >= duration) { tl.seek(0, false); tl.play(); syncAudio(0, true, true); }
+        if (playing && (loopRange ? tl.time() < loopRange.start || tl.time() >= loopRange.end : tl.time() >= duration)) {
+          var restartTime = loopRange ? loopRange.start : 0;
+          tl.seek(restartTime, false); tl.play(); syncAudio(restartTime, true, true);
+        }
         syncAudio(tl.time(), playing && !tl.paused(), false);
         if (performance.now() - stateSentAt >= 100) { stateSentAt = performance.now(); sendState(null); }
         updateTimer = setTimeout(update, 33);
@@ -289,7 +306,7 @@ export function injectMotionSourcePlayer(html: string): string {
   const existing = findRealTagOffset(html, /<script\b[^>]*\bdata-od-motion-source-player\b/i);
   if (existing >= 0) {
     const script = /^<script\b[^>]*>[\s\S]*?<\/script\s*>/i.exec(html.slice(existing));
-    if (!script || /data-od-motion-source-player="11"/.test(script[0])) return html;
+    if (!script || /data-od-motion-source-player="12"/.test(script[0])) return html;
     return html.slice(0, existing) + PLAYER + html.slice(existing + script[0].length);
   }
   const end = findRealTagOffset(html, HTML_TAG_PATTERNS.bodyClose);

@@ -26,6 +26,44 @@ it('uses confirmed state for the slider and sends frame-accurate seek commands',
   expect(Number((screen.getByRole('slider') as HTMLInputElement).value)).toBeCloseTo(73 / 30);
 });
 
+it('keeps the default preview free of file names, single-scene rows and empty feedback tracks', () => {
+  render(<MotionPlaybackControls state={state} connected error={null} fileName="index.html"
+    structure={{ sourceFingerprint: 'source', composition: { id: 'main', duration: 8, width: 960, height: 540 }, warnings: [], scenes: [{ id: 'main', kind: 'scene', label: 'Main scene', start: 0, duration: 8 }], texts: [{ id: 'title', kind: 'text', label: 'Long title', text: 'Full text should not be duplicated here' }], audio: [], captions: [] }}
+    onCommand={vi.fn()} onAnnotate={vi.fn()} onCaptureComparison={vi.fn()} />);
+  expect(screen.queryByText('index.html')).toBeNull();
+  expect(screen.queryByText('Main scene')).toBeNull();
+  expect(screen.queryByText('Full text should not be duplicated here')).toBeNull();
+  expect(screen.queryByText('motion.noComments')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'motion.comparison.capture' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'motion.previousFrame' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'motion.annotate' })).toBeEnabled();
+});
+
+it('offers exact frame input on demand without rounding the underlying timeline', async () => {
+  const onCommand = vi.fn();
+  render(<MotionPlaybackControls state={state} connected error={null} onCommand={onCommand} onAnnotate={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'motion.more' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /motion.frameMode/ }));
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByRole('button', { name: 'motion.more' })).toHaveFocus();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'motion.timeInput' })); });
+  expect(screen.getByRole('spinbutton')).toHaveValue(73);
+  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '74' } });
+  fireEvent.keyDown(screen.getByRole('spinbutton'), { key: 'Enter' });
+  expect(onCommand).toHaveBeenLastCalledWith({ action: 'seek', time: 73 / 30 });
+});
+
+it('does not quantize a frame merely by opening and closing its time input', async () => {
+  const onCommand = vi.fn();
+  render(<MotionPlaybackControls state={{ ...state, time: 73 / 30 }} connected error={null} onCommand={onCommand} onAnnotate={vi.fn()} />);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'motion.timeInput' })); });
+  fireEvent.blur(screen.getByRole('spinbutton'));
+  expect(onCommand.mock.calls).toEqual([[{ action: 'pause' }]]);
+  fireEvent.keyDown(screen.getByRole('slider'), { key: 'ArrowRight' });
+  expect(onCommand).toHaveBeenLastCalledWith({ action: 'seek', time: 74 / 30 });
+});
+
 it('shows time steps for unknown fps and disables positioning while annotating', async () => {
   const onCommand = vi.fn(); let finish!: () => void;
   const pending = new Promise<void>(resolve => { finish = resolve; });
@@ -123,4 +161,9 @@ it('keeps the authored iframe viewport intact and fits the whole frame in the av
   expect(short.height * short.scale).toBe(200);
   expect(short.left).toBeGreaterThan(0);
   expect(motionCompositionSize('<main data-composition-id="main" data-duration="12" data-width="NaN" data-height="1080"></main>')).toBeNull();
+});
+
+
+it.each(['0', '-1', 'Infinity', 'not-a-duration'])('rejects an invalid Motion duration %s before mounting the editor', duration => {
+  expect(motionCompositionSize(`<main data-composition-id="main" data-duration="${duration}" data-width="1280" data-height="720"></main>`)).toBeNull();
 });

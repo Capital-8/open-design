@@ -336,7 +336,11 @@ import { bindMotionPreviewActivity, unbindMotionPreviewActivity } from '../runti
 import { isMotionVideoComposition } from '@open-design/contracts/runtime/motion-source-player';
 import type { PreviewCommentMotionAnchor } from '@open-design/contracts';
 import { useMotionPreviewTransport } from '../runtime/motion-preview-transport';
+import { MotionFrameComparison } from './MotionFrameComparison';
+import { useMotionFrameComparison } from '../runtime/use-motion-frame-comparison';
 import { MotionPlaybackControls } from './MotionPlaybackControls';
+import { MotionObjectEditor } from './MotionObjectEditor';
+import { MotionFeedbackContext, MotionFeedbackDock, motionFeedbackFrameTarget } from './MotionFeedbackContext';
 import { motionDockHeight, motionCompositionSize, motionStageLayout } from './motion-timeline';
 import { motionSceneAt } from './MotionStructureTracks';
 import { useMotionStructure } from '../runtime/use-motion-structure';
@@ -1764,6 +1768,8 @@ function getPreviewDocumentEpoch(key: string): string {
 interface Props {
   projectId: string;
   projectKind: TrackingProjectKind;
+  /** Only the explicit Motion task may use the hosted editing player. */
+  motionTask?: boolean;
   file: ProjectFile;
   liveHtml?: string;
   filesRefreshKey?: number;
@@ -1879,6 +1885,7 @@ type PendingShareUpdateAfterLogin = {
 export const FileViewer = memo(function FileViewer({
   projectId,
   projectKind,
+  motionTask = false,
   file,
   liveHtml,
   filesRefreshKey = 0,
@@ -1987,6 +1994,7 @@ export const FileViewer = memo(function FileViewer({
       <HtmlViewer
         projectId={projectId}
         projectKind={projectKind}
+        motionTask={motionTask}
         file={file}
         pendingShareUpdateAfterLoginRef={pendingShareUpdateAfterLoginRef}
         shareLoginReturnRef={shareLoginReturnRef}
@@ -5086,6 +5094,7 @@ export function CommentSidePanel({
                 {comment.motion ? (
                   <span className="comment-side-slide" data-testid="comment-motion-time">
                     {comment.motion.timeSeconds.toFixed(3)}s
+                    {comment.motion.range ? ` · ${comment.motion.range.startSeconds.toFixed(3)}–${comment.motion.range.endSeconds.toFixed(3)}s` : ''}
                   </span>
                 ) : null}
                 {typeof comment.slideIndex === 'number' && deckSlideCount && deckSlideCount > 0 ? (
@@ -6390,7 +6399,7 @@ export function CommentTargetOverlay({
               style={overlayStyle}
               data-testid="comment-target-overlay"
             >
-              <span className="comment-target-overlay-label">{snapshot.elementId}</span>
+              {!snapshot.motion && <span className="comment-target-overlay-label">{snapshot.elementId}</span>}
             </div>
           );
         })}
@@ -6412,7 +6421,7 @@ export function CommentTargetOverlay({
       }}
       data-testid="comment-target-overlay"
     >
-      <span className="comment-target-overlay-label">{snapshot.elementId}</span>
+      {!snapshot.motion && <span className="comment-target-overlay-label">{snapshot.elementId}</span>}
     </div>
   );
 }
@@ -7254,6 +7263,7 @@ function srcDocLoadRequiresFreshParseOnReturnToVisible(state: {
 function HtmlViewer({
   projectId,
   projectKind,
+  motionTask = false,
   file,
   pendingShareUpdateAfterLoginRef,
   liveHtml,
@@ -7298,6 +7308,8 @@ function HtmlViewer({
 }: {
   projectId: string;
   projectKind: TrackingProjectKind;
+  /** Only the explicit Motion task may use the hosted editing player. */
+  motionTask?: boolean;
   file: ProjectFile;
   pendingShareUpdateAfterLoginRef: { current: PendingShareUpdateAfterLogin | null };
   onObservedPublicShareLink?: (share: ObservedPublicShareLink | null) => void;
@@ -10415,8 +10427,8 @@ function HtmlViewer({
   // passes (Mark/Draw, Inspect) that also must not be yanked out
   // from under the user by a background file change.
   const motionAnnotationSource = annotationFrozenSource ?? livePreviewSource;
-  const holdsMotionAnnotation = (boardMode || drawOverlayOpen)
-    && Boolean(motionAnnotationSource && isMotionVideoComposition(motionAnnotationSource));
+  const holdsMotionAnnotation = motionTask && (boardMode || drawOverlayOpen)
+    && Boolean(motionAnnotationSource && isMotionVideoComposition(motionAnnotationSource) && motionCompositionSize(motionAnnotationSource));
   const motionCommentMode = boardMode && holdsMotionAnnotation;
   const annotationFreezeActive = drawOverlayOpen || inspectMode || motionCommentMode;
   // Freeze the iframe input on the snapshot taken at Edit-mode entry. Any
@@ -11277,6 +11289,9 @@ function HtmlViewer({
     auxiliarySrcDocPreviewBase?.identity === srcDocPreviewBaseIdentity
       ? auxiliarySrcDocPreviewBase.href
       : srcDocBaseHref;
+  const motionSize = useMemo(() => motionTask && previewSource && isMotionVideoComposition(previewSource)
+    ? motionCompositionSize(previewSource) : null, [motionTask, previewSource]);
+  const isMotionPreview = motionSize !== null;
   const srcDocTransportIdentity = [
     srcDocPreviewBaseIdentity,
     transportSourceSnapshotRefreshKey,
@@ -11284,6 +11299,7 @@ function HtmlViewer({
     transportPreviewMeasurementDocumentEpoch,
     effectiveDeck ? 'deck' : 'html',
     srcDocBaseHref,
+    isMotionPreview ? 'motion' : 'document',
   ].join('\0');
   const previewStorageScopeKey = previewStorageKey(sourceAuthorizationScopeKey, projectId, file.name);
   const candidateSrcDocTransport = useMemo(
@@ -11307,7 +11323,7 @@ function HtmlViewer({
         sourceFingerprint: sourceFingerprint ?? '',
         generation,
         srcDoc: previewSource ? buildSrcdoc(previewSource, {
-          motionPreview: true,
+          motionPreview: isMotionPreview,
           previewStorage: Boolean(previewStorageScopeKey),
           deck: effectiveDeck,
           baseHref: srcDocBaseHref,
@@ -11343,6 +11359,7 @@ function HtmlViewer({
       effectiveDeck,
       srcDocTransportIdentity,
       previewStorageScopeKey,
+      isMotionPreview,
       previewStateKey,
       reloadKey,
       transportPreviewMeasurementDocumentEpoch,
@@ -11363,13 +11380,24 @@ function HtmlViewer({
   }
   const srcDocTransport = committedSrcDocTransportRef.current;
   const srcDocTransportGeneration = srcDocTransport.generation;
-  const isMotionPreview = Boolean(previewSource && isMotionVideoComposition(previewSource));
-  const motionSize = useMemo(() => isMotionPreview && previewSource ? motionCompositionSize(previewSource) : null, [isMotionPreview, previewSource]);
   const motionFingerprint = previewSource ? previewSourceFingerprint(previewSource) : '';
   const liveMotionIdentity = `${projectId}\0${file.name}\0${livePreviewSource === null ? 'pending' : previewSourceFingerprint(livePreviewSource)}`;
+  const [motionRangeSelection, setMotionRangeSelection] = useState<{
+    identity: string; range: NonNullable<PreviewCommentMotionAnchor['range']> | null;
+  } | null>(null);
+  const motionRange = motionRangeSelection?.identity === liveMotionIdentity ? motionRangeSelection.range : null;
+  const motionRangeRef = useRef(motionRange);
+  motionRangeRef.current = motionRange;
   const motionStructureEnabled = isMotionPreview && workspaceActive && mode === 'preview' && !manualEditMode && !streaming
     && livePreviewSource !== null && previewSource === livePreviewSource;
   const { structure: motionStructure } = useMotionStructure(projectId, file.name, previewSource, motionStructureEnabled, workspaceContext);
+  const [motionObjectEditorOpen, setMotionObjectEditorOpen] = useState(false);
+  const [motionEditorTime, setMotionEditorTime] = useState(0);
+  const motionEditorReturnRef = useRef<{ identity: string; time: number } | null>(null);
+  const motionEditorFileIdentity = `${projectId}\0${file.name}`;
+  const motionEditorFileIdentityRef = useRef(motionEditorFileIdentity); motionEditorFileIdentityRef.current = motionEditorFileIdentity;
+  useEffect(() => { setMotionObjectEditorOpen(false); motionEditorReturnRef.current = null; }, [motionEditorFileIdentity]);
+  const motionObjectEditorEligible = motionStructureEnabled && !viewerOnly && !!previewSource?.includes('<script id="od-motion-editor-document" type="application/json">');
   const motionHeight = motionDockHeight(motionStructure);
   const [selectedMotionItemId, setSelectedMotionItemId] = useState<string | null>(null);
   const motionStructureDraftRef = useRef<{ liveIdentity: string; fingerprint: string; documentToken: string | null } | null>(null);
@@ -11397,6 +11425,25 @@ function HtmlViewer({
   });
   const motionTransportRef = useRef(motionTransport);
   motionTransportRef.current = motionTransport;
+  useEffect(() => {
+    const pending = motionEditorReturnRef.current;
+    if (!pending || motionObjectEditorOpen || !motionTransport.connected || !motionTransport.state?.active || motionTransport.state.locked) return;
+    if (pending.identity !== motionEditorFileIdentity) { motionEditorReturnRef.current = null; return; }
+    motionEditorReturnRef.current = null;
+    void motionTransportRef.current.command({ action: 'seek', time: Math.min(pending.time, motionTransport.state.duration) })
+      .catch(() => setCommentSavedToast(t('motion.editor.playerError')));
+  }, [motionObjectEditorOpen, motionTransport.connected, motionTransport.state?.active, motionTransport.state?.locked, motionTransport.state?.duration, motionEditorFileIdentity]);
+  async function openMotionObjectEditor() {
+    if (!motionObjectEditorEligible || motionAnnotationLocked || motionComparison.isBusy()) return;
+    const identity = motionEditorFileIdentity;
+    try {
+      await motionTransportRef.current.command({ action: 'pause' });
+      if (identity !== motionEditorFileIdentityRef.current) return;
+      setMotionEditorTime(motionTransportRef.current.getState()?.time ?? 0);
+      setMotionObjectEditorOpen(true);
+    } catch { setCommentSavedToast(t('motion.editor.playerError')); }
+  }
+
   const motionStructureIdentityRef = useRef({ liveIdentity: liveMotionIdentity, fingerprint: motionFingerprint, enabled: motionStructureEnabled });
   motionStructureIdentityRef.current = { liveIdentity: liveMotionIdentity, fingerprint: motionFingerprint, enabled: motionStructureEnabled };
   useEffect(() => { setSelectedMotionItemId(null); }, [liveMotionIdentity]);
@@ -11423,7 +11470,8 @@ function HtmlViewer({
       playing: state.playing,
       locked: state.locked,
       motion: { timeSeconds: state.time, durationSeconds: state.duration,
-        ...(state.fps ? { fps: state.fps } : {}), sourceFingerprint: identity.fingerprint },
+        ...(state.fps ? { fps: state.fps } : {}), sourceFingerprint: identity.fingerprint,
+        ...(motionRangeRef.current ? { range: motionRangeRef.current } : {}) },
     };
   }
   const currentMotionAnchor = currentMotionCaptureContext()?.motion;
@@ -11433,7 +11481,7 @@ function HtmlViewer({
   const displayedActiveCommentTarget = activeCommentTarget
     ? motionCommentDisplaySnapshot(activeCommentTarget, liveCommentTargets, motionDisplayContext) : null;
   function selectMotionStructureItem(item: MotionStructureItem, modify: boolean) {
-    if (!motionStructure || motionStructureOperationRef.current || motionCommentOpeningRef.current || drawOverlayOpen || sendingBoardBatch
+    if (motionComparison.isBusy() || motionStructureOperationRef.current || motionCommentOpeningRef.current || drawOverlayOpen || sendingBoardBatch
       || (modify && viewerOnly) || !motionStructureIdentityRef.current.enabled) return;
     requestComposerRetarget(() => { void (async () => {
       const identity = { ...motionStructureIdentityRef.current };
@@ -11448,18 +11496,18 @@ function HtmlViewer({
       try {
         if (!current()) throw new Error('preview changed');
         const runtime = motionTransportRef.current;
-        const scene = item.kind === 'scene' ? item : motionStructure.scenes.find(candidate => candidate.id === item.sceneId)
+        const scene = item.kind === 'scene' ? item : motionStructure?.scenes.find(candidate => candidate.id === item.sceneId)
           ?? motionSceneAt(motionStructure, runtime.getState()?.time ?? 0);
         const start = item.start ?? scene?.start ?? 0;
         const duration = item.duration ?? scene?.duration ?? runtime.getState()?.duration ?? 0;
         if (runtime.getState()?.locked) { await runtime.setLocked(false); if (!current()) throw new Error('preview changed'); }
         const time = runtime.getState()?.time ?? 0;
-        await runtime.command(time >= start && time < start + duration
+        await runtime.command(item.id === 'motion-current-frame' || (time >= start && time < start + duration)
           ? { action: 'pause' } : { action: 'seek', time: start + duration / 2 });
         if (!current()) throw new Error('preview changed');
-        clearBoardComposer();
+        clearBoardComposer(true);
         setBoardMode(false); setCommentCreateMode(false); setCommentPanelOpen(false);
-        setSelectedMotionItemId(item.id);
+        setSelectedMotionItemId(item.id === 'motion-current-frame' ? null : item.id);
         if (!modify) return;
         const target = item.kind === 'audio' ? scene : item;
         const selector = target?.selector ?? scene?.selector;
@@ -11469,15 +11517,18 @@ function HtmlViewer({
           label: item.label, text: item.text ?? '', htmlHint: '', position: { x: 0, y: 0, width: 1, height: 1 },
         }, () => useUrlLoadPreview ? `url:${iframeRef.current?.src ?? ''}` : `srcdoc:${expectedSrcDocTransportGenerationRef.current}`, { strictMotion: true });
         if (!current()) throw new Error('preview changed');
-        if (typeof checked !== 'object') { setCommentSavedToast(t('motion.targetUnavailable')); return; }
+        if (typeof checked !== 'object') {
+          setCommentSavedToast(t('motion.targetUnavailable'));
+          if (item.id === 'motion-current-frame') await startMotionCanvasSelection();
+          return;
+        }
         await runtime.setLocked(true);
         if (!current()) throw new Error('preview changed');
         motionStructureDraftRef.current = { liveIdentity: identity.liveIdentity, fingerprint: identity.fingerprint, documentToken: token };
-        const snapshot = { ...checked, motion: currentMotionCaptureContext()?.motion };
+        const snapshot = { ...checked, label: item.label, motion: currentMotionCaptureContext()?.motion };
         setActiveCommentTarget(snapshot); setHoveredCommentTarget(snapshot);
         setActivePreviewCommentId(null);
-        setCommentDraft(t('motion.selectionContext', { scene: scene?.label ?? file.name,
-          start: (scene?.start ?? start).toFixed(3), end: ((scene?.start ?? start) + (scene?.duration ?? duration)).toFixed(3), target: item.text ?? item.label }));
+        setCommentDraft('');
         setInspectMode(false); setDrawOverlayOpen(false);
         setBoardMode(true); setCommentCreateMode(true); setCommentPanelOpen(true); setCommentSidePanelCollapsed(false);
         closeArtifactToolMenus();
@@ -11485,8 +11536,42 @@ function HtmlViewer({
       finally { motionStructureOperationRef.current = false; motionCommentOpeningRef.current = false; setMotionCommentOpening(false); }
     })(); });
   }
+  function openMotionFeedback() {
+    const state = motionTransportRef.current.getState();
+    if (!state || !motionStructureIdentityRef.current.enabled || viewerOnly) return;
+    const frameTarget = motionFeedbackFrameTarget(motionStructure, state.time);
+    if (!frameTarget?.selector) {
+      requestComposerRetarget(() => { void startMotionCanvasSelection(); });
+      return;
+    }
+    selectMotionStructureItem({ id: 'motion-current-frame', kind: 'scene', label: t('motion.feedback.currentFrame'),
+      selector: frameTarget.selector, start: frameTarget.start, duration: frameTarget.duration }, true);
+  }
+  async function startMotionCanvasSelection() {
+    const identity = { ...motionStructureIdentityRef.current };
+    const documentToken = motionTransportRef.current.getDocumentToken();
+    if (viewerOnly || !(await lockMotionForAnnotation())) return;
+    if (!documentToken || identity.liveIdentity !== motionStructureIdentityRef.current.liveIdentity
+      || documentToken !== motionTransportRef.current.getDocumentToken()) {
+      setCommentSavedToast(t('motion.previewChanged')); return;
+    }
+    clearBoardComposer(true);
+    motionStructureDraftRef.current = { liveIdentity: identity.liveIdentity, fingerprint: identity.fingerprint, documentToken };
+    setSelectedMotionItemId(null);
+    setInspectMode(false); setDrawOverlayOpen(false); setMode('preview');
+    setBoardMode(true); setBoardTool('inspect'); setCommentCreateMode(true);
+    setCommentPanelOpen(true); setCommentSidePanelCollapsed(false);
+    closeArtifactToolMenus();
+  }
+  function changeMotionFeedbackRange(range: PreviewCommentMotionAnchor['range'] | null) {
+    if (sendingBoardBatch || activePreviewCommentId || !allowStructureDraft()) return;
+    setMotionRangeSelection({ identity: liveMotionIdentity, range: range ?? null });
+    motionRangeRef.current = range ?? null;
+    setActiveCommentTarget(current => current?.motion ? { ...current, motion: { ...current.motion, range: range ?? undefined } } : current);
+  }
   async function lockMotionForAnnotation(): Promise<boolean> {
     if (!isMotionPreview) return true;
+    if (motionComparison.isBusy()) return false;
     try {
       await motionTransportRef.current.setLocked(true);
       return true;
@@ -11504,6 +11589,15 @@ function HtmlViewer({
       return requestPreviewSnapshotWithRetry(frame);
     });
   }
+  const motionComparisonBlocked = motionAnnotationLocked || sendingBoardBatch || motionCommentOpening
+    || manualEditMode || streaming || mode !== 'preview' || !workspaceActive
+    || screenshotInFlightRef.current || manualEditActivationPendingRef.current;
+  const motionComparison = useMotionFrameComparison({
+    fileKey: `${projectId}\0${file.name}`, sourceKey: liveMotionIdentity,
+    enabled: isMotionPreview, blocked: motionComparisonBlocked,
+    context: currentMotionCaptureContext,
+    command: motionTransport.command, setLocked: motionTransport.setLocked, capture: captureCurrentMotionFrame,
+  });
   async function motionCommentImage(): Promise<File | null> {
     try {
       if (!allowStructureDraft()) return null;
@@ -12391,7 +12485,7 @@ function HtmlViewer({
     ? lastRenderedUrlFrameSrcRef.current
     : activePoweredPreviewSrcOverride ?? computedUrlFrameSrc;
   lastRenderedUrlFrameSrcRef.current = selectedUrlFrameSrc;
-  const urlFrameSrc = selectedUrlFrameSrc === 'about:blank'
+  const urlFrameSrc = !isMotionPreview || selectedUrlFrameSrc === 'about:blank'
     ? selectedUrlFrameSrc
     : appendResourceQuery(selectedUrlFrameSrc, 'odMotionPreview=1');
   const urlFrameSandbox = usePoweredPreview
@@ -15474,7 +15568,12 @@ function HtmlViewer({
     setAgentToolsOpen(false);
   }
 
-  function clearBoardComposer() {
+  function clearBoardComposer(preserveMotionContext = false) {
+    if (!preserveMotionContext && (activeCommentTarget?.motion || motionStructureDraftRef.current)) {
+      setMotionRangeSelection(null);
+      motionRangeRef.current = null;
+      setSelectedMotionItemId(null);
+    }
     motionStructureDraftRef.current = null;
     commentReselectPendingRef.current = false;
     disarmComposerDiscard();
@@ -15613,6 +15712,7 @@ function HtmlViewer({
   }
 
   function activateManualEditTool() {
+    if (motionComparison.isBusy()) return;
     if (viewerOnly || (!manualEditMode && !manualEditEntryAllowed)) return;
     fireArtifactToolbarClick('edit');
     void capturePreviewScrollPosition();
@@ -15720,6 +15820,9 @@ function HtmlViewer({
           commentsToAttachments([{ ...existingComment, ...withDeckSlideIndex(targetFromSnapshot(checked)) }]),
         );
         if (!commentSendCompleted(result, existingComment.id)) return;
+        if (isMotionPreview && existingComment.motion) {
+          setBoardMode(false); setCommentCreateMode(false); setCommentPanelOpen(false);
+        }
         clearBoardComposer();
       } finally {
         setSendingBoardBatch(false);
@@ -15756,9 +15859,9 @@ function HtmlViewer({
         (attachment) => !completedIds.has(attachment.id),
       );
       if (pending.length === 0 && commentSendSucceeded(result)) {
-        // A completed structure request returns to the live result. Otherwise
+        // A completed Motion request returns to the live result. Otherwise
         // annotation freeze would keep the previous source on screen after AI edits.
-        if (motionStructureDraftRef.current) {
+        if (isMotionPreview && attachments.some(attachment => attachment.motion)) {
           setBoardMode(false); setCommentCreateMode(false); setCommentPanelOpen(false);
         }
         clearBoardComposer();
@@ -15789,7 +15892,8 @@ function HtmlViewer({
       return null;
     }
     commentReselectPendingRef.current = false;
-    return checked;
+    // The live bridge owns geometry and identity, not the user's Motion target name.
+    return snapshot.motion && snapshot.label ? { ...checked, label: snapshot.label } : checked;
   }
 
   async function savePersistentComment() {
@@ -15815,8 +15919,9 @@ function HtmlViewer({
       if (saved) {
         clearBoardComposer();
         setActiveCommentExistingAttachments(saved.attachments ?? []);
-        setBoardMode(true);
-        setCommentCreateMode(true);
+        setBoardMode(!isMotionPreview);
+        setCommentCreateMode(!isMotionPreview);
+        if (isMotionPreview) setCommentPanelOpen(false);
         setActivePreviewCommentId(saved.id);
         setCommentSavedToast(isFreePin ? t('chat.comments.pinSavedToast') : t('chat.comments.savedToast'));
       }
@@ -16289,7 +16394,7 @@ function HtmlViewer({
   // paste target themselves.
   const handleScreenshotToChat = useCallback(async () => {
     fireArtifactToolbarClick('edit_screenshot');
-    if (screenshotInFlightRef.current) return;
+    if (screenshotInFlightRef.current || motionComparison.isBusy()) return;
     screenshotInFlightRef.current = true;
     try {
       let motion: PreviewCommentMotionAnchor | undefined;
@@ -17094,6 +17199,12 @@ function HtmlViewer({
   const commentComposerNode = boardMode && displayedActiveCommentTarget && activeCommentTargetVisible ? (
     <BoardComposerPopover
       target={displayedActiveCommentTarget}
+      contextTools={displayedActiveCommentTarget.motion ? <MotionFeedbackContext
+        key={displayedActiveCommentTarget.elementId} structure={motionStructure} selectedId={selectedMotionItemId}
+        label={displayedActiveCommentTarget.label} motion={displayedActiveCommentTarget.motion}
+        disabled={sendingBoardBatch || viewerOnly || !!activeComposerComment || !structureDraftIsCurrent()}
+        onSelect={item => item ? selectMotionStructureItem(item, true) : openMotionFeedback()}
+        onRangeChange={changeMotionFeedbackRange} /> : undefined}
       existing={activeComposerComment}
       canEditComment={canEditActiveComment}
       canDeleteComment={canDeleteActiveComment}
@@ -17109,7 +17220,10 @@ function HtmlViewer({
       onRemoveQueuedNote={(index) =>
         setQueuedBoardNotes((current) => current.filter((_, currentIndex) => currentIndex !== index))
       }
-      onClose={clearBoardComposer}
+      onClose={() => {
+        clearBoardComposer();
+        if (isMotionPreview) { setBoardMode(false); setCommentCreateMode(false); setCommentPanelOpen(false); }
+      }}
       onSaveComment={() => { fireCommentPopoverClick('save_comment'); return savePersistentComment(); }}
       onSendBatch={() => {
         observeAnalytics(() => {
@@ -17171,11 +17285,11 @@ function HtmlViewer({
         }
       }
       bounds={commentComposerPortalMetrics?.bounds ?? previewBodySize}
-      docked={false}
+      docked={isMotionPreview}
       commenting
     />
   ) : null;
-  const commentComposer = workspaceActive && commentComposerNode && commentComposerPortalMetrics
+  const commentComposer = isMotionPreview ? null : workspaceActive && commentComposerNode && commentComposerPortalMetrics
     ? createPortal(commentComposerNode, commentComposerPortalMetrics.host)
     : workspaceActive ? commentComposerNode : null;
   const boardPreviewImage =
@@ -17213,7 +17327,7 @@ function HtmlViewer({
     : null;
   const unavailableCommentId = boardMode ? lostSelectedCommentId : null;
   const openPreviewComment = (comment: PreviewComment) => {
-    if (motionCommentOpeningRef.current) return;
+    if (motionCommentOpeningRef.current || motionComparison.isBusy()) return;
     requestComposerRetarget(() => { void (async () => {
       motionCommentOpeningRef.current = true;
       setMotionCommentOpening(true);
@@ -17260,7 +17374,7 @@ function HtmlViewer({
             setCommentSavedToast(t('motion.previewChanged'));
             return;
           }
-          snapshot = { ...verified, motion: comment.motion };
+          snapshot = { ...verified, label: comment.label || verified.label, motion: comment.motion };
           setLiveCommentTargets(current => new Map(current).set(comment.elementId, snapshot));
         }
         const needsLocation = !comment.motion && ownerCommentNeedsLocation(comment, collab.enabled);
@@ -17281,7 +17395,8 @@ function HtmlViewer({
       }
     })(); });
   };
-  const commentSidePanel = workspaceActive && commentPanelOpen ? (
+  const commentSidePanel = workspaceActive && commentPanelOpen ? (isMotionPreview && commentComposerNode
+    ? <MotionFeedbackDock>{commentComposerNode}</MotionFeedbackDock> :
     <CommentSideDock
       comments={visibleSideComments}
       motionSourceFingerprint={motionFingerprint}
@@ -17341,6 +17456,11 @@ function HtmlViewer({
           );
           const completedIds = new Set(result.commentIds);
           if (completedIds.size === 0) return;
+          if (isMotionPreview && selected.every(comment => comment.motion && completedIds.has(comment.id))
+            && !composerHoldsUnsentWork && commentSendSucceeded(result)) {
+            setBoardMode(false); setCommentCreateMode(false); setCommentPanelOpen(false);
+            clearBoardComposer();
+          }
           setSelectedSideCommentIds((current) => {
             const next = new Set(current);
             for (const id of completedIds) next.delete(id);
@@ -17543,6 +17663,8 @@ function HtmlViewer({
           ) : null}
         </div>
         <div className="viewer-toolbar-actions">
+          {motionObjectEditorEligible && <Button size="sm" variant="secondary" disabled={motionAnnotationLocked || motionComparison.busy}
+            onClick={() => { void openMotionObjectEditor(); }}>{t('motion.editor.open')}</Button>}
           {showPreviewToolbarControls ? (
             <div className="viewer-toolbar-inline-actions">
               {mode === 'preview' ? (
@@ -18517,18 +18639,22 @@ function HtmlViewer({
                   ) : null}
                 </div>
               </div>
+              {motionObjectEditorOpen && isMotionPreview && !viewerOnly && workspaceActive && <MotionObjectEditor key={motionEditorFileIdentity} projectId={projectId} filePath={file.name} baseHref={srcDocBaseHref} workspace={workspaceContext}
+                initialTime={motionEditorTime}
+                onClose={time => { motionEditorReturnRef.current = { identity: motionEditorFileIdentity, time: time ?? motionEditorTime }; setMotionObjectEditorOpen(false); }}
+                onSaved={next => { if (motionEditorFileIdentityRef.current !== motionEditorFileIdentity) return; setSource(next); sourceRef.current = next; setInlinedSource(null); }} />}
               {isMotionPreview && !manualEditMode ? (
                 <MotionPlaybackControls
                   key={`${projectId}:${file.name}:${motionFingerprint}`}
                   state={motionTransport.state}
                   connected={motionTransport.connected}
                   error={motionTransport.error}
-                  locked={motionAnnotationLocked}
+                  locked={motionAnnotationLocked || motionComparison.busy}
                   fileName={file.name}
                   filmstrip={motionFilmstrip}
                   structure={motionStructure}
                   selectedItemId={selectedMotionItemId}
-                  structureDisabled={drawOverlayOpen || sendingBoardBatch || motionCommentOpening}
+                  structureDisabled={drawOverlayOpen || sendingBoardBatch || motionCommentOpening || motionComparison.busy}
                   structureModifyDisabled={viewerOnly}
                   onSelectItem={item => selectMotionStructureItem(item, false)}
                   onModifyItem={item => selectMotionStructureItem(item, true)}
@@ -18536,14 +18662,33 @@ function HtmlViewer({
                     ? [{ id: comment.id, time: comment.motion.timeSeconds, number: comment.pinSeq ?? index + 1, note: comment.note }]
                     : [])}
                   activeCommentId={activePreviewCommentId}
-                  commentsDisabled={drawOverlayOpen || sendingBoardBatch || motionCommentOpening}
+                  commentsDisabled={drawOverlayOpen || sendingBoardBatch || motionCommentOpening || motionComparison.busy}
                   onOpenComment={id => {
                     const comment = creationSortedSideComments.find(item => item.id === id && item.motion?.sourceFingerprint === motionFingerprint);
                     if (comment) openPreviewComment(comment);
                   }}
+                  range={motionRange}
+                  rangeDisabled={motionComparisonBlocked || motionComparison.busy || viewerOnly}
+                  onRangeChange={range => {
+                    if (motionComparisonBlocked || motionComparison.isBusy() || viewerOnly) return;
+                    if (range && (!(range.startSeconds >= 0) || !(range.endSeconds > range.startSeconds)
+                      || range.endSeconds > (motionTransportRef.current.getState()?.duration ?? 0))) return;
+                    setMotionRangeSelection({ identity: liveMotionIdentity, range });
+                  }}
+                  comparison={motionComparison.baseline?.before}
+                  comparisonBusy={motionComparison.busy}
+                  comparisonDisabled={motionComparisonBlocked}
+                  comparisonError={motionComparison.error}
+                  onCaptureComparison={() => { void motionComparison.capture(); }}
+                  onCompare={() => { void motionComparison.compare(); }}
                   onCommand={motionTransport.command}
-                  onAnnotate={() => activateCommentCreateTool()}
+                  onAnnotate={openMotionFeedback}
                 />
+              ) : null}
+              {motionComparison.open && motionComparison.baseline ? (
+                <MotionFrameComparison before={motionComparison.baseline.before} after={motionComparison.baseline.after}
+                  sameSource={motionComparison.baseline.before.fingerprint === motionComparison.baseline.after?.fingerprint}
+                  onClose={motionComparison.close} />
               ) : null}
               {boardMode ? (
                 <CommentPreviewOverlays

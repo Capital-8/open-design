@@ -78,7 +78,7 @@ export type SrcdocOptions = {
   /** Host-scoped local progress, seeded before authored scripts by the lazy shell. */
   previewStorage?: boolean;
   previewStorageSeed?: { generation: string; values: Record<string, string> };
-  /** Live embedded motion preview only; do not enable for exports/captures. */
+  /** Live embedded motion preview only. Explicit false disables player injection for non-Motion tasks. */
   motionPreview?: boolean;
   deck?: boolean;
   baseHref?: string;
@@ -369,7 +369,7 @@ export function buildSrcdoc(
   // sanitized title as the default filename — one that Microsoft Teams will
   // accept. Only the title text changes; visible page content is untouched.
   const motionSource = options.motionPreview && !options.freezeMotion ? markMotionHostedPreview(wrapped) : wrapped;
-  const withSafeTitle = sanitizeTitleInDoc(options.freezeMotion ? motionSource : injectMotionSourcePlayer(motionSource));
+  const withSafeTitle = sanitizeTitleInDoc(options.freezeMotion || options.motionPreview === false ? motionSource : injectMotionSourcePlayer(motionSource));
   const withVisibilityGuard = injectAfterHeadOpen(withSafeTitle, buildPreviewVisibilityGuard());
   const withOdIds = annotateMissingOdIds(withVisibilityGuard);
   const withSourcePaths = options.editBridge ? annotateManualEditSourcePaths(withOdIds) : withOdIds;

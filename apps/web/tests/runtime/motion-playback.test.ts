@@ -8,7 +8,7 @@ type MotionWindow = Window & {
   __odMotionThumbnail?: boolean;
   __odMotionRender?: boolean;
   __timelines?: Record<string, unknown>;
-  __odMotionPlayer?: { state(): { playing: boolean; time: number; locked: boolean; muted: boolean; userMuted?: boolean; fps?: number }; pause(): void; play(): void; seek(time: number): void; replay(): void; setMuted(value: boolean): void; setLocked(value: boolean): void };
+  __odMotionPlayer?: { state(): { playing: boolean; time: number; locked: boolean; muted: boolean; userMuted?: boolean; fps?: number }; pause(): void; play(): void; seek(time: number): void; replay(): void; setMuted(value: boolean): void; setLocked(value: boolean): void; setLoop(range: { start: number; end: number } | null): boolean };
 };
 const motionWindow = window as MotionWindow;
 let dispose: (() => void) | undefined;
@@ -27,12 +27,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function boot(hosted: boolean, playResult: Promise<void> = Promise.resolve(), thumbnail = false, fps?: string, render = false) {
+function boot(hosted: boolean, playResult: Promise<void> = Promise.resolve(), thumbnail = false, fps?: string, render = false, duration = 15) {
   vi.useFakeTimers();
   const listeners = vi.spyOn(window, 'addEventListener');
   const post = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => {});
   document.head.innerHTML = '<meta name="od-motion-output" content="video">';
   document.body.innerHTML = '<main data-composition-id="main" data-duration="15" data-width="1920" data-height="1080"><audio src="sound.wav" data-duration="15"></audio></main>';
+  document.querySelector('main')!.setAttribute('data-duration', String(duration));
   if (fps !== undefined) document.querySelector('main')!.setAttribute('data-fps', fps);
   const audio = document.querySelector('audio')!;
   let audioPaused = true;
@@ -41,7 +42,7 @@ function boot(hosted: boolean, playResult: Promise<void> = Promise.resolve(), th
   vi.spyOn(audio, 'pause').mockImplementation(() => { audioPaused = true; });
   let time = 0, paused = false;
   const timeline = {
-    time: () => time, duration: () => 15, timeScale: () => 1,
+    time: () => time, duration: () => duration, timeScale: () => 1,
     repeat: () => 0, delay: () => 0, paused: () => paused,
     seek: (value: number) => { time = value; },
     play: () => { paused = false; }, pause: () => { paused = true; },
@@ -177,6 +178,62 @@ it('loops the thumbnail timeline while keeping its soundtrack paused and permane
   expect(audio.play).not.toHaveBeenCalled();
   activity(false);
   expect(timeline.paused()).toBe(true);
+});
+
+it('loops a hosted range at the composition end without waiting for host state polling', async () => {
+  const { timeline, player, activity, message, post, id, audio } = boot(true, Promise.resolve(), false, '30', false, 5);
+  activity(true);
+  message({ type: MOTION_PREVIEW_CONNECT, clientId: 'range', requestId: 'connect' });
+  message({ type: MOTION_PREVIEW_COMMAND, clientId: 'range', instance: id, requestId: 'set-range', control: { action: 'loop', range: { start: 4, end: 5 } } });
+  expect(post.mock.calls.at(-1)?.[0]).toMatchObject({ requestId: 'set-range', error: undefined, state: { playing: true, time: 4 } });
+  for (let cycle = 0; cycle < 3; cycle++) {
+    // GSAP may already be paused at the exact end before the next 33 ms tick.
+    timeline.seek(5); timeline.pause();
+    await vi.advanceTimersByTimeAsync(34);
+    expect(timeline.time()).toBe(4);
+    expect(timeline.paused()).toBe(false);
+    expect(audio.currentTime).toBe(4);
+  }
+  expect(timeline.duration()).toBe(5);
+  expect(timeline.timeScale()).toBe(1);
+  expect(timeline.repeat()).toBe(0);
+  player.seek(2);
+  expect(player.state()).toMatchObject({ playing: false, time: 2 });
+  player.play();
+  expect(timeline.time()).toBe(4);
+  player.replay();
+  expect(timeline.time()).toBe(4);
+  expect(player.setLoop(null)).toBe(true);
+  timeline.seek(5);
+  await vi.advanceTimersByTimeAsync(34);
+  expect(timeline.time()).toBe(0);
+});
+
+it('rejects invalid or locked loop commands without replacing the previous valid interval', async () => {
+  const { player, timeline, activity, message, post, id } = boot(true, Promise.resolve(), false, '30', false, 5);
+  activity(true);
+  message({ type: MOTION_PREVIEW_CONNECT, clientId: 'range', requestId: 'connect' });
+  expect(player.setLoop({ start: 4, end: 5 })).toBe(true);
+  for (const range of [undefined, {}, { start: NaN, end: 5 }, { start: 4, end: Infinity }, { start: -1, end: 5 }, { start: 5, end: 5 }, { start: 4, end: 6 }, { start: '4', end: 5 }]) {
+    message({ type: MOTION_PREVIEW_COMMAND, clientId: 'range', instance: id, requestId: 'invalid-range', control: { action: 'loop', range } });
+    expect(post.mock.calls.at(-1)?.[0]).toMatchObject({ requestId: 'invalid-range', error: 'Invalid Motion loop range.' });
+  }
+  player.seek(4.5); player.setLocked(true);
+  message({ type: MOTION_PREVIEW_COMMAND, clientId: 'range', instance: id, requestId: 'locked-range', control: { action: 'loop', range: null } });
+  expect(post.mock.calls.at(-1)?.[0]).toMatchObject({ requestId: 'locked-range', error: 'Motion preview is locked for annotation.' });
+  expect(player.setLoop(null)).toBe(false);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(player.state()).toMatchObject({ playing: false, time: 4.5, locked: true });
+  player.setLocked(false); player.play(); timeline.seek(5);
+  await vi.advanceTimersByTimeAsync(34);
+  expect(timeline.time()).toBe(4);
+});
+
+it('does not introduce preview range looping into standalone playback', () => {
+  const { player } = boot(false);
+  expect(player.setLoop({ start: 4, end: 5 })).toBe(false);
+  player.replay();
+  expect(player.state()).toMatchObject({ playing: true, time: 0 });
 });
 
 it('pauses audio and the timeline while hidden, blocks play while inactive and resumes when active', async () => {

@@ -9,7 +9,7 @@ import { previewCommentToCloud } from '../src/collab/collab-cloud-service.js';
 import { parseMemberPage } from '../src/integrations/collab-cloud.js';
 import { normalizeCommentAttachments, renderCommentAttachmentHint } from '../src/runtimes/chat-prompt-inputs.js';
 
-const motion = { timeSeconds: 2.4, durationSeconds: 8, fps: 30, sourceFingerprint: 'source-123' };
+const motion = { timeSeconds: 2.4, durationSeconds: 8, fps: 30, sourceFingerprint: 'source-123', range: { startSeconds: 1, endSeconds: 5 } };
 const image = { path: 'captures/frame.png', name: 'frame.png' };
 const target = { filePath: 'index.html', elementId: 'title', selector: '#title', label: 'Title', text: 'Hello',
   htmlHint: '<h1 id="title">Hello</h1>', position: { x: 10, y: 20, width: 100, height: 30 } };
@@ -35,6 +35,8 @@ describe('Motion comment evidence', () => {
     expect(updated).toMatchObject({ motion, attachments: [image], note: 'Move title left' });
     expect(() => upsertPreviewComment(db, 'project', 'chat', { id: saved.id, target: { ...target, motion: { ...motion, timeSeconds: 4 } }, note: 'Retarget' }))
       .toThrow('cannot be retargeted');
+    expect(() => upsertPreviewComment(db, 'project', 'chat', { id: saved.id, target: { ...target, motion: { ...motion, range: { startSeconds: 2, endSeconds: 6 } } }, note: 'Change range' }))
+      .toThrow('cannot be retargeted');
     closeDatabase();
     db = openDatabase(root, { dataDir: root });
     expect(listPreviewComments(db, 'project', 'chat')).toEqual([expect.objectContaining({ id: saved.id, motion, attachments: [image] })]);
@@ -45,7 +47,8 @@ describe('Motion comment evidence', () => {
     for (const attachments of [[], [{ path: '../escape.png', name: 'bad' }], [{ path: 'capture.txt', name: 'bad' }]]) {
       expect(() => upsertPreviewComment(db, 'project', 'chat', { target: { ...target, motion }, note: 'Review', attachments })).toThrow('requires a project image');
     }
-    for (const invalid of [{ ...motion, timeSeconds: 9 }, { ...motion, fps: 0 }, { ...motion, sourceFingerprint: '' }, { ...motion, timeSeconds: NaN }]) {
+    for (const invalid of [{ ...motion, timeSeconds: 9 }, { ...motion, fps: 0 }, { ...motion, sourceFingerprint: '' }, { ...motion, timeSeconds: NaN },
+      { ...motion, range: { startSeconds: 5, endSeconds: 9 } }, { ...motion, range: { startSeconds: 5, endSeconds: 5 } }]) {
       expect(parsePreviewCommentMotionAnchor(invalid)).toBeNull();
       expect(() => upsertPreviewComment(db, 'project', 'chat', { target: { ...target, motion: invalid }, note: 'Review', attachments: [image] })).toThrow('Invalid Motion');
     }
@@ -99,6 +102,8 @@ describe('Motion comment evidence', () => {
     const prompt = renderCommentAttachmentHint(normalized);
     expect(prompt).toContain('motionReferenceTime: 2.4s / 8s');
     expect(prompt).toContain('motionSourceFingerprint: source-123');
+    expect(prompt).toContain('motionFeedbackRange: 1s–5s');
+    expect(prompt).toContain('not an enforced boundary');
     expect(prompt).toContain('captures/frame.png');
     expect(prompt).toContain('do not restrict the requested change to one frame');
   });

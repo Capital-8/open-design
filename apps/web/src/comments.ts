@@ -508,6 +508,10 @@ function renderCommentAttachmentContext(commentAttachments: ChatCommentAttachmen
     if (item.motion) {
       lines.push(`motionReferenceTime: ${item.motion.timeSeconds}s / ${item.motion.durationSeconds}s`,
         `motionSourceFingerprint: ${item.motion.sourceFingerprint}`,
+        ...(item.motion.range ? [
+          `motionFeedbackRange: ${item.motion.range.startSeconds}s–${item.motion.range.endSeconds}s`,
+          'The selected range is feedback context, not an enforced boundary or a guarantee that other times remain unchanged.',
+        ] : []),
         ...(item.motion.fps ? [`motionOutputFrame: ${Math.round(item.motion.timeSeconds * item.motion.fps)} (${item.motion.fps} fps)`] : []),
         'The time identifies the reference image and target; apply changes over the interval requested by the user, not only this single frame.');
     }

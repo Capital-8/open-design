@@ -132,6 +132,7 @@ import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 import { registerProjectMotionStructureRoutes } from './motion-structure.js';
+import { registerProjectMotionEditorRoutes } from './motion-editor.js';
 import { workspaceProjectGroupCountProperties } from './analytics.js';
 import type { ProjectCommentWorkspaceContextResolution } from './comments.js';
 import {
@@ -1859,6 +1860,7 @@ function applyUrlPreviewBridgesToHtml(
   mime: string,
   requestedBridge: unknown,
   requestedMotionPreview?: unknown,
+  motionTask = false,
 ): string | Buffer {
   if (
     !(
@@ -1870,7 +1872,7 @@ function applyUrlPreviewBridgesToHtml(
       wantsUrlPreviewSandboxGuard(requestedBridge) ||
       wantsUrlPreviewFocusGuard(requestedBridge) ||
       wantsUrlPreviewRedirectGuard(requestedBridge) ||
-      requestedMotionPreview === '1'
+      (motionTask && requestedMotionPreview === '1')
     ) ||
     !/^text\/html(?:;|$)/i.test(mime)
   ) {
@@ -1882,7 +1884,15 @@ function applyUrlPreviewBridgesToHtml(
   // Sanitize the <title> so Cmd+P -> "Save as PDF" produces a Teams-safe
   // filename. URL-load iframes cannot rely on the host rewriting the document
   // title after load, and powered previews are intentionally cross-origin.
-  html = injectMotionSourcePlayer(daemonSanitizeTitleInDoc(html));
+  html = daemonSanitizeTitleInDoc(html);
+  const composition = motionTask && isMotionVideoComposition(html)
+    ? load(html)('[data-composition-id][data-duration][data-width][data-height]').first() : null;
+  const motionPreview = Boolean(composition?.attr('data-composition-id')?.trim()
+    && ['data-duration', 'data-width', 'data-height'].every(attribute => {
+      const value = Number(composition?.attr(attribute));
+      return Number.isFinite(value) && value > 0;
+    }));
+  if (motionPreview) html = injectMotionSourcePlayer(html);
   // Guards must run before authored scripts. injectAfterHeadOpen prepends at
   // the start of <head>; apply in reverse runtime order so the final document
   // executes sandbox -> redirect -> observability -> focus.
@@ -1901,7 +1911,7 @@ function applyUrlPreviewBridgesToHtml(
   if (wantsUrlPreviewBuildFocusBridge(requestedBridge)) {
     // Only marked video motion waits for the building preview host. Legacy
     // HyperFrames and ordinary documents retain their authored playback.
-    html = markMotionHostedPreview(html);
+    if (motionPreview) html = markMotionHostedPreview(html);
     html = injectUrlPreviewBridge(html, 'buildfocus');
   }
   if (wantsUrlPreviewScrollBridge(requestedBridge)) {
@@ -5942,6 +5952,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     authorizeProjectRequest,
   );
   registerProjectMotionStructureRoutes(app, { ...ctx, authorizeProjectRequest });
+  registerProjectMotionEditorRoutes(app, { ...ctx, authorizeProjectRequest });
   const requestCanWriteWorkspaceProject = createWorkspaceProjectWriteAuthorityCheck(
     ctx.verifyWorkspaceRequestAuthority,
     ctx.isProjectUnmaterializedPlaceholder,
@@ -7161,6 +7172,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
             file.mime,
             req.query.odPreviewBridge,
             req.query.odMotionPreview,
+            automaticStrategyTaskProfileForProjectMetadata(project?.metadata) === 'motion-design',
           );
           const workspaceId = typeof req.query.workspaceId === 'string'
             ? req.query.workspaceId
@@ -7282,7 +7294,10 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
             const html = Buffer.isBuffer(transformed) ? transformed.toString('utf8') : String(transformed);
             res.setHeader(MOTION_PREVIEW_OUTPUT_HEADER, isMotionVideoComposition(html) ? 'video' : 'html');
           }
-          return applyUrlPreviewBridgesToHtml(transformed, file.mime, req.query.odPreviewBridge, req.query.odMotionPreview);
+          return applyUrlPreviewBridgesToHtml(
+            transformed, file.mime, req.query.odPreviewBridge, req.query.odMotionPreview,
+            automaticStrategyTaskProfileForProjectMetadata(project?.metadata) === 'motion-design',
+          );
         },
       );
     } catch (err: any) {

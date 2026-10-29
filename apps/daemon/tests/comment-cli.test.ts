@@ -192,6 +192,33 @@ describe('od comment CLI', () => {
   });
 
 
+  it('sends a Motion feedback range with a prompt file and returns it in JSON', async () => {
+    stub = await startStubServer();
+    const motion = { timeSeconds: 6.5, durationSeconds: 12, sourceFingerprint: 'source-123' };
+    const result = await runCliWithStdin([
+      'comment', 'create', 'project-1', 'conversation-1', '--target', JSON.stringify({ ...target, motion }),
+      '--motion-range', '5:8', '--attachments', JSON.stringify([{ path: 'captures/frame.png', name: 'frame.png' }]),
+      '--prompt-file', '-', '--daemon-url', stub.baseUrl, '--json',
+    ], '只调整这一段的标题入场\n保持整体风格');
+    expect(result.code).toBe(0);
+    const sent = JSON.parse(stub.requests[0]!.body);
+    expect(sent.target.motion).toEqual({ ...motion, range: { startSeconds: 5, endSeconds: 8 } });
+    expect(sent.note).toBe('只调整这一段的标题入场\n保持整体风格');
+    expect(JSON.parse(result.stdout).comment.target.motion).toEqual(sent.target.motion);
+  });
+
+  it('rejects an invalid Motion range before issuing a mutation', async () => {
+    stub = await startStubServer();
+    const motion = { timeSeconds: 6.5, durationSeconds: 12, sourceFingerprint: 'source-123' };
+    const result = await runCli([
+      'comment', 'create', 'project-1', 'conversation-1', '--target', JSON.stringify({ ...target, motion }),
+      '--motion-range', '8:5', '--prompt', 'bad range', '--daemon-url', stub.baseUrl, '--json',
+    ]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('Invalid Motion reference or range');
+    expect(stub.requests).toEqual([]);
+  });
+
   it('reads stdin prompt-file verbatim, including whitespace and newlines', async () => {
     stub = await startStubServer();
     const note = '  first line\n第二行  \n\n';

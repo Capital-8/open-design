@@ -21,6 +21,8 @@ export interface PreviewCommentMotionAnchor {
   durationSeconds: number;
   fps?: number;
   sourceFingerprint: string;
+  /** User-selected feedback context, not an enforced edit boundary. */
+  range?: { startSeconds: number; endSeconds: number };
 }
 
 /** Pure wire parser shared by comment persistence, relay and chat admission. */
@@ -33,7 +35,17 @@ export function parsePreviewCommentMotionAnchor(value: unknown): PreviewCommentM
     || timeSeconds > durationSeconds
     || (fps !== undefined && (typeof fps !== 'number' || !Number.isFinite(fps) || fps <= 0 || fps > 240))
     || typeof sourceFingerprint !== 'string' || !sourceFingerprint.trim() || sourceFingerprint.length > 256) return null;
-  return { timeSeconds, durationSeconds, ...(fps === undefined ? {} : { fps }), sourceFingerprint };
+  let range: PreviewCommentMotionAnchor['range'];
+  if (anchor.range !== undefined) {
+    if (!anchor.range || typeof anchor.range !== 'object' || Array.isArray(anchor.range)) return null;
+    const { startSeconds, endSeconds } = anchor.range as Record<string, unknown>;
+    if (typeof startSeconds !== 'number' || !Number.isFinite(startSeconds) || startSeconds < 0
+      || typeof endSeconds !== 'number' || !Number.isFinite(endSeconds)
+      || startSeconds >= endSeconds || endSeconds > durationSeconds) return null;
+    range = { startSeconds, endSeconds };
+  }
+  return { timeSeconds, durationSeconds, ...(fps === undefined ? {} : { fps }), sourceFingerprint,
+    ...(range ? { range } : {}) };
 }
 
 /** Motion screenshots use the normal project-relative image attachment channel. */

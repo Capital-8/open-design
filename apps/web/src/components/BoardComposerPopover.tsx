@@ -1,4 +1,4 @@
-import type { ChangeEvent, ClipboardEvent, CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { ChangeEvent, ClipboardEvent, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { Button, Textarea } from '@open-design/components';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -449,6 +449,7 @@ export function BoardComposerPopover({
   docked = false,
   commenting = true,
   discardPending = false,
+  contextTools,
 }: {
   target: PreviewCommentSnapshot;
   existing: PreviewComment | null;
@@ -502,6 +503,7 @@ export function BoardComposerPopover({
   commenting?: boolean;
   /** A pick was held back to protect unsent work; the next pick discards it. */
   discardPending?: boolean;
+  contextTools?: ReactNode;
 }) {
   const pendingCount = notes.length + (draft.trim() ? 1 : 0);
   const podMembers = target.podMembers ?? [];
@@ -630,7 +632,7 @@ export function BoardComposerPopover({
     ? t('chat.comments.sending')
     : queueOnSend
       ? t('chat.annotationQueue')
-      : t('chat.comments.sendToChat');
+      : t(target.motion ? 'motion.feedback.sendToAI' : 'chat.comments.sendToChat');
   function pickImages(list: FileList | null) {
     const imgs = Array.from(list ?? []).filter((f) => f.type.startsWith('image/'));
     if (imgs.length > 0) onAttachImages?.(imgs);
@@ -694,9 +696,15 @@ export function BoardComposerPopover({
           outside this box (see below) so a height-clamped card can never push
           the buttons out of view. */}
       <div className="comment-popover-body">
-        <section className="comment-popover-section comment-popover-section-params">
+        {contextTools ?? (target.motion ? <div className="comment-popover-section" data-testid="comment-motion-context">
+          <span className="comment-side-slide">{target.motion.timeSeconds.toFixed(3)}s</span>
+          {target.motion.range ? <span>{t('motion.range.context', {
+            start: target.motion.range.startSeconds.toFixed(3), end: target.motion.range.endSeconds.toFixed(3),
+          })}</span> : null}
+        </div> : null)}
+        {!target.motion && <section className="comment-popover-section comment-popover-section-params">
           <AnnotationStyleSummary target={target} testId="comment-popover-style-summary" />
-        </section>
+        </section>}
         {podMembers.length > 0 ? (
           <div className="board-pod-summary">
             <strong>{t('chat.comments.capturedItems', { n: target.memberCount || podMembers.length })}</strong>
@@ -909,6 +917,14 @@ export function BoardComposerPopover({
                     {primaryLabel}
                   </Button>
                 ) : null}
+              </>
+            ) : target.motion ? (
+              <>
+                {canEditComment && <Button variant="ghost" data-testid="comment-popover-save"
+                  disabled={saveDisabled} onClick={() => void onSaveComment()}>{t('motion.feedback.saveComment')}</Button>}
+                {canSendToAgent && allowSendToChat && <Button variant="primary" data-testid="comment-add-send"
+                  disabled={sendBlocked} title={sendDisabled ? sendDisabledReason : undefined}
+                  onClick={() => void onSendBatch()}>{primaryLabel}</Button>}
               </>
             ) : (
               <>

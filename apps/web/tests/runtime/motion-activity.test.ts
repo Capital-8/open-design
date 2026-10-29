@@ -53,6 +53,9 @@ it('marks only live video srcdoc and leaves standalone, frozen and ordinary docu
   expect(live).toContain('window.__odMotionPreview=true');
   expect(live.indexOf('__odMotionPreview=true')).toBeLessThan(live.indexOf('data-od-motion-source-player'));
   expect(buildSrcdoc(video)).not.toContain('__odMotionPreview=true');
+  const ordinaryTask = buildSrcdoc(video, { motionPreview: false });
+  expect(ordinaryTask).not.toContain('__odMotionPreview=true');
+  expect(ordinaryTask).not.toContain('data-od-motion-source-player');
   expect(buildSrcdoc(video,{motionPreview:true,freezeMotion:true})).not.toContain('__odMotionPreview=true');
   for(const content of ['<main>Prototype</main>','<meta name="od-motion-output" content="interactive"><main>Interactive</main>','<main data-composition-id="legacy"></main>']) {
     expect(buildSrcdoc(content,{motionPreview:true})).toBe(buildSrcdoc(content));

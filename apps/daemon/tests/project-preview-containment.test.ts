@@ -622,22 +622,28 @@ describe('project preview containment routes', () => {
   });
 
   it('hosts only video motion in building previews without changing raw sources or legacy playback', async () => {
-    const projectId = await createProject();
+    const projectId = await createProject({ kind: 'video', intent: 'motion-design' });
     for (const mode of ['video', 'interactive', 'legacy', 'prototype', 'ppt', 'marketing']) {
-      const source = `<!doctype html><html><head>${mode === 'video' || mode === 'interactive' ? `<meta name="od-motion-output" content="${mode}">` : ''}</head><body><main data-composition-id="main"></main></body></html>`;
+      const source = `<!doctype html><html><head>${mode === 'video' || mode === 'interactive' ? `<meta name="od-motion-output" content="${mode}">` : ''}</head><body><main data-composition-id="main" data-duration="12" data-width="1280" data-height="720"></main></body></html>`;
       await writeProjectFile(projectId, `${mode}.html`, source);
       const response = await fetch(`${baseUrl}/api/projects/${projectId}/raw/${mode}.html?odPreviewBridge=buildfocus`);
       const html = await response.text();
       expect(html.includes('window.__odMotionPreview=true')).toBe(mode === 'video');
       expect(html.includes('data-od-motion-source-player')).toBe(mode === 'video');
       if (mode === 'video') expect(html.indexOf('window.__odMotionPreview=true')).toBeLessThan(html.indexOf('data-od-motion-source-player'));
+      if (mode === 'video') {
+        const powered = await fetch(`${baseUrl}/api/projects/${projectId}/powered/${mode}.html?odPreviewBridge=buildfocus&odMotionPreview=1`);
+        const poweredHtml = await powered.text();
+        expect(poweredHtml).toContain('window.__odMotionPreview=true');
+        expect(poweredHtml).toContain('data-od-motion-source-player');
+      }
       expect(await (await fetch(`${baseUrl}/api/projects/${projectId}/raw/${mode}.html`)).text()).toBe(source);
     }
   });
 
   it('upgrades a persisted Motion player for thumbnail previews while raw source bytes remain unchanged', async () => {
     const projectId = await createProject({ kind: 'video', intent: 'motion-design' });
-    const source = '<!doctype html><html><head><meta name="od-motion-output" content="video"></head><body><main data-composition-id="main"></main><script data-od-motion-source-player="5">oldPlayer();</script></body></html>';
+    const source = '<!doctype html><html><head><meta name="od-motion-output" content="video"></head><body><main data-composition-id="main" data-duration="12" data-width="1280" data-height="720"></main><script data-od-motion-source-player="5">oldPlayer();</script></body></html>';
     await writeProjectFile(projectId, 'index.html', source);
     const plain = await fetch(`${baseUrl}/api/projects/${projectId}/raw/index.html`);
     expect(await plain.text()).toBe(source);
@@ -645,10 +651,37 @@ describe('project preview containment routes', () => {
     expect(thumbnail.status).toBe(200);
     const html = await thumbnail.text();
     expect(html).not.toContain('oldPlayer();');
-    expect(html).toContain('data-od-motion-source-player="8"');
+    expect(html).toContain('data-od-motion-source-player="12"');
     expect(html).toContain("searchParams.get('odMotionThumbnail')");
     expect(html.match(/<script data-od-motion-source-player/g)).toHaveLength(1);
     expect(html).not.toContain('data-od-url-scroll-bridge');
+  });
+
+  it.each([
+    { kind: 'prototype' }, { kind: 'video' }, { kind: 'video', intent: 'hyperframes' },
+    { kind: 'prototype', intent: 'motion-design' },
+  ])('does not host a Motion-marked document for task metadata %j', async metadata => {
+    const projectId = await createProject(metadata);
+    const source = '<!doctype html><html><head><meta name="od-motion-output" content="video"></head><body><main data-composition-id="main" data-duration="12" data-width="1280" data-height="720"></main></body></html>';
+    await writeProjectFile(projectId, 'index.html', source);
+    for (const transport of ['raw', 'powered']) for (const query of ['odMotionPreview=1', 'odPreviewBridge=buildfocus&odMotionPreview=1']) {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}/${transport}/index.html?${query}`);
+      expect(response.status).toBe(200);
+      // Artifact classification remains independent of task eligibility.
+      expect(response.headers.get('x-od-motion-output')).toBe('video');
+      const html = await response.text();
+      expect(html).not.toContain('window.__odMotionPreview=true');
+      expect(html).not.toContain('data-od-motion-source-player');
+    }
+  });
+
+  it('does not host an invalid composition even inside a Motion task', async () => {
+    const projectId = await createProject({ kind: 'video', intent: 'motion-design' });
+    await writeProjectFile(projectId, 'index.html', '<meta name="od-motion-output" content="video"><main data-composition-id="main" data-duration="0" data-width="1280" data-height="720"></main>');
+    const response = await fetch(`${baseUrl}/api/projects/${projectId}/raw/index.html?odMotionPreview=1&odPreviewBridge=buildfocus`);
+    const html = await response.text();
+    expect(html).not.toContain('window.__odMotionPreview=true');
+    expect(html).not.toContain('data-od-motion-source-player');
   });
 
   it('rejects invalid preview scopes and escaping preview-url paths', async () => {

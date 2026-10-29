@@ -212,6 +212,8 @@ export async function settleManualEditFiles(
 interface Props {
   projectId: string;
   projectKind: TrackingProjectKind;
+  /** Exact business task eligibility, independent of analytics kind. */
+  motionTask?: boolean;
   projectName?: string;
   // Basename of the project's chosen working directory (e.g. "openclaw").
   // Threaded to DesignFilesPanel as the breadcrumb root label. Undefined for
@@ -1334,6 +1336,7 @@ interface WorkspaceActionToast {
 export function FileWorkspace({
   projectId,
   projectKind,
+  motionTask = false,
   projectName,
   rootDirName,
   reloading,
@@ -3511,6 +3514,7 @@ export function FileWorkspace({
     <FileViewer
       projectId={projectId}
       projectKind={projectKind}
+      motionTask={motionTask}
       file={file}
       filesRefreshKey={filesRefreshKey}
       isDeck={isDeck}

@@ -85,6 +85,7 @@ import {
   strategyTaskRunIndex,
 } from '../runtime/strategy-question-continuation';
 import {
+  automaticStrategyTaskProfileForProjectMetadata,
   isTodoWriteToolName,
   isWorkspaceLifecycleReadable,
   workspaceBillingAuthorityContext,
@@ -14524,6 +14525,7 @@ export function ProjectView({
           }
           fileSyncBadge={fileSyncBadge}
           projectKind={projectKindFromMetadataToTrackingOrLegacyDefault(currentProject.metadata)}
+          motionTask={automaticStrategyTaskProfileForProjectMetadata(currentProject.metadata) === 'motion-design'}
           rootDirName={(() => {
             const baseDir = currentProject.metadata?.baseDir;
             return typeof baseDir === 'string'

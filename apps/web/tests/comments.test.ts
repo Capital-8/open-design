@@ -509,7 +509,7 @@ function comment(patch: Partial<PreviewComment>): PreviewComment {
 }
 
 it('preserves a Motion reference and its original target through saved and drawn feedback', () => {
-  const motion = { timeSeconds: 2.5, durationSeconds: 8, fps: 30, sourceFingerprint: 'source:1' };
+  const motion = { timeSeconds: 2.5, durationSeconds: 8, fps: 30, sourceFingerprint: 'source:1', range: { startSeconds: 1, endSeconds: 5 } };
   const saved = comment({ motion, attachments: [{ path: 'uploads/frame.png', name: 'frame.png' }] });
   const moved = { ...targetFromSnapshot({ ...saved }), position: { x: 500, y: 300, width: 10, height: 10 } };
   const snapshot = liveSnapshotForComment(saved, new Map([[saved.elementId, moved]]));
@@ -518,6 +518,8 @@ it('preserves a Motion reference and its original target through saved and drawn
   const attached = commentsToAttachments([saved]);
   expect(attached[0]?.motion).toEqual(motion);
   expect(messageContentWithCommentAttachments('Change the color', attached)).toContain('motionReferenceTime: 2.5s / 8s');
+  expect(messageContentWithCommentAttachments('Change the color', attached)).toContain('motionFeedbackRange: 1s–5s');
+  expect(messageContentWithCommentAttachments('Change the color', attached)).toContain('not an enforced boundary');
   expect(buildVisualAnnotationAttachment({ order: 1, markKind: 'stroke', note: 'This title',
     screenshotPath: 'uploads/frame.png', bounds: saved.position, motion }).motion).toEqual(motion);
 });

@@ -8,6 +8,8 @@ import {
 import { CollabProvider, type CollabContextValue } from '../../src/collab/collab-context';
 import { FileViewer } from '../../src/components/FileViewer';
 import type { PreviewComment, ProjectFile } from '../../src/types';
+import type { ChatCommentAttachment } from '@open-design/contracts';
+import type { CommentSendResult } from '../../src/components/comment-send-result';
 
 const personal: CollabContextValue = {
   workspaceContext: null, workspaceContextLoading: false, enabled: false,
@@ -50,10 +52,14 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-async function setup(comments = [first, second]) {
+async function setup(comments = [first, second], acceptSend = false) {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({})));
+  const sendToChat = vi.fn(async (attachments: ChatCommentAttachment[]): Promise<CommentSendResult> => ({
+    status: acceptSend ? 'accepted' : 'rejected',
+    commentIds: acceptSend ? attachments.map(attachment => attachment.id) : [],
+  }));
   render(<CollabProvider value={personal}>
-    <FileViewer projectId="motion-timeline" projectKind="video" file={file} liveHtml={html} previewComments={comments} />
+    <FileViewer projectId="motion-timeline" projectKind="video" motionTask file={file} liveHtml={html} previewComments={comments} onSendBoardCommentAttachments={sendToChat} />
   </CollabProvider>);
   const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
   const commands: CommandRequest[] = [];
@@ -98,7 +104,7 @@ async function setup(comments = [first, second]) {
     await waitFor(() => expect(screen.getByTestId('comment-popover-input')).toHaveValue(comment.note));
   };
   await waitFor(() => expect(marker(first)).toBeEnabled());
-  return { commands, validations, marker, finishOpen };
+  return { commands, validations, marker, finishOpen, acknowledge, sendToChat };
 }
 
 it('opens the original comment through confirmed unlock/seek/lock and ignores another click while opening', async () => {
@@ -153,4 +159,72 @@ it('protects an edited comment before switching markers, then confirms the origi
   ]);
   expect(validations).toEqual([first.id, second.id]);
   expect(screen.queryByText('You have an unsent comment. Click again to discard it and switch.')).toBeNull();
+});
+
+
+it.each([false, undefined])('does not take over a marked video outside the Motion task (eligibility %s)', async (motionTask) => {
+  const fetchMock = vi.fn(async (_input: RequestInfo | URL) => Response.json({}));
+  vi.stubGlobal('fetch', fetchMock);
+  render(<CollabProvider value={personal}>
+    <FileViewer projectId="ordinary-marked-video" projectKind="video" motionTask={motionTask} file={file} liveHtml={html} />
+  </CollabProvider>);
+  const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+  expect(frame.src).not.toContain('odMotionPreview=1');
+  expect(frame.srcdoc).not.toContain('window.__odMotionPreview=true');
+  expect(frame.srcdoc).not.toContain('data-od-motion-source-player');
+  expect(screen.queryByRole('slider', { name: 'Motion timeline' })).toBeNull();
+  const post = vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
+  await act(async () => { fireEvent.load(frame); });
+  expect(post.mock.calls.some(([message]) => message.type === MOTION_PREVIEW_CONNECT)).toBe(false);
+  expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/motion/structure'))).toBe(false);
+});
+
+
+it('removes hosted playback when the same viewer loses Motion task eligibility', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({})));
+  const tree = (motionTask: boolean) => <CollabProvider value={personal}>
+    <FileViewer projectId="motion-task-transition" projectKind="video" motionTask={motionTask} file={file} liveHtml={html} />
+  </CollabProvider>;
+  const view = render(tree(true));
+  expect(screen.getByRole('slider', { name: 'Motion timeline' })).toBeInTheDocument();
+  expect((screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).src).toContain('odMotionPreview=1');
+  view.rerender(tree(false));
+  await waitFor(() => expect(screen.queryByRole('slider', { name: 'Motion timeline' })).toBeNull());
+  expect((screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).src).not.toContain('odMotionPreview=1');
+});
+
+
+it('exits annotation and unlocks after sending a saved Motion comment from the unified composer', async () => {
+  const { commands, marker, finishOpen, acknowledge, sendToChat } = await setup([first, second], true);
+  fireEvent.click(marker(first));
+  await finishOpen(0, first);
+  expect(screen.getByTestId('comment-panel-toggle')).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.queryByTestId('comment-side-item')).toBeNull();
+  expect(screen.getByTestId('motion-feedback-context')).toHaveTextContent('Title');
+  fireEvent.click(screen.getByTestId('comment-add-send'));
+  await waitFor(() => expect(sendToChat).toHaveBeenCalledOnce());
+  expect(sendToChat.mock.calls[0]![0]).toEqual([expect.objectContaining({
+    id: first.id, comment: first.note, motion: first.motion,
+  })]);
+  await waitFor(() => expect(screen.queryByTestId('comment-popover-input')).toBeNull());
+  expect(screen.getByTestId('comment-panel-toggle')).toHaveAttribute('aria-pressed', 'false');
+  await waitFor(() => expect(commands[3]?.control).toEqual({ action: 'lock', value: false }));
+  await acknowledge(3);
+  expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
+});
+
+it('keeps annotation and its lock when sending a saved Motion comment from the unified composer is rejected', async () => {
+  const { commands, marker, finishOpen, sendToChat } = await setup();
+  fireEvent.click(marker(first));
+  await finishOpen(0, first);
+  expect(screen.queryByTestId('comment-side-item')).toBeNull();
+  expect(screen.getByTestId('motion-feedback-context')).toHaveTextContent('Title');
+  const sendButton = screen.getByTestId('comment-add-send');
+  fireEvent.click(sendButton);
+  await waitFor(() => expect(sendToChat).toHaveBeenCalledOnce());
+  await waitFor(() => expect(sendButton).toBeEnabled());
+  expect(screen.getByTestId('comment-popover-input')).toHaveValue(first.note);
+  expect(screen.getByTestId('comment-panel-toggle')).toHaveAttribute('aria-pressed', 'true');
+  expect(commands).toHaveLength(3);
+  expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled();
 });

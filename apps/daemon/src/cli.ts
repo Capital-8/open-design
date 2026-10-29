@@ -21,7 +21,7 @@ import { BYOK_OPENCODE_AGENT_ID } from './runtimes/byok-opencode.js';
 import { redactSecrets } from './connectionTest.js';
 import { SidecarFactory } from '@open-design/sidecar';
 import { APP_KEYS, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
-import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, mediaFailureNextStep, parseApiFailureDetail } from '@open-design/contracts';
+import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, mediaFailureNextStep, parseApiFailureDetail, parsePreviewCommentMotionAnchor } from '@open-design/contracts';
 import type { ArtifactLintFinding, LintArtifactCliResultEnvelope, LintArtifactResponse, LintFailOn } from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
@@ -333,7 +333,7 @@ const SHARE_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json',
 ]);
 const COMMENT_STRING_FLAGS = new Set([
-  'daemon-url', 'workspace', 'workspace-member', 'prompt', 'prompt-file', 'target', 'attachments', 'status', 'read-at', 'file',
+  'daemon-url', 'workspace', 'workspace-member', 'prompt', 'prompt-file', 'target', 'attachments', 'status', 'read-at', 'file', 'motion-range',
 ]);
 const COMMENT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // Defined near the top because `runFigma` is reachable through the
@@ -405,6 +405,7 @@ const SUBCOMMAND_MAP = {
   agent: runAgent,
   artifacts: runArtifacts,
   media: runMedia,
+  motion: runMotion,
   mcp: runMcp,
   amr: runAmr,
   collab: runCollab,
@@ -467,6 +468,8 @@ Options:
   --file <path>               Exact locally published file for backfill status/retry.
   --target <json>             PreviewCommentTarget JSON for create/update.
   --attachments <json>        Project image attachments [{path,name}], required for a new Motion reference.
+  --motion-range <start:end>  Optional feedback range in seconds, e.g. 5:8; requires target.motion.
+                             Context only; it does not enforce an edit boundary. Also accepted in target.motion.range.
   --prompt <text>             Comment body.
   --prompt-file <path|->      Read the comment body from a file or stdin; mutually exclusive with --prompt.
   --workspace <id>            Exact Workspace for bound project requests.
@@ -498,6 +501,52 @@ function parseCommentTarget(raw) {
   }
 }
 
+async function runMotion(args) {
+  const help = `Usage:
+  od motion inspect <projectId> --file <path.html> [--json]
+  od motion edit <projectId> --file <path.html> --revision <sha256> --prompt-file <path|-> [--json]
+  od motion preview <projectId> --file <path.html> --revision <sha256> --prompt-file <path|-> [--json]
+
+The edit payload is a complete MotionEditorDocument JSON object, not a natural-language prompt.
+Only compatible Motion tasks support direct edits. Read the current revision with inspect first.
+Options: --daemon-url <url>, --workspace <id>, --workspace-member <id>, --label <text>.
+`;
+  if (!args.length || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    process.stdout.write(help); return;
+  }
+  const strings = new Set(['file', 'revision', 'prompt-file', 'daemon-url', 'workspace', 'workspace-member', 'label']);
+  let flags;
+  try { flags = parseFlags(args.slice(1), { string: strings, boolean: new Set(['json']) }); }
+  catch (error) { console.error(error.message); process.exit(2); }
+  const positional = positionalArgs(args.slice(1), strings);
+  const [projectId] = positional;
+  const sub = args[0];
+  if (!['inspect', 'edit', 'preview'].includes(sub) || positional.length !== 1 || !flags.file
+      || (sub !== 'inspect' && (!flags.revision || !flags['prompt-file']))) {
+    console.error(help); process.exit(2);
+  }
+  const body: Record<string, unknown> = { filePath: flags.file };
+  if (sub !== 'inspect') {
+    try { body.document = JSON.parse(await readPromptFromFlags(flags)); }
+    catch { console.error('--prompt-file must contain a valid MotionEditorDocument JSON object.'); process.exit(2); }
+    body.baseRevision = flags.revision;
+    if (flags.label) body.label = flags.label;
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  let response;
+  try {
+    response = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/motion/editor/${sub === 'inspect' ? 'read' : sub === 'preview' ? 'preview' : 'save'}`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(workspaceHeadersFromExplicitFlags(flags) ?? {}) },
+      body: JSON.stringify(body),
+    });
+  } catch (error) { surfaceFetchError(error, base); process.exit(3); }
+  if (!response.ok) return structuredHttpFailure(response, 'motion-edit-rejected');
+  const result = await response.json();
+  if (flags.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  else if (sub === 'preview') process.stdout.write(result.source);
+  else console.log(result.supported ? `Motion ${sub === 'inspect' ? 'document' : 'saved'} · ${result.document.objects.length} objects · revision ${result.revision}` : result.reason);
+}
+
 async function runComment(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     printCommentHelp();
@@ -513,6 +562,9 @@ async function runComment(args) {
   }
   const positional = positionalArgs(rest, COMMENT_STRING_FLAGS);
   const [projectId, conversationId, commentId] = positional;
+  if (flags['motion-range'] !== undefined && sub !== 'create' && sub !== 'update') {
+    commentUsageError('--motion-range is only supported for comment create/update');
+  }
   if (!['list', 'pull', 'create', 'update', 'status', 'delete', 'read', 'align', 'sync-state', 'retry-backfill'].includes(sub)) {
     commentUsageError(`unknown subcommand: od comment ${sub}`);
   }
@@ -600,6 +652,23 @@ async function runComment(args) {
     }
     const target = parseCommentTarget(flags.target);
     if (!target) commentUsageError('--target must be valid PreviewCommentTarget JSON');
+    if (flags['motion-range'] !== undefined) {
+      const parts = flags['motion-range'].split(':');
+      if (!target.motion || parts.length !== 2 || parts.some(part => !part.trim())) {
+        commentUsageError('--motion-range requires target.motion and start:end seconds');
+      }
+      const range = { startSeconds: Number(parts[0]), endSeconds: Number(parts[1]) };
+      if (target.motion.range !== undefined
+        && (target.motion.range?.startSeconds !== range.startSeconds || target.motion.range?.endSeconds !== range.endSeconds)) {
+        commentUsageError('--motion-range conflicts with target.motion.range');
+      }
+      target.motion = { ...target.motion, range };
+    }
+    if (target.motion !== undefined) {
+      const motion = parsePreviewCommentMotionAnchor(target.motion);
+      if (!motion) commentUsageError('Invalid Motion reference or range; require 0 <= start < end <= durationSeconds');
+      target.motion = motion;
+    }
     let note;
     try {
       note = await readPromptFromFlags(flags);
@@ -1233,6 +1302,9 @@ function printRootHelp() {
 
   od comment <list|create|update|status|delete> [args]
       Manage project comments through the same daemon API as the workspace UI.
+
+  od motion <inspect|edit|preview> <projectId> --file <path.html> [--json]
+      Read or edit a compatible Motion document using revision-checked JSON.
 
   od ui <list|show|respond|revoke|prefill> [args]
       Read and answer GenUI surfaces (form / choice / confirmation / oauth-prompt) headlessly.
