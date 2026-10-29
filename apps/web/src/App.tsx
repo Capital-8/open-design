@@ -2304,21 +2304,20 @@ function AppInner() {
       if (
         cancelled ||
         amrPollGenerationRef.current !== pollGeneration ||
-        amrCatalogScopeRef.current.identity !== issuedIdentity ||
-        !result
+        amrCatalogScopeRef.current.identity !== issuedIdentity
       ) {
         return;
       }
       // A forced refresh first yields the generic preset while the scoped
       // remote list runs. Keep the last-good selected-scope catalog visible.
-      if (Array.isArray(result.models) && result.models.length > 0
+      if (result && Array.isArray(result.models) && result.models.length > 0
         && !(result.source === 'preset' && amrModelsRef.current?.source === 'remote')) {
         amrModelsRef.current = result;
         setAgents((current) => mergeAmrModelsIntoAgents(current, result, amrCatalogScopeRef.current.scoped));
       }
       const shouldPollRefresh =
-        result.refreshing &&
-        !result.remoteError &&
+        // Transport failures can recover without another login or scope change.
+        (!result || (result.refreshing && !result.remoteError)) &&
         refreshPolls < maxRefreshPolls;
       if (shouldPollRefresh) {
         refreshPolls += 1;
@@ -3303,7 +3302,20 @@ function AppInner() {
           agentCliEnv: options.agentCliEnv ?? {},
         });
         latestPersistedConfigRef.current = nextConfig;
-        amrModelsRef.current = null;
+        // Settings sends the current environment even for an unchanged rescan.
+        // Keep its verified catalog; real scoped identity changes also clear it
+        // during render and restart the corresponding model read.
+        const amrEnvironmentChanged = JSON.stringify(current.agentCliEnv?.amr ?? {})
+          !== JSON.stringify(nextConfig.agentCliEnv?.amr ?? {});
+        if (amrEnvironmentChanged) {
+          amrModelsRef.current = null;
+        } else if (amrCatalogScopeRef.current.scoped && (
+          amrModelsRef.current?.source !== 'remote' || amrModelsRef.current.models.length === 0
+        )) {
+          // A user rescan can retry a stopped read. Background agent probes
+          // omit agentCliEnv and must not each restart the scoped model poll.
+          setAmrPollRestartToken((token) => token + 1);
+        }
         saveConfig(nextConfig);
         setConfig(nextConfig);
         await syncConfigToDaemon(nextConfig);
