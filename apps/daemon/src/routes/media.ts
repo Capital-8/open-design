@@ -1196,7 +1196,8 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
             source_kind: sourceKind,
             ...props,
           },
-          insertId: `motion_replicate_result:${project.id}:${body.id ?? source}:${props.result}`,
+          // Opaque per-attempt id: never derive it from the source path or link.
+          insertId: `motion_replicate_result:${randomUUID()}`,
         });
       } catch {
         // ignore

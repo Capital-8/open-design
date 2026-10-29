@@ -56,6 +56,7 @@ describe('compareMotionFilms', () => {
     make('same.mp4', 'color=c=red:s=640x360:d=4');
     make('other.mp4', 'color=c=blue:s=640x360:d=4');
     make('short.mp4', 'color=c=red:s=640x360:d=1.5');
+    make('portrait.mp4', 'color=c=red:s=360x640:d=4');
     await writeFile(path.join(project, 'notes.txt'), 'not a video');
   });
 
@@ -87,6 +88,14 @@ describe('compareMotionFilms', () => {
     expect(r.skipped).toHaveLength(1);
     expect(r.skipped[0]!.reason).toContain('ends at');
     expect(r.durationDeltaSec).toBeLessThan(0);
+  });
+
+  it('compares a portrait film against a landscape reference on one canvas', async () => {
+    const r = await compareMotionFilms({ projectDir: project, reference: 'ref.mp4', candidate: 'portrait.mp4', times: [0.5, 2], id: 'p' });
+    expect(r.pairs).toHaveLength(2);
+    expect(r.skipped).toHaveLength(0);
+    expect([r.width, r.height]).toEqual([640, 360]);
+    expect(r.pairs[0]!.ssim).toBeLessThan(1);
   });
 
   it('refuses a path outside the project and a non-video', async () => {

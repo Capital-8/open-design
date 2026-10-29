@@ -142,9 +142,17 @@ export async function compareMotionFilms(input: {
   await mkdir(path.join(dir, 'frames'), { recursive: true });
 
   const times = pickCompareTimes(referenceDurationSec, input.times, input.cuts);
+  // Both frames land on one canvas shaped like the reference, so a film with a
+  // different aspect ratio is letterboxed and still scored instead of failing.
+  const refSize = /Stream #\S+.*?Video:.*?\b(\d{2,5})x(\d{2,5})\b/.exec(referenceProbe.stderr);
+  const canvasW = FRAME_WIDTH;
+  const canvasH = refSize
+    ? Math.max(2, Math.round((FRAME_WIDTH * Number(refSize[2])) / Number(refSize[1]) / 2) * 2)
+    : Math.round((FRAME_WIDTH * 9) / 16 / 2) * 2;
+  const fit = `scale=${canvasW}:${canvasH}:force_original_aspect_ratio=decrease,pad=${canvasW}:${canvasH}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`;
   const extract = async (video: string, at: number, out: string): Promise<boolean> => {
     const shot = await run(ff, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', at.toFixed(3), '-i', video,
-      '-frames:v', '1', '-vf', `scale=${FRAME_WIDTH}:-2,setsar=1`, out], 60_000);
+      '-frames:v', '1', '-vf', fit, out], 60_000);
     return shot.code === 0 && Boolean((await stat(out).catch(() => null))?.size);
   };
 
