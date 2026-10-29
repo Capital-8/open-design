@@ -3584,6 +3584,69 @@ process.stdin.on("end", () => {
     }
   });
 
+  it("publishes both macOS architectures while keeping their shared feed replaceable", async () => {
+    const fixture = await startReleaseMetadataObjectStore({});
+    const runnerTemp = await mkdtemp(join(tmpdir(), "od-release-shared-mac-feed-"));
+    const assetsDir = join(runnerTemp, "assets");
+    const manifestDir = join(runnerTemp, "manifests");
+    const outputsPath = join(runnerTemp, "outputs.json");
+    const version = "1.2.3-prerelease.4";
+    const versionPrefix = `prerelease/versions/${version}`;
+    const writeAsset = async (name: string, bytes: Buffer) => {
+      await writeFile(join(assetsDir, name), bytes);
+      await writeFile(
+        join(assetsDir, `${name}.sha256`),
+        `${createHash("sha256").update(bytes).digest("hex")}  ${name}\n`,
+      );
+    };
+    const writeMacAssets = async (arch: "arm64" | "x64") => {
+      await rm(assetsDir, { force: true, recursive: true });
+      await mkdir(assetsDir, { recursive: true });
+      await writeAsset(`open-design-${version}-mac-${arch}.dmg`, Buffer.from(`${arch} dmg`));
+      await writeAsset(`open-design-${version}-mac-${arch}-payload.zip`, Buffer.from(`${arch} payload`));
+      await writeAsset(`open-design-${version}-mac-${arch}.zip`, Buffer.from(`${arch} zip`));
+      await writeFile(join(assetsDir, "latest-mac.yml"), `arch: ${arch}\n`);
+    };
+    const publish = (target: "mac_arm64" | "mac_x64") => execFileAsync(
+      process.execPath,
+      ["--experimental-strip-types", releaseBetaPlatformPublishScriptPath],
+      {
+        cwd: workspaceRoot,
+        env: {
+          ...process.env,
+          RELEASE_ARTIFACT_MODE: "all",
+          RELEASE_ASSETS_DIR: assetsDir,
+          RELEASE_CHANNEL: "prerelease",
+          RELEASE_MANIFEST_DIR: manifestDir,
+          RELEASE_OUTPUTS_PATH: outputsPath,
+          RELEASE_PUBLIC_ORIGIN: "https://releases.example.test",
+          RELEASE_SIGNED: "true",
+          RELEASE_STORAGE_ACCESS_KEY_ID: "test-access-key",
+          RELEASE_STORAGE_BUCKET: fixture.bucket,
+          RELEASE_STORAGE_ENDPOINT: fixture.endpointUrl,
+          RELEASE_STORAGE_REGION: "auto",
+          RELEASE_STORAGE_SECRET_ACCESS_KEY: "test-secret-key",
+          RELEASE_TARGET: target,
+          RELEASE_VERSION: version,
+        },
+      },
+    );
+
+    try {
+      await writeMacAssets("arm64");
+      await publish("mac_arm64");
+      await writeMacAssets("x64");
+      await publish("mac_x64");
+
+      expect(fixture.object(`${versionPrefix}/latest-mac.yml`)).toEqual(Buffer.from("arch: x64\n"));
+      expect(fixture.object(`${versionPrefix}/platforms/mac_arm64.json`)).not.toBeNull();
+      expect(fixture.object(`${versionPrefix}/platforms/mac_x64.json`)).not.toBeNull();
+    } finally {
+      await fixture.close();
+      await rm(runnerTemp, { force: true, recursive: true });
+    }
+  });
+
   it("rejects stale latest platform manifests from a previous beta version", async () => {
     const fixture = await startReleaseMetadataObjectStore({});
     const runnerTemp = await mkdtemp(join(tmpdir(), "od-release-betas-metadata-"));

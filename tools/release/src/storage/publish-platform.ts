@@ -34,6 +34,7 @@ type TargetConfig = {
   platform: "mac" | "win" | "linux";
   reportDirectory: string | null;
   signed: boolean;
+  sharedAssetNames: string[];
 };
 
 const target = requiredTarget();
@@ -238,6 +239,7 @@ function targetConfig(): TargetConfig {
       platform: "mac",
       reportDirectory: target,
       signed: bool("RELEASE_SIGNED"),
+      sharedAssetNames: feed == null ? [] : [feed.name],
     };
   }
   if (target === "win_x64") {
@@ -265,6 +267,7 @@ function targetConfig(): TargetConfig {
       platform: "win",
       reportDirectory: target,
       signed: bool("RELEASE_SIGNED"),
+      sharedAssetNames: ["latest.yml"],
     };
   }
 
@@ -279,12 +282,21 @@ function targetConfig(): TargetConfig {
     platform: "linux",
     reportDirectory: target,
     signed: false,
+    sharedAssetNames: [],
   };
 }
 
 const config = targetConfig();
+const sharedAssetNames = new Set(config.sharedAssetNames);
 for (const name of config.assetNames) {
+  if (sharedAssetNames.has(name)) continue;
   await uploadImmutableAsset(join(releaseAssetsDir, name), `${versionPrefix}/${name}`);
+}
+// macOS architectures publish different updater feeds to the same versioned
+// key. Keep that existing last-writer behavior separate from immutable
+// architecture-specific release artifacts and their checksums.
+for (const name of config.sharedAssetNames) {
+  await upload(join(releaseAssetsDir, name), `${versionPrefix}/${name}`, "public, max-age=31536000, immutable");
 }
 
 const report = config.reportDirectory == null ? null : await uploadReport(config.reportDirectory);
