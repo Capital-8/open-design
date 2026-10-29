@@ -368,7 +368,8 @@ describe('App project list across a workspace switch', () => {
 
     render(<App />);
     await waitFor(() => expect(screen.getByTestId(`entry-project-${WORKSPACE_A_PROJECT.id}`)).toBeTruthy());
-    expect(screen.getByTestId('entry-project-locally-shared').textContent).toBe('Just moved to team');
+    expect(screen.getByText('Just moved to team').closest('[data-testid]')?.getAttribute('data-testid'))
+      .toBe('entry-project-locally-shared');
   });
 
   it('never renders the previous workspace\'s projects while the new list is in flight', async () => {
