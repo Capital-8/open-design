@@ -43,7 +43,7 @@ beforeEach(async () => {
   await mkdir(path.join(folder, 'examples', 'wrapped'), { recursive: true });
   await writeFile(
     path.join(folder, 'preview', 'index.html'),
-    '<!DOCTYPE html><title>preview</title><p>preview body</p><script>const CFG={image:"assets/dynamic.svg"};if(CFG.image.startsWith("assets/")){const image=new Image();image.src=CFG.image}</script>',
+    '<!DOCTYPE html><!-- <head> --><head data-note=">"><title>preview</title></head><p>preview body</p><script>const CFG={image:"assets/dynamic.svg"};if(CFG.image.startsWith("assets/")){const image=new Image();image.src=CFG.image}</script>',
   );
   await writeFile(
     path.join(folder, 'examples', 'desk-warm', 'index.html'),
@@ -156,6 +156,8 @@ describe('GET /api/plugins/:id/preview', () => {
     const body = await resp.text();
     const href = /<base\b[^>]*href=["']([^"']+)["']/i.exec(body)?.[1];
     expect(href).toBe(`/api/plugins/${encodeURIComponent(PLUGIN_ID)}/asset/preview/`);
+    expect(body).toContain('<!-- <head> -->');
+    expect(body).toContain(`<head data-note=">"><base href="${href}">`);
     expect(body).toContain('CFG={image:"assets/dynamic.svg"}');
     const imageUrl = new URL('assets/dynamic.svg', new URL(href!, resp.url));
     expect(imageUrl.pathname).toBe(`/api/plugins/${encodeURIComponent(PLUGIN_ID)}/asset/preview/assets/dynamic.svg`);

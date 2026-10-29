@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import type * as BetterSqlite3 from 'better-sqlite3';
 import path from 'node:path';
+import { findRealTagEnd, HTML_TAG_PATTERNS, prependAfterDoctype } from '@open-design/contracts/runtime/html-injection-points';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import {
   resolveOptionalLocalWorkspaceRequestAuthority,
@@ -286,10 +287,9 @@ export function registerPluginAssetRoutes(app: Express, deps: RegisterPluginAsse
     // untouched (templates also use them to identify image fields).
     const directory = safeBase ? `${safeBase.split('/').map(encodeURIComponent).join('/')}/` : '';
     const base = `<base href="/api/plugins/${encodeURIComponent(pluginId)}/asset/${directory}">`;
-    if (/<head\b[^>]*>/i.test(rewritten)) {
-      return rewritten.replace(/<head\b[^>]*>/i, head => `${head}${base}`);
-    }
-    return rewritten.replace(/^(\s*<!doctype[^>]*>)?/i, prefix => `${prefix}${base}`);
+    const headEnd = findRealTagEnd(rewritten, HTML_TAG_PATTERNS.headOpen);
+    if (headEnd >= 0) return rewritten.slice(0, headEnd) + base + rewritten.slice(headEnd);
+    return prependAfterDoctype(rewritten, base);
   }
 
   function collectPluginPreviewCandidates(plugin: InstalledPluginLike): string[] {
