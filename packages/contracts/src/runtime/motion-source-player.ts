@@ -54,7 +54,7 @@ function createMotionAudioSync(audio) {
 // Shared by URL previews, srcdoc previews and the persisted editable source.
 // The renderer installs its flag before author scripts; it never sees chrome,
 // layout scaling, poster seeking, or wall-clock playback from this runtime.
-const PLAYER = `<script data-od-motion-source-player="9">
+const PLAYER = `<script data-od-motion-source-player="10">
 ${MOTION_TIMELINE_CHECK_SCRIPT}
 (function () {
 ${MOTION_AUDIO_SYNC_RUNTIME}
@@ -119,13 +119,13 @@ ${MOTION_AUDIO_SYNC_RUNTIME}
     var fitStyle = document.createElement('style');
     fitStyle.textContent = 'html,body{width:100% !important;height:100% !important;margin:0 !important;overflow:hidden !important}';
     document.head.appendChild(fitStyle);
-    // The stage owns viewport fitting. Author viewport units and fit() transforms
-    // must not apply a second scale inside that already-scaled stage.
+    // Only opt-in compositions delegate their root layout to the stage. Legacy
+    // sources keep their own centering contract and deferred fit() callbacks.
     var rootLayout = {position:'absolute', left:'0', top:'0', width:width+'px', height:height+'px', maxWidth:'none', maxHeight:'none', margin:'0', transform:'none'};
     var stage = document.createElement('div');
     root.parentNode.insertBefore(stage, root); stage.appendChild(root);
     function fit() {
-      Object.keys(rootLayout).forEach(function (key) {
+      if (root.dataset.odMotionLayout === 'stage') Object.keys(rootLayout).forEach(function (key) {
         var property = key.replace(/[A-Z]/g, function (letter) { return '-' + letter.toLowerCase(); });
         root.style.setProperty(property, rootLayout[key], 'important');
       });
@@ -205,7 +205,7 @@ export function injectMotionSourcePlayer(html: string): string {
   const existing = findRealTagOffset(html, /<script\b[^>]*\bdata-od-motion-source-player\b/i);
   if (existing >= 0) {
     const script = /^<script\b[^>]*>[\s\S]*?<\/script\s*>/i.exec(html.slice(existing));
-    if (!script || /data-od-motion-source-player="9"/.test(script[0])) return html;
+    if (!script || /data-od-motion-source-player="10"/.test(script[0])) return html;
     return html.slice(0, existing) + PLAYER + html.slice(existing + script[0].length);
   }
   const end = findRealTagOffset(html, HTML_TAG_PATTERNS.bodyClose);

@@ -3,10 +3,10 @@ import { runInNewContext } from 'node:vm';
 import { injectMotionSourcePlayer, markMotionFrameRender } from '../src/runtime/motion-source-player';
 
 describe('motion source player boundaries', () => {
-  it('fits the authored composition once and restores it after author resize handlers', () => {
+  it.each([true, false])('preserves the root layout contract (stage opt-in: %s)', (stageLayout) => {
     const properties: Record<string, string> = {};
     const root = {
-      dataset: { width: '1080', height: '1080', compositionId: 'main' },
+      dataset: { width: '1080', height: '1080', compositionId: 'main', ...(stageLayout ? { odMotionLayout: 'stage' } : {}) },
       style: { setProperty: (key: string, value: string) => { properties[key] = value; } },
       parentNode: { insertBefore() {} },
     };
@@ -28,15 +28,23 @@ describe('motion source player boundaries', () => {
       },
     };
     const html = injectMotionSourcePlayer('<meta name="od-motion-output" content="video"><main data-composition-id="main"></main>');
-    const code = /<script data-od-motion-source-player="9">([\s\S]*?)<\/script>/.exec(html)![1]!;
+    const code = /<script data-od-motion-source-player="10">([\s\S]*?)<\/script>/.exec(html)![1]!;
     runInNewContext(code, Object.assign(sandbox, { window: sandbox }));
-    expect(properties).toMatchObject({ width: '1080px', height: '1080px', left: '0', top: '0', transform: 'none' });
+    if (stageLayout) expect(properties).toMatchObject({ width: '1080px', height: '1080px', left: '0', top: '0', transform: 'none' });
+    else expect(properties).toEqual({});
     expect(elements[2]!.style.cssText).toContain('left:350px;top:0px;');
+    // Legacy authors run a deferred fit() after host boot. Its centering must
+    // remain paired with the author's 50% CSS offsets, untouched by the host.
+    if (!stageLayout) {
+      properties.transform = 'translate(-50%,-50%)';
+      expect(properties.left).toBeUndefined();
+      expect(properties.top).toBeUndefined();
+    }
     // An author fit() callback ran before the host's resize callback.
     properties.transform = 'translate(-50%,-50%) scale(.5)';
     sandbox.innerWidth = 900; sandbox.innerHeight = 1600;
     listeners.resize!();
-    expect(properties.transform).toBe('none');
+    expect(properties.transform).toBe(stageLayout ? 'none' : 'translate(-50%,-50%) scale(.5)');
     expect(elements[2]!.style.cssText).toContain('left:0px;top:350px;');
   });
   it('leaves ordinary documents and code samples unchanged', () => {
@@ -76,7 +84,7 @@ describe('motion audio contract isolation', () => {
     const source = '<meta name="od-motion-output" content="video"><div data-composition-id="main"></div><script data-od-motion-source-player="6">oldPlayer();</script>';
     const result = injectMotionSourcePlayer(source);
     expect(result).not.toContain('oldPlayer');
-    expect(result).toContain('data-od-motion-source-player="9"');
+    expect(result).toContain('data-od-motion-source-player="10"');
     expect(injectMotionSourcePlayer(result)).toBe(result);
   });
 });
