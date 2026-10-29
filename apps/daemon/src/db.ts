@@ -124,6 +124,7 @@ function migrate(db: SqliteDb): void {
       resource_state TEXT NOT NULL CHECK (resource_state IN ('active', 'frozen', 'deleted')),
       created_by_workspace_member_id TEXT,
       updated_by_workspace_member_id TEXT,
+      transferred_from_workspace_member_id TEXT,
       resource_hub_resource_id TEXT,
       cloud_tombstoned_at INTEGER,
       sync_state TEXT,
@@ -466,6 +467,9 @@ function migrate(db: SqliteDb): void {
     db.exec(
       `ALTER TABLE workspace_projects ADD COLUMN metadata_refresh_pending INTEGER NOT NULL DEFAULT 0`,
     );
+  }
+  if (!migratedWorkspaceProjectCols.some((c: DbRow) => c.name === 'transferred_from_workspace_member_id')) {
+    db.exec(`ALTER TABLE workspace_projects ADD COLUMN transferred_from_workspace_member_id TEXT`);
   }
   const conversationCols = db.prepare(`PRAGMA table_info(conversations)`).all() as DbRow[];
   if (!conversationCols.some((c: DbRow) => c.name === 'session_mode')) {
@@ -1212,6 +1216,7 @@ export function getWorkspaceProject(db: SqliteDb, workspaceId: string, projectId
               resource_state AS resourceState,
               created_by_workspace_member_id AS createdByWorkspaceMemberId,
               updated_by_workspace_member_id AS updatedByWorkspaceMemberId,
+              transferred_from_workspace_member_id AS transferredFromWorkspaceMemberId,
               resource_hub_resource_id AS resourceHubResourceId,
               cloud_tombstoned_at AS cloudTombstonedAt,
               sync_state AS syncState,
@@ -1323,6 +1328,7 @@ export function getWorkspaceProjectByProjectId(db: SqliteDb, projectId: string) 
               resource_state AS resourceState,
               created_by_workspace_member_id AS createdByWorkspaceMemberId,
               updated_by_workspace_member_id AS updatedByWorkspaceMemberId,
+              transferred_from_workspace_member_id AS transferredFromWorkspaceMemberId,
               resource_hub_resource_id AS resourceHubResourceId,
               cloud_tombstoned_at AS cloudTombstonedAt,
               sync_state AS syncState,
