@@ -30,37 +30,50 @@ it('shows actual saved conversations newest first and opens the exact conversati
   expect(onOpenConversation).toHaveBeenCalledWith('p1', 'c1');
 });
 
-it('opens the section and immediately shows newly created chats from the live model', async () => {
+// A conversation shows once (per product): in 对话 only while its project holds
+// nothing else. A second conversation makes the project a 项目 folder, and both
+// conversations leave this list for it.
+it('lists a single-conversation project here, and hands it to 项目 once it holds two', async () => {
   localStorage.setItem('od.entry.railRecentOpen', 'false');
   const model: RailConversationModel = {
     projectId: 'p1', conversations: [chat('c1', 'Current', 1)], activeConversationId: 'c1',
     creating: false, onCreate: vi.fn(), onSelect: vi.fn(),
   };
   const { rerender } = render(<RailConversationsSection projects={projects} model={model} />);
-  rerender(<RailConversationsSection projects={projects} model={{ ...model, activeConversationId: 'c2', conversations: [...model.conversations, chat('c2', 'New chat', 2)] }} />);
-  expect(screen.getByRole('button', { name: 'New chat' }).getAttribute('aria-current')).toBe('page');
+  expect(screen.getByRole('button', { name: 'Current' }).getAttribute('aria-current')).toBe('page');
   fireEvent.click(screen.getByRole('button', { name: 'Current' }));
   expect(model.onSelect).toHaveBeenCalledWith('c1');
-  await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
-  expect(listConversations.mock.calls[0]?.[0]).toBe('p2');
+  rerender(<RailConversationsSection projects={projects} model={{ ...model, activeConversationId: 'c2', conversations: [...model.conversations, chat('c2', 'New chat', 2)] }} />);
+  expect(screen.queryByRole('button', { name: 'Current' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'New chat' })).toBeNull();
+  // Only the other project is read; the live one comes from the model.
+  await waitFor(() => expect(listConversations).toHaveBeenCalled());
+  expect(new Set(listConversations.mock.calls.map(call => call[0]))).toEqual(new Set(['p2']));
 });
 
-it('loads only when expanded and supports retry after a failed read', async () => {
+// Collapsed, it still reads: the counts decide which projects are 项目 folders.
+it('reads while collapsed and supports retry after a failed read', async () => {
   localStorage.setItem('od.entry.railRecentOpen', 'false');
-  listConversations.mockRejectedValueOnce(new Error('offline')).mockResolvedValue([chat('c1', 'Recovered', 1)]);
+  listConversations.mockRejectedValueOnce(new Error('offline'))
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue([chat('c1', 'Recovered', 1)]);
   render(<RailConversationsSection projects={[projects[0]!]} />);
-  expect(listConversations).not.toHaveBeenCalled();
+  await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
   fireEvent.click(screen.getByTestId('entry-nav-conversations-toggle'));
   fireEvent.click(await screen.findByRole('button', { name: 'preview.retry' }));
   await screen.findByRole('button', { name: 'Recovered' });
 });
 
 it('keeps the selected older conversation visible in the compact list', async () => {
+  // Fourteen single-conversation projects: each is a 对话 row.
+  const many = Array.from({ length: 14 }, (_, i) => ({ id: `p${i}`, name: `Project ${i}` })) as Project[];
+  listConversations.mockImplementation(async (id: string) => [chat(`c${id.slice(1)}`, `Chat ${id.slice(1)}`, Number(id.slice(1)) + 1)]);
   const model: RailConversationModel = {
-    projectId: 'p1', conversations: Array.from({ length: 14 }, (_, i) => chat(`c${i}`, `Chat ${i}`, i + 1)),
+    projectId: 'p0', conversations: [chat('c0', 'Chat 0', 1)],
     activeConversationId: 'c0', creating: false, onCreate: vi.fn(), onSelect: vi.fn(),
   };
-  render(<RailConversationsSection projects={[projects[0]!]} model={model} />);
+  render(<RailConversationsSection projects={many} model={model} />);
+  await screen.findByRole('button', { name: 'Chat 13' });
   expect(screen.getByRole('button', { name: 'Chat 0' }).getAttribute('aria-current')).toBe('page');
   expect(rowButtons()).toHaveLength(12);
   await waitFor(() => expect(screen.queryByText('common.loading')).toBeNull());

@@ -36,6 +36,8 @@ import type {
 } from '@open-design/contracts';
 import { DesignSystemPicker } from './DesignSystemPicker';
 import type { SkillSummary } from '../types';
+import { useInlineLeadChip } from './useInlineLeadChip';
+import { ComposerBeam, useComposerBeam } from './home-hero/ComposerBeam';
 import { Icon, type IconName } from './Icon';
 import {
   FileTypeIcon,
@@ -426,12 +428,10 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   const [mentionTab, setMentionTab] = useState<HomeMentionTab>('all');
   const [hoveredPlugin, setHoveredPlugin] = useState<InstalledPluginRecord | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  // Border beam on the prompt card (styles/home/composer-beam.css). Mirrors
-  // border-beam's own active/fading contract so blur fades the light out over
-  // 0.5s instead of cutting it; `fading` clears when that keyframe ends.
-  const [beamPhase, setBeamPhase] = useState<'idle' | 'active' | 'fading'>('idle');
+  // Border beam on the prompt card (shared with the project composer).
+  const beam = useComposerBeam();
   /* Does the composer card hold focus? Drives the docked bar's unfold (below).
-     Its own state rather than a read of `beamPhase`: that one is an ANIMATION
+     Its own state rather than a read of `beam.phase`: that one is an ANIMATION
      lifecycle (active -> fading -> idle) and lingers through the fade-out, so
      the bar would stay open for half a second after the caret left. */
   const [composerFocused, setComposerFocused] = useState(false);
@@ -444,7 +444,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
      the composer card's `onPointerDownCapture`): the caret is often still in
      the field when the user clicks back, and then no focus event fires. */
   const [forcedCollapsed, setForcedCollapsed] = useState(false);
-  const beamRef = useRef<HTMLDivElement | null>(null);
   const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
   const [projectReferenceOpen, setProjectReferenceOpen] = useState(false);
   const [figmaHelpOpen, setFigmaHelpOpen] = useState(false);
@@ -467,29 +466,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   // The scenario the placeholder carousel is currently showing. A Send on an
   // empty composer submits THIS scenario's text + template (see handleSend).
   const [carouselScenario, setCarouselScenario] = useState<PlaceholderScenario | null>(null);
-  // The beam's light rides `offset-path`, and a `path()` cannot be written in
-  // terms of the element's own size — border-beam measures the box in JS for
-  // exactly this reason. A ResizeObserver (rather than the original's window
-  // resize listener) also catches the card growing as the prompt wraps.
-  useEffect(() => {
-    const node = beamRef.current;
-    if (!node) return;
-    const syncPath = () => {
-      node.style.setProperty(
-        '--beam-path',
-        `path("M 0 0 H ${node.offsetWidth} V ${node.offsetHeight} H 0 V 0")`,
-      );
-    };
-    syncPath();
-    // jsdom has no ResizeObserver; the one sync above is the whole answer in a
-    // test render, where nothing resizes. Guarded the same way the row-measure
-    // observer further down already is — unguarded, this throws out of a
-    // passive effect and takes the whole HomeHero render with it.
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(syncPath);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [beamPhase]);
   const editorRef = useRef<LexicalComposerInputHandle | null>(null);
   const promptEditorRef = useRef<HTMLDivElement | null>(null);
   // A single-line chip row leads the prompt's FIRST line and every wrapped line
@@ -1427,56 +1403,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     contextOnlyPlugins.length > 0 ||
     contextOnlyMcpServers.length > 0 ||
     contextOnlyConnectors.length > 0;
-  useEffect(() => {
-    const flow = promptFlowRef.current;
-    if (!flow) return;
-    const clear = () => {
-      flow.classList.remove('is-chip-inline');
-      flow.style.removeProperty('--home-hero-chip-w');
-      flow.style.removeProperty('--home-hero-chip-text-left');
-      flow.style.removeProperty('--home-hero-chip-lead');
-    };
-    const row = chipRowRef.current;
-    if (!row) {
-      clear();
-      return;
-    }
-    if (typeof ResizeObserver === 'undefined') return;
-    const apply = () => {
-      const rect = row.getBoundingClientRect();
-      // Inline mode only fits a SINGLE line of chips: the row is taken out of
-      // flow there, so a wrapped (multi-line) row would overlap the prompt text
-      // instead of pushing it down. Anything taller falls back to the stacked
-      // row above the editor.
-      if (rect.width <= 0 || rect.height > 36) {
-        clear();
-        return;
-      }
-      // Wrapped lines align with the chip's own content edge (its icon), not
-      // its border box — measured so a padding/border change can't desync it.
-      const content = row.querySelector('.home-hero__active-icon, .home-hero__active-label');
-      const textLeft = content ? content.getBoundingClientRect().left - rect.left : 0;
-      // The chip is taller than one line of prompt text, so both starting at the
-      // flow's top would leave the first line riding high against it. Drop the
-      // text by half the difference instead of lifting the chip: a negative
-      // offset would be clipped by this flow's own `overflow`.
-      const editable = flow.querySelector('.composer-editable, [contenteditable="true"]');
-      const lineHeight = editable ? parseFloat(getComputedStyle(editable).lineHeight) : Number.NaN;
-      const lead = Number.isFinite(lineHeight) ? Math.max(0, (rect.height - lineHeight) / 2) : 0;
-      flow.style.setProperty('--home-hero-chip-w', `${rect.width}px`);
-      flow.style.setProperty('--home-hero-chip-text-left', `${Math.max(0, textLeft)}px`);
-      flow.style.setProperty('--home-hero-chip-lead', `${lead}px`);
-      flow.classList.add('is-chip-inline');
-    };
-    apply();
-    if (typeof ResizeObserver === 'undefined') return clear;
-    const observer = new ResizeObserver(apply);
-    observer.observe(row);
-    return () => {
-      observer.disconnect();
-      clear();
-    };
-  }, [showActivePluginRow]);
+  useInlineLeadChip(promptFlowRef, chipRowRef, showActivePluginRow, '--home-hero-chip');
   /* Headline: a locale opts into the rotating noun by writing `{word}` into
      its own `homeHero.title`. Splitting on the placeholder keeps the whole
      sentence — particles, punctuation, word order — inside the translation
@@ -1719,16 +1646,8 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
           authoringLayoutActive ? ' home-hero__input-card--compact-authoring' : ''
         }${dragActive ? ' is-drag-active' : ''}`}
         style={inputCardStyle}
-        onFocus={() => {
-          setBeamPhase('active');
-        }}
-        onBlur={(event) => {
-          // focusout bubbles; ignore focus moving BETWEEN the card's own
-          // controls (editor → plus menu → send button).
-          const next = event.relatedTarget;
-          if (next instanceof Node && event.currentTarget.contains(next)) return;
-          setBeamPhase((phase) => (phase === 'active' ? 'fading' : phase));
-        }}
+        onFocus={beam.onFocus}
+        onBlur={beam.onBlur}
         onDragEnter={(event) => {
           if (event.dataTransfer.types.includes('Files')) setDragActive(true);
         }}
@@ -2496,23 +2415,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             </button>
           </div>
         </div>
-        {beamPhase === 'idle' ? null : (
-          <div
-            ref={beamRef}
-            className="home-hero__composer-beam"
-            data-beam="composer"
-            data-active={beamPhase === 'active' ? '' : undefined}
-            data-fading={beamPhase === 'fading' ? '' : undefined}
-            aria-hidden
-            onAnimationEnd={(event) => {
-              if (event.animationName.includes('beam-fade-out')) setBeamPhase('idle');
-            }}
-          >
-            {/* The travelling light — a real node, since it carries its own
-                offset-path animation. */}
-            <div data-beam-bloom />
-          </div>
-        )}
+        <ComposerBeam phase={beam.phase} onFaded={() => beam.setPhase('idle')} />
       </div>
 
       {/* Accessory row under the composer card: just the working directory now

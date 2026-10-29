@@ -24,6 +24,7 @@ import { Icon } from '../Icon';
 import { hasRunStatusGlyph, ProjectRunStatusIcon } from '../ProjectRunStatusIcon';
 import { STATUS_LABEL_KEYS } from '../../state/projectRunStatus';
 import { exportProjectAsZip } from '../../runtime/exports';
+import { shareProjectToTeam } from '../../state/projectShareRequest';
 import { fetchProjectFiles } from '../../providers/registry';
 import { workspaceIdentityCacheKey } from '../../collab/workspace-identity';
 import {
@@ -104,22 +105,11 @@ export function MoreDotsMark() {
  * neither glyph exists in the shared icon set — `pencil`/`trash` are close but
  * not these drawings, and product asked for these.
  */
-/** 新建会话's speech-bubble mark, shared by the rail's create row and the
- *  project folders' hover action. */
+/** 新建会话's speech-bubble mark for the rail's create row. */
 export function NewConversationMark() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden focusable="false">
       <path d="M2 8.99374C2 5.68349 4.67654 3 8.00066 3H15.9993C19.3134 3 22 5.69478 22 8.99374V21H8.00066C4.68659 21 2 18.3052 2 15.0063V8.99374ZM20 19V8.99374C20 6.79539 18.2049 5 15.9993 5H8.00066C5.78458 5 4 6.78458 4 8.99374V15.0063C4 17.2046 5.79512 19 8.00066 19H20ZM14 11H16V13H14V11ZM8 11H10V13H8V11Z" />
-    </svg>
-  );
-}
-
-/** The project folders' hover 新建会话 action (supplied artwork; Remix's
- *  `edit-line`). */
-export function NewConversationActionMark() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden focusable="false">
-      <path d="M6.41421 15.89L16.5563 5.74785L15.1421 4.33363L5 14.4758V15.89H6.41421ZM7.24264 17.89H3V13.6473L14.435 2.21231C14.8256 1.82179 15.4587 1.82179 15.8492 2.21231L18.6777 5.04074C19.0682 5.43126 19.0682 6.06443 18.6777 6.45495L7.24264 17.89ZM3 19.89H21V21.89H3V19.89Z" />
     </svg>
   );
 }
@@ -162,12 +152,15 @@ export function RailRecentRow({
   runStatus,
   showLeadingIcon = true,
   expanded,
+  selected = false,
   onOpen,
   onRename,
+  onDuplicate,
   onDelete,
-  onNewConversation,
-  newConversationDisabled = false,
 }: {
+  /** The open project, shown as the rail's current item (an empty project
+   *  folder has no conversation row to carry that state). */
+  selected?: boolean;
   project: Project;
   workspaceContext?: WorkspaceCollabContext | null;
   /** This project's live run status, when it has one (per product: 如果有项目在
@@ -178,11 +171,8 @@ export function RailRecentRow({
   expanded?: boolean;
   onOpen?: (id: string) => void | Promise<unknown>;
   onRename?: (id: string, name: string) => void;
+  onDuplicate?: (id: string) => Promise<void> | void;
   onDelete?: (id: string) => Promise<boolean | void> | boolean | void;
-  /** Project folders only: a hover action beside the ⋮ that starts a new
-   *  conversation in this project. */
-  onNewConversation?: () => void;
-  newConversationDisabled?: boolean;
 }) {
   const t = useT();
   const snapshotKey = projectCoverSnapshotKey(
@@ -312,7 +302,7 @@ export function RailRecentRow({
   return (
     <div
       ref={rootRef}
-      className={`entry-nav-rail__recent-row${onNewConversation ? ' has-new-conversation' : ''}`}
+      className="entry-nav-rail__recent-row"
       onPointerEnter={(event) => {
         // Touch has no hover to leave; the panel would stick until the next tap.
         if (event.pointerType !== 'mouse' && event.pointerType !== 'pen') return;
@@ -355,7 +345,8 @@ export function RailRecentRow({
       ) : (
         <button
           type="button"
-          className={`entry-nav-rail__recent-item${opening ? ' is-active' : ''}`}
+          className={`entry-nav-rail__recent-item${opening || selected ? ' is-active' : ''}`}
+          aria-current={selected ? 'page' : undefined}
           aria-busy={opening || undefined}
           onClick={() => {
             if (!onOpen || opening) return;
@@ -396,21 +387,6 @@ export function RailRecentRow({
           )}
         </button>
       )}
-      {onNewConversation && !renaming ? (
-        <button
-          type="button"
-          className="entry-nav-rail__recent-more entry-nav-rail__recent-new-conversation"
-          aria-label={t('entry.newConversation')}
-          disabled={newConversationDisabled}
-          data-testid="entry-nav-recent-new-conversation"
-          onClick={(event) => {
-            event.stopPropagation();
-            onNewConversation();
-          }}
-        >
-          <NewConversationActionMark />
-        </button>
-      ) : null}
       {onRename || onDelete ? (
         <button
           type="button"
@@ -461,6 +437,35 @@ export function RailRecentRow({
               <span>{t('designs.menuRename')}</span>
             </button>
           ) : null}
+          {/* Duplicate and Share mirror the open project's header menu (per
+              product: 项目里也会有), in the same order and with its glyphs. */}
+          {onDuplicate ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                releasePopup(project.id, 'menu');
+                void onDuplicate(project.id);
+              }}
+            >
+              <RemixIcon name="file-copy-line" size={14} />
+              <span>{t('workspace.copyProject')}</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              releasePopup(project.id, 'menu');
+              void shareProjectToTeam(project.id, workspaceContext).then((shared) => {
+                // Nothing to share yet: land on the project instead of a dead click.
+                if (!shared) void onOpen?.(project.id);
+              });
+            }}
+          >
+            <RemixIcon name="share-forward-line" size={14} />
+            <span>{t('workspace.shareToTeam')}</span>
+          </button>
           {/* Export sits between Rename and Delete (per product: 增加一个导出，
               在删除上边). It is the ONE export a list row can honestly offer:
               the project is not open here, so there is no rendered file to turn

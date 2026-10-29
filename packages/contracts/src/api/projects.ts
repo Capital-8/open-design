@@ -128,6 +128,11 @@ export interface ProjectMetadata {
   // GPU / off-main-thread scenario cards — analytics-only discriminators for the
   // powered-artifact chips.
   intent?: 'live-artifact' | 'web-clone' | 'document' | 'webgl-experience' | 'worker-visualizer';
+  /** How the rail files this project. `project`: made with 新建项目, so it is
+   *  always a folder in 项目 with its conversations inside, however many it
+   *  holds. Absent: a conversation's own project (Home send / 新建会话), shown
+   *  as a 对话 row while it holds a single conversation. */
+  railKind?: 'project';
   fidelity?: 'wireframe' | 'high-fidelity';
   speakerNotes?: boolean;
   slideCount?: string;

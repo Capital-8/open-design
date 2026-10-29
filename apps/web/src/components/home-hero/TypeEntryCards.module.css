@@ -10,7 +10,9 @@
 /* Wide type cards on the left, the tall image card on the right. */
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+  /* Keep the image entry legible when a conversation pane is resized. The
+     left stack takes the remaining space until the narrow layout takes over. */
+  grid-template-columns: minmax(0, 1.9fr) minmax(260px, 1fr);
   align-items: stretch;
   gap: 8px;
 }

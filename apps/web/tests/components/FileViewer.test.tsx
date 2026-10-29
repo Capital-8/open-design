@@ -2835,7 +2835,7 @@ describe('FileViewer SVG artifacts', () => {
     expect(dock.childElementCount).toBe(0);
   });
 
-  it('switches between the external comment dock and embedded editor', async () => {
+  it('switches between the in-preview comment dock and embedded editor', async () => {
     const file = baseFile({ name: 'comment-dock.html', path: 'comment-dock.html', mime: 'text/html', kind: 'html' });
     const viewer = (active: boolean) => (
       <WorkspaceEditLayout>
@@ -2848,13 +2848,18 @@ describe('FileViewer SVG artifacts', () => {
     const dock = screen.getByTestId('workspace-edit-dock');
     const comments = screen.getByTestId('comment-panel-toggle');
     const edit = screen.getByTestId('manual-edit-mode-toggle');
+    const inPreview = async () => {
+      const panel = await screen.findByTestId('comment-side-panel');
+      expect(panel.closest('[data-testid="comment-preview-layout"]')).not.toBeNull();
+      return panel;
+    };
     fireEvent.click(comments);
-    expect(await within(dock).findByTestId('comment-side-panel')).toBeVisible();
+    expect(await inPreview()).toBeVisible();
     expect(screen.getAllByTestId('comment-side-panel')).toHaveLength(1);
-    expect(screen.getByTestId('comment-preview-layout')).not.toHaveClass('comment-preview-layer-with-side-dock');
-    const separator = screen.getByRole('separator');
-    fireEvent.keyDown(separator, { key: 'ArrowLeft' });
-    expect(separator).toHaveAttribute('aria-valuenow', '330');
+    expect(screen.getByTestId('comment-preview-layout')).toHaveClass('comment-preview-layer-with-side-dock');
+    expect(dock).not.toBeVisible();
+    expect(dock.childElementCount).toBe(0);
+    expect(screen.queryByRole('separator')).toBeNull();
 
     fireEvent.click(edit);
     expect(await screen.findByRole('complementary', { name: 'Manual editor' })).toBeVisible();
@@ -2864,19 +2869,17 @@ describe('FileViewer SVG artifacts', () => {
     expect(screen.queryByRole('separator')).toBeNull();
 
     fireEvent.click(comments);
-    expect(await within(dock).findByTestId('comment-side-panel')).toBeVisible();
+    expect(await inPreview()).toBeVisible();
     expect(screen.queryByRole('complementary', { name: 'Manual editor' })).toBeNull();
-    expect(within(dock).queryByRole('button', { name: 'Close edit panel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Close edit panel' })).toBeNull();
     expect(edit).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '330');
     view.rerender(viewer(false));
-    await waitFor(() => expect(dock).not.toBeVisible());
+    await waitFor(() => expect(screen.queryByTestId('comment-side-panel')).toBeNull());
     expect(dock.childElementCount).toBe(0);
-    expect(screen.queryByRole('separator')).toBeNull();
     view.rerender(viewer(true));
     fireEvent.click(screen.getByTestId('comment-panel-toggle'));
-    expect(await within(dock).findByTestId('comment-side-panel')).toBeVisible();
-    expect(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '330');
+    expect(await inPreview()).toBeVisible();
+    expect(screen.queryByRole('separator')).toBeNull();
   });
 
   it.each(['Save', 'Cancel'])('returns the embedded editor to page settings after %s and can close and reopen it', async (action) => {
@@ -3023,7 +3026,7 @@ describe('FileViewer SVG artifacts', () => {
     await act(async () => saved.resolve(new Response(JSON.stringify({
       file: { name: 'dock-save.html', mtime: 2 },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
-    expect(await within(dock).findByTestId('comment-side-panel')).toBeVisible();
+    expect((await screen.findByTestId('comment-side-panel')).closest('[data-testid="comment-preview-layout"]')).not.toBeNull();
     expect(screen.getByTestId('manual-edit-mode-toggle')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('complementary', { name: 'Manual editor' })).toBeNull();
     expect(writes).toHaveLength(1);
@@ -3084,7 +3087,7 @@ describe('FileViewer SVG artifacts', () => {
       await waitFor(() => expect(frame.srcdoc).toContain('Edited inline child'));
     }
     fireEvent.click(screen.getByTestId('comment-panel-toggle'));
-    expect(await within(dock).findByTestId('comment-side-panel')).toBeVisible();
+    expect((await screen.findByTestId('comment-side-panel')).closest('[data-testid="comment-preview-layout"]')).not.toBeNull();
     expect(writes).toHaveLength(1);
     const saved = new DOMParser().parseFromString(persistedSource, 'text/html');
     if (change === 'padding') {
@@ -8638,7 +8641,8 @@ describe('FileViewer tweaks toolbar', () => {
     const firstDismiss = await screen.findByTestId('comment-side-panel');
     expect(firstDismiss.querySelector('.comment-side-header')).toBeNull();
     if (placement === 'workspace') {
-      expect(screen.getByTestId('workspace-edit-dock').contains(firstDismiss)).toBe(true);
+      expect(screen.getByTestId('comment-preview-layout').contains(firstDismiss)).toBe(true);
+      expect(screen.getByTestId('workspace-edit-dock').childElementCount).toBe(0);
       expect(screen.getByTestId('comment-float-host').childElementCount).toBe(0);
     }
     trigger.focus();

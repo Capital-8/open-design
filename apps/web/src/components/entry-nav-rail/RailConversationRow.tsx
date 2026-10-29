@@ -102,14 +102,20 @@ export function RailConversationRow({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') close();
     }
+    // Anything that moves the row strands the snapshot-anchored menu, so a
+    // scroll dismisses it — except the menu's own (the 移动到 list scrolls).
+    function onDocScroll(event: Event) {
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
+      close();
+    }
     document.addEventListener('pointerdown', onDocPointerDown);
     document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('scroll', close, true);
+    document.addEventListener('scroll', onDocScroll, true);
     window.addEventListener('resize', close);
     return () => {
       document.removeEventListener('pointerdown', onDocPointerDown);
       document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('scroll', close, true);
+      document.removeEventListener('scroll', onDocScroll, true);
       window.removeEventListener('resize', close);
     };
   }, [menuOpen, rowId]);

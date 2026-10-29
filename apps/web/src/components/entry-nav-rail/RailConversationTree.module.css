@@ -18,7 +18,9 @@
 .create:hover,
 .conversation:hover { background: var(--bg-subtle); }
 .create svg { flex-shrink: 0; }
-.children { list-style: none; margin: 0; padding: 0 0 0 28px; }
+/* 1px between the folder row and its first conversation, the same gap the
+   conversations keep between each other (per product). */
+.children { list-style: none; margin: 0; padding: 1px 0 0 28px; }
 .children li + li { margin-top: 1px; }
 .conversation {
   display: flex;

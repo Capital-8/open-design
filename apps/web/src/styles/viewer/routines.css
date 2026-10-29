@@ -4575,8 +4575,13 @@ body.od-quick-switcher-open .chat-composer-fixed-layer .composer-send:disabled:w
 .project-recent-rail__actions .entry-nav-rail__collapse {
   margin-left: 0;
 }
+/* Reserve the collapsed rail's search/toggle space with margin, not padding:
+   the dock is a native drag region later in the DOM than those buttons, and
+   Electron lets a later drag box override an earlier no-drag one, so any
+   overlap turns their clicks into window drags. */
 .workspace-shell--project:has(.project-recent-rail[data-open='false']) .split:not([data-conversation-placement='right']) .split-chat-tabs-dock {
-  padding-left: 80px;
+  padding-left: 0;
+  margin-left: 80px;
 }
 /* When the preview starts beside the collapsed rail, reserve the 72px
    search/toggle group plus an 8px gap before its file tabs. */
@@ -4592,7 +4597,7 @@ body.od-quick-switcher-open .chat-composer-fixed-layer .composer-send:disabled:w
   left: 76px;
 }
 .workspace-shell--desktop[data-host-platform='darwin']:has(.project-recent-rail[data-open='false']) .split:not([data-conversation-placement='right']) .split-chat-tabs-dock {
-  padding-left: 104px;
+  margin-left: 104px;
 }
 .workspace-shell--desktop[data-host-platform='darwin']:has(.project-recent-rail[data-open='false']) .split.split-focus [data-testid='workspace-tab-chrome'],
 .workspace-shell--desktop[data-host-platform='darwin']:has(.project-recent-rail[data-open='false']) .split[data-conversation-placement='right'] [data-testid='workspace-tab-chrome'] {

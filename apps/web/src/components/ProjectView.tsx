@@ -222,6 +222,7 @@ import type {
 import type {
   AgentEvent,
   AgentInfo,
+  ApiProtocol,
   AppConfig,
   Artifact,
   ChatAttachment,
@@ -317,6 +318,7 @@ import {
 import { SHARE_TO_COMMUNITY_PROMPT } from './share-to-community/shareToCommunityPrompt';
 import { CenteredLoader } from './Loading';
 import type { SettingsSection } from './SettingsDialog';
+import { InlineModelSwitcher } from './InlineModelSwitcher';
 import { Toast } from './Toast';
 import { FirstArtifactHint } from './FirstArtifactHint';
 import {
@@ -634,6 +636,7 @@ interface Props {
     choice: { model?: string; reasoning?: string; serviceTier?: string },
   ) => void;
   onApiModelChange?: (model: string) => void;
+  onApiProtocolChange?: (protocol: ApiProtocol) => void;
   onRefreshAgents: () => void;
   onOpenSettings: (section?: SettingsSection) => void;
   onOpenAmrSettings?: () => void;
@@ -705,6 +708,12 @@ const BRAND_EMPTY_TRANSCRIPT_RETRY_DELAYS_MS = [120, 500, 1_200, 2_000] as const
 const CHAT_PANEL_WIDTH_STORAGE_KEY = 'open-design.project.chatPanelWidth';
 const DEFAULT_CHAT_PANEL_WIDTH = 460;
 const MIN_CHAT_PANEL_WIDTH = 345;
+// While the empty conversation shows Home's opening beside the workspace, the
+// chat keeps the width that holds its two-up cards and postcard (the intro's
+// 560px container query, plus the log's 16px, the empty wrap's 12px and the
+// intro's 4px on each side). Dragging farther inward docks the composer.
+const HOME_MIN_CHAT_PANEL_WIDTH = 625;
+const CHAT_PANEL_COLLAPSE_OVERSHOOT = 96;
 const MAX_CHAT_PANEL_WIDTH = 720;
 const MIN_WORKSPACE_PANEL_WIDTH = 400;
 // Keep the chat and workspace cards 8px apart, including the resize gutter.
@@ -793,8 +802,6 @@ function hasGenericDisconnectFailureEvent(message: ChatMessage): boolean {
         event.detail === GENERIC_DAEMON_DISCONNECT_MESSAGE),
   );
 }
-const MIN_NORMAL_SPLIT_WIDTH =
-  MIN_CHAT_PANEL_WIDTH + SPLIT_RESIZE_HANDLE_WIDTH + MIN_WORKSPACE_PANEL_WIDTH;
 type DesignSystemReviewEntry = NonNullable<ProjectMetadata['designSystemReview']>[string];
 type DesignSystemReviewAgentTask = NonNullable<DesignSystemReviewEntry['agentTask']>;
 interface DesignSystemReviewDetails {
@@ -803,25 +810,28 @@ interface DesignSystemReviewDetails {
   agentTask?: DesignSystemReviewAgentTask;
 }
 
-function workspacePanelMinWidthForSplit(splitWidth: number): number {
+// Below the width that fits both minimums, the workspace gives up its minimum
+// so the chat column is never squeezed by it.
+function workspacePanelMinWidthForSplit(splitWidth: number, minChatWidth = MIN_CHAT_PANEL_WIDTH): number {
   if (!Number.isFinite(splitWidth) || splitWidth <= 0) return MIN_WORKSPACE_PANEL_WIDTH;
-  return splitWidth < MIN_NORMAL_SPLIT_WIDTH ? 0 : MIN_WORKSPACE_PANEL_WIDTH;
+  const minNormalSplitWidth = minChatWidth + SPLIT_RESIZE_HANDLE_WIDTH + MIN_WORKSPACE_PANEL_WIDTH;
+  return splitWidth < minNormalSplitWidth ? 0 : MIN_WORKSPACE_PANEL_WIDTH;
 }
 
-function maxChatPanelWidthForSplit(splitWidth: number): number {
+function maxChatPanelWidthForSplit(splitWidth: number, minChatWidth = MIN_CHAT_PANEL_WIDTH): number {
   if (!Number.isFinite(splitWidth) || splitWidth <= 0) return MAX_CHAT_PANEL_WIDTH;
-  const workspaceMinWidth = workspacePanelMinWidthForSplit(splitWidth);
+  const workspaceMinWidth = workspacePanelMinWidthForSplit(splitWidth, minChatWidth);
   const viewportAwareMax = splitWidth - SPLIT_RESIZE_HANDLE_WIDTH - workspaceMinWidth;
   return Math.max(0, Math.min(MAX_CHAT_PANEL_WIDTH, Math.floor(viewportAwareMax)));
 }
 
-function clampPreferredChatPanelWidth(width: number): number {
-  return Math.min(MAX_CHAT_PANEL_WIDTH, Math.max(MIN_CHAT_PANEL_WIDTH, Math.round(width)));
+function clampPreferredChatPanelWidth(width: number, minWidth = MIN_CHAT_PANEL_WIDTH): number {
+  return Math.min(MAX_CHAT_PANEL_WIDTH, Math.max(minWidth, Math.round(width)));
 }
 
-function clampChatPanelWidth(width: number, maxWidth = MAX_CHAT_PANEL_WIDTH): number {
+function clampChatPanelWidth(width: number, maxWidth = MAX_CHAT_PANEL_WIDTH, minWidth = MIN_CHAT_PANEL_WIDTH): number {
   const effectiveMax = Math.max(0, Math.min(MAX_CHAT_PANEL_WIDTH, Math.floor(maxWidth)));
-  const effectiveMin = Math.min(MIN_CHAT_PANEL_WIDTH, effectiveMax);
+  const effectiveMin = Math.min(minWidth, effectiveMax);
   return Math.min(effectiveMax, Math.max(effectiveMin, Math.round(width)));
 }
 
@@ -1751,6 +1761,7 @@ export function ProjectView({
   onAgentChange,
   onAgentModelChange,
   onApiModelChange,
+  onApiProtocolChange,
   onRefreshAgents,
   onOpenSettings,
   onOpenAmrSettings,
@@ -2265,6 +2276,11 @@ export function ProjectView({
     () => routeFileName || projectIsDesignSystemProject ? 'left' : 'full',
   );
   const previousSplitPlacementRef = useRef<Exclude<ConversationPlacement, 'full'>>('left');
+  // The full-width chat's ⊕ opens the hidden workspace's launcher under itself.
+  const [previewLauncherAnchor, setPreviewLauncherAnchor] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (conversationPlacement !== 'full' || workspaceFocused) setPreviewLauncherAnchor(null);
+  }, [conversationPlacement, workspaceFocused]);
   if (conversationPlacement !== 'full') previousSplitPlacementRef.current = conversationPlacement;
   const previewPanelId = `project-preview-${project.id}`;
   // Read by `renderPreferredChatPanelWidth` instead of closing over
@@ -2425,8 +2441,19 @@ export function ProjectView({
     useState<{ id: string; value: string } | null>(null);
   const [chatPanelWidth, setChatPanelWidth] = useState(readSavedChatPanelWidth);
   const [chatPanelMaxWidth, setChatPanelMaxWidth] = useState(MAX_CHAT_PANEL_WIDTH);
+  const [homeComposerActive, setHomeComposerActive] = useState(false);
+  const chatPanelMinWidth = homeComposerActive ? HOME_MIN_CHAT_PANEL_WIDTH : MIN_CHAT_PANEL_WIDTH;
+  const chatPanelMinWidthRef = useRef(chatPanelMinWidth);
+  chatPanelMinWidthRef.current = chatPanelMinWidth;
   const [workspacePanelMinWidth, setWorkspacePanelMinWidth] = useState(MIN_WORKSPACE_PANEL_WIDTH);
   const [resizingChatPanel, setResizingChatPanel] = useState(false);
+  // Mirrors the split's `is-resizing-chat` onto the root for the composer,
+  // which renders in a fixed layer outside the split.
+  useEffect(() => {
+    if (!resizingChatPanel) return;
+    document.documentElement.classList.add('od-resizing-chat');
+    return () => document.documentElement.classList.remove('od-resizing-chat');
+  }, [resizingChatPanel]);
   const splitRef = useRef<HTMLDivElement | null>(null);
   const chatPanelWidthRef = useRef(chatPanelWidth);
   const preferredChatPanelWidthRef = useRef(chatPanelWidth);
@@ -9038,11 +9065,12 @@ export function ProjectView({
     projectFiles,
   ]);
 
-  const handleNewConversation = useCallback(async () => {
+  const handleNewConversation = useCallback(async (options?: { evenFromEmpty?: boolean }) => {
     if (creatingConversationRef.current) return;
     // Only block if we're sure the current conversation is empty:
     // messages must be loaded AND match the active conversation.
     if (
+      !options?.evenFromEmpty &&
       messagesConversationIdRef.current === activeConversationId &&
       messages.length === 0
     ) {
@@ -9136,7 +9164,10 @@ export function ProjectView({
 
   const createFromRail = useCallback(async () => {
     setWorkspaceFocused(false);
-    await handleNewConversation();
+    // The rail's 新建会话 always adds one (per product: 在项目里点击新建会话是在
+    // 这个项目里新建一个对话) — from an empty conversation too, where the
+    // guard above used to make the button do nothing at all.
+    await handleNewConversation({ evenFromEmpty: true });
   }, [handleNewConversation]);
   const railConversationsLoading = conversations.length === 0 && activeConversationId === null
     && pendingEmptyConversationSeed === null && !conversationLoadError;
@@ -9920,7 +9951,7 @@ export function ProjectView({
   // Inspectors share the workspace's right dock; the chat column keeps the
   // width the user set when either comments or editing is opened.
   const splitLeftPanelWidth = chatPanelWidthRef.current;
-  const chatPanelAriaMinWidth = Math.min(MIN_CHAT_PANEL_WIDTH, chatPanelMaxWidth);
+  const chatPanelAriaMinWidth = Math.min(chatPanelMinWidth, chatPanelMaxWidth);
   const projectActionsToastInChatPane =
     projectActionsToast?.scope === 'chat-pane' &&
     !workspaceFocused &&
@@ -9942,12 +9973,12 @@ export function ProjectView({
     maxWidth = chatPanelMaxWidthRef.current,
     options: { commitState?: boolean } = {},
   ): number => {
-    const next = clampChatPanelWidth(preferredWidth, maxWidth);
+    const next = clampChatPanelWidth(preferredWidth, maxWidth, chatPanelMinWidth);
     chatPanelWidthRef.current = next;
     applySplitChatPanelWidth(splitRef.current, next, workspacePanelTrack, workspaceFocusedRef.current);
     if (options.commitState !== false) setChatPanelWidth(next);
     return next;
-  }, [workspacePanelTrack]);
+  }, [workspacePanelTrack, chatPanelMinWidth]);
   // Deliberately excludes `workspaceFocused`: the ResizeObserver effect below
   // is keyed on this callback's identity, and recreating the observer on
   // every focus toggle forced a synchronous `clientWidth` reflow + style
@@ -9961,7 +9992,8 @@ export function ProjectView({
     options: { commitState?: boolean } = {},
   ): number => {
     const nextPreferred = clampPreferredChatPanelWidth(
-      clampChatPanelWidth(width, chatPanelMaxWidthRef.current),
+      clampChatPanelWidth(width, chatPanelMaxWidthRef.current, chatPanelMinWidthRef.current),
+      chatPanelMinWidthRef.current,
     );
     preferredChatPanelWidthRef.current = nextPreferred;
     return renderPreferredChatPanelWidth(nextPreferred, chatPanelMaxWidthRef.current, options);
@@ -10001,8 +10033,8 @@ export function ProjectView({
 
     const updateAllowedWidth = () => {
       const splitWidth = split.clientWidth;
-      const nextWorkspaceMin = workspacePanelMinWidthForSplit(splitWidth);
-      const nextMax = maxChatPanelWidthForSplit(splitWidth);
+      const nextWorkspaceMin = workspacePanelMinWidthForSplit(splitWidth, chatPanelMinWidthRef.current);
+      const nextMax = maxChatPanelWidthForSplit(splitWidth, chatPanelMinWidthRef.current);
       chatPanelMaxWidthRef.current = nextMax;
       setWorkspacePanelMinWidth(nextWorkspaceMin);
       setChatPanelMaxWidth(nextMax);
@@ -10076,6 +10108,17 @@ export function ProjectView({
     event.currentTarget.focus();
     event.currentTarget.setPointerCapture(event.pointerId);
     pointerCleanupRef.current?.();
+    // The chat's contents hold the width they had when the drag started (per
+    // product: 调整大小的时候输入框和上边的内容不要重新调整布局); only the card
+    // around them follows the pointer. They lay out once, on release.
+    // The composer is portaled into a fixed layer outside the split, so its
+    // width is set on the root where both can read it (see shell.css).
+    const frozenLog = split.querySelector<HTMLElement>('.split-chat-slot .pane > .chat-log-wrap');
+    const frozenComposer = document.querySelector<HTMLElement>('.chat-composer-fixed-layer .composer')
+      ?? split.querySelector<HTMLElement>('.split-chat-slot .composer');
+    const root = document.documentElement;
+    if (frozenLog) root.style.setProperty('--chat-resize-log-width', `${frozenLog.getBoundingClientRect().width}px`);
+    if (frozenComposer) root.style.setProperty('--chat-resize-composer-width', `${frozenComposer.getBoundingClientRect().width}px`);
     setResizingChatPanel(true);
     resizeStartPreferredWidthRef.current = preferredChatPanelWidthRef.current;
 
@@ -10087,9 +10130,11 @@ export function ProjectView({
       state.hasMoved = true;
       const rawWidth = state.startWidth + (state.isRtl ? -delta : delta);
       applyChatPanelWidth(rawWidth, { commitState: false });
-      // Dragging inward beyond the usable minimum enters the same floating
-      // composer mode as collapsing the conversation, in either placement.
-      if (rawWidth < Math.min(MIN_CHAT_PANEL_WIDTH, chatPanelMaxWidthRef.current)) {
+      // Hold the minimum width until the pointer travels farther inward, so
+      // a small overshoot does not unexpectedly collapse the composer.
+      const collapseWidth = Math.min(chatPanelMinWidthRef.current, chatPanelMaxWidthRef.current)
+        - CHAT_PANEL_COLLAPSE_OVERSHOOT;
+      if (rawWidth <= collapseWidth) {
         finishChatPanelResize(true);
         setWorkspaceFocused(true);
       }
@@ -10160,7 +10205,7 @@ export function ProjectView({
     } else if (event.key === 'ArrowRight') {
       nextWidth = chatPanelWidthRef.current + (isRtl ? -1 : 1) * CHAT_PANEL_KEYBOARD_STEP;
     } else if (event.key === 'Home') {
-      nextWidth = MIN_CHAT_PANEL_WIDTH;
+      nextWidth = chatPanelMinWidthRef.current;
     } else if (event.key === 'End') {
       nextWidth = chatPanelMaxWidthRef.current;
     }
@@ -10168,7 +10213,7 @@ export function ProjectView({
     event.preventDefault();
     const next = applyChatPanelWidth(nextWidth);
     saveChatPanelWidth(next);
-    if (nextWidth < Math.min(MIN_CHAT_PANEL_WIDTH, chatPanelMaxWidthRef.current)) {
+    if (nextWidth < Math.min(chatPanelMinWidthRef.current, chatPanelMaxWidthRef.current)) {
       setWorkspaceFocused(true);
     }
   }, [applyChatPanelWidth, conversationPlacement]);
@@ -10933,6 +10978,24 @@ export function ProjectView({
   const critiqueTheaterEnabled = useCritiqueTheaterEnabled();
 
 
+  // Home's model pill, worn by the composer while the empty conversation shows
+  // Home's input (same control Home mounts — EntryShell's homeExecutionSwitcher).
+  const homeExecutionControls = onApiModelChange && onApiProtocolChange ? (
+    <div className="home-hero__execution-switcher">
+      <InlineModelSwitcher
+        compact
+        config={config}
+        agents={agents}
+        daemonLive={daemonLive}
+        onModeChange={onModeChange}
+        onAgentChange={onAgentChange}
+        onAgentModelChange={onAgentModelChange}
+        onApiProtocolChange={onApiProtocolChange}
+        onApiModelChange={onApiModelChange}
+        onOpenSettings={onOpenSettings}
+      />
+    </div>
+  ) : undefined;
   const executionControls = (
     <>
       <AvatarMenu
@@ -11020,7 +11083,8 @@ export function ProjectView({
             <WorkspacePreviewToggle
               expanded={false}
               panelId={previewPanelId}
-              onToggle={() => setConversationPlacement(previousSplitPlacementRef.current)}
+              launcherOpen={Boolean(previewLauncherAnchor)}
+              onToggle={button => setPreviewLauncherAnchor(current => current ? null : button)}
             />
           ) : null}
           {/* The project switcher occupies the chat header.
@@ -11239,6 +11303,7 @@ export function ProjectView({
               workspaceComposerDocked={workspaceFocused}
               workspaceConversationExpanded={floatingConversationExpanded}
               onWorkspaceConversationExpandedChange={setFloatingConversationOpen}
+              onHomeComposerChange={setHomeComposerActive}
               onConversationPlacementChange={placement => {
                 setConversationPlacement(placement);
                 setWorkspaceFocused(false);
@@ -11274,6 +11339,7 @@ export function ProjectView({
                 </span>
               )}
               composerFooterAccessory={executionControls}
+              composerHomeFooterAccessory={homeExecutionControls}
               designSystemPicker={(
                 <DesignSystemPicker
                   variant="home"
@@ -11320,13 +11386,24 @@ export function ProjectView({
             onBlur={handleChatResizeBlur}
           />
         ) : null}
-        <WorkspaceEditLayout key={project.id} panelId={previewPanelId} onCollapse={() => {
-          setWorkspaceFocused(false);
-          setConversationPlacement('full');
-        }}>
+        {/* 全屏: collapse the chat into the floating dock so the workspace
+            takes the window; once it does, the same spot brings the chat back. */}
+        <WorkspaceEditLayout key={project.id} panelId={previewPanelId}
+          onCollapse={workspaceFocused ? undefined : () => setWorkspaceFocused(true)}
+          onRestore={workspaceFocused ? () => setWorkspaceFocused(false) : undefined}>
         <FileWorkspace
           projectId={project.id}
           projectName={currentProject.name}
+          externalLauncherAnchor={!workspaceFocused && conversationPlacement === 'full' ? previewLauncherAnchor : null}
+          onExternalLauncherClose={picked => {
+            setPreviewLauncherAnchor(null);
+            // Show the tab the user just opened or created.
+            if (picked) setConversationPlacement(previousSplitPlacementRef.current);
+          }}
+          onLastTabClosed={() => {
+            setWorkspaceFocused(false);
+            setConversationPlacement('full');
+          }}
           viewerOnly={projectCollab.viewerOnly}
           readonlyNotice={readonlyNoticeText}
           fileSyncBadge={fileSyncBadge}

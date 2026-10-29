@@ -2398,6 +2398,37 @@ a.avatar-item:visited {
 .split.is-resizing-chat iframe {
   pointer-events: none;
 }
+/* While dragging, the chat's log and composer keep the widths measured at the
+   drag's start (`--chat-resize-*-width` on the root, set in ProjectView): the
+   card resizes around them and clips, and nothing inside reflows until
+   release. The composer's slot and its fixed layer still follow the card —
+   the layer is positioned from the slot — so only the composer box inside
+   them is pinned, and both clip it. `contain: paint` because the composer's
+   surface is positioned and `overflow` alone would not clip it. */
+.split.is-resizing-chat .split-chat-slot {
+  contain: paint;
+}
+.split.is-resizing-chat .split-chat-slot .pane {
+  overflow: hidden;
+}
+.split.is-resizing-chat .split-chat-slot .pane > .chat-log-wrap {
+  flex-shrink: 0;
+  width: var(--chat-resize-log-width, 100%);
+  min-width: var(--chat-resize-log-width, 0);
+  max-width: none;
+}
+.od-resizing-chat .chat-composer-fixed-layer,
+.split.is-resizing-chat .split-chat-slot .chat-composer-slot {
+  overflow: hidden;
+  contain: paint;
+}
+.od-resizing-chat .chat-composer-fixed-layer .composer,
+.split.is-resizing-chat .split-chat-slot .composer {
+  flex-shrink: 0;
+  width: var(--chat-resize-composer-width, 100%);
+  min-width: var(--chat-resize-composer-width, 0);
+  max-width: none;
+}
 .split.is-resizing-chat .workspace,
 .split.is-resizing-chat .viewer,
 .split.split-focus .workspace,

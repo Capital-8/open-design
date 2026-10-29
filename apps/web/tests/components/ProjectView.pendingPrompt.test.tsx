@@ -653,7 +653,7 @@ describe('ProjectView pending prompt seeding', () => {
     }));
     expect(screen.getByTestId('workspace-edit-layout').parentElement)
       .toHaveAttribute('data-conversation-placement', 'full');
-    expect(screen.getByRole('button', { name: 'workspace.expandPreview' }))
+    expect(screen.getByRole('button', { name: 'workspace.newTab' }))
       .toHaveAttribute('aria-expanded', 'false');
   });
 

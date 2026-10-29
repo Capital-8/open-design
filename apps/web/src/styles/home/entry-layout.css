@@ -14,18 +14,9 @@
   --entry-rail-width: 236px;
 }
 
-/* Keep the content card at its usable width even when the browser viewport
-   becomes narrower than the two docked columns. The shell can scroll
-   horizontally at that point instead of reflowing the hero and composer. */
-.entry-shell--no-header:has(> .entry) {
-  min-width: 856px; /* 56px destinations + 800px content track */
-}
-.entry-shell--no-header:has(> .entry.entry--rail-open) {
-  min-width: 1056px; /* plus the workspace rail's 200px floor */
-}
-.entry-shell--no-header:has(> .entry.entry--destination) {
-  min-width: 856px;
-}
+/* No minimum width: below the docked columns' comfortable width the content
+   card squeezes instead of the window scrolling sideways (per product:
+   不允许左右滑动). */
 
 /* `.entry-shell` is always mounted inside `.workspace-shell__body`, which
    reserves its own space above for the app's persistent tab-chrome header
@@ -58,8 +49,8 @@
    animates between 0 and its saved width. */
 .entry-shell--no-header .entry {
   --entry-destinations-width: 56px;
-  /* Reserve an 800px main track: 792px of visible card plus its 8px right inset.
-     The shell's minimum width keeps that track intact in narrow viewports. */
+  /* Reserve an 800px main track while there is room: the rail gives up width
+     first (down to 200px), then the content squeezes. */
   --entry-rail-track-width: clamp(200px, calc(100% - var(--entry-destinations-width) - 800px), var(--entry-rail-width, 236px));
   position: relative;
   grid-template-columns: var(--entry-destinations-width) 0 minmax(0, 1fr);
@@ -1184,15 +1175,6 @@
 .entry-nav-rail__recent-row:focus-within .entry-nav-rail__recent-item {
   /* 6 (the ⋮'s own inset) + 24 (its box) + 6 of air. */
   padding-right: 36px;
-}
-/* Project folders carry a second hover action (新建会话) just left of the ⋮,
-   so the name gives up one more 28px slot while it shows. */
-.entry-nav-rail__recent-new-conversation {
-  right: 34px;
-}
-.entry-nav-rail__recent-row.has-new-conversation:hover .entry-nav-rail__recent-item,
-.entry-nav-rail__recent-row.has-new-conversation:focus-within .entry-nav-rail__recent-item {
-  padding-right: 64px;
 }
 .entry-nav-rail__recent-more:hover:not(:disabled) {
   background: color-mix(in srgb, var(--text) 8%, transparent);

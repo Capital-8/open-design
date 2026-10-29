@@ -3,6 +3,11 @@
   grid-template-columns: var(--project-workspace-panel-track) var(--project-chat-handle-width) var(--project-chat-panel-width);
 }
 .right > :global(.split-chat-slot) { grid-column: 3; grid-row: 1; }
+/* Docked right, chat owns the trailing window gutter: the same 8px as its
+   bottom margin, so the card sits evenly off both window edges. Out-ranks the
+   chat skin's `.app .split-chat-slot { margin: 0 0 8px }` regardless of load
+   order. */
+.right:global(.split) > :global(.split-chat-slot) { margin-right: 8px; }
 .right > :global(.split-resize-handle) { grid-column: 2; grid-row: 1; }
 .right > [data-testid='workspace-edit-layout'] { grid-column: 1; grid-row: 1; }
 /* The resize handle supplies the same gap as when chat is on the left. */

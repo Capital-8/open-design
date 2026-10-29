@@ -3,7 +3,12 @@ import { Button } from '@open-design/components';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import type { Conversation, Project } from '../../types';
 import { createConversation, listConversations, moveConversation } from '../../state/projects';
-import { CONVERSATION_MOVED_EVENT, type ConversationMovedDetail } from '../../state/conversation-events';
+import {
+  CONVERSATION_CREATED_EVENT,
+  CONVERSATION_MOVED_EVENT,
+  type ConversationCreatedDetail,
+  type ConversationMovedDetail,
+} from '../../state/conversation-events';
 import { workspaceIdentityCacheKey } from '../../collab/workspace-identity';
 import { useI18n } from '../../i18n';
 import { NewConversationMark, RailRecentRow } from './RailRecentRow';
@@ -55,13 +60,18 @@ export function RailNewProject() {
   </Button>;
 }
 
+// One in-flight default conversation per project, so folders that read the
+// same empty list (remounts, StrictMode) never create two.
+const seedingDefaultConversation = new Map<string, Promise<Conversation | null>>();
+
 /** Projects are the only folders; their children are conversation leaves. */
-export function RailProjectFolder({ project, context, model, onOpenConversation, onRename, onDelete }: {
+export function RailProjectFolder({ project, context, model, onOpenConversation, onRename, onDuplicate, onDelete }: {
   project: Project;
   context?: WorkspaceCollabContext | null;
   model?: RailConversationModel | null;
   onOpenConversation?: (projectId: string, conversationId: string) => void | Promise<unknown>;
   onRename?: (id: string, name: string) => void;
+  onDuplicate?: (id: string) => Promise<void> | void;
   onDelete?: (id: string) => Promise<boolean | void> | boolean | void;
 }) {
   const { t } = useI18n();
@@ -83,14 +93,24 @@ export function RailProjectFolder({ project, context, model, onOpenConversation,
   useEffect(() => { if (current?.activeConversationId) setOpen(true); }, [current?.activeConversationId]);
   const [dropActive, setDropActive] = useState(false);
   // The live project's list belongs to ProjectView; every other folder re-reads
-  // its own when a move adds or removes one of its conversations.
+  // its own when a move adds or removes one of its conversations, or one is
+  // created in it from outside its chat (and opens it, to show the new row).
   useEffect(() => {
     function onMoved(event: Event) {
       const { fromProjectId, toProjectId } = (event as CustomEvent<ConversationMovedDetail>).detail;
       if (fromProjectId === project.id || toProjectId === project.id) setRetry(value => value + 1);
     }
+    function onCreated(event: Event) {
+      if ((event as CustomEvent<ConversationCreatedDetail>).detail.projectId !== project.id) return;
+      setOpen(true);
+      setRetry(value => value + 1);
+    }
     window.addEventListener(CONVERSATION_MOVED_EVENT, onMoved);
-    return () => window.removeEventListener(CONVERSATION_MOVED_EVENT, onMoved);
+    window.addEventListener(CONVERSATION_CREATED_EVENT, onCreated);
+    return () => {
+      window.removeEventListener(CONVERSATION_MOVED_EVENT, onMoved);
+      window.removeEventListener(CONVERSATION_CREATED_EVENT, onCreated);
+    };
   }, [project.id]);
   const acceptsDrop = () => {
     const item = draggedConversation();
@@ -113,24 +133,25 @@ export function RailProjectFolder({ project, context, model, onOpenConversation,
     let cancelled = false;
     setLoading(true);
     setError(false);
-    void listConversations(project.id, { workspaceContext: contextRef.current, throwOnError: true }).then(list => {
+    void listConversations(project.id, { workspaceContext: contextRef.current, throwOnError: true }).then(async list => {
+      // A project never sits empty (per product): one created without a
+      // conversation gets its default one here, which opens on the start page.
+      // The live project's default comes from ProjectView instead.
+      if (list.length === 0) {
+        let seeding = seedingDefaultConversation.get(project.id);
+        if (!seeding) {
+          seeding = createConversation(project.id, undefined, { workspaceContext: contextRef.current })
+            .catch(() => null)
+            .finally(() => seedingDefaultConversation.delete(project.id));
+          seedingDefaultConversation.set(project.id, seeding);
+        }
+        const fresh = await seeding;
+        if (fresh) list = [fresh];
+      }
       if (!cancelled) setLoaded({ identity, items: list });
     }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [open, Boolean(current), project.id, identity, retry]);
-  const [creating, setCreating] = useState(false);
-  // Hover action on the folder row (per product): the live project goes through
-  // ProjectView's own creator; any other project gets a conversation via the
-  // API and is then opened on it.
-  async function newConversation() {
-    setOpen(true);
-    if (current) return void current.onCreate();
-    setCreating(true);
-    try {
-      const fresh = await createConversation(project.id, undefined, { workspaceContext: contextRef.current });
-      if (fresh) await onOpenConversation?.(project.id, fresh.id);
-    } finally { setCreating(false); }
-  }
   const items = [...(current && !current.conversationsLoading ? current.conversations : cached ?? [])].sort((a, b) => a.createdAt - b.createdAt);
   const placement = current?.newConversationPlacement;
   if (placement?.afterId && placement.id !== placement.afterId) {
@@ -160,16 +181,14 @@ export function RailProjectFolder({ project, context, model, onOpenConversation,
       }}
     >
       <RailRecentRow project={project} workspaceContext={context} expanded={open}
-        onOpen={() => { setOpen(value => !value); }} onRename={onRename} onDelete={onDelete}
-        onNewConversation={onOpenConversation || current ? () => void newConversation() : undefined}
-        newConversationDisabled={creating || Boolean(current?.creating)} />
+        onOpen={() => setOpen(value => !value)} onRename={onRename} onDuplicate={onDuplicate} onDelete={onDelete} />
     </div>
     <div className={`accordion-collapsible${open ? ' open' : ''}`} inert={!open} aria-hidden={!open || undefined}>
       <div className="accordion-collapsible-inner">
         <ul className={styles.children}>
           {!current && loading && !cached ? <li className={styles.status}>{t('common.loading')}</li> : null}
           {!current && error ? <li><Button className={styles.conversation} onClick={() => setRetry(value => value + 1)}>{t('preview.retry')}</Button></li> : null}
-          {(current || cached || !loading && !error) ? items.map(conversation => <li
+          {current || cached || !loading && !error ? items.map(conversation => <li
             key={conversation.id}
             draggable={childDraggable}
             onDragStart={childDraggable ? event => startConversationDrag(event, { projectId: project.id, conversationId: conversation.id }) : undefined}

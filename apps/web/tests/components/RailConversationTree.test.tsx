@@ -114,18 +114,27 @@ it('keeps cached children when the newly selected project publishes its loading 
   expect(screen.queryByRole('button', { name: 'First conversation' })).toBeNull();
 });
 
-it('starts a new conversation from the folder hover action', async () => {
-  listConversations.mockResolvedValue([]);
-  createConversation.mockResolvedValue({ id: 'fresh', title: null, createdAt: 3 });
+// A project never sits empty (per product): its empty default conversation is
+// a normal leaf, opened like any other (it lands on the start page).
+it('lists an empty conversation as a leaf and opens it', async () => {
+  listConversations.mockResolvedValue([{ id: 'seed', title: null, messageCount: 0, createdAt: 1 }] as Conversation[]);
   const onOpenConversation = vi.fn();
   render(<RailProjectFolder project={project} onOpenConversation={onOpenConversation} />);
-  fireEvent.click(screen.getByTestId('folder-new-conversation'));
-  await waitFor(() => expect(onOpenConversation).toHaveBeenCalledWith('p1', 'fresh'));
-  expect(createConversation).toHaveBeenCalledWith('p1', undefined, { workspaceContext: undefined });
+  fireEvent.click(screen.getByRole('button', { name: 'Project folder' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'chat.untitledConversation' }));
+  expect(onOpenConversation).toHaveBeenCalledWith('p1', 'seed');
+  expect(createConversation).not.toHaveBeenCalled();
+});
 
-  const onCreate = vi.fn(async () => {});
-  cleanup();
-  render(<RailProjectFolder project={project} model={{ projectId: 'p1', conversations: [], activeConversationId: null, creating: false, onCreate, onSelect: vi.fn() }} />);
-  fireEvent.click(screen.getByTestId('folder-new-conversation'));
-  expect(onCreate).toHaveBeenCalledTimes(1);
+it('creates the default conversation for a project created without one', async () => {
+  listConversations.mockResolvedValue([]);
+  createConversation.mockReset();
+  createConversation.mockResolvedValue({ id: 'fresh', title: null, messageCount: 0, createdAt: 1 } as Conversation);
+  const onOpenConversation = vi.fn();
+  render(<RailProjectFolder project={project} onOpenConversation={onOpenConversation} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Project folder' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'chat.untitledConversation' }));
+  expect(createConversation).toHaveBeenCalledTimes(1);
+  expect(createConversation).toHaveBeenCalledWith('p1', undefined, { workspaceContext: undefined });
+  expect(onOpenConversation).toHaveBeenCalledWith('p1', 'fresh');
 });

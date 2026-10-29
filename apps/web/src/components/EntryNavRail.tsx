@@ -25,6 +25,7 @@
 // The gate is `workspaceType` + permissions, never the billing/provider axis — a
 // personal_byok workspace still has full team features.
 
+import { isRailFolderProject, useRailConversationCounts } from './entry-nav-rail/railConversationCounts';
 import {
   useCallback,
   useEffect,
@@ -267,6 +268,7 @@ interface Props {
   onOpenConversation?: (projectId: string, conversationId: string) => void | Promise<unknown>;
   /** Row actions for the 最近浏览过 list's ⋮ menu. Omit either to drop its item. */
   onRenameRecentProject?: (id: string, name: string) => void;
+  onDuplicateRecentProject?: (id: string) => Promise<void> | void;
   onDeleteRecentProject?: (id: string) => Promise<boolean | void> | boolean | void;
   /** Opens one of those projects — the pull-first opener, so a shared project
    *  that is not local yet still lands. */
@@ -348,6 +350,7 @@ export function RailRecentSection({
   projects,
   onOpen,
   onRename,
+  onDuplicate,
   onDelete,
   workspaceContext,
   label,
@@ -365,6 +368,7 @@ export function RailRecentSection({
   projects: Project[];
   onOpen?: (id: string) => void | Promise<unknown>;
   onRename?: (id: string, name: string) => void;
+  onDuplicate?: (id: string) => Promise<void> | void;
   onDelete?: (id: string) => Promise<boolean | void> | boolean | void;
   workspaceContext?: WorkspaceCollabContext | null;
   label: string;
@@ -378,14 +382,20 @@ export function RailRecentSection({
   const [open, setOpen] = useState(() => readStoredRecentOpen(storageKey, section === 'recent'));
   // Selecting a conversation must not override the user's Projects disclosure.
   // Its active item is also available in the separate Conversations section.
+  // A conversation's own single-conversation project is that conversation's
+  // row in 对话, not a folder here (see ./entry-nav-rail/railConversationCounts).
+  const conversationCounts = useRailConversationCounts();
   const items = useMemo(
     () => {
-      const sorted = [...projects].sort((a, b) => section === 'personal'
+      const folders = section === 'personal'
+        ? projects.filter(project => isRailFolderProject(project, conversationCounts))
+        : projects;
+      const sorted = [...folders].sort((a, b) => section === 'personal'
         ? b.createdAt - a.createdAt
         : b.updatedAt - a.updatedAt);
       return section === 'personal' ? sorted : sorted.slice(0, RAIL_RECENT_LIMIT);
     },
-    [projects, section],
+    [projects, section, conversationCounts],
   );
   // Keep the current conversation reachable even when its project is older.
   const compactItems = section === 'personal' ? items.slice(0, RAIL_PERSONAL_LIMIT) : items;
@@ -513,6 +523,7 @@ export function RailRecentSection({
                     model={conversationModel}
                     onOpenConversation={onOpenConversation}
                     onRename={onRename}
+                    onDuplicate={onDuplicate}
                     onDelete={onDelete}
                   /> : <RailRecentRow
                     project={project}
@@ -521,6 +532,7 @@ export function RailRecentSection({
                     showLeadingIcon={false}
                     onOpen={openProject}
                     onRename={onRename}
+                    onDuplicate={onDuplicate}
                     onDelete={onDelete}
                   />}
                 </li>
@@ -2078,6 +2090,7 @@ export function EntryNavRail({
   onOpenConversation,
   onOpenRecentProject,
   onRenameRecentProject,
+  onDuplicateRecentProject,
   onDeleteRecentProject,
 }: Props) {
   const { t } = useI18n();
@@ -2203,6 +2216,7 @@ export function EntryNavRail({
               projects={personalProjects ?? []}
               onOpen={onOpenRecentProject}
               onRename={onRenameRecentProject}
+              onDuplicate={onDuplicateRecentProject}
               onDelete={onDeleteRecentProject}
               workspaceContext={context}
               label={t('entry.navProjects')}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Ref, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { isRailFolderProject, useRailConversationCounts } from './entry-nav-rail/railConversationCounts';
 import type { Project } from '../types';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import { useI18n } from '../i18n';
@@ -31,7 +32,7 @@ function readRailWidth(): number {
   } catch { return RAIL_WIDTH_DEFAULT; }
 }
 
-export function ProjectRecentRail({ projects, context, onOpen, onRename, onDelete, conversationModel, controlsHostRef, onNewConversation }: {
+export function ProjectRecentRail({ projects, context, onOpen, onRename, onDuplicate, onDelete, conversationModel, controlsHostRef, onNewConversation }: {
   projects: Project[];
   onNewConversation?: () => void;
   controlsHostRef?: Ref<HTMLDivElement>;
@@ -39,6 +40,7 @@ export function ProjectRecentRail({ projects, context, onOpen, onRename, onDelet
   context: WorkspaceCollabContext | null;
   onOpen: (id: string) => Promise<boolean> | Promise<void> | boolean | void;
   onRename: (id: string, name: string) => void;
+  onDuplicate?: (id: string) => Promise<void> | void;
   onDelete: (id: string) => Promise<boolean | void> | boolean | void;
 }) {
   const { t } = useI18n();
@@ -130,6 +132,14 @@ export function ProjectRecentRail({ projects, context, onOpen, onRename, onDelet
     try { localStorage.setItem(RAIL_OPEN_STORAGE_KEY, String(open)); } catch { /* Storage may be unavailable. */ }
     window.dispatchEvent(new CustomEvent(ENTRY_RAIL_STATE_EVENT, { detail: { open } }));
   }, [open]);
+  // 新建会话 (per product): inside a project — a 项目 folder — it adds a
+  // conversation to that project; from a 对话 (a conversation's own project)
+  // it starts a new 对话 (`onNewConversation`: a blank one-conversation
+  // project, listed under 对话).
+  const conversationCounts = useRailConversationCounts();
+  const currentProject = conversationModel ? projects.find(project => project.id === conversationModel.projectId) : undefined;
+  const inProjectFolder = Boolean(conversationModel)
+    && isRailFolderProject(currentProject, conversationCounts, conversationModel?.projectId);
   return (<>
     <aside ref={railRef} id="project-recent-rail" className="project-recent-rail" data-open={open} style={{ width: open ? width : 0 }} aria-label={t('chat.conversationsHeading')}>
       <div ref={actionsRef} className="project-recent-rail__actions entry-nav-rail__search-row" style={{ width: open ? width - 8 : 72 }}>
@@ -143,7 +153,12 @@ export function ProjectRecentRail({ projects, context, onOpen, onRename, onDelet
       {open ? <div className="entry-nav-rail__panel">
         <div className="entry-nav-rail__group">
           <div className={recentSectionStyles.fixedAction}>
-            <RailNewConversation onClick={onNewConversation ?? (() => navigate({ kind: 'home', view: 'home' }))} />
+            <RailNewConversation
+              disabled={Boolean(inProjectFolder && conversationModel?.creating)}
+              onClick={inProjectFolder && conversationModel
+                ? () => { void conversationModel.onCreate(); }
+                : onNewConversation ?? (() => navigate({ kind: 'home', view: 'home' }))}
+            />
             <RailNewProject />
           </div>
           <RailRecentSection
@@ -161,6 +176,7 @@ export function ProjectRecentRail({ projects, context, onOpen, onRename, onDelet
             workspaceContext={context}
             onOpen={async (id) => { await onOpen(id); }}
             onRename={onRename}
+            onDuplicate={onDuplicate}
             onDelete={onDelete}
             label={t('entry.navProjects')}
           />

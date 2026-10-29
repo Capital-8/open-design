@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { isRailFolderProject, publishRailConversationCounts } from './railConversationCounts';
 import { Button } from '@open-design/components';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import type { Conversation, Project } from '../../types';
@@ -9,7 +10,7 @@ import {
   moveConversation,
   patchConversation,
 } from '../../state/projects';
-import { CONVERSATION_MOVED_EVENT } from '../../state/conversation-events';
+import { CONVERSATION_CREATED_EVENT, CONVERSATION_MOVED_EVENT } from '../../state/conversation-events';
 import { exportAsMd } from '../../runtime/exports';
 import { workspaceIdentityCacheKey } from '../../collab/workspace-identity';
 import { useI18n } from '../../i18n';
@@ -59,10 +60,12 @@ export function RailConversationsSection({ projects, moveTargets, context, model
       timer = setTimeout(() => setMoveFailed(false), 4000);
     };
     window.addEventListener(CONVERSATION_MOVED_EVENT, refresh);
+    window.addEventListener(CONVERSATION_CREATED_EVENT, refresh);
     window.addEventListener(CONVERSATION_MOVE_FAILED_EVENT, showFailure);
     return () => {
       clearTimeout(timer);
       window.removeEventListener(CONVERSATION_MOVED_EVENT, refresh);
+      window.removeEventListener(CONVERSATION_CREATED_EVENT, refresh);
       window.removeEventListener(CONVERSATION_MOVE_FAILED_EVENT, showFailure);
     };
   }, []);
@@ -85,8 +88,10 @@ export function RailConversationsSection({ projects, moveTargets, context, model
     try { localStorage.setItem(STORAGE_KEY, 'true'); } catch { /* Storage is optional. */ }
   }, [model?.activeConversationId]);
   useEffect(() => { setShowAll(false); }, [identity]);
+  // Read even while collapsed: the counts decide which projects are folders in
+  // 项目 (see ./railConversationCounts), and that list is open on its own.
+  // Opening the section still re-reads, as it always has.
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     const ids = (JSON.parse(projectIds) as string[]).filter(id => id !== liveProjectId);
     const workspaceContext = contextRef.current;
@@ -126,10 +131,21 @@ export function RailConversationsSection({ projects, moveTargets, context, model
   }, [open, projectIds, identity, liveProjectId, retry]);
 
   const allowedProjects = new Set(projects.map(project => project.id));
-  const items = [
+  const allItems = [
     ...(loaded.identity === identity ? loaded.items.filter(item => allowedProjects.has(item.projectId) && (item.projectId !== liveProjectId || model?.conversationsLoading)) : []),
     ...(model && !model.conversationsLoading ? model.conversations.map(item => ({ ...item, projectId: model.projectId })) : []),
   ].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+  // A conversation shows once (per product): here only when its project is a
+  // conversation's own (not 新建项目) and holds nothing else; every other
+  // project is a folder in 项目 and keeps its conversations.
+  const counts = new Map<string, number>();
+  for (const item of allItems) counts.set(item.projectId, (counts.get(item.projectId) ?? 0) + 1);
+  const countsKey = JSON.stringify([...counts].sort(([a], [b]) => a.localeCompare(b)));
+  useEffect(() => {
+    publishRailConversationCounts(new Map(JSON.parse(countsKey) as [string, number][]));
+  }, [countsKey]);
+  const projectsById = new Map(projects.map(project => [project.id, project]));
+  const items = allItems.filter(item => !isRailFolderProject(projectsById.get(item.projectId), counts, item.projectId));
   const visible = showAll ? items : items.slice(0, 12);
   const active = items.find(item => item.projectId === model?.projectId && item.id === model?.activeConversationId);
   if (!showAll && active && !visible.includes(active)) visible[visible.length - 1] = active;

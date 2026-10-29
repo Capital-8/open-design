@@ -5162,6 +5162,7 @@ function AppInner() {
           onAgentChange={handleAgentChange}
           onAgentModelChange={handleAgentModelChange}
           onApiModelChange={handleApiModelChange}
+          onApiProtocolChange={handleApiProtocolChange}
           onRefreshAgents={refreshAgents}
           onOpenSettings={openSettings}
           onOpenAmrSettings={openAmrSettings}
@@ -5372,13 +5373,23 @@ function AppInner() {
         <div className="workspace-shell__body">
           {route.kind === 'project' && projectChromeVisible ? (
             <ProjectRecentRail
-              onNewConversation={handleBack}
+              // Outside a project folder 新建会话 makes a new 对话: a blank
+              // one-conversation project, same as the Home rail's button.
+              onNewConversation={() => {
+                void handleCreateProject({
+                  name: t('common.untitled'),
+                  skillId: null,
+                  designSystemId: null,
+                  metadata: { kind: 'other', nameSource: 'generated' },
+                });
+              }}
               controlsHostRef={setProjectControlsHost}
               conversationModel={railConversations?.projectId === route.projectId ? railConversations : null}
               projects={projects}
               context={workspaceContext}
               onOpen={handleOpenProject}
               onRename={handleRenameProject}
+              onDuplicate={handleDuplicateProject}
               onDelete={handleDeleteProject}
             />
           ) : null}

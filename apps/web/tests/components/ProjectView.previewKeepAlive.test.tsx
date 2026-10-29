@@ -115,8 +115,19 @@ vi.mock('../../src/components/AvatarMenu', () => ({
 
 vi.mock('../../src/components/FileWorkspace', () => ({
   DESIGN_SYSTEM_TAB: '__design_system__',
-  FileWorkspace: ({ openRequest, tabsState }: { openRequest?: { name: string } | null; tabsState: { active: string | null } }) => (
-    <div data-testid="file-workspace" data-open-request={openRequest?.name} data-active-tab={tabsState.active} />
+  FileWorkspace: ({ openRequest, tabsState, externalLauncherAnchor, onExternalLauncherClose, onLastTabClosed }: {
+    openRequest?: { name: string } | null;
+    tabsState: { active: string | null };
+    externalLauncherAnchor?: HTMLElement | null;
+    onExternalLauncherClose?: (picked: boolean) => void;
+    onLastTabClosed?: () => void;
+  }) => (
+    <div data-testid="file-workspace" data-open-request={openRequest?.name} data-active-tab={tabsState.active}>
+      <button type="button" onClick={() => onLastTabClosed?.()}>Close last tab</button>
+      {externalLauncherAnchor ? (
+        <button type="button" onClick={() => onExternalLauncherClose?.(true)}>Pick launcher item</button>
+      ) : null}
+    </div>
   ),
 }));
 
@@ -270,7 +281,7 @@ describe('ProjectView preview keep-alive invalidation', () => {
     await waitFor(() => expect(preview).toHaveAttribute('data-active-tab', 'index.html'));
     expect(split).toHaveAttribute('data-conversation-placement', 'full');
     fireEvent.click(screen.getByRole('button', { name: 'Move chat right' }));
-    fireEvent.click(screen.getByRole('button', { name: 'workspace.collapsePreview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close last tab' }));
     expect(split).toHaveAttribute('data-conversation-placement', 'full');
     fireEvent.click(screen.getByRole('button', { name: 'Open artifact' }));
     expect(split).toHaveAttribute('data-conversation-placement', 'right');
@@ -284,6 +295,21 @@ describe('ProjectView preview keep-alive invalidation', () => {
       .toHaveAttribute('data-conversation-placement', 'left');
   });
 
+  it('goes full screen by docking the chat, without remounting the preview', async () => {
+    renderProjectView();
+    await screen.findByTestId('chat-pane');
+    const preview = screen.getByTestId('file-workspace');
+    const split = screen.getByTestId('workspace-edit-layout').parentElement!;
+    fireEvent.click(screen.getByRole('button', { name: 'Move chat right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'common.fullscreen' }));
+    expect(split).not.toHaveAttribute('data-conversation-placement', 'full');
+    expect(screen.queryByRole('button', { name: 'common.fullscreen' })).toBeNull();
+    expect(screen.getByTestId('file-workspace')).toBe(preview);
+    fireEvent.click(screen.getByRole('button', { name: 'common.exitFullscreen' }));
+    expect(screen.getByRole('button', { name: 'common.fullscreen' })).toBeTruthy();
+    expect(screen.getByTestId('file-workspace')).toBe(preview);
+  });
+
   it('collapses and restores the preview without remounting it or losing pane placement', async () => {
     renderProjectView();
     await screen.findByTestId('chat-pane');
@@ -292,16 +318,19 @@ describe('ProjectView preview keep-alive invalidation', () => {
     const split = layout.parentElement!;
     fireEvent.click(screen.getByRole('button', { name: 'Move chat right' }));
     expect(split).toHaveAttribute('data-conversation-placement', 'right');
-    fireEvent.click(screen.getByRole('button', { name: 'workspace.collapsePreview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close last tab' }));
     expect(split).toHaveAttribute('data-conversation-placement', 'full');
-    const expand = screen.getByRole('button', { name: 'workspace.expandPreview' });
-    expect(expand).toHaveAttribute('aria-expanded', 'false');
-    expect(expand).toHaveAttribute('aria-controls', layout.id);
+    const launcher = screen.getByRole('button', { name: 'workspace.newTab' });
+    expect(launcher).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByTestId('file-workspace')).toBe(preview);
-    fireEvent.click(expand);
+    // The ⊕ opens the hidden workspace's launcher; dismissing it keeps chat full width.
+    fireEvent.click(launcher);
+    expect(launcher).toHaveAttribute('aria-expanded', 'true');
+    expect(split).toHaveAttribute('data-conversation-placement', 'full');
+    fireEvent.click(screen.getByRole('button', { name: 'Pick launcher item' }));
     expect(split).toHaveAttribute('data-conversation-placement', 'right');
     expect(screen.getByTestId('file-workspace')).toBe(preview);
-    expect(screen.queryByRole('button', { name: 'workspace.expandPreview' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'workspace.newTab' })).toBeNull();
   });
 
   it('evicts the active preview when registry prompt context changes for the open project', async () => {

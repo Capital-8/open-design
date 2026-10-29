@@ -4644,3 +4644,12 @@
 .home-hero--dock .home-hero__lexical .composer-input-editor {
   max-height: calc(var(--home-hero-line) * 4.5);
 }
+
+/* The same row under a project chat's composer (ChatComposer, empty
+   conversation): Home's row is capped and centred for Home's column; here it
+   spans the composer so the trigger lines up with the "+" above it. Doubled
+   class keeps it ahead of the base rule wherever the sheets land. */
+.chat-composer__workdir-row.chat-composer__workdir-row {
+  max-width: none;
+  margin: 2px 0 0;
+}
