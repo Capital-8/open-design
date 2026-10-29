@@ -52,14 +52,15 @@ interface Props {
 }
 
 /**
- * Modals in this app lock the page by setting `document.body.style.overflow`,
- * so that is the one signal available without a global modal registry. The
+ * Modals lock the page through inline body overflow or the shared
+ * `data-web-modal-scroll-lock` attribute used by CMS dialogs. The
  * card must not surface behind an open dialog: it sits below the dialog's
  * layer and gets caught by its backdrop blur, which looks like a rendering
  * bug rather than a deliberate stack.
  */
 function isModalOpen(): boolean {
-  return document.body.style.overflow === 'hidden';
+  return document.body.style.overflow === 'hidden'
+    || document.body.hasAttribute('data-web-modal-scroll-lock');
 }
 
 // Grounded in what users actually complain about in the per-run feedback
@@ -186,7 +187,7 @@ export function ExperienceSurvey({
         });
         modalWatcher.observe(document.body, {
           attributes: true,
-          attributeFilter: ['style'],
+          attributeFilter: ['style', 'data-web-modal-scroll-lock'],
         });
         return;
       }

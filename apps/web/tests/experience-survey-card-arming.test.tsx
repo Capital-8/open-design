@@ -38,10 +38,57 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  document.body.style.overflow = '';
+  document.body.removeAttribute('data-web-modal-scroll-lock');
   vi.useRealTimers();
 });
 
 describe('experience survey card arming', () => {
+  it.each(['style', 'attribute'] as const)(
+    'waits for a %s modal lock to be released before showing the card',
+    async (lock) => {
+      const onExposure = vi.fn();
+      render(<ExperienceSurvey metricsConsent onExposure={onExposure} />);
+      deliverArtifact();
+      if (lock === 'style') document.body.style.overflow = 'hidden';
+      else document.body.setAttribute('data-web-modal-scroll-lock', '');
+
+      passTheDelay();
+      expect(card()).toBeNull();
+      expect(onExposure).not.toHaveBeenCalled();
+
+      await act(async () => {
+        if (lock === 'style') document.body.style.overflow = '';
+        else document.body.removeAttribute('data-web-modal-scroll-lock');
+      });
+      expect(card()).not.toBeNull();
+      expect(onExposure).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('keeps observing attribute changes until both modal locks are released', async () => {
+    document.body.style.overflow = 'hidden';
+    render(<ExperienceSurvey metricsConsent />);
+    deliverArtifact();
+    passTheDelay();
+
+    await act(async () => {
+      document.body.setAttribute('data-web-modal-scroll-lock', '');
+      document.body.style.overflow = '';
+    });
+    expect(card()).toBeNull();
+
+    await act(async () => {
+      document.body.setAttribute('data-web-modal-scroll-lock', 'active');
+    });
+    expect(card()).toBeNull();
+
+    await act(async () => {
+      document.body.removeAttribute('data-web-modal-scroll-lock');
+    });
+    expect(card()).not.toBeNull();
+  });
+
   it('shows the card once a delivery survives the delay', () => {
     render(<ExperienceSurvey metricsConsent />);
 
