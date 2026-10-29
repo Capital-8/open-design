@@ -1490,6 +1490,42 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     }
   });
 
+  it('URL comment browse observes only its explicit unannotated saved target without enabling picker', async () => {
+    const response = await fetch(`${rawUrl('body.html')}?odPreviewBridge=selection`);
+    const bridge = load(await response.text())('script[data-od-url-selection-bridge]').text();
+    const dom = new JSDOM('<body><main data-od-id="old-id"><h2>Saved target</h2><button>Normal action</button></main></body>', {
+      url: rawUrl('body.html'), runScripts: 'outside-only', pretendToBeVisual: true,
+    });
+    try {
+      dom.window.eval(`window.posted=[]; window.postMessage=data=>window.posted.push(data);
+        window.requestAnimationFrame=fn=>{fn();return 1;};
+        document.querySelector('h2').getBoundingClientRect=()=>new DOMRect(10,1100,100,40);
+        document.querySelector('button').getBoundingClientRect=()=>new DOMRect(10,20,100,40);`);
+      dom.window.eval(bridge);
+      dom.window.eval(`
+        window.dispatchEvent(new MessageEvent('message',{data:{type:'od:comment-mode',enabled:false,observe:true}}));
+        window.dispatchEvent(new MessageEvent('message',{data:{type:'od:comment-active-target',elementId:'old-id',selector:'body > main > h2',locate:true,requestId:'browse'}}));
+        document.dispatchEvent(new Event('scroll'));
+        var click=new MouseEvent('click',{bubbles:true,cancelable:true});
+        document.querySelector('button').dispatchEvent(click);
+        window.clickPrevented=click.defaultPrevented;
+      `);
+      await new Promise(resolve => setTimeout(resolve, 25));
+      const result = dom.window.eval(`({messages:window.posted,clickPrevented:window.clickPrevented,picker:document.documentElement.hasAttribute('data-od-comment-mode')})`);
+      expect(result).toMatchObject({ clickPrevented:false, picker:false, messages:expect.arrayContaining([
+        expect.objectContaining({type:'od:comment-active-target-update',selector:'body > main > h2',text:'Saved target'}),
+        expect.objectContaining({type:'od:comment-targets',targets:[expect.objectContaining({text:'Saved target'})]}),
+      ]) });
+      expect((result as {messages:{type:string}[]}).messages.some(message=>message.type==='od:comment-target')).toBe(false);
+      const missing = dom.window.eval(`(() => {
+        document.querySelector('h2').remove();
+        window.dispatchEvent(new MessageEvent('message',{data:{type:'od:comment-active-target',elementId:'old-id',selector:'body > main > h2',locate:true,requestId:'missing-browse'}}));
+        return window.posted.at(-1);
+      })()`);
+      expect(missing).toMatchObject({type:'od:comment-location-missing',requestId:'missing-browse'});
+    } finally { dom.window.close(); }
+  });
+
   it('URL comment save validates the live selector without requiring the old identity', async () => {
     const response = await fetch(`${rawUrl('body.html')}?odPreviewBridge=selection`);
     const bridge = load(await response.text())('script[data-od-url-selection-bridge]').text();

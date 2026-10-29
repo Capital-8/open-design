@@ -76,7 +76,7 @@ describe('BoardComposerPopover keyboard submit', () => {
 
   it('closes the nested native menu on first Escape and retains the draft and attachment', () => {
     const onClose = vi.fn();
-    renderPopover({ onClose, images: [{ url: 'blob:reference', file: new File(['image'], 'reference.png', { type: 'image/png' }) }] });
+    renderPopover({ onClose, selectionKind: 'pod', images: [{ url: 'blob:reference', file: new File(['image'], 'reference.png', { type: 'image/png' }) }] });
     const menu = screen.getByRole('menu', { hidden: true });
     let menuOpen = false;
     vi.spyOn(menu, 'matches').mockImplementation(selector => selector === ':popover-open' && menuOpen);

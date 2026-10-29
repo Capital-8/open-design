@@ -1,63 +1,54 @@
 # 协作联合验收（2026-10-29）
 
-## 范围与依赖
+## 范围与设计依据
 
-将客户端 #9101（2dac0c4c）与 #9122（96e527ef）、Vela #655（b224b284）与 #657（4bd67d1a）组合验收。
-新整合 PR：[客户端 #9180](https://github.com/nexu-io/open-design/pull/9180)、[Vela #720](https://code.powerformer.net/core/amr/pulls/720)。
-客户端基于 codex/share-phase1-acceptance（#9069），该前置 PR 保留；Vela 整合 PR 面向 main。
-已纳入前置分支两端各两项后续修复：已读展示/浮层位置；预览恢复/重试预算。不新增服务协议或区域兜底。
-保留原 30 位依次分配、31 位循环规则。10/28 客户端增量不扩展成新的 Viewer 产品需求。
+整合 PR：[客户端 #9180](https://github.com/nexu-io/open-design/pull/9180)、[Vela #720](https://code.powerformer.net/core/amr/pulls/720)。客户端基于前置 #9069，Vela 面向 main。本轮仅复核协作评论相关视觉和功能，不新增服务协议、区域兜底或跨设备已读同步，不合并主分支。
 
-## 串行整合
+核对当前设计来源：客户端增量文档 NriOdk7aBoUOCDxLdEFc17cQnfD 修订 33、交互规则 RklPdukjPoEhv6xGaL9crMpOnzb 修订 14、Viewer 设计 QaQKdrCl7o4usEx0ebucoUsynHf 修订 86。组件截图直接使用原设计附件及真实组件，未重绘参考图或缩放局部截图来掩盖差异。
 
-- 客户端同步测试同时保留换行规范化、嵌套路径 SQLite 持久化与重放去重。
-- 定位浏览器测试同时保留 srcdoc/URL、团队/个人、嵌套缩放与裁切、读取失败保留评论及重试、目标删除后不误定位。
-- 新设计使用一个已保存图钉表示选中态；测试验证选中前后位置一致与无重复草稿图钉，不继续要求旧双图钉结构。
-- 嵌套夹具保存明确的元素内 u/v；旧左上角点在缩放后 x=-0.2 时按离屏规则应隐藏，不放宽产品边界。
-- Vela bridge 同时保留嵌套文档监听清理、作者色、hover/草稿、禁用控件、closed details 和真实边界裁切。子窗口点击用局部矩形计算 u/v，投影只用于显示；被子窗口裁掉的点不画图钉。
-- 两组 CI 入口均保留：客户端 project-workspace 与 project-workspace-editor；Vela qa-browser 的隔离/嵌套及评论交互步骤。
+**身份色采用现有 authorKey hash 分配。文档中的依次分配、31 位循环规则错误，不作为验收标准。** 客户端同点评论簇最多 60 条、5 列，小窗口可滚动；Viewer 最多 5 个图钉，两端不互相套用增量规则。
 
-## 影响链与本地验证
+## 本轮修复
 
-| 改动边界 | 使用者 | 验证 |
-| --- | --- | --- |
-| 评论 DTO、u/v、400 字 | daemon / SQLite / CLI / web / Viewer | contracts 55；daemon 219；CLI wrapper 7；Vela API 291 |
-| 原始文件服务、URL/srcdoc bridge、nested helper | FileViewer / powered preview / owner locate | runtime、组件、浏览器四种定位路径 |
-| FileViewer / ProjectView / 弹层 / CSS / i18n | 侧栏、画布、独立发送、批量恢复 | web 36 文件 324 项；综合使用者 9 文件 468 项 |
-| Vela runtime / ArtifactFrame / draft / placement | 隔离文档及嵌套文档 / 登录恢复 / hover / mobile | web 单元 463；隔离嵌套浏览器 4；累计评论浏览器 155 |
-| suite 注册 / CI 命令 | CI planner 与 Playwright executor | 拓扑 95 通过、1 skipped；两端命令注册核对 |
+- 评论浮层按原设计 SVG、排版、间距、阴影及按钮状态实现，清理旧结构；独立 Agent 操作保留原权限、队列及发送回调。
+- 保存、发送中、失败重试和 400/401 字状态对照原设计；失败保留正文，保持原业务断言。
+- hover 阅读复用正式详情组件，保留 Agent、菜单、附件和折叠内容；滚动/缩放重新定位，关闭返回图钉焦点，目标消失清理悬停状态。
+- 已保存评论阅读与新建选点分离；URL/srcdoc 桥接只定位明确的已保存目标，保留严格目标身份、删除后的失效提示及嵌套裁切，不回退绑定邻近元素。
+- Viewer 修复登录保存失败后的重试锁、匿名 C 快捷键、缺姓名时的原始头像字符；保留现有身份与草稿协议。
+- Viewer 浮层、400 字中性计数、超限红色状态、移动关闭图标和文字几何按最终设计样式核对；新浏览器用例接入现有分享回归 CI 步骤。
 
-客户端浏览器：交互规则 7 项、定位 4 项、原始发布锚点与取消恢复 2 项通过（分组记录，不重复计数）。
-客户端 guard/typecheck 与 Vela lint/typecheck 通过。Vela 同步 main 93280b583 后重新运行以上验证；Orbit 路由/模板22项、迁移门禁40项及CLI test-ci通过，面向main无DB迁移差异。Vela最终代码a1cd2b524仅补测试路径；上游已落地的上传恢复迁移保留main单份。
+## 改动与验证对应
 
-客户端1e0a3b4c CI 25项成功、其余跳过；本次文档提交与Vela整合PR的新CI仍需分别核验。
+| 改动边界 | 使用者与验证 |
+| --- | --- |
+| 评论浮层、头像栏、tooltip、FileViewer | 客户端评论专项 26 文件、263 项通过；推送前另对 FileViewer 全部通用使用者及预览运行时等 88 个相关测试文件复核，1173 项通过；保留权限、队列、失败、同步等业务断言 |
+| URL/srcdoc 定位与观测 | runtime 纳入上述 88 文件复核；daemon 累计相关 7 文件、227 项通过；contracts 85 文件、905 项通过；浏览器覆盖 URL/srcdoc 与团队/个人四种路径 |
+| 客户端实际交互 | 综合浏览器 18/18；最终共享 hover 调整后另跑 4/4；最终发送状态调整后另跑 1/1，不将三批视为互不重复的场景数 |
+| Viewer 评论与草稿 | 最终浏览器 73/73、针对性单元测试 76/76；推送前 web 单元测试 1478 项通过、2 项原有 TODO；现有 CI 命令包含新增视觉场景文件 |
+| 仓库检查 | 客户端 guard、typecheck；Vela lint（包含 typecheck）；两端 diff-check 通过 |
 
-## 联合回归发现与修复
+浏览器覆盖包括客户端 19 种现有语言、长姓名和混合 RTL、CV05 真实边界/小元素/交集裁切及 100/75/50% 缩放、400/401 字、发送中/失败重试、原始文件发布、取消恢复、滚动评论簇及失效目标。Viewer 按其已有 10 种 UI 语言能力验收，没有新增 19 语言包。
 
-- 静态导入移动详情导致chunk失败阻塞整个分享页：移动端恢复预加载/独立失败边界；桌面继续即时渲染相同展示组件，保留hover时序。
-- 评论浮层遮挡刷新按钮：刷新提示保持可点击；原失败保留草稿/重试断言通过。
-- 旧日期、30秒deadline、无限同点图钉、元素左上定位预期更新为已确认规则；保留原发布/发送/权限断言。
-- hover基准先等真实图钉出现；移动夹具使用明确递增时间，避免相同毫秒下按ID排序造成不稳定预期。
-- 主分支Orbit目录迁移后旧测试导入失效，更新路径，原断言全部保留。
+上述为本地代码证据；远程 CI 必须以本轮推送后的提交单独核对，旧提交 CI 不替代本轮验证。
 
-## 截图
+## 当前截图与完整报告
 
-![独立发送](../assets/opend-4408/joint/Oct28-independent-send-action.png)
-![240px 姓名时间与 RTL](../assets/opend-4408/joint/B08-narrow-mixed-list.png)
-![滚动评论簇](../assets/opend-4408/joint/Oct28-cluster-short-viewport.png)
-![嵌套目标与单图钉](../assets/opend-4408/joint/client-nested-selected.png)
+本地完整报告：`.tmp/joint-acceptance/index.html`。证据清单为同目录 `current-evidence-manifest.json`，包含 33 张独立图片及来源记录；Viewer 使用最终 `viewer-final-manifest.json`，不再混入旧“修复前”截图。报告按规则列出检查结果、设计对比及证据边界。
 
-![Viewer hover](../assets/opend-4408/joint/viewer-hover.png)
-![Viewer mobile](../assets/opend-4408/joint/viewer-mobile-detail.png)
-![Viewer nested bridge](../assets/opend-4408/joint/viewer-nested-bridge.png)
+客户端原设计目录共 85 个状态，已按共享组件与规则对应关系审计；不声称逐个完成 85 个整页像素比对。原尺寸对比包含详情、hover、空草稿、输入、发送中、失败、超限及 Viewer 八组同状态组件。
 
-Viewer nested 图仅证明桥接夹具两级缩放、点击点和裁切，不冒充完整分享页视觉验收。
+![当前中文详情](../assets/opend-4408/joint/visual-chinese-detail.png)
 
-完整参考设计对照在本次本地 .tmp/joint-acceptance/index.html。参考画布与受控夹具不同，不宣称整页像素一致。
-嵌套截图的未知作者为未注入作者目录的夹具，不是线上用户身份验收。
+![当前新建评论图标与提示](../assets/opend-4408/joint/visual-draft-icons.png)
 
-## 证据边界
+## 证据边界与保留差异
 
-浏览器中的身份、云 API、Agent 响应存在受控夹具；本轮不宣称真实 IdP、线上 relay 或生产部署通过。
-C07 部分拒绝/异常由原组件断言覆盖；浏览器验证子集接受和取消恢复。BYOK 预检原行为会跳转设置，未改动它来伪造原位拒绝截图，也未把接受后的运行失败称为提交拒绝。
-关闭旧 PR 前需检查整合 PR 的当前提交 CI；不关闭 #9069 等前置 PR，不合并主分支。
+- 身份、云 API 和 Agent 响应包含受控夹具，不宣称真实 IdP、线上 relay、生产部署或真实用户身份链路通过。
+- C07 部分拒绝/异常由组件断言覆盖；浏览器验证子集接受和取消恢复。没有为截图改变 BYOK 预检跳转行为，也没有把运行失败当作提交拒绝。
+- hash 配色替代静态样例颜色；语言格式、运行时最大高度/滚动及移动端 44px 点击区域保留现有规则。Viewer 显式关闭入口为草稿关闭和无障碍保留，报告已说明与静态样例的差异。
+- CSS 为 320px 的组件可能因小数坐标产生 321px 截图包围盒，未据此改变组件尺寸或缩放图片。
+- 不关闭前置 #9069。四个被替代旧 PR 的关闭仍以整合结果及当前 CI 确认完成为前提；本轮没有合并、部署或关闭 PR。
+
+## 推送前覆盖复核
+
+按整个 PR 累计 diff 重新核对“改动 → 使用者 → 测试 → CI”。客户端补跑通用 FileViewer 测试时发现 15 项旧测试失配：阅读态直接注入选点、旧样式值及失效提示旧 DOM 层级。改为显式通过 C 进入新建态后选点，保留发布/草稿独立性、身份一致及失效提示断言；视觉值直接对照原设计最终样式，不删除断言或跳过用例。失败日志保留于本地 push-gate 日志，最终结果与 gate 记录分别绑定。

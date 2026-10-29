@@ -313,6 +313,7 @@ export function BoardComposerPopover({
   saveError = false,
   author,
   locationNotice,
+  positionStyle,
 }: {
   target: PreviewCommentSnapshot;
   existing: PreviewComment | null;
@@ -369,6 +370,8 @@ export function BoardComposerPopover({
   saveError?: boolean;
   author?: ReactNode;
   locationNotice?: string;
+  /** Placement supplied by the hover shell; content and actions stay shared. */
+  positionStyle?: CSSProperties;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<CSSProperties>({});
@@ -465,9 +468,8 @@ export function BoardComposerPopover({
               const rect = event.currentTarget.getBoundingClientRect();
               setMenuPosition({ left: Math.min(window.innerWidth - 140, Math.max(16, rect.right - 120)), top: Math.min(window.innerHeight - 110, rect.bottom + 4) });
               menuRef.current?.togglePopover();
-            }}>···</button>
+            }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.45" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.45" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.45" fill="currentColor" stroke="none" /></svg></button>
             <div ref={menuRef} popover="auto" role="menu" className={browseStyles.menuItems} style={menuPosition}>
-              {!existing && canSendToAgent && allowSendToChat ? <button type="button" data-testid="comment-add-send" disabled={sendBlocked} title={sendDisabled ? sendDisabledReason : undefined} onClick={() => void onSendBatch()}>{primaryLabel}</button> : null}
               {existing && onDeleteComment && canDeleteComment ? <button type="button" className={browseStyles.deleteAction} disabled={sending} onClick={() => void onDeleteComment(existing.id)}>{t('common.delete')}</button> : null}
               {isPodSelection && canEditComment && !existing ? <button type="button" data-testid="comment-popover-add-note" disabled={!draft.trim() || sending || overLimit} onClick={onAddDraft}>{t('chat.comments.addNote')}</button> : null}
             </div>
@@ -483,7 +485,7 @@ export function BoardComposerPopover({
       role="dialog"
       aria-modal="false"
       aria-label={`${t('chat.comments.comment')}${target.label ? `: ${target.label}` : ''}`}
-      style={popoverStyle}
+      style={positionStyle ?? popoverStyle}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -503,15 +505,21 @@ export function BoardComposerPopover({
           </div>
           {canSendToAgent && allowSendToChat ? <button
             type="button"
-            className={browseStyles.iconButton}
+            className={`${browseStyles.iconButton} ${browseStyles.agentButton} od-tooltip`}
             data-testid="comment-add-send"
             disabled={sendBlocked}
             title={sendDisabled ? sendDisabledReason : primaryLabel}
+            data-tooltip={sendDisabled ? sendDisabledReason : t('chat.comments.sendToChat')}
+            data-tooltip-placement="top"
+            data-tooltip-context="comment-agent"
             aria-label={primaryLabel}
             onClick={() => void onSendBatch()}
-          ><Icon name="send" size={16} /></button> : null}
+          ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+            <path d="M20.05 3.4C20.7 3.16 20.84 3.3 20.6 3.95L14.54 20.08C14.3 20.71 13.94 20.72 13.66 20.1L10.67 13.51Q10.61 13.39 10.49 13.33L3.9 10.34C3.28 10.06 3.29 9.7 3.92 9.46Z" />
+            <path d="m20.3 3.7-9.5 9.5" />
+          </svg></button> : null}
           {actionsMenu}
-          <button type="button" className={browseStyles.iconButton} aria-label={t('common.close')} onClick={onClose}><Icon name="close" size={14} /></button>
+          <button type="button" className={browseStyles.iconButton} aria-label={t('common.close')} onClick={onClose}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m6.5 6.5 11 11m0-11-11 11" /></svg></button>
         </div>
       ) : null}
       {/* Everything above the action row scrolls; the action row itself lives
@@ -611,7 +619,6 @@ export function BoardComposerPopover({
                 ))}
               </div>
             ) : null}
-            {existing && locationNotice ? <p dir="auto" role="status" className={browseStyles.readonlyNote}>{locationNotice}</p> : null}
             {existing ? <div className={browseStyles.detail} data-testid="comment-popover-detail">
               <p dir="auto" ref={detailRef} className={detailExpanded ? browseStyles.expanded : browseStyles.clamped}>{existing.note}</p>
               {detailOverflows || detailExpanded ? <button type="button" onClick={() => setDetailExpanded(value => !value)} aria-expanded={detailExpanded}>
@@ -656,8 +663,12 @@ export function BoardComposerPopover({
                 }
               }}
             />}
+            {existing && locationNotice ? <p dir="auto" role="status" className={browseStyles.locationNotice}>
+              <svg width="14" height="14" viewBox="2.9 2.9 18.2 18.2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5" /><circle cx="12" cy="7.7" r=".6" fill="currentColor" stroke="none" /></svg>
+              <span>{locationNotice}</span>
+            </p> : null}
             {overLimit ? <p dir="auto" role="alert" className={`${browseStyles.error} ${browseStyles.limitError}`}><span>{t('comment.overLimit', { count: characterCount - COMMENT_MAX_CHARACTERS, max: COMMENT_MAX_CHARACTERS })}</span><span dir="ltr" className={browseStyles.counter}>{characterCount} / {COMMENT_MAX_CHARACTERS}</span></p> : null}
-            {!existing && saveError ? <p dir="auto" role="alert" className={browseStyles.error}>{t('comment.saveFailed')} <button type="button" disabled={saveDisabled} onClick={() => void onSaveComment()}>{t('preview.retry')}</button></p> : null}
+            {!existing && saveError ? <p dir="auto" role="alert" className={browseStyles.error}>{t('comment.saveFailed')}</p> : null}
             {/* OP2: explain WHY the textarea is read-only when it's specifically
                 a share-page (external) comment — team-member-vs-team-member
                 read-only (OP3) has no such reason line, board only asked for
@@ -677,13 +688,30 @@ export function BoardComposerPopover({
         <div className={browseStyles.actionsStart}>
           {!existing && onAttachImages && canEditComment ? <>
             <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={onImageInputChange} />
-            <button type="button" className={browseStyles.iconButton} disabled={sending} onClick={() => imageInputRef.current?.click()} title={t('chat.annotationAttachImage')} aria-label={t('chat.annotationAttachImage')}><Icon name="image" size={16} /></button>
+            <button type="button" className={browseStyles.iconButton} disabled={sending} onClick={() => imageInputRef.current?.click()} title={t('chat.annotationAttachImage')} aria-label={t('chat.annotationAttachImage')}><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M2.9918 21C2.44405 21 2 20.5551 2 20.0066V3.9934C2 3.44476 2.45531 3 2.9918 3H21.0082C21.556 3 22 3.44495 22 3.9934V20.0066C22 20.5552 21.5447 21 21.0082 21H2.9918ZM20 15V5H4V19L14 9L20 15ZM20 17.8284L14 11.8284L6.82843 19H20V17.8284ZM8 11C6.89543 11 6 10.1046 6 9C6 7.89543 6.89543 7 8 7C9.10457 7 10 7.89543 10 9C10 10.1046 9.10457 11 8 11Z" /></svg></button>
           </> : null}
         </div>
-        {!existing ? actionsMenu : null}
-        {!existing && canEditComment ? <button type="button" className={browseStyles.send} data-testid="comment-popover-save" aria-label={t('chat.comments.comment')} disabled={isPodSelection ? sendBlocked : saveDisabled} onClick={() => void (isPodSelection ? onSendBatch() : onSaveComment())}>
-          {sending ? <span className={browseStyles.spinner} aria-label={t('common.loading')} /> : <span aria-hidden>↑</span>}
+        {isPodSelection ? actionsMenu : null}
+        <div className={browseStyles.sendOptions}>
+        {canSendToAgent && allowSendToChat ? <button
+            type="button"
+            className={`${browseStyles.iconButton} ${browseStyles.agentButton} od-tooltip`}
+            data-testid="comment-add-send"
+            disabled={sendBlocked}
+            title={sendDisabled ? sendDisabledReason : primaryLabel}
+            data-tooltip={sendDisabled ? sendDisabledReason : t('chat.comments.sendToChat')}
+            data-tooltip-placement="top"
+            data-tooltip-context="comment-agent"
+            aria-label={primaryLabel}
+            onClick={() => void onSendBatch()}
+          ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+            <path d="M20.05 3.4C20.7 3.16 20.84 3.3 20.6 3.95L14.54 20.08C14.3 20.71 13.94 20.72 13.66 20.1L10.67 13.51Q10.61 13.39 10.49 13.33L3.9 10.34C3.28 10.06 3.29 9.7 3.92 9.46Z" />
+            <path d="m20.3 3.7-9.5 9.5" />
+          </svg></button> : null}
+        {!existing && canEditComment ? <button type="button" className={browseStyles.send} data-sending={sending} data-testid="comment-popover-save" aria-label={t('chat.comments.comment')} disabled={isPodSelection ? sendBlocked : saveDisabled} onClick={() => void (isPodSelection ? onSendBatch() : onSaveComment())}>
+          {sending ? <span className={browseStyles.spinner} aria-label={t('common.loading')} /> : <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M12 20V4m-6 6 6-6 6 6" /></svg>}
         </button> : null}
+        </div>
       </div> : null}
     </div>
   );

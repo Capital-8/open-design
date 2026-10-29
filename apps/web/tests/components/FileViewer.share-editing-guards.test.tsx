@@ -147,6 +147,7 @@ it.each(['initially-lost', 'saved', 'typed', 'cleared', 'whitespace-only', 'fres
   }
   // Saved details are read-only; composer-state cases start a separate draft.
   if (!['initially-lost', 'saved'].includes(state)) {
+    fireEvent.keyDown(document.body, { key: 'c' });
     await selectLegacy({ elementId: 'draft-target', selector: '[data-od-id="draft-target"]' });
   }
   if (state === 'cleared') fireEvent.change(screen.getByTestId('probe-draft'), { target: { value: 'Temporary draft' } });

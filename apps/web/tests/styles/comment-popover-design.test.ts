@@ -16,13 +16,13 @@ describe('comment composer owns its current design directly', () => {
     expect(moduleSource).not.toContain('comment-popover');
     expect(declarations('.popover')).toMatchObject({
       position:'absolute', 'z-index':'40', display:'flex', 'flex-direction':'column', overflow:'hidden',
-      'border-radius':'12px', background:'#fff', border:'1px solid #e6e6e6', 'box-shadow':'0 4px 18px #00000012',
+      'border-radius':'12px', background:'#fdfefe', border:'0', 'box-shadow':'0 6px 24px #0000000d,0 2px 6px #00000005',
     });
   });
   it('keeps the scroll body separate from actions and supplies native icon button layout', () => {
     expect(declarations('.body')).toMatchObject({flex:'1 1 auto',overflow:'auto','min-height':'0'});
     expect(declarations('.actions')).toMatchObject({flex:'0 0 auto',display:'flex'});
-    expect(declarations('.iconButton')).toMatchObject({display:'inline-flex',width:'22px',height:'22px',background:'transparent'});
+    expect(declarations('.iconButton')).toMatchObject({display:'inline-flex',width:'24px',height:'28px',background:'transparent'});
     expect(declarations('.readonlyNote')).toMatchObject({color:'#888','font-size':'11px'});
   });
 });

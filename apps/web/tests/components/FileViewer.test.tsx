@@ -12751,6 +12751,10 @@ describe('FileViewer tweaks toolbar', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Open comment for pin-saved' }));
       expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent('Saved note');
 
+      // Reading a saved comment does not enable canvas picking.
+      pickElement(frame, heroTarget);
+      expect(screen.getByTestId('comment-popover-detail')).toHaveTextContent('Saved note');
+      fireEvent.keyDown(document.body, { key: 'c' });
       pickElement(frame, heroTarget);
       expect(composerAccessibleName()).toContain('Hero heading');
       expect(screen.queryByText(discardNotice)).toBeNull();
@@ -13946,6 +13950,7 @@ describe('FileViewer tweaks toolbar', () => {
     fireEvent.click(within(pin).getByRole('button'));
     expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent('My comment');
     expect(pin.querySelector('.comment-saved-pin')).toHaveTextContent('琼');
+    fireEvent.keyDown(document.body, { key: 'c' });
     act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, data: {
       type: 'od:comment-target', elementId: 'new-target', selector: 'h2', label: 'New target', text: '', htmlHint: '',
       position: { x: 16, y: 80, width: 100, height: 30 },
@@ -14255,13 +14260,13 @@ describe('FileViewer tweaks toolbar', () => {
     const shellRule = (selector: string) => rule(shellCss, selector);
 
     expect(coreRule('.comment-side-panel')).toContain('width: 100%;');
-    expect(coreRule('.comment-side-header')).toContain('padding: 0 10.5px 0 14.5px;');
+    expect(coreRule('.comment-side-header')).toContain('padding: 0 10.5px 0 22.5px;');
     expect(coreRule('.comment-side-list')).toContain('padding: 8px 12px;');
     expect(coreRule('.comment-side-list')).toContain('gap: 6px;');
     expect(coreRule('.comment-side-item')).toContain('padding: 6px 10px 6px 8px;');
     expect(coreRule('.comment-side-item')).toContain('border-radius: 8px;');
     expect(coreRule('.comment-side-time')).toContain('font-size: 10.5px;');
-    expect(coreRule('.comment-side-check')).toContain('border: 1px solid #CFCFCF;');
+    expect(coreRule('.comment-side-check')).toContain('border: 1px solid #dcdedb;');
     expect(coreRule('.comment-side-selectbar .primary')).toContain('background: #202020;');
     expect(shellRule('.comment-float-host')).toContain('width: min(var(--comment-panel-width, 320px), calc(100vw - 32px));');
     expect(shellRule('.comment-float-host')).toContain('border-left: 1px solid #E6E6E6;');
@@ -15821,7 +15826,7 @@ describe('LiveArtifactRefreshHistoryPanel', () => {
       expect(screen.queryByTestId('comment-target-overlay')).toBeNull();
       expect(screen.getByTestId('comment-side-item')).toHaveTextContent(comment.note);
       expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
-      expect(within(screen.getByTestId('comment-popover')).getByText(_expected)).toHaveAttribute('role', 'status');
+      expect(within(screen.getByTestId('comment-popover')).getByText(_expected).closest('[role="status"]')).not.toBeNull();
       expect(screen.queryByTestId('comment-popover-input')).toBeNull();
       return;
     }

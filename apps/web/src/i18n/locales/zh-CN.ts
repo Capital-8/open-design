@@ -5976,7 +5976,7 @@ export const zhCN: Dict = {
   "comment.moreCount": "查看评论（{n}）",
   "comment.resizePanel": "调整评论面板宽度",
   "comment.overLimit": "已超出 {count} 字，请精简后发送",
-  "comment.saveFailed": "评论提交失败，请重试。",
+  "comment.saveFailed": "发送失败，请重试",
   "comment.locationUnavailable": "无法定位此元素，页面可能已变化。",
   "comment.agentSubmitFailed": "提交失败，请重试。",
   "comment.agentSubmitUnavailable": "当前无法提交，请稍后重试。",

@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import { AnnotationHoverPopover, BoardComposerPopover } from '../../src/components/BoardComposerPopover';
 import styles from '../../src/components/CommentComposer.module.css';
+import { TooltipLayer } from '../../src/components/TooltipLayer';
 
 afterEach(cleanup);
 const props: ComponentProps<typeof BoardComposerPopover> = {
@@ -28,7 +29,11 @@ it('detail mounts its real author, menu and close while keeping the old controls
   const close=vi.fn();
   render(<BoardComposerPopover {...props} onClose={close} locationNotice="Position may have changed" author={<span>Alice</span>} existing={{...props.target,id:'comment-1',projectId:'project',conversationId:'conversation',note:'Read only detail',status:'open',createdAt:1,updatedAt:1}}/>);
   expect(screen.getByText('Alice')).toBeTruthy();
-  expect(screen.getByRole('status')).toHaveTextContent('Position may have changed');
+  const notice=screen.getByRole('status');
+  expect(notice).toHaveTextContent('Position may have changed');
+  expect(screen.getByTestId('comment-popover-detail').compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(notice).toHaveClass(styles.locationNotice!);
+  expect(notice.querySelector('svg')).toHaveAttribute('aria-hidden','true');
   expect(screen.getByLabelText('comment.moreActions')).toBeTruthy();
   expect(screen.queryByLabelText('Move comment box')).toBeNull();
   expect(screen.queryByTestId('comment-popover-view-all')).toBeNull();
@@ -82,11 +87,11 @@ it.each([
   fireEvent.click(button);
   expect(send).toHaveBeenCalledTimes(disabled ? 0 : 1);
 });
-it('keeps draft pod send and add-note actions in the existing menu', () => {
+it('exposes draft pod send while keeping add-note in the menu', () => {
   const addNote=vi.fn();
   render(<BoardComposerPopover {...props} target={{...props.target,selectionKind:'pod'}} onAddDraft={addNote}/>);
   const menu=screen.getByRole('menu',{hidden:true});
-  expect(menu.contains(screen.getByTestId('comment-add-send'))).toBe(true);
+  expect(menu.contains(screen.getByTestId('comment-add-send'))).toBe(false);
   const add=screen.getByTestId('comment-popover-add-note');
   expect(menu.contains(add)).toBe(true);
   fireEvent.click(add);
@@ -96,4 +101,32 @@ it('the independent annotation hover retains its existing global surface', () =>
   render(<AnnotationHoverPopover target={{...props.target,style:{color:'#f00'}}} scale={1} bounds={{width:800,height:600}}/>);
   expect(screen.getByTestId('annotation-hover-popover')).toHaveClass('comment-popover','annotation-hover-popover');
   expect(screen.getByTestId('annotation-hover-style-summary')).toHaveTextContent('Color');
+});
+
+it.each([false,true])('shows the Agent tooltip on pointer hover and keyboard focus (detail=%s)', detail => {
+  render(<><BoardComposerPopover {...props} existing={detail ? savedComment : null} queueOnSend t={translate}/><TooltipLayer/></>);
+  const button=screen.getByTestId('comment-add-send');
+  expect(button).toHaveAccessibleName('Queue');
+  expect(button).toHaveAttribute('data-tooltip-placement','top');
+  fireEvent.pointerOver(button);
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Send to Agent');
+  fireEvent.pointerOut(button);
+  fireEvent.keyDown(document,{key:'Tab'});
+  fireEvent.focusIn(button);
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Send to Agent');
+});
+it('retains the disabled Agent reason in the shared tooltip', () => {
+  render(<><BoardComposerPopover {...props} sendDisabled sendDisabledReason="Agent unavailable" t={translate}/><TooltipLayer/></>);
+  const button=screen.getByTestId('comment-add-send');
+  expect(button).toBeDisabled();
+  fireEvent.pointerOver(button);
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Agent unavailable');
+});
+it('keeps the sending state on the disabled primary button with its in-place loader', () => {
+  render(<BoardComposerPopover {...props} sending/>);
+  const button=screen.getByTestId('comment-popover-save');
+  expect(button).toBeDisabled();
+  expect(button).toHaveAttribute('data-sending','true');
+  expect(button.querySelector(`.${styles.spinner}`)).not.toBeNull();
+  expect(screen.getByTestId('comment-popover-input')).toHaveAttribute('readonly');
 });

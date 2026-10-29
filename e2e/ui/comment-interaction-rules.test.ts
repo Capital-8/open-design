@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { COMMENT_REFERENCE_ARTIFACT_HTML } from '../resources/comment-reference-artifact.js';
 import { PNG } from 'pngjs';
 import type { Page } from '@playwright/test';
 import { clusterTest, test, expect } from '@/playwright/suite';
@@ -11,7 +12,7 @@ const LONG_NAME = 'Alexandria Catherine Montgomery-Wellington';
 const NOTE = 'يرجى تحديث Target 42 — 中文反馈';
 test.use({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai', colorScheme: 'light', deviceScaleFactor: 1 });
 
-async function seed(page: Page, controls = false, extraHtml = '') {
+async function seed(page: Page, controls = false, extraHtml = '', artifactHtml?: string) {
   await applyStandardMocks(page);
   await page.clock.setFixedTime(NOW);
   await page.addInitScript(() => {
@@ -26,7 +27,7 @@ async function seed(page: Page, controls = false, extraHtml = '') {
   const created = await page.request.post('/api/projects', { data: { id, name: '评论交互规则', skillId: null, designSystemId: null, metadata: { kind: 'prototype', nameSource: 'user' } } });
   expect(created.ok(), await created.text()).toBeTruthy();
   const { conversationId } = await created.json() as { conversationId: string };
-  const written = await page.request.post(`/api/projects/${id}/files`, { data: { name: 'index.html', content: '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><body style="margin:0;padding:80px;font-family:system-ui;background:#faf9f6"><h1 data-od-id="hero">让反馈成为下一步行动</h1><p>保留每一条还没处理的建议</p>' + (controls ? '<div role="menu"><button id="frame-menu">Frame menu</button></div><dialog open style="position:static"><button id="frame-dialog">Frame dialog</button></dialog><button id="frame-handled" onkeydown="event.preventDefault()">Frame handled</button><input id="frame-input"><button id="frame-plain">Frame plain</button>' : '') + extraHtml + '</body></html>', artifactManifest: { version: 1, kind: 'html', title: '评论规则', entry: 'index.html', renderer: 'html', exports: ['html'] } } });
+  const written = await page.request.post(`/api/projects/${id}/files`, { data: { name: 'index.html', content: artifactHtml ?? '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><body style="margin:0;padding:80px;font-family:system-ui;background:#faf9f6"><h1 data-od-id="hero">让反馈成为下一步行动</h1><p>保留每一条还没处理的建议</p>' + (controls ? '<div role="menu"><button id="frame-menu">Frame menu</button></div><dialog open style="position:static"><button id="frame-dialog">Frame dialog</button></dialog><button id="frame-handled" onkeydown="event.preventDefault()">Frame handled</button><input id="frame-input"><button id="frame-plain">Frame plain</button>' : '') + extraHtml + '</body></html>', artifactManifest: { version: 1, kind: 'html', title: '评论规则', entry: 'index.html', renderer: 'html', exports: ['html'] } } });
   expect(written.ok(), await written.text()).toBeTruthy();
   return { id, conversationId };
 }
@@ -51,7 +52,7 @@ function visibleAttachment() {
   return { name: 'visible-blue-gold.png', mimeType: 'image/png', buffer: PNG.sync.write(png) };
 }
 
-test('[P0] D05 native menu Escape retains visible image and draft then restores the exact creation opener', async ({ page }, testInfo) => {
+test('[P0] D05 independent Agent action retains draft and image while Escape restores the creation opener', async ({ page }, testInfo) => {
   const { id } = await seed(page);
   await open(page, id);
   const opener = page.getByTestId('board-mode-toggle');
@@ -65,12 +66,12 @@ test('[P0] D05 native menu Escape retains visible image and draft then restores 
   await expect(image).toBeVisible();
   await expect.poll(() => image.evaluate((node: HTMLImageElement) => [node.complete, node.naturalWidth, node.naturalHeight])).toEqual([true, 160, 96]);
   const src = await image.getAttribute('src');
-  await popover.getByRole('button', { name: '更多评论操作' }).click();
-  await expect(popover.getByRole('menu')).toBeVisible();
-  await expect.poll(() => popover.getByRole('menu').evaluate(node => node.matches(':popover-open'))).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('D05-menu.png') });
-  await page.keyboard.press('Escape');
-  await expect(popover.getByRole('menu')).toBeHidden();
+  const agent = popover.getByTestId('comment-add-send');
+  await expect(agent).toBeVisible();
+  await expect(agent).toBeEnabled();
+  await expect(popover.getByRole('button', { name: '更多评论操作' })).toHaveCount(0);
+  await agent.focus();
+  await page.screenshot({ path: testInfo.outputPath('D05-independent-agent.png') });
   await expect(input).toHaveValue('CV16 受控草稿与可见附件');
   await expect(image).toBeVisible();
   await expect(image).toHaveAttribute('src', src!);
@@ -171,6 +172,177 @@ test('[P0] B08 actual 240px resizer preserves full author title, same-line times
   await expect(pin).toBeFocused();
 });
 
+
+test('[P1] comment detail visual review uses the reference author and Chinese note at native size', async ({ page }, testInfo) => {
+  const artifact = COMMENT_REFERENCE_ARTIFACT_HTML;
+  const { id, conversationId } = await seed(page, false, '', artifact);
+  await page.addInitScript(() => localStorage.setItem('open-design:locale', 'en'));
+  const note = '主标题和副标题的间距可以再收紧一点。';
+  const saved = await page.request.post(`/api/projects/${id}/conversations/${conversationId}/comments`, { data: {
+    target: { filePath: 'index.html', elementId: 'hero', selector: '[data-od-id="hero"]', label: 'IRREPLACEABLE 主标题', text: 'IRREPLACEABLE', htmlHint: '<h1 id="hero-headline">', position: { x: 0, y: 0, width: 800, height: 900, anchor: { u: .67, v: .28 } } }, note,
+  } });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  await page.route(`**/api/projects/${id}/conversations/*/comments`, async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ response, json: { ...body, comments: body.comments.map((comment: object) => ({ ...comment, authorDisplayName: 'Mia', authorKey: 'viewer-mia', createdAt: NOW.getTime() - 2 * 60_000 })) } });
+  });
+  await open(page, id);
+  await page.getByTestId('comment-panel-toggle').click();
+  const savedPin = page.getByTestId('comment-saved-marker-hero').getByRole('button');
+  await savedPin.hover();
+  const hover = page.getByTestId('comment-hover-preview');
+  await expect(hover).toBeVisible();
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await expect.poll(async () => {
+    const pin = await savedPin.boundingBox();
+    const card = await hover.boundingBox();
+    if (!pin || !card) return 1000;
+    return Math.min(Math.abs(card.x - pin.x - pin.width - 12), Math.abs(pin.x - card.x - card.width - 12), Math.abs(card.y - pin.y - pin.height - 12), Math.abs(pin.y - card.y - card.height - 12));
+  }).toBeLessThan(2);
+  await page.screenshot({ path: testInfo.outputPath('CV08-hover-reflow-current.png') });
+  await hover.screenshot({ path: testInfo.outputPath('F16-hover-component.png') });
+  await expect(hover.getByTestId('comment-add-send')).toBeVisible();
+  await hover.locator('button[aria-haspopup="menu"]').click();
+  await expect(hover.getByRole('menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(hover.getByRole('menu')).toBeHidden();
+  await hover.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(hover).toHaveCount(0);
+  await expect(savedPin).toBeFocused();
+  // The 150ms hover timer must not reopen a card explicitly closed by keyboard.
+  await page.waitForTimeout(200);
+  await expect(hover).toHaveCount(0);
+  await page.mouse.move(0, 0);
+  await expect(hover).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByTestId('comment-side-item').click();
+  await expect(page.getByTestId('board-mode-toggle')).toHaveAttribute('aria-pressed', 'false');
+  const detail = page.getByTestId('comment-popover');
+  await expect(detail.getByTestId('comment-popover-detail')).toHaveText(note);
+  await expect(detail.getByTestId('comment-popover-detail').locator('p')).toHaveCSS('direction', 'ltr');
+  await expect(detail.locator('textarea')).toHaveCount(0);
+  await expect(detail.getByTestId('comment-add-send')).toBeEnabled();
+  const headerGap = await detail.evaluate(node => {
+    const name = node.querySelector('.comment-side-author')!.getBoundingClientRect();
+    const time = node.querySelector('.comment-detail-time')!.getBoundingClientRect();
+    return time.left - name.right;
+  });
+  expect(headerGap).toBeGreaterThanOrEqual(0);
+  expect(headerGap).toBeLessThanOrEqual(10);
+  await testInfo.attach('visual-detail-metrics', { body: JSON.stringify(await detail.evaluate(n => { const style = getComputedStyle(n); return { width: n.getBoundingClientRect().width, height: n.getBoundingClientRect().height, fontFamily: style.fontFamily, background: style.backgroundColor, border: style.border, text: n.textContent }; }), null, 2), contentType: 'application/json' });
+  await testInfo.attach('visual-chinese-detail', { body: await detail.screenshot({ path: testInfo.outputPath('visual-chinese-detail.png') }), contentType: 'image/png' });
+  await testInfo.attach('visual-chinese-context', { body: await page.screenshot({ path: testInfo.outputPath('visual-chinese-context.png') }), contentType: 'image/png' });
+});
+
+test('[P1] D01-D04-D10 actual draft states preserve content, prevent duplicate submission and retry at 400 characters', async ({ page }, testInfo) => {
+  const artifact = COMMENT_REFERENCE_ARTIFACT_HTML;
+  const { id } = await seed(page, false, '', artifact);
+  await open(page, id);
+  await page.getByTestId('board-mode-toggle').click();
+  await page.frameLocator('iframe:visible').locator('h1').click();
+  const card = page.getByTestId('comment-popover');
+  const input = card.getByTestId('comment-popover-input');
+  const save = card.getByTestId('comment-popover-save');
+  const agent = card.getByTestId('comment-add-send');
+  await expect(save).toBeDisabled();
+  await expect(agent).toBeDisabled();
+  await card.screenshot({ path: testInfo.outputPath('D01-current.png') });
+  await input.fill('统一调整主标题字号与右侧留白。');
+  await expect(save).toBeEnabled();
+  await expect(agent).toBeEnabled();
+  await input.focus();
+  await input.press('Tab');
+  await page.keyboard.press('Tab');
+  await agent.focus();
+  await expect(page.getByRole('tooltip')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('D02-tooltip-current.png') });
+  await card.screenshot({ path: testInfo.outputPath('D02-current.png') });
+  await input.fill('评'.repeat(401));
+  await expect(input).toHaveValue('评'.repeat(401));
+  await expect(save).toBeDisabled();
+  await expect(agent).toBeDisabled();
+  await expect(card.getByRole('alert')).toContainText('401');
+  for (let line = 0; line < 20; line++) await input.press('ArrowUp');
+  await card.screenshot({ path: testInfo.outputPath('D10-current.png') });
+  await input.fill('评'.repeat(400));
+  await expect(save).toBeEnabled();
+  await input.fill('统一调整主标题字号与右侧留白。');
+  let failRequest!: () => void;
+  const released = new Promise<void>(resolve => { failRequest = resolve; });
+  let posts = 0;
+  const url = `**/api/projects/${id}/conversations/*/comments`;
+  await page.route(url, async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    posts++;
+    await released;
+    await route.fulfill({ status: 503, json: { error: 'controlled save failure' } });
+  });
+  await save.click();
+  await expect(input).toHaveAttribute('readonly', '');
+  await expect(save).toBeDisabled();
+  await expect(save).toHaveCSS('opacity', '1');
+  await input.press('Enter');
+  expect(posts).toBe(1);
+  await card.screenshot({ path: testInfo.outputPath('D03-current.png') });
+  failRequest();
+  await expect(card.getByRole('alert')).toBeVisible();
+  await expect(input).toHaveValue('统一调整主标题字号与右侧留白。');
+  await expect(save).toBeEnabled();
+  await card.screenshot({ path: testInfo.outputPath('D04-current.png') });
+  await page.unroute(url);
+  await input.fill('评'.repeat(400));
+  await save.click();
+  await expect(input).toHaveCount(0);
+  await expect(page.getByTestId('comment-side-item')).toHaveCount(1);
+  await expect(page.getByTestId('board-mode-toggle')).toHaveAttribute('aria-pressed', 'false');
+  await page.screenshot({ path: testInfo.outputPath('D07-current.png') });
+});
+
+test('[P1] CV26 current 19 locales preserve long mixed-script comment layout and keyboard reachability', async ({ page }, testInfo) => {
+  test.setTimeout(T.xlong * 4);
+  const { id, conversationId } = await seed(page);
+  const note = 'يرجى تحديث Target 42 — 中文反馈 '.repeat(4);
+  const saved = await page.request.post(`/api/projects/${id}/conversations/${conversationId}/comments`, { data: {
+    target: { filePath: 'index.html', elementId: 'hero', selector: '[data-od-id="hero"]', label: 'h1', text: '让反馈成为下一步行动', htmlHint: '<h1>', position: { x: 80, y: 80, width: 350, height: 48 } }, note,
+  } });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  await page.route(`**/api/projects/${id}/conversations/*/comments`, async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ response, json: { ...body, comments: body.comments.map((comment: object) => ({ ...comment, authorDisplayName: LONG_NAME.repeat(2), authorKey: 'fixture:locale:stable' })) } });
+  });
+  await page.addInitScript(() => {
+    const locale = sessionStorage.getItem('comment-audit-locale');
+    if (locale) localStorage.setItem('open-design:locale', locale);
+  });
+  await open(page, id);
+  const results = [];
+  for (const locale of ['en', 'id', 'de', 'zh-CN', 'zh-TW', 'pt-BR', 'es-ES', 'ru', 'fa', 'ar', 'ja', 'ko', 'pl', 'hu', 'fr', 'uk', 'tr', 'th', 'it']) {
+    await page.evaluate(value => sessionStorage.setItem('comment-audit-locale', value), locale);
+    await page.reload();
+    await expect(page.getByTestId('comment-panel-toggle')).toBeVisible({ timeout: T.long });
+    if (!await page.getByTestId('comment-side-item').isVisible()) await page.getByTestId('comment-panel-toggle').click();
+    await page.getByTestId('comment-side-item').click();
+    const detail = page.getByTestId('comment-popover');
+    await expect(detail.getByTestId('comment-popover-detail')).toContainText(note);
+    const metric = await detail.evaluate(node => ({ width: node.clientWidth, scrollWidth: node.scrollWidth, rtl: getComputedStyle(node.querySelector('[data-testid="comment-popover-detail"] p')!).direction }));
+    expect(metric.scrollWidth).toBeLessThanOrEqual(metric.width + 1);
+    expect(metric.rtl).toBe('rtl');
+    const send = detail.getByTestId('comment-add-send');
+    await expect(send).toBeEnabled();
+    await send.focus();
+    await expect(send).toBeFocused();
+    results.push({ locale, ...metric });
+    await detail.screenshot({ path: testInfo.outputPath(`CV26-${locale}.png`) });
+    await page.keyboard.press('Escape');
+    await expect(detail).toHaveCount(0);
+    await expect(page.getByTestId('comment-side-item')).toBeFocused();
+  }
+  await testInfo.attach('CV26-layout-results', { body: JSON.stringify(results, null, 2), contentType: 'application/json' });
+});
 
 test('[P0] Oct28 rail opens canvas detail without hover and +N exposes the full 60-comment list; five-column cluster remains accessible in a short viewport', async ({ page }, testInfo) => {
   test.setTimeout(T.xlong * 2);
@@ -393,7 +565,7 @@ test('[P0] CV04 host and active preview respect native shortcut guards before ac
 });
 
 
-for (const zoom of [100, 75]) {
+for (const zoom of [100, 75, 50]) {
 test(`[P0] CV05 real small-element bounds and canvas intersections preserve selected geometry at ${zoom}%`, async ({ page }, info) => {
   const { id } = await seed(page, false, `<style>
     .cv05 { position:absolute; background:#e6b85c; padding:0; margin:0; }

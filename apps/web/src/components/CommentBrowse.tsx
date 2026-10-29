@@ -1,14 +1,49 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { PreviewComment } from '../types';
-import { Icon } from './Icon';
 import { placeCommentPopover } from '../comments/popover-geometry';
 import styles from './CommentBrowse.module.css';
 
 export function useCommentHoverPreview(suppressed: boolean) {
-  const [preview, setPreview] = useState<{ comment: PreviewComment; anchor: DOMRect; preferLeft: boolean; animation: 'enter' | 'switch' } | null>(null);
+  const [preview, setPreview] = useState<{ comment: PreviewComment; node: HTMLElement; anchor: DOMRect; preferLeft: boolean; animation: 'enter' | 'switch' } | null>(null);
   const [closing, setClosing] = useState(false);
   const current = useRef(preview);
+  const retained = useRef(false);
+  const measureAnchor = useCallback(() => {
+    const previous = current.current;
+    if (!previous) return;
+    if (!previous.node.isConnected) {
+      retained.current = false;
+      clearTimeout(showTimer.current); clearTimeout(closeTimer.current); clearTimeout(fadeTimer.current);
+      setClosing(false);
+      current.current = null;
+      setPreview(null);
+      return;
+    }
+    const anchor = previous.node.getBoundingClientRect();
+    if (anchor.left === previous.anchor.left && anchor.top === previous.anchor.top
+      && anchor.width === previous.anchor.width && anchor.height === previous.anchor.height) return;
+    const next = { ...previous, anchor };
+    current.current = next;
+    setPreview(next);
+  }, []);
+  // React layout changes (including new canvas bounds) need the same fresh
+  // measurement as native scrolling. Equality above prevents render loops.
+  useLayoutEffect(measureAnchor);
+  const previewNode = preview?.node;
+  useLayoutEffect(() => {
+    if (!previewNode) return;
+    window.addEventListener('scroll', measureAnchor, true);
+    window.addEventListener('resize', measureAnchor);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measureAnchor);
+    observer?.observe(previewNode);
+    if (previewNode.parentElement) observer?.observe(previewNode.parentElement);
+    return () => {
+      window.removeEventListener('scroll', measureAnchor, true);
+      window.removeEventListener('resize', measureAnchor);
+      observer?.disconnect();
+    };
+  }, [previewNode, measureAnchor]);
   const isSuppressed = useRef(suppressed);
   isSuppressed.current = suppressed;
   const showTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -17,7 +52,7 @@ export function useCommentHoverPreview(suppressed: boolean) {
   const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const cancelClose = () => { clearTimeout(closeTimer.current); clearTimeout(fadeTimer.current); setClosing(false); };
   const dismiss = () => {
-    clearTimeout(showTimer.current); cancelClose(); current.current = null; setPreview(null);
+    clearTimeout(showTimer.current); cancelClose(); retained.current = false; current.current = null; setPreview(null);
   };
   useEffect(() => { if (suppressed) dismiss(); }, [suppressed]);
   useEffect(() => () => { clearTimeout(showTimer.current); clearTimeout(closeTimer.current); clearTimeout(fadeTimer.current); }, []);
@@ -26,20 +61,21 @@ export function useCommentHoverPreview(suppressed: boolean) {
     closing,
     show: (comment: PreviewComment, node: HTMLElement, preferLeft = false) => {
       clearTimeout(showTimer.current); cancelClose();
-      if (isSuppressed.current) return;
+      if (isSuppressed.current || retained.current) return;
       const reveal = () => {
         if (isSuppressed.current) return;
-        const next = { comment, anchor: node.getBoundingClientRect(), preferLeft, animation: current.current ? 'switch' as const : 'enter' as const };
+        const next = { comment, node, anchor: node.getBoundingClientRect(), preferLeft, animation: current.current ? 'switch' as const : 'enter' as const };
         current.current = next; setPreview(next);
       };
       if (current.current || reducedMotion()) reveal();
       else showTimer.current = setTimeout(reveal, 150);
     },
     keep: cancelClose,
+    retain: () => { retained.current = true; clearTimeout(showTimer.current); cancelClose(); },
     dismiss,
     leave: () => {
       clearTimeout(showTimer.current); cancelClose();
-      if (!current.current) return;
+      if (!current.current || retained.current) return;
       if (reducedMotion()) { dismiss(); return; }
       closeTimer.current = setTimeout(() => {
         setClosing(true);
@@ -49,12 +85,13 @@ export function useCommentHoverPreview(suppressed: boolean) {
   };
 }
 
-export function CommentHoverPreview({ state, author, bounds, images = [], imageFailedLabel = 'Image unavailable' }: {
+export function CommentHoverPreview({ state, author, bounds, images = [], imageFailedLabel = 'Image unavailable', renderDetail }: {
   state: ReturnType<typeof useCommentHoverPreview>;
   author: ReactNode;
   bounds?: DOMRect;
   images?: { url: string; name: string }[];
   imageFailedLabel?: string;
+  renderDetail?: (comment: PreviewComment) => ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 320, height: 120 });
@@ -82,11 +119,11 @@ export function CommentHoverPreview({ state, author, bounds, images = [], imageF
   };
   const placement = placeCommentPopover({ left: anchor.left, top: anchor.top, width: anchor.width, height: anchor.height }, viewport, size.height);
   if (!placement) return null;
-  return createPortal(<div ref={ref} key={comment.id} className={`${styles.preview} ${preview.animation === 'switch' ? styles.switching : styles.entering}${state.closing ? ` ${styles.closing}` : ''}`} role="tooltip"
+  return createPortal(<div ref={ref} key={comment.id} className={`${styles.preview}${renderDetail ? ` ${styles.sharedDetail}` : ''} ${preview.animation === 'switch' ? styles.switching : styles.entering}${state.closing ? ` ${styles.closing}` : ''}`} role={renderDetail ? undefined : 'tooltip'} data-testid="comment-hover-preview"
     style={placement}
-    onMouseEnter={state.keep} onMouseLeave={state.leave}>
-    {author}{comment.note ? <p dir="auto">{comment.note}</p> : null}
-    {images.length > 0 ? <div className={styles.previewImages}>{images.map(image => <a key={image.url} href={image.url} target="_blank" rel="noopener noreferrer" title={image.name}><CommentImage src={image.url} name={image.name} failedLabel={imageFailedLabel} /></a>)}</div> : null}
+    onMouseEnter={state.keep} onMouseLeave={state.leave} onPointerDown={renderDetail ? state.retain : undefined} onFocusCapture={renderDetail ? state.retain : undefined}>
+    {renderDetail ? renderDetail(comment) : <>{author}{comment.note ? <p dir="auto">{comment.note}</p> : null}
+    {images.length > 0 ? <div className={styles.previewImages}>{images.map(image => <a key={image.url} href={image.url} target="_blank" rel="noopener noreferrer" title={image.name}><CommentImage src={image.url} name={image.name} failedLabel={imageFailedLabel} /></a>)}</div> : null}</>}
   </div>, document.body);
 }
 
@@ -107,7 +144,9 @@ export function CommentAvatarRail({ comments, activeId, unreadIds, renderAvatar,
   const hidden = Math.max(0, sortedComments.length - 5);
   return <aside className={`${styles.rail} comment-side-rail`} data-testid="comment-side-collapsed-rail">
     <button ref={toggleRef} className={styles.toggle} type="button" onClick={onExpand} aria-expanded={false} aria-label={expandLabel} title={expandLabel}>
-      <Icon name="chevron-left" size={14} /><Icon name="chevron-left" size={14} />
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+        <path d="m11 7-5 5 5 5m7-10-5 5 5 5" />
+      </svg>
     </button>
     <div className={styles.avatars}>
       {sortedComments.slice(0, 5).map(comment => <button key={comment.id} type="button"
@@ -116,7 +155,7 @@ export function CommentAvatarRail({ comments, activeId, unreadIds, renderAvatar,
         onClick={event => { hover.dismiss(); onOpen(comment, event.currentTarget); }}>
         {renderAvatar(comment)}{unreadIds.has(comment.id) ? <i className={styles.unread} /> : null}
       </button>)}
-      {hidden > 0 ? <button type="button" className={styles.more} aria-expanded={false} aria-label={moreLabel(hidden)} title={moreLabel(hidden)} onClick={onExpand}>+{Math.min(99, hidden)}
+      {hidden > 0 ? <button type="button" className={styles.more} aria-expanded={false} aria-label={moreLabel(hidden)} title={moreLabel(hidden)} onClick={onExpand}><span className={styles.moreCount}>+{Math.min(99, hidden)}</span>
         {sortedComments.slice(5).some(comment => unreadIds.has(comment.id)) ? <i className={styles.unread} /> : null}
       </button> : null}
     </div>

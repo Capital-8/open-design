@@ -2147,11 +2147,10 @@ function meaningfulDomFallbackTarget(el) {
         items.push(item);
       }
     }
-    if (isNestedCommentAnchor(activeCommentElementId, activeCommentSelector)) {
-      var nested = resolveNestedComment(activeCommentElementId, activeCommentSelector);
-      var payload = nested && nestedCommentPayload(nested);
-      if (payload) items.push(payload);
-    }
+    // Observation measures the explicitly opened saved target without enabling
+    // the picker or enumerating unrelated unannotated DOM nodes.
+    var savedTarget = activeSavedCommentTarget();
+    if (savedTarget && !seen[savedTarget.elementId]) items.push(savedTarget);
     return items;
   }
   var postTargetsPending = false;
@@ -2225,14 +2224,22 @@ function meaningfulDomFallbackTarget(el) {
     }
     return el;
   }
+  function activeSavedCommentTarget(){
+    if (!activeCommentElementId) return null;
+    var el = findCommentTargetByIdentity(activeCommentElementId, activeCommentSelector);
+    if (!el) return null;
+    // A structural selector must not fall back to an annotation id reused by
+    // a different element. cmt and nested identities retain their strict resolver.
+    if (activeCommentSelector && activeCommentSelector.split('>')[0].trim() === 'body') {
+      try { if (!el.matches(activeCommentSelector)) return null; } catch (_) { return null; }
+    }
+    var payload = targetFrom(el, true, null, null, String(activeCommentElementId).indexOf('cmt:') === 0);
+    try { if (payload && activeCommentSelector && el.matches(activeCommentSelector)) payload.selector = activeCommentSelector; } catch (_) {}
+    return payload;
+  }
   function postActiveCommentTarget(){
     if (!active() || !activeCommentElementId) return;
-    var el = findCommentTargetByIdentity(activeCommentElementId, activeCommentSelector);
-    if (!el) return;
-    var payload = targetFrom(el, commentEnabled && mode === 'picker' && !inspectEnabled, null, null, String(activeCommentElementId).indexOf('cmt:') === 0);
-    // Preserve the selector that actually found the saved target, even when
-    // source annotation gives that DOM node a newer attribute identity.
-    try { if (payload && activeCommentSelector && el.matches(activeCommentSelector)) payload.selector = activeCommentSelector; } catch (_) {}
+    var payload = activeSavedCommentTarget();
     if (payload) window.parent.postMessage(Object.assign({}, payload, { type: 'od:comment-active-target-update' }), '*');
     else if (isNestedCommentAnchor(activeCommentElementId, activeCommentSelector)) schedulePostTargets();
   }

@@ -125,6 +125,7 @@ for (const nested of [false, true]) for (const forceInline of [false, true])
             if (!src) throw new Error('URL preview source missing');
             await expect.poll(() => frame.url().split('#')[0]).toBe(new URL(src, page.url()).href.split('#')[0]);
         }
+        await expect(frame.locator('html')).not.toHaveAttribute('data-od-comment-mode', /.*/);
         await expect(target).toBeInViewport();
         const overlay = page.getByTestId('comment-target-overlay').last();
         await expect(overlay).toBeVisible();

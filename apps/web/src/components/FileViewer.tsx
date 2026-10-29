@@ -5023,7 +5023,9 @@ export function CommentSidePanel({
             title={t('preview.hideSidebar', { label: commentsLabel })}
             onClick={() => handleCollapsedChange(true, 'collapsed')}
           >
-            <Icon name="chevron-right" size={14} /><Icon name="chevron-right" size={14} />
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+              <path d="m6 7 5 5-5 5m7-10 5 5-5 5" />
+            </svg>
           </button>
         </div>
       </div>
@@ -5142,12 +5144,13 @@ export function CommentSidePanel({
               </div>
               <CommentListBody key={comment.note} note={comment.note} t={t} />
               {unavailableCommentId === comment.id ? (
-                <span role="status" data-testid="comment-location-unavailable">
-                  {t('comment.locationUnavailable')}
+                <span role="status" className="comment-side-location-notice" data-testid="comment-location-unavailable">
+                  <svg width="14" height="14" viewBox="2.9 2.9 18.2 18.2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5" /><circle cx="12" cy="7.7" r=".6" fill="currentColor" stroke="none" /></svg>
+                  <span>{t('comment.locationUnavailable')}</span>
                 </span>
               ) : null}
               {unavailableCommentId !== comment.id && locationNotices?.get(comment.id) ? (
-                <span role="status" data-testid="comment-location-notice">{locationNotices.get(comment.id)}</span>
+                <span role="status" className="comment-side-location-notice" data-testid="comment-location-notice"><svg width="14" height="14" viewBox="2.9 2.9 18.2 18.2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5" /><circle cx="12" cy="7.7" r=".6" fill="currentColor" stroke="none" /></svg><span>{locationNotices.get(comment.id)}</span></span>
               ) : null}
               {projectId && comment.attachments && comment.attachments.length > 0 ? (
                 <div className="comment-side-attachments">
@@ -11573,7 +11576,7 @@ function HtmlViewer({
     }
     win.postMessage({
       type: 'od:comment-mode',
-      enabled: boardMode,
+      enabled: boardMode && (commentCreateMode || boardTool === 'pod'),
       observe: commentPanelOpen,
       shortcutEnabled: workspaceActive,
       cursor: commentCursor,
@@ -12769,13 +12772,13 @@ function HtmlViewer({
     if (!win) return;
     win.postMessage({
       type: 'od:comment-mode',
-      enabled: boardMode,
+      enabled: boardMode && (commentCreateMode || boardTool === 'pod'),
       observe: commentPanelOpen,
       shortcutEnabled: workspaceActive,
       cursor: commentCursor,
       mode: boardTool,
     }, '*');
-  }, [boardMode, commentPanelOpen, commentCursor, boardTool, srcDoc, useUrlLoadPreview, workspaceActive]);
+  }, [boardMode, commentCreateMode, commentPanelOpen, commentCursor, boardTool, srcDoc, useUrlLoadPreview, workspaceActive]);
 
   useEffect(() => {
     if (!workspaceActive) return;
@@ -12881,7 +12884,7 @@ function HtmlViewer({
   // `!boardMode`. Issue #890.
   useEffect(() => {
     if (!workspaceActive) return;
-    if (!inspectMode && !boardMode) {
+    if (!inspectMode && !boardMode && !commentPanelOpen) {
       setLiveCommentTargets((current) => (current.size > 0 ? new Map() : current));
       setCommentTargetsReadyKey(null);
       return;
@@ -12928,7 +12931,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [inspectMode, boardMode, file.name, commentTargetsKey, isOurPreviewIframeSource, isActivePreviewIframeSource, workspaceActive]);
+  }, [inspectMode, boardMode, commentPanelOpen, file.name, commentTargetsKey, isOurPreviewIframeSource, isActivePreviewIframeSource, workspaceActive]);
 
   useEffect(() => {
     commentReselectPendingRef.current = false;
@@ -13200,7 +13203,7 @@ function HtmlViewer({
       if (data.type === 'od:comment-target') {
         const snapshot = snapshotFromData(data);
         if (!snapshot.elementId || !isValidCommentOverlayPosition(snapshot.position)) return;
-        const shouldOpenComposer = boardMode || commentCreateMode;
+        const shouldOpenComposer = commentCreateMode || (boardMode && boardTool === 'pod');
         cancelHoverCardDismiss();
         setLiveCommentTargets((current) => {
           const existing = current.get(snapshot.elementId);
@@ -13272,7 +13275,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [activeCommentTarget, boardMode, commentPanelOpen, boardTool, cancelHoverCardDismiss, commentPortalHost, file.name, commentTargetsKey, commentTargetsReadyKey, commentLocationIntent, isActivePreviewIframeSource, previewComments, requestComposerRetarget, scheduleHoverCardDismiss, workspaceActive]);
+  }, [activeCommentTarget, boardMode, commentCreateMode, commentPanelOpen, boardTool, cancelHoverCardDismiss, commentPortalHost, file.name, commentTargetsKey, commentTargetsReadyKey, commentLocationIntent, isActivePreviewIframeSource, previewComments, requestComposerRetarget, scheduleHoverCardDismiss, workspaceActive]);
 
   useEffect(() => {
     commentLocateRequestRef.current = null;
@@ -15670,6 +15673,35 @@ function HtmlViewer({
     return { ...target, slideIndex: slideState.active };
   }
 
+  async function sendSavedBoardComment(existingComment: PreviewComment, target: PreviewCommentSnapshot) {
+    if (!onSendBoardCommentAttachments || sendingBoardBatch) return;
+    setSendingBoardBatch(true);
+    try {
+      const checked = await currentCommentSaveTarget(target);
+      if (!checked) return;
+      const result = await onSendBoardCommentAttachments(
+        commentsToAttachments([{ ...existingComment, ...withDeckSlideIndex(targetFromSnapshot(checked)) }]),
+      );
+      if (!commentSendCompleted(result, existingComment.id)) return;
+      clearBoardComposer();
+      commentHoverPreview.dismiss();
+    } finally {
+      setSendingBoardBatch(false);
+    }
+  }
+
+  async function deleteBoardComment(commentId: string) {
+    const removed = await onRemovePreviewComment?.(commentId);
+    if (!removed) return;
+    clearBoardComposer();
+    commentHoverPreview.dismiss();
+    setSelectedSideCommentIds(current => {
+      if (!current.has(commentId)) return current;
+      const next = new Set(current); next.delete(commentId); return next;
+    });
+    setActivePreviewCommentId(current => current === commentId ? null : current);
+  }
+
   async function sendBoardBatch() {
     if (!activeCommentTarget || !onSendBoardCommentAttachments) return;
     const existingComment = currentActiveComposerComment();
@@ -15680,19 +15712,7 @@ function HtmlViewer({
       && normalizeCommentContent(commentDraft) === normalizeCommentContent(existingComment.note),
     );
     if (existingComment && sendingUnchangedSavedComment) {
-      setSendingBoardBatch(true);
-      try {
-        const checked = await currentCommentSaveTarget(activeCommentTarget);
-        if (!checked) return;
-        const result = await onSendBoardCommentAttachments(
-          commentsToAttachments([{ ...existingComment, ...withDeckSlideIndex(targetFromSnapshot(checked)) }]),
-        );
-        if (!commentSendCompleted(result, existingComment.id)) return;
-        clearBoardComposer();
-      } finally {
-        setSendingBoardBatch(false);
-      }
-      return;
+      return sendSavedBoardComment(existingComment, activeCommentTarget);
     }
     const nextNotes = [...queuedBoardNotes];
     if (normalizeCommentContent(commentDraft)) nextNotes.push(normalizeCommentContent(commentDraft));
@@ -17145,18 +17165,7 @@ function HtmlViewer({
         setHoveredPodMemberId((current) => (current === elementId ? null : current));
       }}
       onHoverMember={setHoveredPodMemberId}
-      onDeleteComment={onRemovePreviewComment ? async (commentId) => {
-        const removed = await onRemovePreviewComment(commentId);
-        if (!removed) return;
-        clearBoardComposer();
-        setSelectedSideCommentIds((current) => {
-          if (!current.has(commentId)) return current;
-          const next = new Set(current);
-          next.delete(commentId);
-          return next;
-        });
-        setActivePreviewCommentId((current) => (current === commentId ? null : current));
-      } : undefined}
+      onDeleteComment={onRemovePreviewComment ? deleteBoardComment : undefined}
       sending={sendingBoardBatch}
       queueOnSend={commentQueueOnSend}
       sendDisabled={commentSendDisabled || viewerOnly || Boolean(lostSelectedCommentId)}
@@ -17289,7 +17298,7 @@ function HtmlViewer({
           setQueuedBoardNotes([]);
           setActiveCommentExistingAttachments(comment.attachments ?? []);
           setBoardMode(true);
-          setCommentCreateMode(true);
+          setCommentCreateMode(false);
           setCommentPanelOpen(true);
         });
       }}
@@ -17583,7 +17592,7 @@ function HtmlViewer({
               <button
                 ref={commentPanelToggleRef}
                 type="button"
-                className={`viewer-action viewer-comment-count-trigger viewer-comment-toggle od-tooltip${boardMode && commentCreateMode ? ' active' : ''}`}
+                className={`viewer-action viewer-comment-count-trigger viewer-comment-toggle od-tooltip${commentPanelOpen ? ' active' : ''}`}
                 data-testid="comment-panel-toggle"
                 data-tooltip={t('chat.tabComments')}
                 data-tooltip-placement="bottom"
@@ -18530,7 +18539,7 @@ function HtmlViewer({
                     requestComposerRetarget(() => {
                       commentComposerReturnFocusRef.current = origin;
                       setCommentPanelOpen(true);
-                      setCommentCreateMode(true);
+                      setCommentCreateMode(false);
                       setBoardMode(true);
                       const needsLocation = ownerCommentNeedsLocation(comment, collab.enabled);
                       if (needsLocation) setCommentLocationIntent(intent => intent + 1);
@@ -18636,9 +18645,25 @@ function HtmlViewer({
                   </button>
                 </div>
               ) : null}
-              <CommentHoverPreview images={commentHoverPreview.preview?.comment.attachments?.map(a => ({ url: projectRawUrl(projectId, a.path, workspaceContext), name: a.name }))} imageFailedLabel={t('comment.imageFailed')} state={commentHoverPreview} author={commentHoverPreview.preview ? <div className="comment-detail-author"><CommentAuthorIdentity comment={commentHoverPreview.preview.comment} currentUser={commentAuthorSelf} displayNumber={commentHoverPreview.preview.comment.pinSeq ?? 1} t={t} /><span className="comment-detail-time">{formatCommentTime(commentCreatedAt(commentHoverPreview.preview.comment), Date.now(), t)}</span></div> : null} bounds={commentCanvasViewportBounds} />
+              <CommentHoverPreview images={commentHoverPreview.preview?.comment.attachments?.map(a => ({ url: projectRawUrl(projectId, a.path, workspaceContext), name: a.name }))} imageFailedLabel={t('comment.imageFailed')} state={commentHoverPreview} author={commentHoverPreview.preview ? <div className="comment-detail-author"><CommentAuthorIdentity comment={commentHoverPreview.preview.comment} currentUser={commentAuthorSelf} displayNumber={commentHoverPreview.preview.comment.pinSeq ?? 1} t={t} /><span className="comment-detail-time">{formatCommentTime(commentCreatedAt(commentHoverPreview.preview.comment), Date.now(), t)}</span></div> : null} bounds={commentCanvasViewportBounds} renderDetail={comment => <BoardComposerPopover
+                target={preserveCommentPoint(comment, liveSnapshotForComment(comment, liveCommentTargets) ?? comment)}
+                existing={comment} draft={comment.note} notes={[]} sending={sendingBoardBatch}
+                canEditComment={false} canDeleteComment={canDeleteComment(comment, commentAuthority)}
+                canSendToAgent={canSendCommentToAgent(comment)} allowSendToChat={!viewerOnly}
+                queueOnSend={commentQueueOnSend} sendDisabled={commentSendDisabled || viewerOnly}
+                sendDisabledReason={viewerOnly ? viewerOnlyDisabledTitle : undefined}
+                author={<div className="comment-detail-author"><CommentAuthorIdentity comment={comment} currentUser={commentAuthorSelf} displayNumber={comment.pinSeq ?? 1} t={t} /><span className="comment-detail-time">{formatCommentTime(commentCreatedAt(comment), Date.now(), t)}</span></div>}
+                existingImages={comment.attachments?.map(attachment => ({ url:projectRawUrl(projectId, attachment.path, workspaceContext),name:attachment.name }))}
+                locationNotice={commentLocationNotices.get(comment.id)} t={t}
+                positionStyle={{ position:'relative',left:0,top:0,width:'100%',maxHeight:'inherit' }}
+                onDraft={() => undefined} onAddDraft={() => undefined} onRemoveQueuedNote={() => undefined}
+                onSaveComment={() => undefined} onRemoveMember={() => undefined}
+                onClose={() => { const origin=commentHoverPreview.preview?.node; origin?.focus({preventScroll:true}); commentHoverPreview.dismiss(); }}
+                onSendBatch={() => { fireCommentPopoverClick('send_to_chat',[comment]); return sendSavedBoardComment(comment,preserveCommentPoint(comment,liveSnapshotForComment(comment,liveCommentTargets) ?? comment)); }}
+                onDeleteComment={onRemovePreviewComment ? deleteBoardComment : undefined}
+              />} />
               {commentComposer}
-              {boardMode && !commentCreateMode && hoveredCommentTarget && (!activeCommentTarget || commentPortalHost) ? (
+              {boardMode && !commentCreateMode && !activeComposerComment && hoveredCommentTarget && (!activeCommentTarget || commentPortalHost) ? (
                 <AnnotationHoverPopover
                   target={hoveredCommentTarget}
                   scale={overlayPreviewScale}

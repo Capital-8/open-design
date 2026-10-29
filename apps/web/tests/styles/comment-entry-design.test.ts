@@ -27,12 +27,12 @@ describe('restored comment appearance', () => {
 
   it('restores the compact neutral panel, selection and send styles', () => {
     expect(declarations('.comment-side-panel')).toMatchObject({
-      background: '#FAFAFA', 'border-radius': '10px', 'box-shadow': 'none',
+      background: '#fdfefe', 'border-radius': '0 0 12px 0', 'box-shadow': 'none',
     });
-    expect(declarations('.comment-side-header')).toMatchObject({ height: '56px', padding: '0 10.5px 0 14.5px' });
-    expect(declarations('.comment-side-item.selected')).toMatchObject({ background: '#EDEDED' });
-    expect(declarations('.comment-side-item.active')).toMatchObject({ background: '#EDEDED', 'box-shadow': 'none' });
-    expect(declarations('.comment-side-check.checked')).toMatchObject({ background: '#202020' });
+    expect(declarations('.comment-side-header')).toMatchObject({ height: '56px', padding: '0 10.5px 0 22.5px' });
+    expect(declarations('.comment-side-item.selected')).toMatchObject({ background: '#fafafa' });
+    expect(declarations('.comment-side-item.active')).toMatchObject({ background: '#fafafa', 'box-shadow': 'none' });
+    expect(declarations('.comment-side-check.checked')).toMatchObject({ background: '#eeeeef', 'border-color': '#dedee0', color: '#55565a' });
     expect(declarations('.comment-side-selectbar .primary')).toMatchObject({ background: '#202020', height: '28px' });
   });
 

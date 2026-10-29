@@ -1056,11 +1056,10 @@ ${NESTED_COMMENT_HELPERS}
         items.push(item);
       }
     }
-    if (isNestedCommentAnchor(activeCommentElementId, activeCommentSelector)) {
-      var nested = resolveNestedComment(activeCommentElementId, activeCommentSelector);
-      var payload = nested && nestedCommentPayload(nested);
-      if (payload) items.push(payload);
-    }
+    // Observation measures the explicitly opened saved target without enabling
+    // the picker or enumerating unrelated unannotated DOM nodes.
+    var savedTarget = activeSavedCommentTarget();
+    if (savedTarget && !seen[savedTarget.elementId]) items.push(savedTarget);
     return items;
   }
   function postTargets(){
@@ -1094,11 +1093,22 @@ ${NESTED_COMMENT_HELPERS}
     }
     return el;
   }
+  function activeSavedCommentTarget(){
+    if (!activeCommentElementId) return null;
+    var el = findCommentTargetByIdentity(activeCommentElementId, activeCommentSelector);
+    if (!el) return null;
+    // A structural selector must not fall back to an annotation id reused by
+    // a different element. cmt and nested identities retain their strict resolver.
+    if (activeCommentSelector && activeCommentSelector.split('>')[0].trim() === 'body') {
+      try { if (!el.matches(activeCommentSelector)) return null; } catch (_) { return null; }
+    }
+    var payload = targetFrom(el, true, null, null, String(activeCommentElementId).indexOf('cmt:') === 0);
+    try { if (payload && activeCommentSelector && el.matches(activeCommentSelector)) payload.selector = activeCommentSelector; } catch (_) {}
+    return payload;
+  }
   function postActiveCommentTarget(){
     if (!active() || !activeCommentElementId) return;
-    var el = findCommentTargetByIdentity(activeCommentElementId, activeCommentSelector);
-    if (!el) return;
-    var payload = targetFrom(el, commentEnabled && mode === 'picker');
+    var payload = activeSavedCommentTarget();
     if (payload) window.parent.postMessage(Object.assign({}, payload, { type: 'od:comment-active-target-update' }), '*');
     else if (isNestedCommentAnchor(activeCommentElementId, activeCommentSelector)) schedulePostTargets();
   }
@@ -1402,12 +1412,12 @@ ${NESTED_COMMENT_HELPERS}
     if (data.type === 'od:comment-active-target') {
       activeCommentElementId = data.elementId ? String(data.elementId) : null;
       activeCommentSelector = data.selector ? String(data.selector) : null;
-      if ((isNestedCommentAnchor(activeCommentElementId, activeCommentSelector) || String(activeCommentElementId || '').indexOf('cmt:') === 0 || commentSelectorClaimsIdentity(activeCommentSelector)) && data.locate && typeof data.requestId === 'string') {
+      if (data.locate && typeof data.requestId === 'string') {
         var target = findCommentTargetByIdentity(activeCommentElementId, activeCommentSelector);
-        var payload = target && targetFrom(target, true);
+        var payload = activeSavedCommentTarget();
         if (payload || (target && nestedCommentPayload(target, true))) {
           try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }); scrollNestedComment(target); } catch (_) {}
-          payload = targetFrom(target, true);
+          payload = activeSavedCommentTarget();
         }
         window.parent.postMessage(payload
           ? Object.assign({}, payload, { type: 'od:comment-active-target-update', requestId: data.requestId })

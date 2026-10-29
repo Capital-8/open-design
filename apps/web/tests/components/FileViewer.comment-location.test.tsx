@@ -201,7 +201,7 @@ it('opens a legacy lost marker as a saved detail without inventing a target or p
     source: commentFrame.contentWindow, data: { type: 'od:comment-targets', targets: [] },
   })));
   expect(await screen.findByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
-  expect(within(screen.getByTestId('comment-popover')).getByText('Unable to locate this element. The page may have changed.')).toHaveAttribute('role', 'status');
+  expect(within(screen.getByTestId('comment-popover')).getByText('Unable to locate this element. The page may have changed.').closest('[role="status"]')).not.toBeNull();
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
   expect(screen.queryByTestId('comment-target-overlay')).toBeNull();
   expect(screen.queryByTestId('comment-popover-input')).toBeNull();

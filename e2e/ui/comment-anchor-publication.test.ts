@@ -71,6 +71,7 @@ test('[P1] OPEND-3887 saved srcdoc anchors resolve in the original file bytes', 
   await expect(row).toBeVisible();
   await row.click();
   await expect(page.getByTestId('comment-popover-detail')).toHaveText('Keep this heading portable');
+  await expect(page.frameLocator('[data-testid="artifact-preview-frame"]').locator('html')).not.toHaveAttribute('data-od-comment-mode', /.*/);
   await expect(page.getByTestId('comment-popover-input')).toHaveCount(0);
   await expect(page.getByTestId('comment-popover-save')).toHaveCount(0);
   const pin = page.locator('.comment-saved-pin').first();
