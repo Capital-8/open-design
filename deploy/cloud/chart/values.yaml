@@ -25,6 +25,9 @@ cloudResources:
   limits: {cpu: "1", memory: 768Mi}
 imagePullSecrets: []
 nodeSelector: {}
+networkPolicy:
+  # Namespace-local OD test peers; preserve legacy deployments unless enabled.
+  enabled: false
 secrets:
   # OD_CLOUD_DATABASE_URL, OD_CLOUD_CREDENTIAL_KEYS, OD_CLOUD_CREDENTIAL_KEY_ID
   application: ""
