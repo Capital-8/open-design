@@ -80,6 +80,21 @@ describe('synced comment merge is ordered by cloud seq', () => {
     expect(stored(db)?.note).toBe('updated\ntext');
   });
 
+  it('preserves nested frame anchors from a web comment across persistence and replay', () => {
+    const db = seededDb();
+    const anchor = 'od-frame-v1:' + JSON.stringify([[
+      ['dom:body > iframe', 'body > iframe', 'srcdoc:0:fbc0cc3c'],
+      ['dom:body > iframe', 'body > iframe', 'srcdoc:0:fbc0cc3c'],
+    ], 'dom:body > button', 'body > button']);
+    const event = sharePageEvent(3, { elementId: anchor, selector: anchor, note: 'Nested web comment' });
+    expect(merge(db, event)).toBe('changed');
+    closeDatabase();
+    const reopened = openDatabase(tempDir!);
+    expect(stored(reopened)).toMatchObject({ elementId: anchor, selector: anchor, note: 'Nested web comment' });
+    expect(merge(reopened, event)).toBe('unchanged');
+    expect(stored(reopened)?.selector).toBe(anchor);
+  });
+
   it('keeps a resolve when the create (no updatedAt) is replayed from seq 0', () => {
     const db = seededDb();
     const create = sharePageEvent(3);

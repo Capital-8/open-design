@@ -19,6 +19,10 @@ async function seed(page: Page, controls = false, extraHtml = '') {
     localStorage.setItem('open-design:locale-source', 'manual');
   });
   const id = `comment-rules-${randomUUID()}`;
+  // This fixture owns local presentation. Do not let the worker's previously
+  // selected workspace turn a local list read into a real cloud relay wait.
+  await page.route(`**/api/projects/${id}/conversations/*/comments/pull`, route =>
+    route.fulfill({ status: 503, json: { error: 'No cloud relay in local presentation fixture' } }));
   const created = await page.request.post('/api/projects', { data: { id, name: '评论交互规则', skillId: null, designSystemId: null, metadata: { kind: 'prototype', nameSource: 'user' } } });
   expect(created.ok(), await created.text()).toBeTruthy();
   const { conversationId } = await created.json() as { conversationId: string };

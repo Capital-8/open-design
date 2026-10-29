@@ -10069,7 +10069,9 @@ function HtmlViewer({
     mode === 'preview' &&
     !manualEditMode &&
     !manualEditSrcDocActive &&
-    !boardMode &&
+    // Powered URL comments run in the served document; do not construct a
+    // second multi-megabyte srcDoc just to open the comment panel.
+    (!boardMode || serverPoweredPreviewRequired) &&
     !inspectMode &&
     !drawOverlayOpen &&
     !isDeck;
@@ -10722,6 +10724,9 @@ function HtmlViewer({
     return s != null && htmlNeedsPoweredPreview(s);
   }, [routingHtmlSource, serverPoweredPreviewRequired]);
   const previewBridgeQuery = useMemo(() => {
+    // Powered documents already provide these capabilities. Keep their URL
+    // stable when opening comments loads the full source of a large file.
+    if (needsPowered) return BASE_PREVIEW_BRIDGE_QUERY;
     const query = [BASE_PREVIEW_BRIDGE_QUERY];
     // Preserve the old URL-load behavior for ordinary passive documents. Only
     // request a guard when the source heuristic says this artifact needs it;
@@ -12207,8 +12212,11 @@ function HtmlViewer({
       if (typeof data.href !== 'string' || data.href.length === 0) return;
       let matches: boolean;
       try {
-        matches = new URL(data.href, window.location.href).href
-          === new URL(frame.getAttribute('src') ?? '', window.location.href).href;
+        const actual = new URL(data.href, window.location.href);
+        const expected = new URL(frame.getAttribute('src') ?? '', window.location.href);
+        actual.hash = '';
+        expected.hash = '';
+        matches = actual.href === expected.href;
       } catch {
         return;
       }
@@ -18294,7 +18302,8 @@ function HtmlViewer({
                               urlPreviewLoadedKeysRef.current.add(urlPreviewKeepAliveKey);
                               setUrlPreviewFirstLoadPending(false);
                             }
-                            setUrlSelectionBridgeReady(false);
+                            // URL changes reset readiness; a late load must not erase
+                            // a verified ready from the currently committed document.
                             dcViewportRestoreAtRef.current = Date.now();
                             frame?.contentWindow?.postMessage({
                               type: '__dc_set_viewport',
@@ -18346,7 +18355,8 @@ function HtmlViewer({
                               urlPreviewLoadedKeysRef.current.add(urlPreviewKeepAliveKey);
                               setUrlPreviewFirstLoadPending(false);
                             }
-                            setUrlSelectionBridgeReady(false);
+                            // URL changes reset readiness; a late load must not erase
+                            // a verified ready from the currently committed document.
                             dcViewportRestoreAtRef.current = Date.now();
                             frame?.contentWindow?.postMessage({
                               type: '__dc_set_viewport',
