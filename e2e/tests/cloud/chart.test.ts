@@ -212,6 +212,10 @@ describe.skipIf(!installed)(
       expect(renderer.spec.ingress).toEqual([{from:[{podSelector:{matchLabels:{"app.kubernetes.io/name":"open-design-cloud","app.kubernetes.io/instance":"cloud-fixture"}}}],ports:[{protocol:"TCP",port:19001}]}]);
       const main = docs.find(d => d.kind === "Deployment" && d.metadata.name === "open-design-cloud")!;
       expect(main.spec.template.metadata.labels.delivery).toBeUndefined();
+      const egress = policies.find(d => d.metadata.name === "open-design-cloud-egress")!;
+      expect(egress.spec.egress.find((rule: any) => rule.ports[0].port === 18082).to).toEqual([
+        {podSelector:{matchLabels:{"app.kubernetes.io/name":"harness","app.kubernetes.io/instance":"od-e2e-harness",delivery:"opend-4356-ns-e2e"}}},
+      ]);
       const db = policies.find(d => d.metadata.name === "open-design-cloud-database-egress")!;
       expect(db.spec.egress).toEqual([{to:[{podSelector:{matchLabels:{"app.kubernetes.io/name":"od-test-postgres"}}}],ports:[{protocol:"TCP",port:5432}]}]);
       const config = docs.find(d => d.kind === "ConfigMap")!;
