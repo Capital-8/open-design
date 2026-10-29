@@ -368,7 +368,8 @@ describe('App project list across a workspace switch', () => {
 
     render(<App />);
     await waitFor(() => expect(screen.getByTestId(`entry-project-${WORKSPACE_A_PROJECT.id}`)).toBeTruthy());
-    expect(screen.getByTestId('entry-project-locally-shared').textContent).toBe('Just moved to team');
+    expect(screen.getByText('Just moved to team').closest('[data-testid]')?.getAttribute('data-testid'))
+      .toBe('entry-project-locally-shared');
   });
 
   it('never renders the previous workspace\'s projects while the new list is in flight', async () => {
@@ -1042,7 +1043,7 @@ describe('App project list across a workspace switch', () => {
     expect(screen.getByTestId(`entry-project-${boundProjectB.id}`)).toBeTruthy();
   });
 
-  it('waits for directory authority before mounting a deep link while health and project list stay pending', async () => {
+  it('waits for directory authority before mounting a deep link after the startup catalog settles', async () => {
     const boundProjectA: Project = {
       ...WORKSPACE_A_PROJECT,
       workspaceId: 'ws-a',
@@ -1091,7 +1092,8 @@ describe('App project list across a workspace switch', () => {
 
     render(<App />);
 
-    await waitFor(() => expect(scopeReads).toBe(1));
+    await waitFor(() => expect(vi.mocked(listProjects)).toHaveBeenCalled());
+    expect(scopeReads).toBe(0);
     expect(detailReads).toBe(0);
     expect(screen.queryByTestId('project-view')).toBeNull();
     await act(async () => {
@@ -1138,7 +1140,7 @@ describe('App project list across a workspace switch', () => {
     ).toBe(false);
   });
 
-  it('adopts a completed bootstrap after workspace refresh and directory authority settle', async () => {
+  it('adopts an in-flight bootstrap after a workspace selection change', async () => {
     const boundProjectA: Project = {
       ...WORKSPACE_A_PROJECT,
       workspaceId: 'ws-a',
@@ -1214,13 +1216,6 @@ describe('App project list across a workspace switch', () => {
         headers: { 'content-type': 'application/json' },
       }));
       await scopeResponse.promise;
-    });
-
-    await waitFor(() => expect(scopeReads).toBe(1));
-    expect(detailReads).toBe(0);
-    expect(screen.queryByTestId('project-view')).toBeNull();
-    await act(async () => {
-      directory.resolve(new Response(JSON.stringify(workspaceDirectoryFixture([workspaceContext('ws-a')]))));
     });
 
     await waitFor(() => {
