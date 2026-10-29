@@ -1467,7 +1467,15 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       authorizedBoundMutation = authorization.authorizedBoundMutation;
     }
     const previousSubmission = submission ? getProjectUserSubmission(db, submission.id as string) : undefined;
-    if (previousSubmission && previousSubmission.projectId !== requestBody.projectId) {
+    // Resolve ownership before plugin resolution, which can persist bindings.
+    // Project-only retries use the same default-conversation rule as the run.
+    const submissionConversationId = typeof requestBody.conversationId === 'string' && requestBody.conversationId
+      ? requestBody.conversationId
+      : !stream && typeof requestBody.projectId === 'string' && requestBody.projectId
+        ? getFirstProjectConversation(db, requestBody.projectId)?.id
+        : undefined;
+    if (previousSubmission && (previousSubmission.projectId !== requestBody.projectId
+      || previousSubmission.conversationId !== submissionConversationId)) {
       return sendApiError(res, 409, 'IDEMPOTENCY_CONFLICT', 'submission belongs to another conversation');
     }
     if (submission?.source === 'queue' && !previousSubmission) {
