@@ -8,14 +8,16 @@ the normal pinned `resources:prepare` path, not a relaxed local bundle.
 | `examples/guizang-ppt/example.html` | The same plugin's `assets/template.html`, inserting `assets/example-slides.html` at `SLIDES_HERE` and supplying its OpenDesign product title |
 | `examples/html-ppt/example.html` | `examples/html-ppt-pitch-deck/example.html`, a complete authored deck in the same HTML-PPT system |
 | `examples/replit-deck/example.html` | `design-templates/replit-deck/examples/example-atlas.html`, unchanged |
-| `scenarios/od-plugin-authoring/examples/generated-plugin/` | `plugins/spec/examples/refine-critique-loop/{SKILL.md,open-design.json}`, normalized trailing newline only |
+| `scenarios/od-plugin-authoring/examples/generated-plugin/` (manifest named `open-design.example.json`) | `plugins/spec/examples/refine-critique-loop/{SKILL.md,open-design.json}`, normalized trailing newline only |
 
 The first three paths are relative to `plugins/_official/`; their preview,
 example output and context asset references all point to `example.html`.
 Samples remain HTML with their actual slide content. External font URLs in
 the canonical samples remain external; offline capture needs a font fallback.
 
-The authoring sample is scenario-owned fixture data, not an independently
+The authoring JSON sample uses the `.example.json` suffix so recursive bundled
+manifest walkers also leave it out of registration. Copy it as `open-design.json`
+when creating a user plugin. It is scenario-owned fixture data, not an independently
 installed plugin. Both official metadata and SQLite catalog builders register
 only plugin-root manifests (one legacy directory level or the tier/id layout),
 not manifests inside a plugin's examples/assets. The fixture remains included
