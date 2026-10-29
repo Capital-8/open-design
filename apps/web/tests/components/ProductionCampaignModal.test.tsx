@@ -231,12 +231,12 @@ describe("ProductionCampaignModal", () => {
 		}
 	});
 
-	it("provides a bounded viewport for generated content without host padding", () => {
+	it("bounds content and preserves scrolling without imposing a fixed canvas", () => {
 		const modalRule = modalHostStyles.match(/\.modal\s*\{[^}]*\}/)?.[0];
 		expect(modalRule).toContain("max-width: calc(100vw - 32px - var(--web-modal-scrollbar-width, 0px))");
 		expect(modalRule).toContain("background: transparent");
-		expect(modalRule).toContain("width: 800px");
-		expect(modalRule).toContain("height: 800px");
+		expect(modalRule).toContain("max-height: calc(100vh - 32px - var(--web-modal-scrollbar-height, 0px))");
+		expect(modalRule).toContain("overflow: auto");
 		expect(modalRule).not.toMatch(/(?:^|[;{]\s*)padding:/);
 	});
 	it("keeps the opend-touchpoint host background transparent inside the modal (OPEND-3478)", () => {
