@@ -288,7 +288,7 @@ describe("TestCampaignModal", () => {
 			target: { value: "deployment-1" },
 		});
 		await screen.findByRole("dialog");
-		await waitFor(() => expect(document.body.style.overflow).toBe("hidden"));
+		await waitFor(() => expect(document.body).toHaveAttribute("data-web-modal-scroll-lock"));
 		expect(document.documentElement.style.overflow).toBe("hidden");
 		fireEvent.keyDown(document, { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -335,10 +335,10 @@ describe("CMS modal host cleanup", () => {
 		);
 		const releaseFirst = lockWebTouchpointModalScroll();
 		const releaseSecond = lockWebTouchpointModalScroll();
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		expect(document.documentElement.style.overflow).toBe("hidden");
 		releaseFirst();
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		expect(document.documentElement.style.overflow).toBe("hidden");
 		releaseSecond();
 		expect(document.body.style.overflow).toBe("");

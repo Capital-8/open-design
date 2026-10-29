@@ -1748,6 +1748,10 @@
 
 /* Host modals own the root lock; home owns its independent scrolling pane.
    Keep the stable gutter and scroll position while removing the background bar. */
+body[data-web-modal-scroll-lock] {
+  overflow: hidden !important;
+}
+
 body[data-web-modal-scroll-lock] .entry-main--scroll {
   overflow-y: hidden;
 }
@@ -9390,3 +9394,7 @@ button.entry-nav-rail__menu-credits-row:active:not(:disabled) {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+
+.entry-main--registration-entry { animation: registration-workspace-entry 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes registration-workspace-entry { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .entry-main--registration-entry { animation: none; } }

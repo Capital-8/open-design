@@ -329,7 +329,7 @@ describe("lockWebTouchpointModalScroll", () => {
 
 	it("locks the viewport root, not just the body the fixed backdrop cannot cover", () => {
 		const release = lockWebTouchpointModalScroll();
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		expect(root().style.overflow).toBe("hidden");
 		release();
 		expect(document.body.style.overflow).toBe("");
@@ -342,7 +342,7 @@ describe("lockWebTouchpointModalScroll", () => {
 		expect(root().style.overflow).toBe("hidden");
 		first();
 		first();
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		expect(root().style.overflow).toBe("hidden");
 		second();
 		expect(document.body.style.overflow).toBe("");
@@ -353,7 +353,7 @@ describe("lockWebTouchpointModalScroll", () => {
 		document.body.style.overflow = "auto";
 		root().style.overflow = "clip";
 		const release = lockWebTouchpointModalScroll();
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		expect(root().style.overflow).toBe("hidden");
 		release();
 		expect(document.body.style.overflow).toBe("auto");

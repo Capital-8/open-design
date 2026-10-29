@@ -26,6 +26,8 @@ function preserveStyle(element: HTMLElement, properties: string[]) {
  * scrollbar sizes so CMS backdrops retain their centering while painting across
  * the entire viewport. The home pane is locked by the
  * matching entry-layout.css attribute selector; modal content keeps its scroll.
+ * Body overflow is owned by that selector, leaving inline overflow available
+ * to Dialog's independent background isolation lifecycle.
  */
 export function lockWebModalScroll(body: HTMLElement = document.body): () => void {
 	let lock = locks.get(body);
@@ -41,7 +43,7 @@ export function lockWebModalScroll(body: HTMLElement = document.body): () => voi
 		const scrollbarWidth = (doc.defaultView?.innerWidth ?? root.clientWidth) - root.clientWidth;
 		const scrollbarHeight = (doc.defaultView?.innerHeight ?? root.clientHeight) - root.clientHeight;
 		const restoreBody = preserveStyle(body, [
-			"overflow", "overflow-x", "overflow-y", "position", "top", "left", "width",
+			"position", "top", "left", "width",
 			"--web-modal-scrollbar-width", "--web-modal-scrollbar-height",
 		]);
 		const restoreRoot = preserveStyle(root, [
@@ -61,7 +63,6 @@ export function lockWebModalScroll(body: HTMLElement = document.body): () => voi
 		body.style.left = `${-scrollLeft}px`;
 		// Retain the original gutter while following both viewport expansion and shrinkage.
 		body.style.width = `calc(100vw - ${viewportWidth - width}px)`;
-		body.style.overflow = "hidden";
 		root.style.overflow = "hidden";
 		lock = {
 			count: 1,

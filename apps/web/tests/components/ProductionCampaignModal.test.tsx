@@ -26,6 +26,7 @@ vi.mock("../../src/providers/registry", () => ({
 	openExternalUrl: openExternalUrlMock,
 }));
 import { UseEverywhereModal } from "../../src/components/UseEverywhereModal";
+import { AmrArtifactUpgradeDialog } from "../../src/components/AmrArtifactUpgradeDialog";
 import { ProductionCampaignModal } from "../../src/components/ProductionCampaignModal";
 import { internalActionNavigationUrl } from "../../src/components/touchpoint-navigation";
 import { ProductionCampaignBadge } from "../../src/components/ProductionCampaignBadge";
@@ -173,6 +174,34 @@ const modalHostStyles = readFileSync(
 
 describe("ProductionCampaignModal", () => {
 	it.each([
+		[false, false], [false, true], [true, false], [true, true],
+	])("restores scroll with native Dialog isolation (other first: %s, closes first: %s)", async (otherFirst, otherClosesFirst) => {
+		(globalThis as CampaignHostGlobal).__openDesignCampaignTestHost = {
+			client: { osLocale: "en-US", type: "desktop" },
+		};
+		vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(decision()), { status: 200 })));
+		const openOther = () => render(<AmrArtifactUpgradeDialog profile={null} metricsConsent={false} installationId={null} onClose={() => {}} onContinue={() => {}} />);
+		let other = otherFirst ? openOther() : undefined;
+		const campaign = render(<ProductionCampaignModal authenticated sessionSubject="native-dialog-user" />);
+		try {
+			await screen.findByRole("dialog", { name: "Campaign" });
+			other ??= openOther();
+			const [first, last] = otherClosesFirst ? [other, campaign] : [campaign, other];
+			first.unmount();
+			expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
+			expect(document.documentElement.style.overflow).toBe("hidden");
+			last.unmount();
+			expect(document.body.style.overflow).toBe("");
+			expect(document.body.style.position).toBe("");
+			expect(document.documentElement.style.overflow).toBe("");
+			expect(document.body).not.toHaveAttribute("data-web-modal-scroll-lock");
+		} finally {
+			campaign.unmount();
+			other?.unmount();
+			document.body.style.overflow = "";
+		}
+	});
+	it.each([
 		[false, "campaign-first"], [false, "other-first"],
 		[true, "campaign-first"], [true, "other-first"],
 	] as const)("keeps actual modal hosts locked (other opens first: %s, closes: %s)", async (otherFirst, order) => {
@@ -188,7 +217,7 @@ describe("ProductionCampaignModal", () => {
 			other ??= openOther();
 			const [first, last] = order === "campaign-first" ? [campaign, other] : [other, campaign];
 			first.unmount();
-			expect(document.body.style.overflow).toBe("hidden");
+			expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 			expect(document.documentElement.style.overflow).toBe("hidden");
 			last.unmount();
 			expect(document.body.style.overflow).toBe("");
@@ -480,7 +509,7 @@ describe("ProductionCampaignModal", () => {
 				.getByTestId("campaign-custom-element")
 				.querySelector("opend-touchpoint"),
 		).not.toBeNull();
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		expect(document.querySelector("iframe,webview")).toBeNull();
 		// The fixture declares the SDK capability but exposes no actual close
 		// control, so the host fallback remains available.
@@ -835,7 +864,7 @@ describe("Production campaign live refresh", () => {
 		const modal = dialog.firstElementChild as HTMLElement;
 		const element = document.querySelector("opend-touchpoint");
 		expect(element).not.toBeNull();
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		const outside = document.createElement("button");
 		document.body.append(outside);
 		outside.focus();
@@ -846,7 +875,7 @@ describe("Production campaign live refresh", () => {
 		expect(screen.getByRole("dialog")).toBe(dialog);
 		expect(document.querySelector("opend-touchpoint")).toBe(element);
 		expect(OpenDesignTouchpointElement.prototype.mount).toHaveBeenCalledTimes(1);
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 		fireEvent.keyDown(document, { key: "Tab" });
 		expect(modal.contains(document.activeElement)).toBe(true);
 		outside.remove();
@@ -969,7 +998,7 @@ describe("Production campaign live refresh", () => {
 		// One mount for the whole episode: no rebuilt shadow DOM, no replayed
 		// entry animation, no scroll lock released and re-taken.
 		expect(OpenDesignTouchpointElement.prototype.mount).toHaveBeenCalledTimes(1);
-		expect(document.body.style.overflow).toBe("hidden");
+		expect(document.body).toHaveAttribute("data-web-modal-scroll-lock");
 	});
 
 	// The other half of OPEND-3372's premise: the client now holds a credential
