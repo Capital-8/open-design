@@ -65,7 +65,7 @@
     "preview": {
       "type": "html",
       "entry": "./example.html",
-      "motion": "deck"
+      "motion": "scroll"
     },
     "useCase": {
       "query": {
