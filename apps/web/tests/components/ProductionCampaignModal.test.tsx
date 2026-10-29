@@ -244,6 +244,11 @@ describe("ProductionCampaignModal", () => {
 			/\.modal\s+:global\(opend-touchpoint\)\s*\{[^}]*\}/,
 		)?.[0];
 		expect(hostRule).toContain("background: transparent");
+		expect(hostRule).toContain("height: round(down, calc(100vh - var(--web-modal-scrollbar-height, 0px)), 1px)");
+		expect(hostRule).toContain("width: round(down, calc(100vw - var(--web-modal-scrollbar-width, 0px)), 1px)");
+		expect(hostRule).toContain("grid-auto-rows: max-content");
+		expect(hostRule).toContain("justify-items: safe center");
+		expect(hostRule).toContain("align-content: safe center");
 		const modalRule = modalHostStyles.match(/\.modal\s*\{[^}]*\}/)?.[0];
 		expect(modalRule).not.toMatch(/border-radius:/);
 		expect(modalRule).not.toMatch(/overflow:\s*hidden/);
