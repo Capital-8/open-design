@@ -1,7 +1,7 @@
 type ModalScrollLock = { count: number; restore: () => void };
 
 const locks = new WeakMap<HTMLElement, ModalScrollLock>();
-const LOCK_ATTRIBUTE = "data-web-modal-scroll-lock";
+export const WEB_MODAL_SCROLL_LOCK_ATTRIBUTE = "data-web-modal-scroll-lock";
 
 function preserveStyle(element: HTMLElement, properties: string[]) {
 	const saved = Array.from(element.style)
@@ -49,13 +49,13 @@ export function lockWebModalScroll(body: HTMLElement = document.body): () => voi
 		const restoreRoot = preserveStyle(root, [
 			"overflow", "overflow-x", "overflow-y", "scrollbar-gutter",
 		]);
-		const previousAttribute = body.getAttribute(LOCK_ATTRIBUTE);
+		const previousAttribute = body.getAttribute(WEB_MODAL_SCROLL_LOCK_ATTRIBUTE);
 		// Do not introduce a gutter on hosts whose root never had a scrollbar.
 		if (scrollbarWidth > 0
 			&& doc.defaultView?.getComputedStyle(root).scrollbarGutter === "auto") {
 			root.style.scrollbarGutter = "stable";
 		}
-		body.setAttribute(LOCK_ATTRIBUTE, "");
+		body.setAttribute(WEB_MODAL_SCROLL_LOCK_ATTRIBUTE, "");
 		body.style.setProperty("--web-modal-scrollbar-width", `${scrollbarWidth}px`);
 		body.style.setProperty("--web-modal-scrollbar-height", `${scrollbarHeight}px`);
 		body.style.position = "fixed";
@@ -69,8 +69,8 @@ export function lockWebModalScroll(body: HTMLElement = document.body): () => voi
 			restore: () => {
 				restoreBody();
 				restoreRoot();
-				if (previousAttribute === null) body.removeAttribute(LOCK_ATTRIBUTE);
-				else body.setAttribute(LOCK_ATTRIBUTE, previousAttribute);
+				if (previousAttribute === null) body.removeAttribute(WEB_MODAL_SCROLL_LOCK_ATTRIBUTE);
+				else body.setAttribute(WEB_MODAL_SCROLL_LOCK_ATTRIBUTE, previousAttribute);
 				const restoreBehavior = preserveStyle(root, ["scroll-behavior"]);
 				root.style.scrollBehavior = "auto";
 				scrolling.scrollLeft = scrollLeft;
