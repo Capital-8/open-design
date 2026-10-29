@@ -188,10 +188,42 @@ describe.skipIf(!installed)(
         ),
       ).toHaveLength(1);
     });
+    it("renders OD test private peers and renderer isolation without a second ingress owner", () => {
+      const docs = render("--namespace", "od-test", "-f", join(root, "deploy/cloud/environments/od-e2e.yaml"));
+      expect(docs.some(d => d.kind === "Ingress")).toBe(false);
+      const policies = docs.filter(d => d.kind === "NetworkPolicy");
+      expect(policies).toHaveLength(8);
+      for (const policy of policies) {
+        for (const direction of ["ingress", "egress"]) {
+          for (const rule of policy.spec[direction] ?? []) {
+            for (const peer of rule.from ?? rule.to ?? []) {
+              expect(peer.ipBlock).toBeUndefined();
+              if (peer.namespaceSelector) {
+                expect(peer.namespaceSelector.matchLabels).toEqual({"kubernetes.io/metadata.name":"ingress-nginx"});
+                expect(peer.podSelector.matchLabels["app.kubernetes.io/component"]).toBe("controller");
+              } else expect(Object.keys(peer.podSelector.matchLabels).length).toBeGreaterThan(0);
+            }
+          }
+        }
+      }
+      const renderer = policies.find(d => d.metadata.name === "open-design-cloud-renderer")!;
+      expect(renderer.spec.policyTypes).toEqual(["Ingress", "Egress"]);
+      expect(renderer.spec.egress).toEqual([]);
+      expect(renderer.spec.ingress).toEqual([{from:[{podSelector:{matchLabels:{"app.kubernetes.io/name":"open-design-cloud","app.kubernetes.io/instance":"cloud-fixture"}}}],ports:[{protocol:"TCP",port:19001}]}]);
+      const main = docs.find(d => d.kind === "Deployment" && d.metadata.name === "open-design-cloud")!;
+      expect(main.spec.template.metadata.labels.delivery).toBeUndefined();
+      const db = policies.find(d => d.metadata.name === "open-design-cloud-database-egress")!;
+      expect(db.spec.egress).toEqual([{to:[{podSelector:{matchLabels:{"app.kubernetes.io/name":"od-test-postgres"}}}],ports:[{protocol:"TCP",port:5432}]}]);
+      const config = docs.find(d => d.kind === "ConfigMap")!;
+      expect(config.data.OD_CLOUD_VELA_API_URL).toBe("http://od-e2e-api.od-test.svc.cluster.local:18080");
+      expect(config.data.OD_CLOUD_VELA_WEB_URL).toBe("https://od-e2e-amr.powerformer.net/cloud");
+    });
     it.each([
       ["--namespace", "default"],
       ["--set", "target=other"],
       ["--set", "target=od-e2e"],
+      ["--set", "networkPolicy.enabled=true"],
+      ["--namespace", "od-test", "--set", "target=od-e2e,networkPolicy.enabled=true,postgresAccess.enabled=false"],
       ["--set", "image.digest="],
       ["--set", "renderer.image.digest=latest"],
       ["--set", "secrets.application="],
@@ -200,7 +232,7 @@ describe.skipIf(!installed)(
       ["--set", "migration.enabled=true"],
     ])(
       "rejects incomplete or misdirected deployment values %s %s",
-      (flag, value) => {
+      (...flags: string[]) => {
         const result = spawnSync(
           helm,
           [
@@ -211,8 +243,7 @@ describe.skipIf(!installed)(
             "od-amr-4114",
             "-f",
             values,
-            flag,
-            value,
+            ...flags,
           ],
           { encoding: "utf8" },
         );

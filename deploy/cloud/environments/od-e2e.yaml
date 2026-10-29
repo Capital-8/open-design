@@ -1,0 +1,29 @@
+# Operator fills image digests and resources.revision from the reviewed release
+# receipt. Keep blank required values fail-closed; never deploy mutable tags.
+target: od-e2e
+profile: test
+webUrl: https://od-e2e.powerformer.net
+amr:
+  api: http://od-e2e-api.od-test.svc.cluster.local:18080
+  web: https://od-e2e-amr.powerformer.net/cloud
+  runtime: http://od-e2e-harness.od-test.svc.cluster.local:18082
+  id: od-e2e
+  supportsRecovery: true
+  privateHttp: true
+secrets:
+  application: odcloud-application
+  migration: odcloud-migration
+resources:
+  existingClaim: odcloud-resources
+  # Set subPath to the immutable source SHA directory along with revision.
+nodeSelector:
+  eks.amazonaws.com/nodegroup: default
+  kubernetes.io/arch: amd64
+postgresAccess:
+  podSelector:
+    app.kubernetes.io/name: od-test-postgres
+networkPolicy:
+  enabled: true
+ingress:
+  # od-e2e.powerformer.net has an existing operator owner; update that owner.
+  enabled: false

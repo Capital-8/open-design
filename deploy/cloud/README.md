@@ -67,6 +67,23 @@ The default `spark-amr` / `od-amr-4114` pair remains available. These are render
 constraints; operators must separately verify their kube context and resource
 ownership. The application chart still does not create its DB, Secrets or PVC.
 
+`environments/od-e2e.yaml` records the current lane's private Service URLs,
+public login origin, existing Secret/PVC names and default-node placement.
+Supply image digests, the validated full resource revision and a matching
+immutable `resources.subPath` from the release receipt. The file alone cannot
+render without those required values. It leaves ingress disabled because the
+existing operator release owns `od-e2e.powerformer.net`.
+
+Its opt-in `networkPolicy.enabled` supports only `od-e2e/od-test` with the
+existing `od-test-postgres` selector. New rules allow cloud to API/Harness,
+renderer and PostgreSQL; migration only to PostgreSQL; existing nginx
+controllers/static Web to cloud; and the corresponding AMR peer ingress.
+Namespace-local selectors never imply another namespace. The existing renderer
+policy already permits only cloud ingress and no general egress; the
+foundation's shared DNS allowance remains additive. Cloud/renderer do not carry
+the legacy broad `delivery` label. These are rendered policy contracts, not
+proof of live enforcement: validate allowed/denied connections after rollout.
+
 `amr.privateHttp=true` enables cloud's account API and Harness backchannel only
 for Kubernetes Service roots in the release namespace (`service.namespace.svc`
 or `service.namespace.svc.cluster.local`). It sets

@@ -1,0 +1,137 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if not (and (eq .Values.target "od-e2e") (eq .Release.Namespace "od-test")) }}
+{{- fail "OD test network policies require od-e2e/od-test" }}
+{{- end }}
+{{- if not (and .Values.postgresAccess.enabled (eq (index .Values.postgresAccess.podSelector "app.kubernetes.io/name") "od-test-postgres")) }}
+{{- fail "OD test networking requires the existing od-test-postgres selector and postgresAccess.enabled" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-design-cloud
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+              app.kubernetes.io/instance: ingress-nginx
+              app.kubernetes.io/component: controller
+        - podSelector:
+            matchLabels:
+              component: web
+              delivery: opend-4356-ns-e2e
+      ports: [{protocol: TCP, port: 19000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-design-cloud
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              component: api
+              delivery: opend-4356-ns-e2e
+      ports: [{protocol: TCP, port: 18080}]
+    - to:
+        - podSelector:
+            matchLabels:
+              component: harness
+              delivery: opend-4356-ns-e2e
+      ports: [{protocol: TCP, port: 18082}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-design-cloud-renderer
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports: [{protocol: TCP, port: 19001}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-database-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [open-design-cloud, open-design-cloud-migrate]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- toYaml .Values.postgresAccess.podSelector | nindent 14 }}
+      ports: [{protocol: TCP, port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-api-ingress
+spec:
+  podSelector:
+    matchLabels:
+      component: api
+      delivery: opend-4356-ns-e2e
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-design-cloud
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports: [{protocol: TCP, port: 18080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-harness-ingress
+spec:
+  podSelector:
+    matchLabels:
+      component: harness
+      delivery: opend-4356-ns-e2e
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-design-cloud
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports: [{protocol: TCP, port: 18082}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: open-design-cloud-web-egress
+spec:
+  podSelector:
+    matchLabels:
+      component: web
+      delivery: opend-4356-ns-e2e
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-design-cloud
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports: [{protocol: TCP, port: 19000}]
+{{- end }}
