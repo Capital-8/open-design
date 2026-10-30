@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { assertVelaVersion } from '../../scripts/vela-version.js';
+import { assertVelaVersion } from '../../../.github/scripts/release/vela-version.js';
 
 const manifest = (version: string) => JSON.stringify({ optionalDependencies: { '@powerformer/vela-cli': version } });
 const lock = (specifier: string, version: string) => `importers:\n  tools/pack:\n    optionalDependencies:\n      '@powerformer/vela-cli':\n        specifier: ${specifier}\n        version: ${version}\n\n  tools/release:\n    dependencies: {}\n`;

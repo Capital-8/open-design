@@ -154,7 +154,7 @@ jobs:
           # Read the candidate as data; execute only the checker from the trusted default branch.
           git show "$HEAD_SHA:tools/pack/package.json" > "$RUNNER_TEMP/vela-pack.json"
           git show "$HEAD_SHA:pnpm-lock.yaml" > "$RUNNER_TEMP/vela-lock.yaml"
-          node --experimental-strip-types e2e/scripts/vela-version.ts "$RUNNER_TEMP/vela-pack.json" "$RUNNER_TEMP/vela-lock.yaml"
+          node --experimental-strip-types .github/scripts/release/vela-version.ts "$RUNNER_TEMP/vela-pack.json" "$RUNNER_TEMP/vela-lock.yaml"
 
       - name: Approve the clean backport (release bot, CI green)
         # release/v* requires 1 approving review. The diff was already reviewed + approved on
