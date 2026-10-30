@@ -19,6 +19,7 @@ export interface CommentSyncStateService {
 export function createCommentSyncStateService(db: Database.Database,
   sessionAvailable: (scope: CommentSyncScope) => Promise<boolean | null>,
   diagnostics?: {
+    preparePendingComments?: (scope: CommentSyncScope, options?: { retryFailed?: boolean }) => void | Promise<void>;
     readAlign?: (scope: CommentSyncScope) => CommentAlignResult | undefined;
     readProjectShareState?: ReadProjectShareState;
     /** Credential used for this GET; compare across availability and remote read. */
@@ -42,6 +43,7 @@ export function createCommentSyncStateService(db: Database.Database,
     };
     const available = await sessionAvailable(scope);
     if (available === null) return null;
+    await diagnostics?.preparePendingComments?.(scope);
     // Query after the session await, not a stale count from before a send finished.
     const rows = db.prepare(`SELECT last_error, file_path FROM comment_relay_outbox
       WHERE project_id=? AND workspace_id=? AND workspace_member_id=? ORDER BY updated_at DESC`).all(...identity) as Array<{ last_error: string | null; file_path: string }>;
@@ -69,11 +71,12 @@ export function createCommentSyncStateService(db: Database.Database,
       && rows.some(row => row.file_path === scope.filePath && row.last_error === 'PAYLOAD_TOO_LARGE');
     return { ...(payloadTooLarge ? { payloadTooLarge: true } : {}), ...(align ? { align } : {}), ...(backfill ? { backfill } : {}), pending: rows.length,
       // Arbitrary transport messages can contain credentials or other private data.
-      lastError: (rows.some(row => Boolean(row.last_error)) || db.prepare('SELECT 1 FROM comment_relay_sync_failures WHERE project_id=? AND workspace_id=? AND workspace_member_id=?').get(...identity)) ? 'COMMENT_SYNC_DELIVERY_FAILED' : null,
+      lastError: (backfill?.state === 'failed' || rows.some(row => Boolean(row.last_error)) || db.prepare('SELECT 1 FROM comment_relay_sync_failures WHERE project_id=? AND workspace_id=? AND workspace_member_id=?').get(...identity)) ? 'COMMENT_SYNC_DELIVERY_FAILED' : null,
       sessionMissing: rows.length > 0 && !available, shareStopped };
   };
   return { read, retry: async scope => {
     const identity = args(scope);
+    await diagnostics?.preparePendingComments?.(scope, { retryFailed: true });
     if (scope.filePath !== undefined) {
       const backfill = readPublishedCommentBackfill(db, scope);
       if (backfill?.state === 'failed') {

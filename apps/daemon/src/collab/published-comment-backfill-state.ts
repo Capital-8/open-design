@@ -186,3 +186,40 @@ export function readPublishedCommentBackfill(
   };
   return typeof row.code === 'string' && row.code ? { ...result, code: row.code } : result;
 }
+
+/** Exact revision preparation state; an enqueue failure has no committed members. */
+export function readPublishedCommentBackfillPreparation(
+  db: SqliteDb, scope: PublicFilePublicationScope, revision: PublicFilePublicationRevision,
+): 'absent' | 'enqueue-failed' | 'prepared' {
+  migratePublishedCommentBackfillState(db);
+  const row = db.prepare(`SELECT code FROM published_comment_backfill_batches
+    WHERE workspace_id=? AND workspace_member_id=? AND project_id=? AND file_path=? AND publication_revision=?`)
+    .get(scope.resourceTeamId, scope.ownerMemberId, scope.projectId, scope.filePath, revision.token) as { code: string | null } | undefined;
+  return !row ? 'absent' : row.code === 'BACKFILL_ENQUEUE_FAILED' ? 'enqueue-failed' : 'prepared';
+}
+
+/** Failure belongs to comments only and never alters the publication witness. */
+export function recordPublishedCommentBackfillEnqueueFailure(
+  db: SqliteDb, input: RecordPublishedCommentBackfillInput,
+): void {
+  migratePublishedCommentBackfillState(db);
+  const { scope, publicationRevision } = input;
+  db.prepare(`INSERT INTO published_comment_backfill_batches
+    (workspace_id,workspace_member_id,project_id,file_path,publication_revision,state,retryable,code,reopened)
+    SELECT resource_team_id,owner_member_id,project_id,file_path,revision,'failed',1,'BACKFILL_ENQUEUE_FAILED',?
+    FROM public_file_publications WHERE resource_team_id=? AND owner_member_id=? AND project_id=? AND file_path=?
+      AND slug=? AND revision=?
+    ON CONFLICT(workspace_id,workspace_member_id,project_id,file_path,publication_revision) DO NOTHING`)
+    .run(input.reopened === undefined ? null : input.reopened ? 1 : 0,
+      scope.resourceTeamId, scope.ownerMemberId, scope.projectId, scope.filePath, publicationRevision.slug, publicationRevision.token);
+}
+
+/** Called only inside the replacement enqueue transaction, so failure restores the marker. */
+export function clearPublishedCommentBackfillEnqueueFailure(
+  db: SqliteDb, scope: PublicFilePublicationScope, revision: PublicFilePublicationRevision,
+): void {
+  if (!db.inTransaction) throw new Error('Comment backfill retry requires a transaction');
+  db.prepare(`DELETE FROM published_comment_backfill_batches WHERE workspace_id=? AND workspace_member_id=?
+    AND project_id=? AND file_path=? AND publication_revision=? AND code='BACKFILL_ENQUEUE_FAILED'`)
+    .run(scope.resourceTeamId, scope.ownerMemberId, scope.projectId, scope.filePath, revision.token);
+}
