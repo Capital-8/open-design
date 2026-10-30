@@ -15768,7 +15768,7 @@ describe('LiveArtifactRefreshHistoryPanel', () => {
     ['reanchored', 'versioned', '基于旧版本', { anchoredVersion: 1 }, { elementId: 'versioned', selector: '[data-od-id="versioned"]' }],
     ['stale', 'moved', '锚点可能已移动', {}, { elementId: 'moved-now', selector: '[data-od-id="moved"]' }],
     ['lost', 'lost', '无法定位此元素，页面可能已变化。', {}, null],
-  ] as const)('preserves %s anchor state on the rendered avatar marker', async (_state, elementId, _expected, extra, target) => {
+  ] as const)('preserves %s anchor state in its available marker or list detail', async (_state, elementId, _expected, extra, target) => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       if (this.matches('.viewer-body, .comment-preview-canvas')) return testRect(0, 0, 900, 700);
       if (this.matches('[data-testid="comment-popover"]')) return testRect(0, 0, 320, 160);
@@ -15820,8 +15820,8 @@ describe('LiveArtifactRefreshHistoryPanel', () => {
       const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
       act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, data: { type: 'od:comment-targets', targets: [] } })));
       fireEvent.click(screen.getByTestId('comment-side-item'));
-      const lostMarker = await screen.findByTestId('comment-saved-marker-cmt:lost');
-      expect(lostMarker).toHaveAttribute('data-anchor-state', 'lost');
+      expect(screen.queryByTestId('comment-saved-marker-cmt:lost')).toBeNull();
+      expect(screen.queryByTestId('comment-lost-markers')).toBeNull();
       expect(screen.queryByTestId('comment-active-pin')).toBeNull();
       expect(screen.queryByTestId('comment-target-overlay')).toBeNull();
       expect(screen.getByTestId('comment-side-item')).toHaveTextContent(comment.note);
