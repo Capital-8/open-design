@@ -988,6 +988,12 @@ else { process.stderr.write("unexpected gh call: " + args + "\\n"); process.exit
     expect(feishuStep).toContain(
       "(github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out')",
     );
+    expect(feishuStep).toContain("always()");
+    expect(feishuStep).toContain("steps.vela_guard.outcome == 'failure'");
+    expect(feishuStep).toContain("steps.vela_guard.outputs.reason_b64");
+    expect(feishuStep).toContain("github.event.workflow_run.head_sha");
+    expect(velaGate).toContain('exit 1');
+    expect(velaGate).toContain('reason_b64=$reason');
     expect(feishuStep).not.toContain("'cancelled'");
   });
 
