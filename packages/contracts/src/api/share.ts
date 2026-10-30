@@ -1284,7 +1284,9 @@ export interface ShareBridgeLocatedPayload extends ShareBridgePinPayload {
  * resize or redraw; never selects, focuses, scrolls or submits by itself.
  * Target removal invalidates its selection with found=false/rect=null.
  * Pin removal from the supplied pin set REVOKES it instead of creating a
- * geometry message. An unmatched anchor has no drawn pin.
+ * geometry message. An unmatched anchor has no drawn pin. If a selected pin
+ * loses its target while remaining in the set, send found=false, visible=false
+ * with a valid placeholder rect so the host clears its old presentation.
  * Each variant has EXACT keys; no htmlHint or display data on updates.
  */
 export type ShareBridgeGeometryPayload =
