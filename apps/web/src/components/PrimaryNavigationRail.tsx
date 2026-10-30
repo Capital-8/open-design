@@ -137,7 +137,7 @@ function DestinationModules({
       {onOpenSettings ? <NavButton iconOnly active={settingsActive}
         ariaLabel={t('entry.accountSettings')} label={t('entry.accountSettings')}
         title={t('entry.accountSettings')} onClick={() => onOpenSettings()} testId="entry-settings-button">
-        <Icon name="settings" size={16} />
+        <Icon name={settingsActive ? 'settings-filled' : 'settings'} size={16} />
       </NavButton> : null}
     </div>
   );

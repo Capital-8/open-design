@@ -110,6 +110,7 @@ export type IconName =
   | 'search'
   | 'send'
   | 'settings'
+  | 'settings-filled'
   | 'share'
   | 'sliders'
   | 'smartphone'
@@ -242,6 +243,7 @@ const REMIX_ICON: Partial<Record<IconName, string>> = {
   search: 'search-line',
   send: 'send-plane-2-line',
   settings: 'settings-3-line',
+  'settings-filled': 'settings-5-fill',
   share: 'share-forward-line',
   sliders: 'equalizer-line',
   smartphone: 'smartphone-line',
