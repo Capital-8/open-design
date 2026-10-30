@@ -39,6 +39,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Button } from '@open-design/components';
 import recentSectionStyles from './entry-nav-rail/RailRecentSection.module.css';
+import { RailDisclosure } from './entry-nav-rail/RailDisclosure';
 import { coalescedGet, evictCoalescedGet } from '../lib/coalesced-get';
 import type {
   WorkspaceActiveResponse,
@@ -482,28 +483,15 @@ export function RailRecentSection({
   if (items.length === 0 && section === 'recent') return null;
 
   return (
-    <div className={`entry-nav-rail__recent${scrollable ? ` ${recentSectionStyles.scrollable}` : ''}`}>
-      <button
-        type="button"
-        className="entry-nav-rail__recent-head"
-        onClick={toggle}
-        aria-expanded={open}
-        data-testid={section === 'personal' ? 'entry-nav-drafts' : 'entry-nav-recent-toggle'}
-      >
-        {/* Title first, chevron trailing (per product: 展开和收起的按钮在最右侧).
-            DOM order follows the visual one rather than an `order` swap, so the
-            reading order matches too. */}
-        <span className="entry-nav-rail__recent-title">{label}</span>
-        <span className="entry-nav-rail__recent-chevron" aria-hidden>
-          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
-        </span>
-      </button>
-      <div className={scrollable ? recentSectionStyles.scrollBody : undefined}>
-      {/* The canonical disclosure pair (index.css / composio.css): the outer
-          grid animates 0fr → 1fr, the inner box carries the clip. `hidden` on
-          the wrapper would skip the transition entirely. */}
-      <div className={`accordion-collapsible${open ? ' open' : ''}`} inert={!open} aria-hidden={!open || undefined}>
-        <div className="accordion-collapsible-inner">
+    <RailDisclosure
+      label={label}
+      open={open}
+      onToggle={toggle}
+      controlsId={listId}
+      testId={section === 'personal' ? 'entry-nav-drafts' : 'entry-nav-recent-toggle'}
+      scrollable={scrollable}
+      afterList={afterList}
+    >
           <ul id={listId} className="entry-nav-rail__recent-list">
             {items.map((project) => {
               const status = runStatusByProjectId.get(project.id);
@@ -551,11 +539,7 @@ export function RailRecentSection({
             </svg>
             {showAll ? t('chat.input.collapse') : t('recentProjects.viewAll')}
           </Button>}
-        </div>
-      </div>
-      {afterList}
-      </div>
-    </div>
+    </RailDisclosure>
   );
 }
 

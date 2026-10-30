@@ -21,8 +21,7 @@ import type { ProjectDisplayStatus, WorkspaceCollabContext } from '@open-design/
 import { useT } from '../../i18n';
 import { RemixIcon } from '../RemixIcon';
 import { Icon } from '../Icon';
-import { hasRunStatusGlyph, ProjectRunStatusIcon } from '../ProjectRunStatusIcon';
-import { STATUS_LABEL_KEYS } from '../../state/projectRunStatus';
+import { RailRecentItem } from './RailRecentItem';
 import { exportProjectAsZip } from '../../runtime/exports';
 import { shareProjectToTeam } from '../../state/projectShareRequest';
 import { fetchProjectFiles } from '../../providers/registry';
@@ -343,49 +342,21 @@ export function RailRecentRow({
           aria-label={t('designs.menuRename')}
         />
       ) : (
-        <button
-          type="button"
-          className={`entry-nav-rail__recent-item${opening || selected ? ' is-active' : ''}`}
-          aria-current={selected ? 'page' : undefined}
-          aria-busy={opening || undefined}
-          onClick={() => {
+        <RailRecentItem
+          name={project.name}
+          selected={selected}
+          opening={opening}
+          expanded={expanded}
+          runStatus={runStatus}
+          showLeadingIcon={showLeadingIcon}
+          onOpen={() => {
             if (!onOpen || opening) return;
             setOpening(true);
             void Promise.resolve().then(() => onOpen(project.id)).finally(() => {
               if (activeRef.current) setOpening(false);
             });
           }}
-          /* No `title`: the OS tooltip it produced opened right where the hover
-             preview does and covered it (per product: hover 这的文本的气泡去掉).
-             The full name lives in that preview now — a surface we control,
-             which can also wrap it instead of ellipsizing. */
-          aria-expanded={expanded}
-          data-testid="entry-nav-recent-item"
-        >
-          {showLeadingIcon ? (
-            <span className="entry-nav-rail__recent-icon">
-              {runStatus && runStatus !== 'succeeded' && hasRunStatusGlyph(runStatus) ? (
-                <ProjectRunStatusIcon
-                  status={runStatus}
-                  size={14}
-                  label={t(STATUS_LABEL_KEYS[runStatus])}
-                />
-              ) : (
-                <Icon name={expanded ? 'folder-5' : 'folder-3'} size={16} />
-              )}
-            </span>
-          ) : null}
-          <span className="entry-nav-rail__recent-name">{project.name}</span>
-          {runStatus === 'succeeded' && (
-            <span
-              className="entry-nav-rail__recent-unread"
-              role="img"
-              aria-label={t(STATUS_LABEL_KEYS.succeeded)}
-              title={t(STATUS_LABEL_KEYS.succeeded)}
-              data-testid="entry-nav-recent-unread"
-            />
-          )}
-        </button>
+        />
       )}
       {onRename || onDelete ? (
         <button

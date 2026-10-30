@@ -38,6 +38,7 @@ import { DesignSystemPicker } from './DesignSystemPicker';
 import type { SkillSummary } from '../types';
 import { useInlineLeadChip } from './useInlineLeadChip';
 import { ComposerBeam, useComposerBeam } from './home-hero/ComposerBeam';
+import { HomeComposerCard, HomeComposerInputCard } from './home-hero/HomeComposerCard';
 import { Icon, type IconName } from './Icon';
 import {
   FileTypeIcon,
@@ -1470,6 +1471,8 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     </>
   );
 
+  const dockCollapsed = isDock && ((carouselActive && !composerFocused) || forcedCollapsed);
+
   return (
     <section
       ref={homeHeroRef}
@@ -1490,9 +1493,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
          included, because the ask is that scrolling always puts the bar back
          down. Only the first branch still asks `carouselActive`; it is what
          keeps a field with content open once the caret leaves it. */
-      data-collapsed={
-        isDock && ((carouselActive && !composerFocused) || forcedCollapsed) ? 'true' : undefined
-      }
+      data-collapsed={dockCollapsed ? 'true' : undefined}
     >
       <div
         className={`home-hero__content${activeChipId || isDock ? '' : ' home-hero__content--centered'}`}
@@ -1587,80 +1588,20 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
       ) : null}
       </div>
 
-      {/* #5517 wraps the input card + workdir row into one visible composer
-          card so they read as a single surface. */}
-      <div
-        className="home-hero__composer-card"
-        data-testid="home-hero-composer-card"
-        /* Docked: a pointer anywhere on the bar opens it (per product: 我的鼠标
-           只要点击这个模块包含输入框就展开). `onFocus` below cannot carry this on
-           its own — a scroll folds the bar WITHOUT blurring the editor (that is
-           deliberate: the caret has to survive a scroll), so the caret is
-           usually STILL in the field when the user clicks back, no focus event
-           fires, and the bar had no way to reopen. Capture phase, because the
-           editor handles its own pointerdown.
-           Anything focusable in the bar keeps its own click — only the inert
-           parts hand the caret to the field, which is also what makes the
-           reopen stick: `carouselActive && !composerFocused` would fold it
-           straight back if nothing took focus. */
-        onPointerDownCapture={
-          isDock
-            ? (event) => {
-                setForcedCollapsed(false);
-                const target = event.target;
-                if (
-                  target instanceof Element &&
-                  target.closest(
-                    'button, a, input, textarea, select, [role="button"], [contenteditable="true"]',
-                  )
-                ) {
-                  return;
-                }
-                editorRef.current?.focus();
-              }
-            : undefined
-        }
-        /* Focus anywhere in the BAR holds it open — not just in the input card
-           (per product: 没有输入时点工作目录，面板没弹出，直接收起来了). The
-           工作目录 trigger, the execution switcher and the pickers' panels are
-           SIBLINGS of the input card, so tracking focus on that card alone read
-           a click on any of them as a blur: on an empty field `carouselActive`
-           is still true, the bar folded, `display: none` took the row away
-           mid-click, and the panel never got to open.
-           focusin/focusout bubble, so this outer box hears every one of them,
-           and `contains()` stops a move BETWEEN the bar's own controls from
-           counting as leaving. The beam stays on the input card's own handlers
-           below — it traces THAT box, not this one. */
-        onFocus={() => {
-          setComposerFocused(true);
-          setForcedCollapsed(false);
-        }}
-        onBlur={(event) => {
-          const next = event.relatedTarget;
-          if (next instanceof Node && event.currentTarget.contains(next)) return;
-          setComposerFocused(false);
-        }}
+      <HomeComposerCard
+        docked={isDock}
+        collapsed={dockCollapsed}
+        focusEditor={() => editorRef.current?.focus()}
+        onExpanded={() => setForcedCollapsed(false)}
+        onFocusedChange={setComposerFocused}
       >
-      <div
-        className={`home-hero__input-card${
-          authoringLayoutActive ? ' home-hero__input-card--compact-authoring' : ''
-        }${dragActive ? ' is-drag-active' : ''}`}
+      <HomeComposerInputCard
+        compactAuthoring={authoringLayoutActive}
+        dragActive={dragActive}
         style={inputCardStyle}
         onFocus={beam.onFocus}
         onBlur={beam.onBlur}
-        onDragEnter={(event) => {
-          if (event.dataTransfer.types.includes('Files')) setDragActive(true);
-        }}
-        onDragOver={(event) => {
-          if (!event.dataTransfer.types.includes('Files')) return;
-          event.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={(event) => {
-          const nextTarget = event.relatedTarget;
-          if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-          setDragActive(false);
-        }}
+        onDragActiveChange={setDragActive}
         onDrop={handleDrop}
       >
         <div className="home-hero__prompt-flow" ref={promptFlowRef}>
@@ -2416,7 +2357,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
           </div>
         </div>
         <ComposerBeam phase={beam.phase} onFaded={() => beam.setPhase('idle')} />
-      </div>
+      </HomeComposerInputCard>
 
       {/* Accessory row under the composer card: just the working directory now
           — the upload entry moved up into the card's send cluster (per product)
@@ -2524,7 +2465,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
           </ContextChipHoverCard>
         ))}
       </div>
-      </div>
+      </HomeComposerCard>
 
       {previewHomeFile && previewHomeFileUrl ? createPortal(
         <div
