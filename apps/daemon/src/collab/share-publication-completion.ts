@@ -15,7 +15,7 @@ export interface SharePublicationCompletionInput {
   reopened?: boolean;
 }
 
-/** Persist local witnesses and both kinds of intent in one transaction, after
+/** Persist the publication witness and pending binding in one transaction, after
  * confirmed network publication. A failed pending write retains the receipt in
  * the response, but cannot promise an automatic binding retry.
  * All dependencies must use the same database; no callback performs network I/O.
