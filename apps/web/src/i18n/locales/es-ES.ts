@@ -903,6 +903,7 @@ export const esES: Dict = {
   "entry.accountSignOut": "Cerrar sesión",
   "signOut.confirmTitle": "Cerrar sesión",
   "signOut.confirmMessage": "¿Seguro que quieres cerrar sesión?",
+  "signOut.confirmAccountMessage": "¿Cerrar sesión en la siguiente cuenta?",
   "signOut.confirmAction": "Cerrar sesión",
   "entry.navRecents": "Inicio",
   "entry.navDashboard": "Dashboard",

@@ -40,11 +40,12 @@ export function SignOutConfirmDialog({ busy = false, email, confirmDisabled = fa
       data-testid="sign-out-confirm-dialog"
     >
       <DialogTitle id={titleId}>{t('signOut.confirmTitle')}</DialogTitle>
-      <DialogDescription>{t('signOut.confirmMessage')}</DialogDescription>
+      <DialogDescription>{t(email ? 'signOut.confirmAccountMessage' : 'signOut.confirmMessage')}</DialogDescription>
       {email ? <div className={styles.account}><span className={styles.avatar} aria-hidden>{email.slice(0, 1).toUpperCase()}</span><span>{email}</span></div> : null}
       <DialogFooter className={styles.actions}>
         <Button
           type="button"
+          className={styles.cancel}
           onClick={onCancel}
           disabled={busy}
           data-testid="sign-out-confirm-cancel"

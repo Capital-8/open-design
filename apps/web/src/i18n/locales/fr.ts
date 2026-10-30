@@ -892,6 +892,7 @@ export const fr: Dict = {
   "entry.accountSignOut": "Se déconnecter",
   "signOut.confirmTitle": "Se déconnecter",
   "signOut.confirmMessage": "Voulez-vous vraiment vous déconnecter ?",
+  "signOut.confirmAccountMessage": "Se déconnecter du compte suivant ?",
   "signOut.confirmAction": "Se déconnecter",
   "entry.navRecents": "Accueil",
   "entry.navDashboard": "Tableau de bord",

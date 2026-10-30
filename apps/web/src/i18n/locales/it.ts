@@ -892,6 +892,7 @@ export const it: Dict = {
   "entry.accountSignOut": "Esci",
   "signOut.confirmTitle": "Esci",
   "signOut.confirmMessage": "Vuoi davvero uscire?",
+  "signOut.confirmAccountMessage": "Uscire dal seguente account?",
   "signOut.confirmAction": "Esci",
   "entry.navRecents": "Home",
   "entry.navDashboard": "Dashboard",

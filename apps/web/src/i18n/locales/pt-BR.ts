@@ -892,6 +892,7 @@ export const ptBR: Dict = {
   "entry.accountSignOut": "Sair",
   "signOut.confirmTitle": "Sair",
   "signOut.confirmMessage": "Tem certeza de que deseja sair?",
+  "signOut.confirmAccountMessage": "Sair da seguinte conta?",
   "signOut.confirmAction": "Sair",
   "entry.navRecents": "Início",
   "entry.navDashboard": "Dashboard",

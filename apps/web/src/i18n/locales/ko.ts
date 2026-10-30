@@ -892,6 +892,7 @@ export const ko: Dict = {
   "entry.accountSignOut": "로그아웃",
   "signOut.confirmTitle": "로그아웃",
   "signOut.confirmMessage": "정말 로그아웃하시겠어요?",
+  "signOut.confirmAccountMessage": "다음 계정에서 로그아웃할까요?",
   "signOut.confirmAction": "로그아웃",
   "entry.navRecents": "홈",
   "entry.navDashboard": "Dashboard",

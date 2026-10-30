@@ -1251,6 +1251,7 @@ export interface Dict {
   // can never sign the user out without an explicit confirm.
   'signOut.confirmTitle': string;
   'signOut.confirmMessage': string;
+  'signOut.confirmAccountMessage': string;
   'signOut.confirmAction': string;
   'entry.navRecents': string;
   'entry.navDashboard': string;

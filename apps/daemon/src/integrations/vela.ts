@@ -1884,7 +1884,10 @@ async function mirrorAmrAnalyticsEvent(
 function velaLoginAttributionEnv(
   attribution: AmrEntryAttribution | null | undefined,
 ): Record<string, string> {
-  if (!attribution) return {};
+  // Every login this daemon starts is for the Open Design client, so the
+  // activation page can always offer "Open Open Design" — even for retries or
+  // entry points that carry no entry attribution.
+  if (!attribution) return { OPEN_DESIGN_AMR_ORIGIN: 'open_design' };
   return {
     OPEN_DESIGN_AMR_ENTRY_ID: attribution.entryId,
     OPEN_DESIGN_AMR_ENTRY_SOURCE: attribution.sourceDetail,

@@ -903,6 +903,7 @@ export const de: Dict = {
   "entry.accountSignOut": "Abmelden",
   "signOut.confirmTitle": "Abmelden",
   "signOut.confirmMessage": "Möchten Sie sich wirklich abmelden?",
+  "signOut.confirmAccountMessage": "Von folgendem Konto abmelden?",
   "signOut.confirmAction": "Abmelden",
   "entry.navRecents": "Startseite",
   "entry.navDashboard": "Dashboard",

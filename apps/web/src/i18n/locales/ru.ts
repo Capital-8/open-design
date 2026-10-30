@@ -892,6 +892,7 @@ export const ru: Dict = {
   "entry.accountSignOut": "Выйти",
   "signOut.confirmTitle": "Выйти",
   "signOut.confirmMessage": "Вы действительно хотите выйти?",
+  "signOut.confirmAccountMessage": "Выйти из следующего аккаунта?",
   "signOut.confirmAction": "Выйти",
   "entry.navRecents": "Главная",
   "entry.navDashboard": "Dashboard",

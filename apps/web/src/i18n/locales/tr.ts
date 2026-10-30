@@ -892,6 +892,7 @@ export const tr: Dict = {
   "entry.accountSignOut": "Çıkış yap",
   "signOut.confirmTitle": "Çıkış yap",
   "signOut.confirmMessage": "Çıkış yapmak istediğinizden emin misiniz?",
+  "signOut.confirmAccountMessage": "Aşağıdaki hesaptan çıkış yapılsın mı?",
   "signOut.confirmAction": "Çıkış yap",
   "entry.navRecents": "Ana sayfa",
   "entry.navDashboard": "Dashboard",

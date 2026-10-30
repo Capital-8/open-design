@@ -1620,6 +1620,9 @@ describe('POST /api/integrations/vela/login', () => {
     const env = JSON.parse(readFileSync(dumpPath, 'utf8'));
     expect(env.OPEN_DESIGN_AMR_AUTH_ATTEMPT_ID).toBe(authAttemptId);
     expect(env.OPEN_DESIGN_AMR_AUTH_STAGE_FORMAT).toBeUndefined();
+    // No entry attribution (e.g. a retry) still marks the login as Open Design's.
+    expect(env.OPEN_DESIGN_AMR_ORIGIN).toBe('open_design');
+    expect(env.OPEN_DESIGN_AMR_ENTRY_ID).toBeUndefined();
     const status = await getJson<{
       authAttemptId?: string;
       authRoute?: string;

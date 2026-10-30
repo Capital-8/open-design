@@ -892,6 +892,7 @@ export const hu: Dict = {
   "entry.accountSignOut": "Kijelentkezés",
   "signOut.confirmTitle": "Kijelentkezés",
   "signOut.confirmMessage": "Biztosan ki szeretne jelentkezni?",
+  "signOut.confirmAccountMessage": "Kijelentkezik az alábbi fiókból?",
   "signOut.confirmAction": "Kijelentkezés",
   "entry.navRecents": "Kezdőlap",
   "entry.navDashboard": "Dashboard",

@@ -892,6 +892,7 @@ export const ja: Dict = {
   "entry.accountSignOut": "ログアウト",
   "signOut.confirmTitle": "ログアウト",
   "signOut.confirmMessage": "ログアウトしてもよろしいですか？",
+  "signOut.confirmAccountMessage": "次のアカウントからログアウトしますか？",
   "signOut.confirmAction": "ログアウト",
   "entry.navRecents": "ホーム",
   "entry.navDashboard": "Dashboard",

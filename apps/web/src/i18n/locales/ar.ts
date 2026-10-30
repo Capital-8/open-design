@@ -903,6 +903,7 @@ export const ar: Dict = {
   "entry.accountSignOut": "تسجيل الخروج",
   "signOut.confirmTitle": "تسجيل الخروج",
   "signOut.confirmMessage": "هل أنت متأكد من أنك تريد تسجيل الخروج؟",
+  "signOut.confirmAccountMessage": "هل تريد تسجيل الخروج من الحساب التالي؟",
   "signOut.confirmAction": "تسجيل الخروج",
   "entry.navRecents": "الرئيسية",
   "entry.navDashboard": "Dashboard",

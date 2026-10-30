@@ -1,7 +1,13 @@
 import type { VelaLoginStatus } from '../providers/daemon';
 
 export const AMR_LOGIN_POLL_INTERVAL_MS = 2000;
-export const AMR_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+// The AMR device request lives 15 minutes server-side and `vela login` exits on
+// its own when it expires. The client must not give up earlier: a new user can
+// still be registering in the browser, and an early cancel turns their finished
+// registration into "登录已取消" (OPEND-4588). This is only a backstop past the
+// server deadline for a child that never reports back.
+export const AMR_DEVICE_AUTH_TTL_MS = 15 * 60 * 1000;
+export const AMR_LOGIN_TIMEOUT_MS = AMR_DEVICE_AUTH_TTL_MS + 60 * 1000;
 export const AMR_LOGIN_STARTUP_SETTLE_MS = 3000;
 export const AMR_LOGIN_STATUS_EVENT = 'od:amr-login-status-change';
 

@@ -43,6 +43,7 @@ import {
 } from '../analytics/events';
 import {
   amrHandoffDeviceId,
+  readAmrAttribution,
   recordAmrEntry,
   type AmrEntryAttribution,
 } from '../analytics/amr-attribution';
@@ -3124,7 +3125,9 @@ function OnboardingView({
       try { if (await pollAmrLoginCompletion()) continueAfterCloudSignIn(); }
       finally { setAmrLoginPending(false); }
     } else {
-      await handleAmrSignInToContinue(undefined, true);
+      // Keep the original entry so the new activation page still knows it
+      // belongs to this client (and the funnel keeps one entry id).
+      await handleAmrSignInToContinue(readAmrAttribution(), true);
     }
   }
 

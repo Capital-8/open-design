@@ -892,6 +892,7 @@ export const pl: Dict = {
   "entry.accountSignOut": "Wyloguj się",
   "signOut.confirmTitle": "Wyloguj się",
   "signOut.confirmMessage": "Czy na pewno chcesz się wylogować?",
+  "signOut.confirmAccountMessage": "Wylogować się z tego konta?",
   "signOut.confirmAction": "Wyloguj się",
   "entry.navRecents": "Strona główna",
   "entry.navDashboard": "Dashboard",

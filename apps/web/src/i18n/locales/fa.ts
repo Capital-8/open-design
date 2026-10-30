@@ -903,6 +903,7 @@ export const fa: Dict = {
   "entry.accountSignOut": "خروج از حساب",
   "signOut.confirmTitle": "خروج از حساب",
   "signOut.confirmMessage": "آیا مطمئن هستید که می‌خواهید از حساب خارج شوید؟",
+  "signOut.confirmAccountMessage": "از حساب زیر خارج می‌شوید؟",
   "signOut.confirmAction": "خروج",
   "entry.navRecents": "خانه",
   "entry.navDashboard": "Dashboard",

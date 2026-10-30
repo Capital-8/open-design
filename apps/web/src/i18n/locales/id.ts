@@ -892,6 +892,7 @@ export const id: Dict = {
   "entry.accountSignOut": "Keluar",
   "signOut.confirmTitle": "Keluar",
   "signOut.confirmMessage": "Yakin ingin keluar dari akun?",
+  "signOut.confirmAccountMessage": "Keluar dari akun berikut?",
   "signOut.confirmAction": "Keluar",
   "entry.navRecents": "Beranda",
   "entry.navDashboard": "Dashboard",

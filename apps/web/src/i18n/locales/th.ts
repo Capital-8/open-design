@@ -892,6 +892,7 @@ export const th: Dict = {
   "entry.accountSignOut": "ออกจากระบบ",
   "signOut.confirmTitle": "ออกจากระบบ",
   "signOut.confirmMessage": "คุณแน่ใจหรือไม่ว่าต้องการออกจากระบบ?",
+  "signOut.confirmAccountMessage": "ออกจากระบบบัญชีต่อไปนี้หรือไม่?",
   "signOut.confirmAction": "ออกจากระบบ",
   "entry.navRecents": "หน้าแรก",
   "entry.navDashboard": "Dashboard",
