@@ -32,7 +32,7 @@ function setup() {
   // A real committed publication exists before comments are prepared.
   publications.set(scope, publication);
   const revision = publications.getRevision(scope)!;
-  const fact = { scope, publicationRevision: revision, publicFilePath: 'index.html', reopened: false };
+  const fact = { scope, publicationRevision: revision, publicFilePath: 'index.html', reopened: false, receipt: { resourceId: 'resource', versionId: 'version' } };
   const reconciler = createPublishedCommentBackfillReconciler(db, { listFacts: () => [fact] });
   const syncScope = { projectId: 'p', workspaceId: 'w', workspaceMemberId: 'm', filePath: scope.filePath };
   return { db, scope, publications, publication, revision, fact, outbox, reconciler, syncScope };
@@ -85,22 +85,22 @@ it('rolls back partial enqueue, records safe comment failure and retries once wi
   expect(await sync.retry(s.syncScope)).toMatchObject({ pending: 2, backfill: { state: 'pending', total: 2 } });
   const rows = s.outbox.listDue(Date.now());
   await sync.retry(s.syncScope);
-  s.reconciler.prepare(s.scope);
+  await s.reconciler.prepare(s.scope);
   expect(s.outbox.listDue(Date.now())).toEqual(rows);
   expect(s.publications.getRevision(s.scope)).toEqual(s.revision);
 });
 
-it.each(['stop', 'revision'] as const)('ignores a stale fact after %s and cannot recreate a stopped queue', change => {
+it.each(['stop', 'revision'] as const)('ignores a stale fact after %s and cannot recreate a stopped queue', async change => {
   const s = setup();
   if (change === 'stop') s.publications.delete(s.scope);
   else s.publications.set(s.scope, s.publication);
-  s.reconciler.prepare(s.scope, { retryFailed: true });
+  await s.reconciler.prepare(s.scope, { retryFailed: true });
   expect(s.outbox.count()).toBe(0);
   expect(readPublishedCommentBackfill(s.db, s.syncScope)).toBeUndefined();
 });
 
 it('retries transport through the existing batch without preparing it again', async () => {
-  const s = setup(); s.reconciler.prepare(s.scope);
+  const s = setup(); await s.reconciler.prepare(s.scope);
   const row = s.outbox.listDue(Date.now())[0]!;
   s.outbox.defer(row, { nextAttemptAt: 9000000000000, error: 'offline' });
   const sync = createCommentSyncStateService(s.db, async () => true, {
@@ -113,26 +113,86 @@ it('retries transport through the existing batch without preparing it again', as
   expect(s.outbox.count()).toBe(2);
 });
 
-it('keeps failed fact reads unknown and rejects a foreign scope before enqueue', () => {
+it('keeps failed fact reads unknown and rejects a foreign scope before enqueue', async () => {
   const s = setup();
   const unavailable = createPublishedCommentBackfillReconciler(s.db, { listFacts: () => { throw new Error('private credential'); } });
-  expect(() => unavailable.prepare(s.scope)).toThrow('COMMENT_BACKFILL_FACTS_UNAVAILABLE');
+  await expect(unavailable.prepare(s.scope)).rejects.toThrow('COMMENT_BACKFILL_FACTS_UNAVAILABLE');
   const foreign = createPublishedCommentBackfillReconciler(s.db, { listFacts: () => [{ ...s.fact, scope: { ...s.scope, ownerMemberId: 'foreign' } }] });
-  expect(() => foreign.prepare(s.scope)).toThrow('COMMENT_BACKFILL_SCOPE_MISMATCH');
+  await expect(foreign.prepare(s.scope)).rejects.toThrow('COMMENT_BACKFILL_SCOPE_MISMATCH');
   expect(s.outbox.count()).toBe(0);
   expect(readPublishedCommentBackfill(s.db, s.syncScope)).toBeUndefined();
 });
 
-it('does not attach an old enqueue failure to a new publication or a stopped file', () => {
+it('does not attach an old enqueue failure to a new publication or a stopped file', async () => {
   const s = setup();
   s.db.exec("CREATE TRIGGER fail_comment BEFORE INSERT ON comment_relay_outbox BEGIN SELECT RAISE(ABORT,'unavailable'); END");
-  s.reconciler.prepare(s.scope);
+  await s.reconciler.prepare(s.scope);
   expect(readPublishedCommentBackfill(s.db, s.syncScope)).toMatchObject({ state: 'failed' });
   s.publications.set(s.scope, s.publication);
-  s.reconciler.prepare(s.scope, { retryFailed: true });
+  await s.reconciler.prepare(s.scope, { retryFailed: true });
   expect(readPublishedCommentBackfill(s.db, s.syncScope)).toBeUndefined();
   s.publications.delete(s.scope);
-  s.reconciler.prepare(s.scope, { retryFailed: true });
+  await s.reconciler.prepare(s.scope, { retryFailed: true });
   expect(readPublishedCommentBackfill(s.db, s.syncScope)).toBeUndefined();
   expect(s.outbox.count()).toBe(0);
 });
+
+it('records failed comment admission, skips it on polls and admits once on explicit retry', async () => {
+  const s = setup();
+  let offline = true;
+  let admissions = 0;
+  const reconciler = createPublishedCommentBackfillReconciler(s.db, {
+    listFacts: () => [s.fact],
+    admitFact: async fact => {
+      admissions++;
+      expect(s.db.inTransaction).toBe(false);
+      expect(fact.receipt).toEqual({ resourceId: 'resource', versionId: 'version' });
+      if (offline) throw new Error('private remote admission error');
+    },
+  });
+  await reconciler.prepare(s.scope);
+  expect(readPublishedCommentBackfill(s.db, s.syncScope)).toMatchObject({
+    state: 'failed', retryable: true, code: 'BACKFILL_ENQUEUE_FAILED',
+  });
+  expect(s.outbox.count()).toBe(0);
+  expect(s.publications.getRevision(s.scope)).toEqual(s.revision);
+  await reconciler.prepare(s.scope);
+  expect(admissions).toBe(1);
+  offline = false;
+  await reconciler.prepare(s.scope, { retryFailed: true });
+  const rows = s.outbox.listDue(Date.now());
+  expect(rows).toHaveLength(2);
+  expect(readPublishedCommentBackfill(s.db, s.syncScope)).toMatchObject({ state: 'pending', total: 2 });
+  await reconciler.prepare(s.scope, { retryFailed: true });
+  expect(admissions).toBe(2);
+  expect(s.outbox.listDue(Date.now())).toEqual(rows);
+  expect(s.publications.getRevision(s.scope)).toEqual(s.revision);
+});
+
+it.each(['stop', 'revision', 'stop-with-error'] as const)(
+  'does not enqueue or record stale failure when %s races with comment admission', async change => {
+    const s = setup();
+    let release!: () => void;
+    const admitted = new Promise<void>(resolve => { release = resolve; });
+    let admissions = 0;
+    const reconciler = createPublishedCommentBackfillReconciler(s.db, {
+      listFacts: () => [s.fact],
+      admitFact: async () => {
+        admissions++;
+        await admitted;
+        if (change === 'stop-with-error') throw new Error('private late error');
+      },
+    });
+    const preparing = reconciler.prepare(s.scope);
+    expect(admissions).toBe(1);
+    if (change === 'revision') s.publications.set(s.scope, s.publication);
+    else s.publications.delete(s.scope);
+    release();
+    await preparing;
+    expect(s.outbox.count()).toBe(0);
+    expect(readPublishedCommentBackfill(s.db, s.syncScope)).toBeUndefined();
+    expect(s.db.prepare('SELECT 1 FROM published_comment_backfill_batches').get()).toBeUndefined();
+    await reconciler.prepare(s.scope, { retryFailed: true });
+    expect(admissions).toBe(1);
+  },
+);

@@ -14,13 +14,15 @@ export interface PublishedCommentBackfillSubject {
 export function createPublishedCommentBackfillReconciler(
   db: Database.Database,
   deps: {
+    /** Register the committed receipt for comments; never publishes or changes link lifecycle. */
+    admitFact?: (fact: PublishedFileCommentBackfillInput) => Promise<void>;
     listFacts: (subject: PublishedCommentBackfillSubject) => readonly PublishedFileCommentBackfillInput[];
   },
 ) {
   migratePublishedCommentBackfillState(db);
   const publications = createSqlitePublicFilePublicationStore(db);
   return {
-    prepare(subject: PublishedCommentBackfillSubject, options?: { retryFailed?: boolean }): void {
+    async prepare(subject: PublishedCommentBackfillSubject, options?: { retryFailed?: boolean }): Promise<void> {
       if (db.inTransaction) throw new Error('Comment preparation requires committed publication facts');
       // A failed fact read is unknown work, never an empty successful batch.
       let facts: readonly PublishedFileCommentBackfillInput[];
@@ -36,7 +38,13 @@ export function createPublishedCommentBackfillReconciler(
           return revision?.token === publicationRevision.token && revision.slug === publicationRevision.slug;
         };
         if (!current()) continue;
+        const preparation = readPublishedCommentBackfillPreparation(db, scope, publicationRevision);
+        if (preparation === 'prepared' || (preparation === 'enqueue-failed' && !options?.retryFailed)) continue;
         try {
+          // Remote admission is comment work and cannot run inside SQLite's
+          // synchronous transaction or hold publication completion open.
+          await deps.admitFact?.(fact);
+          if (!current()) continue;
           db.transaction(() => {
             if (!current()) return;
             const state = readPublishedCommentBackfillPreparation(db, scope, publicationRevision);

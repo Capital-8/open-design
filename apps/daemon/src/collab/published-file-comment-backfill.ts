@@ -9,6 +9,8 @@ import { createSqlitePublicFilePublicationStore, type PublicFilePublicationScope
 
 export interface PublishedFileCommentBackfillInput {
   scope: PublicFilePublicationScope;
+  /** Committed content receipt used only for independent comment admission. */
+  receipt?: { resourceId: string; versionId: string };
   publicationRevision: PublicFilePublicationRevision;
   /** Produced by the publisher's actual file mapping; never guessed here. */
   publicFilePath: string;
