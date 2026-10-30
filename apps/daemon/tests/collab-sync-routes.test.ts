@@ -31,7 +31,6 @@ import {
   buildWorkspacePermissions,
   buildWorkspaceSeatSummary,
   type WorkspaceCollabContext,
-  SHARE_MAX_TOTAL_BYTES,
 } from '@open-design/contracts';
 import { runVelaResourceCommand } from '../src/collab/vela-cli-resource-adapter.js';
 import {
@@ -1938,11 +1937,37 @@ describe('collab sync routes', () => {
     } finally { db.close(); }
   });
 
-  it.each(['permission', 'nonowner', 'placeholder'] as const)('preflight does not plan or mutate for %s denial', async denial => {
+  it('plans owned local files without team-share eligibility and preserves Vela publication denial', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'od-share-authority-'));
+    tempDirs.push(dir);
+    await writeFile(path.join(dir, 'index.html'), '<main>Public file</main>');
     const db = new Database(':memory:');
     try {
       const share = await publicShareFixture({ db });
-      const context = denial === 'permission' ? fixedShareContextProvider(false) : personalContextProvider();
+      const api = await startSyncServer(fixedShareContextProvider(false), {
+        ...share, resolveProjectDir: () => dir,
+        resolveSharedProject: async () => ({ projectId: 'p1', ownerMemberId: 'wm-1', sharedAt: '2026-01-01', name: 'Project' }),
+      });
+      const plan = await api.json('/api/projects/p1/files/index.html/share-plan', { method: 'POST' });
+      expect(plan.status).toBe(200);
+      expect(plan.body.fileCount).toBe(1);
+      expect(vi.mocked(runVelaResourceCommand)).not.toHaveBeenCalled();
+      vi.mocked(runVelaResourceCommand).mockRejectedValueOnce(Object.assign(new Error('cloud denied'), {
+        stderr: '{"error":"denied","status":403,"errorCode":"resource_publish_forbidden"}',
+      }));
+      const publish = await api.json('/api/projects/p1/files/index.html/publish-public', { method: 'POST' });
+      expect(publish.status).toBe(403);
+      expect(publish.body.failure).toMatchObject({ upstreamStatus: 403, upstreamCode: 'resource_publish_forbidden' });
+      expect(vi.mocked(runVelaResourceCommand)).toHaveBeenCalledOnce();
+      expect(share.publicFilePublicationStore.get({ projectId: 'p1', filePath: 'index.html', resourceTeamId: 'ws-1', ownerMemberId: 'wm-1' })).toBeNull();
+    } finally { db.close(); }
+  });
+
+  it.each(['nonowner', 'placeholder'] as const)('preflight does not plan or mutate for %s denial', async denial => {
+    const db = new Database(':memory:');
+    try {
+      const share = await publicShareFixture({ db });
+      const context = personalContextProvider();
       const resolveProjectDir = vi.fn(() => '/must-not-be-read');
       const resolveSharedProject = vi.fn(async () => ({
         projectId: 'p1', ownerMemberId: denial === 'nonowner' ? 'another-member' : 'wm-personal-1',
@@ -1987,16 +2012,18 @@ describe('collab sync routes', () => {
       const baseline = await api.json(planUrl, { method: 'POST' });
       expect(baseline.status).toBe(200);
       expect(baseline.body.fileCount).toBe(2);
-      const atLimitAssetBytes = SHARE_MAX_TOTAL_BYTES - (baseline.body.totalBytes - 1);
+      const sampleBytes = 21 * 1024 * 1024;
+      const atLimitAssetBytes = sampleBytes - (baseline.body.totalBytes - 1);
       expect(atLimitAssetBytes).toBeGreaterThan(0);
       await writeFile(asset, Buffer.alloc(atLimitAssetBytes, 65));
       const atLimit = await api.json(planUrl, { method: 'POST' });
       expect(atLimit.status).toBe(200);
-      expect(atLimit.body).toMatchObject({ fileCount: 2, totalBytes: SHARE_MAX_TOTAL_BYTES, exceedsSizeLimit: false });
+      expect(atLimit.body).toMatchObject({ fileCount: 2, totalBytes: sampleBytes });
       await writeFile(asset, Buffer.alloc(atLimitAssetBytes + 1, 65));
       const over = await api.json(planUrl, { method: 'POST' });
       expect(over.status).toBe(200);
-      expect(over.body).toMatchObject({ fileCount: 2, totalBytes: SHARE_MAX_TOTAL_BYTES + 1, exceedsSizeLimit: true });
+      expect(over.body).toMatchObject({ fileCount: 2, totalBytes: sampleBytes + 1 });
+      expect(over.body).not.toHaveProperty('exceedsSizeLimit');
       vi.mocked(runVelaResourceCommand).mockRejectedValueOnce(Object.assign(new Error('cloud rejected'), {stderr:'{"error":"too large","status":413,"errorCode":"public_share_too_large"}'}));
       const rejected = await api.json(publishUrl, { method: 'POST' });
       expect(rejected.status).toBe(413);
@@ -2004,10 +2031,15 @@ describe('collab sync routes', () => {
       expect(vi.mocked(runVelaResourceCommand)).toHaveBeenCalledOnce();
       expect(share.publicFilePublicationStore.get({ projectId: 'p1', filePath: 'index.html', resourceTeamId: 'ws-personal-1', ownerMemberId: 'wm-personal-1' })).toBeNull();
       expect(share.readProjectShareState).toHaveBeenCalledOnce();
-      await writeFile(asset, Buffer.alloc(atLimitAssetBytes, 65));
-      const recovered = await api.json(planUrl, { method: 'POST' });
-      expect(recovered.body).toMatchObject({ totalBytes: SHARE_MAX_TOTAL_BYTES, exceedsSizeLimit: false });
-      expect(vi.mocked(runVelaResourceCommand)).toHaveBeenCalledOnce();
+      // The same bytes may be admitted after Vela's policy changes; no client
+      // threshold or new client build participates in that decision.
+      vi.mocked(runVelaResourceCommand).mockResolvedValueOnce(JSON.stringify({ id: 'accepted-version', version: 1 }));
+      const recovered = await api.json(publishUrl, { method: 'POST' });
+      expect(recovered.status).toBe(200);
+      expect(vi.mocked(runVelaResourceCommand)).toHaveBeenCalledTimes(2);
+      const unchangedPlan = await api.json(planUrl, { method: 'POST' });
+      expect(unchangedPlan.body).toMatchObject({ totalBytes: sampleBytes + 1 });
+      expect(unchangedPlan.body).not.toHaveProperty('exceedsSizeLimit');
     } finally { db.close(); }
   });
 

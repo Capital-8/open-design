@@ -28,7 +28,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   SHARE_ENTRY_INDEX_CONFLICT,
-  SHARE_MAX_TOTAL_BYTES,
   type SharePlanSummary,
   type ShareUnpublishResponse,
   type SharePublishRequest,
@@ -479,7 +478,6 @@ async function buildSharePlan(
     summary: {
       fileCount: deployPlan.files.length,
       totalBytes,
-      exceedsSizeLimit: totalBytes > SHARE_MAX_TOTAL_BYTES,
       exclusions: [
         ...deployPlan.missing.map((path) => ({ path, reason: 'missing' as const })),
         ...deployPlan.invalid.map((path) => ({ path, reason: 'invalid' as const })),
@@ -958,18 +956,6 @@ export function registerCollabSyncRoutes(
     return { verification, principal, scope: boundScope };
   }
 
-  async function canShareProjectsForRequest(
-    req: Request,
-    verifiedContext?: WorkspaceCollabContext | null,
-  ): Promise<boolean> {
-    const verification =
-      verifiedContext === undefined
-        ? await verifiedWorkspaceContextForRequest(req)
-        : { ok: true as const, context: verifiedContext };
-    const context = verification.ok ? verification.context : null;
-    return context?.permissions.canShareProjects === true;
-  }
-
   async function verifiedPublishPrincipalForRequest(
     req: Request,
     projectId: string,
@@ -1315,7 +1301,8 @@ export function registerCollabSyncRoutes(
     const context = verification.context;
     const principal = publicFilePrincipal(context);
     if (!context || !principal) return res.status(409).json(workspaceIdentityRequiredBody());
-    if (!await canShareProjectsForRequest(req, context)) return res.status(403).json({ error: 'WORKSPACE_PROJECT_SHARE_DENIED' });
+    // This endpoint only inspects local files. Vela authorizes publication;
+    // team-project visibility permission is not public-file eligibility.
     const resolved = await resolveSharedProjectForPublicFile(resolveSharedProject, projectId, context, principal);
     if (!resolved.ok) return res.status(503).json({ error: 'WORKSPACE_PROJECT_OWNERSHIP_UNAVAILABLE' });
     const owner = resolved.project?.ownerMemberId
@@ -1484,9 +1471,8 @@ export function registerCollabSyncRoutes(
         return fail(502, 'PUBLIC_SHARE_RESUME_UNAVAILABLE', 'resume_prepare');
       }
     }
-    // The plan is built, and refused on size or blockers, before the alias is
-    // reserved or Vela is contacted: an unpublishable file must not cost a
-    // network round-trip or leave a reservation behind.
+    // Resolve local files and structural blockers before reserving an alias.
+    // Publication capacity and eligibility are decided by Vela.
     if (!resolveProjectDir) {
       return res.status(500).json({ error: 'PROJECT_DIR_UNAVAILABLE' });
     }

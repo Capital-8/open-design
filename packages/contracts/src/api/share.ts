@@ -293,25 +293,16 @@ export interface SharePlanExclusion {
 }
 
 /**
- * Total-bytes ceiling for one share (S15). Checked BEFORE the upload starts,
- * so the user is refused immediately rather than after a long transfer.
- *
- * NOTE: the 20 MB figure is carried over from the product spec and has no
- * source in code or in the decision ledger — it is an inherited constant, not
- * a measured limit. It is frozen here so the two ends agree, not because it
- * has been justified.
- */
-export const SHARE_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
-
-/**
  * Summary of what a share WOULD contain, computed by the daemon's
- * `buildSharePlan` before any bytes move. Drives S2/S3/S7/S15/S16.
+ * `buildSharePlan` before any bytes move. Reports local content facts only;
+ * Vela decides publication authorization and capacity.
  */
 export interface SharePlanSummary {
   fileCount: number;
   totalBytes: number;
-  /** `totalBytes > SHARE_MAX_TOTAL_BYTES` — the S15 pre-upload refusal. */
-  exceedsSizeLimit: boolean;
+  /** @deprecated Older daemons supplied a local estimate. Current plans omit
+   * this field: Vela alone decides publication capacity during upload. */
+  exceedsSizeLimit?: boolean;
   /** S16. Empty array, never absent, so callers need no `?? []`. */
   exclusions: SharePlanExclusion[];
   /**
