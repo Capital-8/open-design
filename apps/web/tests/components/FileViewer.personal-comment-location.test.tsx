@@ -116,11 +116,17 @@ it.each(['missing', 'duplicate', 'wrong-selector'] as const)('Personal: %s cmt i
   expect(request).toBeDefined();
   expect(screen.getByTestId('comment-location-unavailable')).toHaveTextContent('Unable to locate this element. The page may have changed.');
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveAttribute('data-anchor-state', 'lost');
+  expect(screen.queryByTestId(`comment-saved-marker-${comment.elementId}`)).toBeNull();
+  expect(screen.queryByTestId('comment-lost-markers')).toBeNull();
+  expect(screen.getByTestId('comment-side-item')).toHaveTextContent(comment.note);
+  expect(screen.getByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
   await dispatch({ ...target, type: 'od:comment-active-target-update' });
   await dispatch({ ...target, type: 'od:comment-active-target-update', requestId: request.requestId });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId(`comment-saved-marker-${comment.elementId}`)).toHaveAttribute('data-anchor-state', 'lost');
+  expect(screen.queryByTestId(`comment-saved-marker-${comment.elementId}`)).toBeNull();
+  expect(screen.queryByTestId('comment-lost-markers')).toBeNull();
+  expect(screen.getByTestId('comment-side-item')).toHaveTextContent(comment.note);
+  expect(screen.getByTestId('comment-popover-detail')).toHaveTextContent(comment.note);
   expect(post.mock.calls.filter(call => call[0]?.type === 'od:preview-scroll-by')).toHaveLength(0);
 });
 it('Personal: srcDoc acknowledgement is request-scoped and cannot reveal after a file boundary', async () => {
