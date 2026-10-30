@@ -549,6 +549,17 @@ describe('resolveCommentAnchor drift ladder', () => {
     expect(res.snapshot?.elementId).toBe('path-2-9');
   });
 
+  it('does not choose between equally scoring text matches when the old selector is absent', () => {
+    const snapshots = new Map([
+      ['a', snap({ elementId: 'a', selector: '#a', htmlHint: '<div>', text: 'Same text' })],
+      ['b', snap({ elementId: 'b', selector: '#b', htmlHint: '<div>', text: 'Same text' })],
+    ]);
+    const saved = comment({ elementId: 'gone', selector: '#gone', htmlHint: '<figure>', text: 'Same text', position: { x: 10, y: 20, width: 300, height: 80 } });
+    expect(resolveCommentAnchor(saved, snapshots).state).toBe('lost');
+    snapshots.delete('b');
+    expect(resolveCommentAnchor(saved, snapshots)).toMatchObject({ state: 'stale', snapshot: { elementId: 'a' } });
+  });
+
   it('does not fuzzy-match on position alone without a content signal', () => {
     const snapshots = new Map([
       ['other', snap({

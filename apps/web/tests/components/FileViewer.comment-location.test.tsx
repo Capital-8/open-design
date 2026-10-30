@@ -64,7 +64,7 @@ it('rechecks an old lost comment in the DOM, ignores stale location replies and 
   expect(request).toMatchObject({ type: 'od:comment-active-target', locate: true,
     elementId: comment.elementId, selector: comment.selector, requestId: expect.any(String) });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
-  expect(screen.getByTestId('comment-saved-marker-' + comment.elementId)).toHaveAttribute('data-anchor-state', 'lost');
+  expect(screen.queryByTestId('comment-saved-marker-' + comment.elementId)).toBeNull();
   await dispatch({ type: 'od:comment-active-target-update', ...comment, elementId: 'current-h2',
     position: { x: 20, y: 80, width: 200, height: 40 }, requestId: request.requestId });
   expect(screen.queryByTestId('comment-active-pin')).toBeNull();
@@ -182,7 +182,7 @@ it.each([true, false])('OPEND-3869 keeps located and saved pins together through
 });
 
 
-it('opens a legacy lost marker as a saved detail without inventing a target or posting a write', async () => {
+it('keeps a missing legacy comment in the list without drawing a pin or posting a write', async () => {
   const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({}));
   vi.stubGlobal('fetch', fetcher);
   render(tree());
@@ -191,9 +191,11 @@ it('opens a legacy lost marker as a saved detail without inventing a target or p
   await act(async () => window.dispatchEvent(new MessageEvent('message', {
     source: frame.contentWindow, data: { type: 'od:comment-targets', targets: [] },
   })));
-  const marker = await screen.findByTestId('comment-saved-marker-' + comment.elementId);
-  expect(marker).toHaveAttribute('data-anchor-state', 'lost');
-  fireEvent.click(within(marker).getByRole('button'));
+  expect(screen.queryByTestId('comment-saved-marker-' + comment.elementId)).toBeNull();
+  expect(screen.queryByTestId('comment-lost-markers')).toBeNull();
+  const row = screen.getByTestId('comment-side-item');
+  expect(row).toHaveTextContent(comment.note);
+  fireEvent.click(row);
   // Entering comment mode may replace the preview document; only its fresh
   // authoritative report can establish that the legacy anchor is still lost.
   const commentFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;

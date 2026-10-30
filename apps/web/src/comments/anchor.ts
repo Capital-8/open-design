@@ -94,6 +94,7 @@ function fuzzyFindSnapshot(comment: PreviewComment, snapshots: Map<string, Previ
   const wantPos = validPosition(comment.lastGoodPosition) ?? validPosition(comment.position);
   let best: PreviewCommentSnapshot | null = null;
   let bestScore = 0;
+  let tied = false;
   for (const snap of snapshots.values()) {
     if (snap.filePath !== comment.filePath || (snap.slideIndex ?? -1) !== (comment.slideIndex ?? -1) || !validPosition(snap.position)) continue;
     let score = 0;
@@ -101,9 +102,10 @@ function fuzzyFindSnapshot(comment: PreviewComment, snapshots: Map<string, Previ
     if (wantHint && trimHtmlHint(snap.htmlHint) === wantHint) score += 3;
     if (wantText && trimContextText(snap.text) === wantText) score += 2;
     if (wantPos) score += positionProximityScore(snap.position, wantPos);
-    if (score > bestScore) { bestScore = score; best = snap; }
+    if (score > bestScore) { bestScore = score; best = snap; tied = false; }
+    else if (score === bestScore && score > 0) tied = true;
   }
-  return bestScore >= 2 ? best : null;
+  return bestScore >= 2 && !tied ? best : null;
 }
 
 function positionProximityScore(a: PreviewCommentSnapshot['position'], b: PreviewCommentSnapshot['position']): number {

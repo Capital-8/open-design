@@ -6200,15 +6200,13 @@ function CommentPreviewOverlays({
   offsetY: number;
   strokePoints: StrokePoint[];
   activeSlideIndex?: number | null;
-  /** Team collaboration: resolve anchors through the drift ladder (keep + badge stale/lost)
-   *  instead of the exact-match silent drop. Off for single-user. */
+  /** Team collaboration: resolve and report stale/lost anchors in the comment list. */
   driftLadder?: boolean;
   /** Current content version, used by the ladder to flag reanchored (older vN). */
   currentVersion?: number;
   /** An empty map is authoritative only after this preview has reported targets. */
   targetsReady: boolean;
-  /** Team collaboration: persist the durable `lost` capture (last-good position) so the
-   *  ghost pin survives reload. Only fires in drift-ladder mode. */
+  /** Persist the last-good position for lost-anchor history, not canvas placement. */
   onLostAnchors?: (writeBacks: AnchorWriteBack[]) => void;
   onOpenComment: (comment: PreviewComment, snapshot: PreviewCommentSnapshot, origin: HTMLElement) => void;
   t: TranslateFn;
@@ -6254,8 +6252,8 @@ function CommentPreviewOverlays({
         .filter(({ comment }) => commentVisibleOnDeckSlide(comment, activeSlideIndex)),
     [comments, liveTargets, activeSlideIndex, driftLadder, currentVersion],
   );
-  // Team collaboration durability: when a comment first drifts to `lost`, persist its
-  // last-good position once so the ghost pin survives reload. The ref set keeps
+  // Team collaboration durability: retain the last-good position as history.
+  // The ref set keeps
   // pointermove re-renders (during pod drawing) from re-firing the same capture;
   // the server COALESCEs too, so this is belt-and-suspenders idempotency.
   const persistedLostRef = useRef<Set<string>>(new Set());
@@ -6315,7 +6313,6 @@ function CommentPreviewOverlays({
       })}
     </div>
   </div>);
-  const lostComments = targetsReady ? visibleComments.filter(item => item.anchorState === 'lost') : [];
   const activeSavedIndex = activeExistingCommentId
     ? comments.findIndex((comment) => comment.id === activeExistingCommentId)
     : -1;
@@ -6336,10 +6333,6 @@ function CommentPreviewOverlays({
   return (
     <div className="comment-overlay-layer" aria-hidden={false}>
       {savedMarkers}
-      {lostComments.length > 0 ? <div className="comment-lost-markers" data-testid="comment-lost-markers"
-        style={{ left: canvas.left + 16, top: canvas.top + canvas.height - 44, maxWidth: Math.max(0, canvas.width - 32) }}>
-        {lostComments.map(item => renderMarker(item, { left: 0, top: 0, width: 28, height: 28 }, true))}
-      </div> : null}
       {targetOverlay && podDisplayMembers(targetOverlay).length === 0 ? (
         <CommentCanvasTarget snapshot={targetOverlay} scale={scale} offset={overlayOffset} canvas={canvas} selected={Boolean(activeTarget)} color={activePinColor ?? draftColor} />
       ) : targetOverlay ? (
@@ -17108,7 +17101,12 @@ function HtmlViewer({
   const commentComposerNode = boardMode && composerTarget && !composerMarkerHidden ? (
     <BoardComposerPopover
       target={composerTarget}
-      markerRect={composerMarkerRect}
+      // Missing comments remain actionable from the list. Anchor only the
+      // dialog to a safe viewport corner; never render a pin or reuse stale
+      // element geometry as a location.
+      markerRect={lostSelectedCommentId && commentComposerPortalMetrics
+        ? { left: commentComposerPortalMetrics.bounds.scrollLeft + 16, top: commentComposerPortalMetrics.bounds.scrollTop + 16, width: 1, height: 1 }
+        : composerMarkerRect}
       existing={activeComposerComment}
       locationNotice={lostSelectedCommentId ? t('comment.locationUnavailable') : activeComposerComment ? commentLocationNotices.get(activeComposerComment.id) : undefined}
       canEditComment={canEditActiveComment}

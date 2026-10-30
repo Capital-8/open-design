@@ -1243,9 +1243,9 @@ export interface ShareBridgePinsPayload {
     selector: string;
     display?: ShareBridgePinDisplay;
     anchor?: ShareBridgeAnchorPoint;
-    /** Old-publication comments never bind to same-named targets in a newer document. */
+    /** Legacy request to suppress anchoring; accepted without drawing a pin. */
     forceGhost?: boolean;
-    /** Stored comment geometry, displayed only as untrusted layout fallback. */
+    /** Legacy stored geometry, accepted for wire compatibility and never drawn. */
     ghostPosition?: ShareBridgeViewportRect;
   }>;
 }
@@ -1263,8 +1263,8 @@ export interface ShareBridgeTargetPayload {
 }
 /**
  * frame → host. A drawn pin was activated. Rect is the DRAWN PIN's bounds.
- * found describes the anchor, not whether the pin exists. For found=false,
- * rect must pass isShareBridgeFallbackRect: a visible pin remains activatable.
+ * found describes the anchor. Legacy found=false messages remain valid, but
+ * their rect is only a protocol placeholder and must not be drawn or located.
  */
 export interface ShareBridgePinPayload {
   /** False when the true anchor is offscreen or excluded from the visible cluster. */
@@ -1273,7 +1273,7 @@ export interface ShareBridgePinPayload {
   found: boolean;
   rect: ShareBridgeViewportRect;
 }
-/** frame → host. One locate answer; same anchor/fallback semantics as pin. */
+/** frame → host. A missing target uses found=false and visible=false; rect is a protocol placeholder. */
 export interface ShareBridgeLocatedPayload extends ShareBridgePinPayload {
   /** Fresh element bounds for restoring a draft; never the displayed avatar. */
   targetRect?: ShareBridgeViewportRect;
@@ -1284,7 +1284,7 @@ export interface ShareBridgeLocatedPayload extends ShareBridgePinPayload {
  * resize or redraw; never selects, focuses, scrolls or submits by itself.
  * Target removal invalidates its selection with found=false/rect=null.
  * Pin removal from the supplied pin set REVOKES it instead of creating a
- * geometry message. An unmatched anchor in that set still has a fallback pin.
+ * geometry message. An unmatched anchor has no drawn pin.
  * Each variant has EXACT keys; no htmlHint or display data on updates.
  */
 export type ShareBridgeGeometryPayload =
@@ -1452,14 +1452,12 @@ export function isShareBridgePinDisplay(value: unknown): value is ShareBridgePin
 }
 
 /**
- * Fallback placement is local to the runtime and never persisted as an anchor:
- * when no matched/usable anchor or prior visible pin position exists, allocate
- * a deterministic viewport-clamped fallback region ordered by the supplied pin
- * list, with pointer AND keyboard access to every missing pin (scroll/paging
- * when necessary). Never claim found=true for that region. Recompute visible
- * fallback bounds on resize/scroll; do not replay stale viewport coordinates.
- * A hidden/zero-size viewport defers geometry until it can be measured.
- * Do not silently discard an unmatched selector or an otherwise valid pin.
+ * Draw a pin only when its target is uniquely located and usable. Missing,
+ * inaccessible, ambiguous and forceGhost targets remain in the host comment
+ * list but have no canvas pin. For a missing locate, the compatible
+ * found=false, visible=false response carries a valid placeholder rect only
+ * for the existing wire schema; the host must not draw or locate that rect.
+ * Free-position pins with a real point retain their normal geometry.
  *
  * Ordering and revocation — the rules that make a stale message harmless.
  *

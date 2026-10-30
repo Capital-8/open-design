@@ -169,3 +169,11 @@ it('preserves complete author initials already supported by Viewer', () => {
     expect(bridge.isShareBridgePinDisplay({ label, colorIndex: 0 })).toBe(true);
   }
 });
+
+it('retains legacy ghost input and a nonvisible missing-locate placeholder on the wire', () => {
+  const pin: bridge.ShareBridgePinsPayload = { items: [{ id: 'c', elementId: 'old', selector: '#missing', forceGhost: true, ghostPosition: rect }] };
+  const missing: bridge.ShareBridgeLocatedPayload = { id: 'c', found: false, visible: false, rect: { left: 0, top: 0, width: 1, height: 1, viewportWidth: 1440, viewportHeight: 904 } };
+  expect(pin.items[0]).toMatchObject({ forceGhost: true, ghostPosition: rect });
+  expect(bridge.isShareBridgeFallbackRect(missing.rect)).toBe(true);
+  expect(missing).toMatchObject({ found: false, visible: false });
+});

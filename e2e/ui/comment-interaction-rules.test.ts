@@ -474,35 +474,21 @@ clusterTest('[P0] CV19 authoritative published version and real DOM report uncer
     await page.getByTestId('comment-panel-toggle').click();
     const authority = await page.request.get(`/api/projects/${id}/collab/status`, { headers });
     await testInfo.attach('CV19-authoritative-publication', { body: JSON.stringify(await authority.json()), contentType: 'application/json' });
-    const lostGroup = page.getByTestId('comment-lost-markers');
-    const lostMarker = lostGroup.locator('[data-anchor-state="lost"]');
-    await expect(lostMarker).toHaveCount(1);
-    const lostGeometry = await lostGroup.evaluate(node => {
-      const marker = node.querySelector<HTMLElement>('[data-anchor-state="lost"]')!;
-      const button = marker.querySelector('button')!;
-      const group = node.getBoundingClientRect();
-      const canvas = node.closest('.comment-overlay-layer')!.getBoundingClientRect();
-      const style = getComputedStyle(button);
-      return { left: group.left, bottom: group.bottom, canvasLeft: canvas.left, canvasBottom: canvas.bottom,
-        borderStyle: style.borderTopStyle, background: style.backgroundColor };
-    });
-    expect(lostGeometry.borderStyle).toBe('dashed');
-    const grayChannels = lostGeometry.background.match(/\d+/g)!.slice(0, 3).map(Number);
-    expect(Math.max(...grayChannels) - Math.min(...grayChannels)).toBeLessThanOrEqual(10);
-    expect(lostGeometry.left).toBeGreaterThanOrEqual(lostGeometry.canvasLeft);
-    expect(lostGeometry.bottom).toBeLessThanOrEqual(lostGeometry.canvasBottom);
-    expect(lostGeometry.left - lostGeometry.canvasLeft).toBeLessThanOrEqual(24);
-    expect(lostGeometry.canvasBottom - lostGeometry.bottom).toBeLessThanOrEqual(24);
-    await lostMarker.getByRole('button').click();
+    const lostRow = page.getByTestId('comment-side-item').filter({ hasText: 'Lost removed illustration' });
+    await expect(lostRow).toBeVisible();
+    await expect(page.getByTestId('comment-lost-markers')).toHaveCount(0);
+    await expect(page.getByTestId('comment-saved-marker-removed-figure')).toHaveCount(0);
+    await lostRow.click();
     const lostDetail = page.getByTestId('comment-popover');
     await expect(lostDetail).toContainText('Lost removed illustration');
     await expect(lostDetail.getByRole('status')).toContainText('无法定位此元素，页面可能已变化。');
     await expect(page.getByTestId('comment-target-overlay')).toHaveCount(0);
-    await testInfo.attach('Oct28-lost-bottom-left-detail', { body: await page.screenshot({ path: testInfo.outputPath('Oct28-lost-bottom-left-detail.png') }), contentType: 'image/png' });
-    await testInfo.attach('Oct28-lost-marker-geometry', { body: JSON.stringify(lostGeometry, null, 2), contentType: 'application/json' });
-    await lostDetail.getByRole('button', { name: '更多评论操作' }).focus();
-    await page.keyboard.press('Escape');
-    await expect(lostDetail).toHaveCount(0);
+    await expect(lostDetail.getByTestId('comment-add-send')).toBeVisible();
+    await testInfo.attach('lost-comment-list-without-pin', { body: await page.screenshot({ path: testInfo.outputPath('lost-comment-list-without-pin.png') }), contentType: 'image/png' });
+    await lostDetail.getByRole('button', { name: '更多评论操作' }).click();
+    await lostDetail.getByRole('menu').getByRole('button', { name: '删除' }).click();
+    await expect(lostRow).toHaveCount(0);
+    await expect(page.getByTestId('comment-lost-markers')).toHaveCount(0);
     for (const [note, notice] of [['Earlier published version', '基于旧版本'], ['Moved legacy anchor', '锚点可能已移动']] as const) {
       const row = page.getByTestId('comment-side-item').filter({ hasText: note });
       await expect(row.getByTestId('comment-location-notice')).toContainText(notice);
