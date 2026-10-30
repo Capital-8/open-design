@@ -273,7 +273,7 @@ describe('file mutation routes move workspace artifact identity', () => {
     const runtime = createCollabRuntime({ workspaceContext: { current: async () => context } });
     const publications = createSqlitePublicFilePublicationStore(db);
     const fixture = createPublicSharePublishingFixture(db, publications, async () => JSON.stringify({ id: 'v1', version: 1 }),
-      enqueuePublishedFileComments, { teamProject: catalog });
+      { teamProject: catalog });
     const app = express(); app.use(express.json());
     const shareServer = createServer(app);
     const localFiles = createLocalCommentFiles(db);
@@ -282,7 +282,7 @@ describe('file mutation routes move workspace artifact identity', () => {
         admitFileReceipt: (scope, resourceId, versionId, entryPath) => localFiles.admit({ projectId: scope.projectId,
           workspaceId: 'offline-w', creatorMemberId: 'creator', resourceId, versionId,
           paths: [{ sourceFilePath: scope.filePath, entryPath }], run: catalog }) },
-      recordPublicFilePublication: createPublicFilePublicationRecorder(db, publications, enqueuePublishedFileComments),
+      recordPublicFilePublication: createPublicFilePublicationRecorder(db, publications),
       verifyWorkspaceRequest: async () => context,
       resolveLocalPublicShareOwner: (id, workspaceId) => id === projectId && workspaceId === 'offline-w' ? 'creator' : null,
       resolveSharedProject: async () => ({ projectId, ownerMemberId: 'creator', sharedAt: new Date(1).toISOString() }),
@@ -299,6 +299,9 @@ describe('file mutation routes move workspace artifact identity', () => {
     } finally {
       await new Promise<void>(resolve => shareServer.close(() => resolve()));
       runtime.dispose();
+    }
+    for (const fact of publications.listFacts({ resourceTeamId: 'offline-w', ownerMemberId: 'creator', projectId, filePath: 'offline.html' })) {
+      db.transaction(() => enqueuePublishedFileComments(db, fact))();
     }
     expect(getProjectPreviewComment(db, projectId, comment.id)).toMatchObject(comment);
     expect(createCommentRelayOutboxStore(db).listDue(Date.now()).find(row => row.commentId === comment.id)?.comment)
