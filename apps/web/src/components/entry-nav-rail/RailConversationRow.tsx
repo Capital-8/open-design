@@ -14,15 +14,13 @@ import { useI18n } from '../../i18n';
 import type { Project } from '../../types';
 import { RemixIcon } from '../RemixIcon';
 import { endConversationDrag, startConversationDrag, type DraggedConversation } from './conversationDrag';
+import { DeleteMark, MoreDotsMark, RenameMark } from './RailRecentMarks';
 import {
   claimPopup,
   currentPopupClaim,
-  DeleteMark,
-  MoreDotsMark,
   popupClaimListeners,
   POPUP_GAP_PX,
   releasePopup,
-  RenameMark,
   type PopupClaim,
 } from './RailRecentRow';
 import styles from './RailConversationTree.module.css';

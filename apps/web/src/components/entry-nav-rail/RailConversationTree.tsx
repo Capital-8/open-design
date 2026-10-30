@@ -11,7 +11,8 @@ import {
 } from '../../state/conversation-events';
 import { workspaceIdentityCacheKey } from '../../collab/workspace-identity';
 import { useI18n } from '../../i18n';
-import { NewConversationMark, RailRecentRow } from './RailRecentRow';
+import { RailRecentRow } from './RailRecentRow';
+import { NewConversationMark } from './RailRecentMarks';
 import { navigate } from '../../router';
 import { requestNewProjectFromRail } from '../entryRailBridge';
 import {
