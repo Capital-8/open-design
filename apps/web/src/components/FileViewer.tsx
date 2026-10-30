@@ -10401,10 +10401,11 @@ function HtmlViewer({
     boardPreviewCanvasSize,
     boardPreviewScaleOptions,
   );
+  const [commentPreviewOffset, setCommentPreviewOffset] = useState({ x: 0, y: 0 });
   const overlayPreviewTransform: PreviewOverlayTransform = {
     scale: overlayPreviewScale,
-    offsetX: 0,
-    offsetY: 0,
+    offsetX: commentPreviewOffset.x,
+    offsetY: commentPreviewOffset.y,
   };
   const showDeckNavigation = effectiveDeck && (slideState === null || slideState.count > 0);
   const activeDeckSlideIndex =
@@ -12831,6 +12832,35 @@ function HtmlViewer({
   }, [inspectMode, srcDoc, useUrlLoadPreview, workspaceActive]);
 
   const commentTargetsKey = JSON.stringify([projectId, file.name, srcDoc, useUrlLoadPreview, reloadKey]);
+  useLayoutEffect(() => {
+    const canvas = commentPreviewCanvasNode;
+    if (!canvas || !workspaceActive || mode !== 'preview' || manualEditMode || (!boardMode && !commentPanelOpen)) return;
+    const measure = () => {
+      const frame = useUrlLoadPreview ? urlPreviewIframeRef.current : srcDocPreviewIframeRef.current;
+      const frameRect = frame?.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      const next = frame?.dataset.odActive === 'true' && frameRect && frameRect.width > 0 && frameRect.height > 0
+        ? { x: frameRect.left - canvasRect.left - canvas.clientLeft, y: frameRect.top - canvasRect.top - canvas.clientTop }
+        : { x: 0, y: 0 };
+      setCommentPreviewOffset(current => current.x === next.x && current.y === next.y ? current : next);
+    };
+    // Bridge boxes use the iframe viewport. The outer clip can scroll during
+    // locate without changing those boxes, so project from the actual frame.
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(canvas);
+    const frame = useUrlLoadPreview ? urlPreviewIframeRef.current : srcDocPreviewIframeRef.current;
+    if (frame) observer?.observe(frame);
+    canvas.addEventListener('scroll', measure, true);
+    canvas.addEventListener('load', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      canvas.removeEventListener('scroll', measure, true);
+      canvas.removeEventListener('load', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [boardMode, commentPanelOpen, commentPreviewCanvasNode, commentTargetsKey, commentTargetsReadyKey, manualEditMode, mode, overlayPreviewScale, previewScale, previewViewport, srcDocTransportResetKey, urlPreviewKeepAliveKey, useUrlLoadPreview, workspaceActive]);
   // Only a current target report or a paired locate failure can establish loss.
   // Saved boxes/text never supply location evidence; an unwitnessed document is pending.
   const selectedLocationComment = previewComments.find(comment => comment.id === activePreviewCommentId
@@ -17090,8 +17120,8 @@ function HtmlViewer({
         scrollTop: top - hostRect.top + commentComposerHost.scrollTop,
       },
       offset: {
-        x: canvasRect.left - hostRect.left + commentComposerHost.scrollLeft + overlayPreviewTransform.offsetX,
-        y: canvasRect.top - hostRect.top + commentComposerHost.scrollTop + overlayPreviewTransform.offsetY,
+        x: canvasRect.left + commentPreviewCanvasNode.clientLeft - hostRect.left + commentComposerHost.scrollLeft + overlayPreviewTransform.offsetX,
+        y: canvasRect.top + commentPreviewCanvasNode.clientTop - hostRect.top + commentComposerHost.scrollTop + overlayPreviewTransform.offsetY,
       },
     };
   })();
