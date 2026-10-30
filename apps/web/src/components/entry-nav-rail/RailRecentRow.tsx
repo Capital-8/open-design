@@ -19,9 +19,11 @@ import { createPortal } from 'react-dom';
 import type { ProjectDisplayStatus, WorkspaceCollabContext } from '@open-design/contracts';
 
 import { useT } from '../../i18n';
+import { RemixIcon } from '../RemixIcon';
+import { Icon } from '../Icon';
 import { RailRecentItem } from './RailRecentItem';
-import { MoreDotsMark } from './RailRecentMarks';
-import { RailRecentMenu } from './RailRecentMenu';
+import { exportProjectAsZip } from '../../runtime/exports';
+import { shareProjectToTeam } from '../../state/projectShareRequest';
 import { fetchProjectFiles } from '../../providers/registry';
 import { workspaceIdentityCacheKey } from '../../collab/workspace-identity';
 import {
@@ -75,6 +77,73 @@ export function releasePopup(rowId: string, kind: 'preview' | 'menu') {
  *  visible margin and still reads as attached to the row rather than floating
  *  loose over the page. */
 export const POPUP_GAP_PX = 24;
+
+/**
+ * The ⋮ mark (supplied artwork; Remix's `more-2-line`). Inlined rather than
+ * added to the shared icon set: no `IconName` maps to that glyph today, and
+ * this is the only place it appears.
+ */
+export function MoreDotsMark() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={16}
+      height={16}
+      fill="currentColor"
+      aria-hidden
+      focusable="false"
+    >
+      <path d="M12 3C11.175 3 10.5 3.675 10.5 4.5C10.5 5.325 11.175 6 12 6C12.825 6 13.5 5.325 13.5 4.5C13.5 3.675 12.825 3 12 3ZM12 18C11.175 18 10.5 18.675 10.5 19.5C10.5 20.325 11.175 21 12 21C12.825 21 13.5 20.325 13.5 19.5C13.5 18.675 12.825 18 12 18ZM12 10.5C11.175 10.5 10.5 11.175 10.5 12C10.5 12.825 11.175 13.5 12 13.5C12.825 13.5 13.5 12.825 13.5 12C13.5 11.175 12.825 10.5 12 10.5Z" />
+    </svg>
+  );
+}
+
+/**
+ * Menu marks (supplied artwork). Inlined for the same reason as the ⋮ above:
+ * neither glyph exists in the shared icon set — `pencil`/`trash` are close but
+ * not these drawings, and product asked for these.
+ */
+/** 新建会话's speech-bubble mark for the rail's create row. */
+export function NewConversationMark() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden focusable="false">
+      <path d="M2 8.99374C2 5.68349 4.67654 3 8.00066 3H15.9993C19.3134 3 22 5.69478 22 8.99374V21H8.00066C4.68659 21 2 18.3052 2 15.0063V8.99374ZM20 19V8.99374C20 6.79539 18.2049 5 15.9993 5H8.00066C5.78458 5 4 6.78458 4 8.99374V15.0063C4 17.2046 5.79512 19 8.00066 19H20ZM14 11H16V13H14V11ZM8 11H10V13H8V11Z" />
+    </svg>
+  );
+}
+
+export function RenameMark() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={14}
+      height={14}
+      fill="currentColor"
+      aria-hidden
+      focusable="false"
+    >
+      <path d="M18.5293 15.3193C18.7058 14.8934 19.2942 14.8934 19.4707 15.3193L19.7236 15.9307C20.1556 16.9735 20.9615 17.8062 21.9746 18.2568L22.6914 18.5762C23.1022 18.7589 23.1022 19.3564 22.6914 19.5391L21.9326 19.877C20.9449 20.3163 20.1534 21.1194 19.7139 22.1279L19.4668 22.6934C19.2863 23.1075 18.7136 23.1075 18.5332 22.6934L18.2861 22.1279C17.8466 21.1194 17.0551 20.3163 16.0674 19.877L15.3076 19.5391C14.8974 19.3562 14.8974 18.759 15.3076 18.5762L16.0254 18.2568C17.0385 17.8062 17.8444 16.9735 18.2764 15.9307L18.5293 15.3193ZM16.4346 3.21193C16.8251 2.82141 17.4591 2.82141 17.8496 3.21193L20.6777 6.04103C21.0681 6.43157 21.0682 7.06464 20.6777 7.45509L7.24219 20.8897H3V16.6475L16.4346 3.21193ZM5 17.4756V18.8897H6.41406L15.7275 9.57618L14.3135 8.16212L5 17.4756ZM15.7275 6.74806L17.1426 8.16212L18.5566 6.74806L17.1426 5.334L15.7275 6.74806Z" />
+    </svg>
+  );
+}
+
+export function DeleteMark() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={14}
+      height={14}
+      fill="currentColor"
+      aria-hidden
+      focusable="false"
+    >
+      <path d="M20 7V20C20 21.1046 19.1046 22 18 22H6C4.89543 22 4 21.1046 4 20V7H2V5H22V7H20ZM6 7V20H18V7H6ZM11 9H13V11H11V9ZM11 12H13V14H11V12ZM11 15H13V17H11V15ZM7 2H17V4H7V2Z" />
+    </svg>
+  );
+}
 
 export function RailRecentRow({
   project,
@@ -130,10 +199,16 @@ export function RailRecentRow({
   // `anchor` cannot serve: it is cleared the moment the pointer leaves the row,
   // which happens on the way to the menu itself.
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; left: number } | null>(null);
+  // Delete asks in place rather than through a dialog: the rail is a narrow
+  // column and a modal over it to confirm a one-line row is heavier than the
+  // action. The menu swaps to a confirm row and the click that destroys is a
+  // second, differently-labelled one.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [opening, setOpening] = useState(false);
   const [draftName, setDraftName] = useState(project.name);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const activeRef = useRef(true);
   useEffect(() => {
@@ -170,6 +245,36 @@ export function RailRecentRow({
       // and the next hover should be allowed to try again.
     }
   }, [project.id, project.metadata?.entryFile, snapshotKey, workspaceContext]);
+
+  // Close the menu on an outside click, the way every other rail popover does.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function close() {
+      releasePopup(project.id, 'menu');
+      setConfirmingDelete(false);
+    }
+    function onDocPointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      close();
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') close();
+    }
+    document.addEventListener('pointerdown', onDocPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    // Its anchor is a snapshot of the row's position, so anything that moves
+    // the row (the rail list scrolling, the page behind it) would leave the
+    // menu stranded. Dismiss instead of chasing.
+    document.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('pointerdown', onDocPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [menuOpen, project.id]);
 
   useEffect(() => {
     if (!renaming) return;
@@ -266,6 +371,7 @@ export function RailRecentRow({
              is what made it impossible to click through to. */
           onClick={(event) => {
             event.stopPropagation();
+            setConfirmingDelete(false);
             const rect = rootRef.current?.getBoundingClientRect();
             if (rect) setMenuAnchor({ top: rect.top + rect.height / 2, left: rect.right + POPUP_GAP_PX });
             if (menuOpen) releasePopup(project.id, 'menu');
@@ -275,22 +381,123 @@ export function RailRecentRow({
           <MoreDotsMark />
         </button>
       ) : null}
-      {menuOpen && menuAnchor ? (
-        <RailRecentMenu
-          projectId={project.id}
-          projectName={project.name}
-          workspaceContext={workspaceContext}
-          anchor={menuAnchor}
-          rowRef={rootRef}
-          onClose={() => releasePopup(project.id, 'menu')}
-          onRename={onRename ? () => {
-            setDraftName(project.name);
-            setRenaming(true);
-          } : undefined}
-          onDuplicate={onDuplicate ? () => onDuplicate(project.id) : undefined}
-          onDelete={onDelete ? () => onDelete(project.id) : undefined}
-          onOpen={onOpen ? () => onOpen(project.id) : undefined}
-        />
+      {/* Same slot as the hover preview — beside the row, clear of the rail
+          (per product: 弹窗的位置就是预览图的位置). Portalled for the same
+          reason the preview is: inside the rail it would sit behind the content
+          column whatever its z-index. */}
+      {menuOpen && menuAnchor && typeof document !== 'undefined' ? createPortal(
+        <div
+          ref={menuRef}
+          className="entry-nav-rail__recent-menu"
+          role="menu"
+          style={{ top: menuAnchor.top, left: menuAnchor.left }}
+          /* The pointer arriving here is what cancels the close the ⋮ scheduled
+             when it left; leaving the menu closes it. */
+        >
+          {onRename ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                releasePopup(project.id, 'menu');
+                setDraftName(project.name);
+                setRenaming(true);
+              }}
+            >
+              <RenameMark />
+              <span>{t('designs.menuRename')}</span>
+            </button>
+          ) : null}
+          {/* Duplicate and Share mirror the open project's header menu (per
+              product: 项目里也会有), in the same order and with its glyphs. */}
+          {onDuplicate ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                releasePopup(project.id, 'menu');
+                void onDuplicate(project.id);
+              }}
+            >
+              <RemixIcon name="file-copy-line" size={14} />
+              <span>{t('workspace.copyProject')}</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              releasePopup(project.id, 'menu');
+              void shareProjectToTeam(project.id, workspaceContext).then((shared) => {
+                // Nothing to share yet: land on the project instead of a dead click.
+                if (!shared) void onOpen?.(project.id);
+              });
+            }}
+          >
+            <RemixIcon name="share-forward-line" size={14} />
+            <span>{t('workspace.shareToTeam')}</span>
+          </button>
+          {/* Export sits between Rename and Delete (per product: 增加一个导出，
+              在删除上边). It is the ONE export a list row can honestly offer:
+              the project is not open here, so there is no rendered file to turn
+              into a PDF / image / standalone HTML — those four rows in the
+              viewer all need a loaded source. The whole-project archive needs
+              nothing but the id, so that is what this is.
+              Calls the shared runtime helper directly rather than taking an
+              `onExport` prop like its neighbours: Rename and Delete mutate
+              state the parent owns, while this one is a download — no parent
+              has anything to do with it.
+              `preview.exportMenu` is the bare word "Export" already translated
+              in all 19 locales (导出 / 匯出 / Exporter …); same reasoning as the
+              `designs.renameSave` reuse below, rather than a 20th copy of one
+              word in every file. */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              releasePopup(project.id, 'menu');
+              // No file scope: an empty `filePath` leaves `root` off the
+              // archive URL, which is what asks for the whole project.
+              void exportProjectAsZip({
+                projectId: project.id,
+                filePath: '',
+                fallbackHtml: '',
+                fallbackTitle: project.name,
+                workspaceContext,
+              });
+            }}
+          >
+            {/* The viewer's Export button glyph (per product), from the same
+                shared set it uses there — `RemixIcon name="download-line"`,
+                sized to this menu's 14px marks. */}
+            <RemixIcon name="download-line" size={14} />
+            <span>{t('preview.exportMenu')}</span>
+          </button>
+          {onDelete ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={confirmingDelete ? 'is-danger' : undefined}
+              onClick={() => {
+                if (!confirmingDelete) {
+                  setConfirmingDelete(true);
+                  return;
+                }
+                releasePopup(project.id, 'menu');
+                setConfirmingDelete(false);
+                void onDelete(project.id);
+              }}
+            >
+              <DeleteMark />
+              {/* `designs.renameSave` is the generic confirm word in every
+                  locale (确定 / OK) — it just happens to live under the rename
+                  dialog. Reused rather than adding a 20th copy of the same
+                  string to all 19 locale files. */}
+              <span>{confirmingDelete ? t('designs.renameSave') : t('designs.menuDelete')}</span>
+            </button>
+          ) : null}
+        </div>,
+        document.body,
       ) : null}
       {/* The preview hangs OUTSIDE the rail, over the content column — and is
           portalled to <body> to get there. Inside the rail it stayed BEHIND the

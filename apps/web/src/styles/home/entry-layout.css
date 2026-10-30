@@ -1251,8 +1251,7 @@
   color: var(--text);
   font: inherit;
   /* 13 (per product, was 12). The marks beside it are already 14 — see
-     `RenameMark` / `DeleteMark` in RailRecentMarks.tsx and the export glyph in
-     RailRecentMenu.tsx, all
+     `RenameMark` / `DeleteMark` / the export glyph in RailRecentRow.tsx, all
      drawn at that size — so the row now reads label-and-mark at one weight
      instead of a 14px glyph over a 12px word. */
   font-size: 13px;
