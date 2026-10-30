@@ -960,6 +960,13 @@ else { process.stderr.write("unexpected gh call: " + args + "\\n"); process.exit
     expect(workflow).toContain("--squash");
     expect(workflow).toContain("--delete-branch");
 
+    const velaGate = sectionBetween(workflow, "Check stable Vela CLI version before backport auto-merge", "Approve the clean backport");
+    expect(velaGate).toContain('steps.pr.outputs.head_oid == github.event.workflow_run.head_sha');
+    expect(velaGate).toContain('git show "$HEAD_SHA:tools/pack/package.json"');
+    expect(velaGate).toContain('git show "$HEAD_SHA:pnpm-lock.yaml"');
+    expect(velaGate).toContain('e2e/scripts/vela-version.ts');
+    expect(workflow.indexOf("Check stable Vela CLI version before backport auto-merge")).toBeLessThan(workflow.indexOf("Approve the clean backport"));
+
     // To satisfy release/v*'s one-approval rule, the bot's own clean backport is auto-approved by
     // github-actions[bot] (pull-requests: write) — under the same author==bot gate as the merge.
     expect(workflow).toContain("pull-requests: write");

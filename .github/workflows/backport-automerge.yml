@@ -125,6 +125,37 @@ jobs:
             echo "pristine=$pristine"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Set up Node for Vela CLI check
+        if: >-
+          ${{ steps.pr.outputs.found == 'true'
+              && steps.pr.outputs.draft == 'false'
+              && steps.pr.outputs.pristine == 'true'
+              && steps.pr.outputs.author == 'app/open-design-release-bot'
+              && steps.pr.outputs.cross == 'false'
+              && steps.pr.outputs.head_oid == github.event.workflow_run.head_sha
+              && github.event.workflow_run.conclusion == 'success' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check stable Vela CLI version before backport auto-merge
+        if: >-
+          ${{ steps.pr.outputs.found == 'true'
+              && steps.pr.outputs.draft == 'false'
+              && steps.pr.outputs.pristine == 'true'
+              && steps.pr.outputs.author == 'app/open-design-release-bot'
+              && steps.pr.outputs.cross == 'false'
+              && steps.pr.outputs.head_oid == github.event.workflow_run.head_sha
+              && github.event.workflow_run.conclusion == 'success' }}
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          # Read the candidate as data; execute only the checker from the trusted default branch.
+          git show "$HEAD_SHA:tools/pack/package.json" > "$RUNNER_TEMP/vela-pack.json"
+          git show "$HEAD_SHA:pnpm-lock.yaml" > "$RUNNER_TEMP/vela-lock.yaml"
+          node --experimental-strip-types e2e/scripts/vela-version.ts "$RUNNER_TEMP/vela-pack.json" "$RUNNER_TEMP/vela-lock.yaml"
+
       - name: Approve the clean backport (release bot, CI green)
         # release/v* requires 1 approving review. The diff was already reviewed + approved on
         # main; this is a mechanical, conflict-free cherry-pick by the release bot with green CI.
