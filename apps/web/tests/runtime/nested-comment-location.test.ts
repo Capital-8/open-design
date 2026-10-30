@@ -5,13 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildSrcdoc } from '../../src/runtime/srcdoc';
 import { injectCommentBridge } from '../../src/runtime/comment-bridge';
 
-// Captured wire contract: FNV-1a of authored srcdoc + newline + about:srcdoc.
+// Existing cloud anchors remain readable; their legacy fingerprint is ignored.
 const anchor = 'od-frame-v1:' + JSON.stringify([[
   ['dom:body > iframe:nth-of-type(1)', 'body > iframe:nth-of-type(1)', 'srcdoc:0:fbc0cc3c'],
 ], 'dom:body > h2:nth-of-type(1)', 'body > h2:nth-of-type(1)']);
 
 for (const portable of [false, true]) for (const depth of [1, 2]) describe(`nested cloud anchors (portable=${portable}, depth=${depth})`, () => {
-  it('locates inside the child, projects scale/borders, preserves the wire anchor and rejects replacements', () => {
+  it('locates inside the child, projects scale/borders, preserves the wire anchor and keeps unique targets after replacement', () => {
     const dom = new JSDOM('<body><iframe srcdoc=""></iframe></body>', { runScripts: 'outside-only', pretendToBeVisual: true });
     try {
       const win = dom.window, frame = win.document.querySelector('iframe')!;
@@ -56,8 +56,10 @@ for (const portable of [false, true]) for (const depth of [1, 2]) describe(`nest
       expect(locate()).toMatchObject({ type: 'od:comment-location-missing' });
       Reflect.deleteProperty(frame, 'contentDocument');
       frame.setAttribute('srcdoc', '<h2>Replacement</h2>');
+      expect(locate()).toMatchObject({ type: 'od:comment-active-target-update', elementId: nestedAnchor });
+      target.remove();
       expect(locate()).toMatchObject({ type: 'od:comment-location-missing' });
-      expect(scroll).toHaveBeenCalledOnce();
+      expect(scroll).toHaveBeenCalledTimes(2);
     } finally { dom.window.close(); }
   });
 });
@@ -99,5 +101,22 @@ for (const depth of [1, 2]) it(`clips through ${depth} scaled iframe viewports w
     expect(helpers.nestedCommentPayload(node)).toBeNull();
     top = 0;
     expect(helpers.nestedCommentPayload(node)).not.toBeNull();
+  } finally { dom.window.close(); }
+});
+
+for (const legacyField of ['', 'src:106:cloud-host-fingerprint', 'srcdoc:203:bbed4e06']) it(`locates a unique child across different transport identities (${legacyField || 'no fingerprint'})`, () => {
+  const dom = new JSDOM('<body><iframe></iframe></body>', { url: 'http://local-preview.test/project/index.html', runScripts: 'outside-only' });
+  try {
+    const win = dom.window;
+    const frame = win.document.querySelector('iframe')!;
+    frame.contentDocument!.body.innerHTML = '<h2 data-od-id="heading">Replacement content</h2>';
+    const target = frame.contentDocument!.querySelector('h2')!;
+    const id = 'od-frame-v1:' + JSON.stringify([[['dom:body > iframe', 'body > iframe', legacyField]], 'heading', '[data-od-id="heading"]']);
+    const helpers = new win.Function('function commentSelectorClaimsIdentity() { return false; }' + NESTED_COMMENT_HELPERS + '; return {resolveNestedComment};')();
+    expect(helpers.resolveNestedComment(id, id)).toBe(target);
+    target.after(target.cloneNode(true));
+    expect(helpers.resolveNestedComment(id, id)).toBeNull();
+    frame.remove();
+    expect(helpers.resolveNestedComment(id, id)).toBeNull();
   } finally { dom.window.close(); }
 });

@@ -1,9 +1,9 @@
 /** Browser code shared by URL and inline previews. Decodes the cloud viewer's
  * od-frame-v1 anchor without granting child frames access to host messages.
- * Missing, changed, ambiguous or inaccessible documents fail closed.
+ * Missing, ambiguous or inaccessible targets remain unlocated.
  */
 export const NESTED_COMMENT_HELPERS = String.raw`
-  var nestedCommentAnchors = new WeakMap(), nestedCommentDocuments = new WeakSet(), nestedFrameFingerprints = new WeakMap();
+  var nestedCommentAnchors = new WeakMap(), nestedCommentDocuments = new WeakSet();
   function isNestedCommentAnchor(id, selector) {
     return String(id || '').indexOf('od-frame-v1:') === 0 || String(selector || '').indexOf('od-frame-v1:') === 0;
   }
@@ -20,17 +20,6 @@ export const NESTED_COMMENT_HELPERS = String.raw`
     if (id.indexOf('cmt:') === 0) return node;
     return node.getAttribute('data-od-id') === id || node.getAttribute('data-screen-label') === id ? node : null;
   }
-  function nestedFrameIdentity(frame) {
-    var source = frame.hasAttribute('srcdoc') ? frame.getAttribute('srcdoc') : frame.src || 'about:blank';
-    var url = frame.contentDocument && frame.contentDocument.URL;
-    var cached = nestedFrameFingerprints.get(frame);
-    if (cached && cached.source === source && cached.url === url) return cached.identity;
-    var fingerprint = source + '\n' + url, hash = 2166136261;
-    for (var i = 0; i < fingerprint.length; i++) { hash ^= fingerprint.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-    var identity = (frame.hasAttribute('srcdoc') ? 'srcdoc:' : 'src:') + source.length + ':' + (hash >>> 0).toString(16);
-    nestedFrameFingerprints.set(frame, { source: source, url: url, identity: identity });
-    return identity;
-  }
   function resolveNestedComment(id, selector) {
     try {
       if (id !== selector || typeof selector !== 'string' || selector.length > 4100 || selector.indexOf('od-frame-v1:') !== 0) return null;
@@ -40,7 +29,8 @@ export const NESTED_COMMENT_HELPERS = String.raw`
       for (var part of value[0]) {
         if (!Array.isArray(part) || part.length !== 3 || part.some(function(v) { return typeof v !== 'string'; })) return null;
         var f = nestedLocalNode(doc, part[0], part[1]);
-        if (!f || f.localName !== 'iframe' || !f.contentDocument || nestedFrameIdentity(f) !== part[2]) return null;
+        // The legacy third field is retained in stored anchors, but no longer gates location.
+        if (!f || f.localName !== 'iframe' || !f.contentDocument) return null;
         frames.push(f); doc = f.contentDocument;
         if (!nestedCommentDocuments.has(doc) && typeof schedulePostActiveCommentTarget === 'function') {
           nestedCommentDocuments.add(doc);
