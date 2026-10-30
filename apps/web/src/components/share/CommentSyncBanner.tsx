@@ -156,15 +156,9 @@ export function CommentSyncBanner({ projectId, workspaceContext, filePath, inclu
       : <div className={`${styles.banner} ${styles.alignment}`}><ShareErrorRow className={styles.neutral} message={t('fileViewer.commentSync.payloadTooLarge')} role="alert" /></div>;
   }
 
-  // Pending means the current publication's comments have not finished relay.
-  // K1 (first publish) and K4 (verified reopen) are both drawn by ShareTab's
-  // OWN primary button now — a progress bar for K1, a busy button for K4 —
-  // so a `backfillOnly` mount (ShareTab's) must not also stack this pill
-  // beneath it. A non-`backfillOnly` mount has no current production call
-  // site, but it is a tested, documented capability of this component (see
-  // CommentSyncBanner.test.tsx's "restored branches" — 2026 refactor: item 4
-  // kept this instead of deleting it as production-unreachable, since doing
-  // so would have broken that contract test) — keep it rendering here.
+  // ShareTab owns its separate comment-progress region. Its backfillOnly
+  // mount handles failure/retry here without duplicating that pending status.
+  // Keep the non-backfillOnly pending presentation for existing consumers.
   if (includeBackfill && state.backfill?.state === 'pending') {
     if (backfillOnly) return null;
     const pendingCopyKey = state.backfill.reopened === true
@@ -194,7 +188,9 @@ export function CommentSyncBanner({ projectId, workspaceContext, filePath, inclu
               ? 'fileViewer.commentSync.backfillReopenedRetryingBody'
               : 'fileViewer.commentSync.backfillReopenedTerminalBody')
             : (state.backfill.retryable
-              ? 'fileViewer.commentSync.backfillRetryingBody'
+              ? (state.backfill.code === 'BACKFILL_ENQUEUE_FAILED'
+                ? 'fileViewer.commentSync.backfillFailedBody'
+                : 'fileViewer.commentSync.backfillRetryingBody')
               : 'fileViewer.commentSync.backfillTerminalBody'))}
           action={state.backfill.retryable ? (
             <ShareButton

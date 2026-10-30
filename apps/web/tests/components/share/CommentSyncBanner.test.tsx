@@ -161,6 +161,16 @@ describe('CommentSyncBanner — restored branches', () => {
     expect(retry.className).not.toMatch(/softError/);
   });
 
+  it('offers explicit retry for enqueue failure without claiming an automatic retry is running', async () => {
+    renderBanner({ ...base, lastError: 'COMMENT_SYNC_DELIVERY_FAILED', backfill: {
+      state: 'failed', filePath: 'index.html', publicationRevision: 'r1', retryable: true,
+      reopened: false, code: 'BACKFILL_ENQUEUE_FAILED',
+    } });
+    await screen.findByText('已有评论暂未同步，访客暂时看不到');
+    expect(screen.queryByText(/正在自动重试/)).toBeNull();
+    expect(screen.getByRole('button', { name: '重试' })).toBeEnabled();
+  });
+
   it('keeps retry disabled while the POST is pending and reports a failed POST', async () => {
     let release!: (response: Response) => void;
     const post = new Promise<Response>(resolve => { release = resolve; });
