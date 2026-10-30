@@ -309,7 +309,6 @@ function confirmedShareOutput(args: string[], fault?: 'wrong-version' | 'missing
 /** Real reservation/receipt validation/completion, with only the CLI transport synthetic. */
 async function publicShareFixture(options: {
   db?: Database.Database;
-  enqueue?: Parameters<typeof createPublicFilePublicationRecorder>[2];
   run?: (args: string[]) => Promise<string>;
 } = {}) {
   const actual = await vi.importActual<typeof import('../src/collab/vela-share-publish.js')>('../src/collab/vela-share-publish.js');
@@ -320,7 +319,7 @@ async function publicShareFixture(options: {
   migrateCommentRelayOutbox(db);
   const store = createSqlitePublicFilePublicationStore(db);
   const outbox = createShareBindingOutbox(db);
-  const record = createPublicFilePublicationRecorder(db, store, options.enqueue ?? (() => ({ enqueued: 0, skippedInbound: 0 })));
+  const record = createPublicFilePublicationRecorder(db, store);
   let ids = 0;
   // Publish and read share one Viewer resolver, as server.ts wires them.
   const resolvePublicShareLink: NonNullable<RegisterCollabSyncRoutesDeps['resolvePublicShareLink']> = (projectId, slug, amr) => resolveShareLink(projectId, slug, amr, { OD_SHARE_VIEWER_URL: 'https://web.example.test' });
@@ -543,7 +542,7 @@ async function startSyncServer(
 }
 
 describe('collab sync routes', () => {
-  it.each([false, true])('admits the exact selected receipt before alias mutation without uploading root; unknown proof=%s', async unknown => {
+  it('publishes the selected receipt with version identity without running comment admission', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'od-comment-receipt-order-'));
     tempDirs.push(dir);
     await writeFile(path.join(dir, 'selected.html'), '<h1>SELECTED</h1>');
@@ -554,27 +553,22 @@ describe('collab sync routes', () => {
         steps.push('selected-upload');
         expect(args[1]).toBe('push');
         expect(args[3]).toMatch(/^project-file-/);
+        expect(JSON.parse(args[args.indexOf('--source-identity-json') + 1]!)).toEqual({
+          projectId: 'p1', sourceFileId: '11111111-1111-4111-8111-111111111111', sourceFilePath: 'selected.html',
+        });
         expect(await readdir(args[4] ?? '')).not.toContain('private.html');
         return JSON.stringify({ id: 'selected-v1', version: 1 });
       }
       expect(args.slice(0, 2)).toEqual(['share', 'publish']);
-      expect(steps).toEqual(['selected-upload', 'admitted']);
+      expect(steps).toEqual(['selected-upload']);
       steps.push('alias');
       return confirmedShareOutput(args);
     } });
     share.sharePublishing.sourceFileId = () => '11111111-1111-4111-8111-111111111111';
-    share.sharePublishing.admitFileReceipt = async (scope, resourceId, versionId, entryPath) => {
-      expect(scope).toMatchObject({ sourceFileId: '11111111-1111-4111-8111-111111111111', filePath: 'selected.html' });
-      expect(resourceId).toBe(publicFileResourceIdFor(scope));
-      expect(versionId).toBe('selected-v1');
-      expect(entryPath).toBe('index.html');
-      if (unknown) throw new Error('COMMENT_FILE_AUTHORITY_UNAVAILABLE');
-      steps.push('admitted');
-    };
     const api = await startSyncServer(personalContextProvider(), { resolveProjectDir: () => dir, resolveSharedProject: async () => null, ...share });
     const response = await api.json('/api/projects/p1/files/selected.html/publish-public', { method: 'POST' });
-    expect(response.status).toBe(unknown ? 502 : 200);
-    expect(steps).toEqual(unknown ? ['selected-upload'] : ['selected-upload', 'admitted', 'alias']);
+    expect(response.status).toBe(200);
+    expect(steps).toEqual(['selected-upload', 'alias']);
   });
   it('keeps publish callbacks scoped to every workspace sharing the same project', async () => {
     const onPublished = vi.fn();
@@ -2173,12 +2167,12 @@ describe('collab sync routes', () => {
       const api = await startSyncServer(personalContextProvider(), {
         resolveProjectDir: () => dir, resolveSharedProject: async () => null,
         publicFilePublicationStore: store,
-        recordPublicFilePublication: createPublicFilePublicationRecorder(db, store, () => ({ enqueued: 0, skippedInbound: 0 })),
+        recordPublicFilePublication: createPublicFilePublicationRecorder(db, store),
         sharePublishing: {
           sourceFileId: () => '11111111-1111-4111-8111-111111111111',
           reservations: createShareAliasReservations(db, () => receipt.slug), outbox,
           ensureProject: async scope => ({ projectId: scope.projectId, ownerMemberId: scope.ownerMemberId, sharedAt: '2026-01-01T00:00:00.000Z' }),
-          complete: createSharePublicationCompletion(db, createPublicFilePublicationRecorder(db, store, () => ({ enqueued: 0, skippedInbound: 0 })), outbox, true),
+          complete: createSharePublicationCompletion(db, createPublicFilePublicationRecorder(db, store), outbox, true),
           prepare: async scope => ({
             run: async args => {
               if (args[0] === 'team-projects') {
@@ -2209,7 +2203,7 @@ describe('collab sync routes', () => {
     } finally { db.close(); }
   });
 
-  it.each([false, true])('records planner mapping and publication in the HTTP transaction; enqueue failure=%s', async fail => {
+  it.each([false, true])('commits publication before an independent comment transaction; enqueue failure=%s', async fail => {
     const dir = await mkdtemp(path.join(tmpdir(), 'od-publish-transaction-'));
     tempDirs.push(dir);
     await mkdir(path.join(dir, 'pages'));
@@ -2236,27 +2230,29 @@ describe('collab sync routes', () => {
         : { id: 'v1', version: 1 }));
       const api = await startSyncServer(personalContextProvider(), {
         resolveProjectDir: () => dir, resolveSharedProject: async () => null,
-        ...await publicShareFixture({ db, enqueue }),
+        ...await publicShareFixture({ db }),
       });
       const response = await api.json('/api/projects/p1/files/pages/local.html/publish-public', { method: 'POST' });
-      expect(enqueue).toHaveBeenCalledTimes(1); expect(db.inTransaction).toBe(false);
-      expect(response.status).toBe(fail ? 502 : 200);
+      expect(enqueue).not.toHaveBeenCalled();
+      expect(db.inTransaction).toBe(false);
+      expect(response.status).toBe(200);
+      const facts = store.listFacts(scope);
+      expect(facts).toHaveLength(1);
+      const prepareComments = db.transaction(() => enqueue(db, facts[0]!));
+      if (fail) expect(prepareComments).toThrow('intent storage unavailable');
+      else prepareComments();
+      expect(enqueue).toHaveBeenCalledTimes(1);
       const commands = vi.mocked(runVelaResourceCommand).mock.calls;
       expect(commands.map(call => call[0][0])).toEqual(['push']);
       for (const command of commands) expect(command[1]).toBe(scope.resourceTeamId);
       const current = await api.json('/api/projects/p1/files/pages/local.html/publish-public');
-      if (fail) {
-        expect(response.body.error).toMatchObject({ code: 'PUBLIC_FILE_MANUAL_REVOKE_REQUIRED', data: { projectId: 'p1', slug: fixtureSlug, fileName: scope.filePath } });
-        expect(response.body.error.data.url).toBe(`https://web.example.test/artifact/p1/${fixtureSlug}`);
-        expect(store.get(scope)).toBeNull(); expect(current.body.publication).toBeNull();
-        expect(db.prepare('SELECT * FROM test_publish_intents').all()).toEqual([]);
-        // Local storage failure must not revoke the already confirmed remote alias.
-      } else {
-        expect(response.body.receipt.slug).toBe(fixtureSlug); expect(current.body.publication.slug).toBe(fixtureSlug);
-        expect(db.prepare('SELECT * FROM test_publish_intents').all()).toEqual([
-          { local_path: scope.filePath, public_path: 'index.html', revision: store.getRevision(scope)!.token },
-        ]);
-      }
+      expect(response.body.receipt.slug).toBe(fixtureSlug);
+      expect(current.body.publication.slug).toBe(fixtureSlug);
+      expect(store.getRevision(scope)).toEqual(facts[0]!.publicationRevision);
+      expect(db.prepare('SELECT * FROM test_publish_intents').all()).toEqual(fail ? [] : [
+        { local_path: scope.filePath, public_path: 'index.html', revision: store.getRevision(scope)!.token },
+      ]);
+
     } finally { db.close(); }
   });
 

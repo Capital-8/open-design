@@ -16,7 +16,7 @@ export interface PublishedCommentBackfillSubject {
 export interface RecordPublishedCommentBackfillInput {
   scope: PublicFilePublicationScope;
   publicationRevision: PublicFilePublicationRevision;
-  /** Exact ids present at publication time; later comments cannot satisfy this batch. */
+  /** Exact ids captured when the comment batch is prepared; later comments cannot satisfy it. */
   commentIds: readonly string[];
   /** Trusted receipt origin; omitted legacy batches have unknown provenance. */
   reopened?: boolean;
@@ -81,11 +81,11 @@ function batchValues(record: PublishedCommentBackfillOutboxRecord): [string, str
 }
 
 /**
- * Captures one publish's initial eligible comment set inside its publication transaction.
+ * Captures the eligible comment set in an independent comment preparation transaction.
  * Empty batches are completed work, rather than an absent/not-run state.
  */
 export function recordPublishedCommentBackfill(db: SqliteDb, input: RecordPublishedCommentBackfillInput): void {
-  if (!db.inTransaction) throw new Error('Published comment backfill requires the publication transaction');
+  if (!db.inTransaction) throw new Error('Published comment backfill requires a comment transaction');
   migratePublishedCommentBackfillState(db);
   const { scope, publicationRevision } = input;
   if (!publicationRevision.token) throw new Error('Published comment backfill requires a publication revision');

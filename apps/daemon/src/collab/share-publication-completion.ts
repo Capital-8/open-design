@@ -27,7 +27,9 @@ export function createSharePublicationCompletion(
   retryAvailable = false,
 ) {
   const commit = db.transaction((input: SharePublicationCompletionInput): SharePublishResult => {
-    const revision = recordPublication(input.scope, input.publication, input.mapping, input.reopened === true);
+    const revision = recordPublication(input.scope, input.publication, input.mapping, input.reopened === true, {
+      resourceId: input.resourceId, versionId: input.result.receipt.versionId,
+    });
     if (input.result.status === 'published') return input.result;
     const pending = recordPendingShareBinding(outbox, { ...input.scope, resourceId: input.resourceId,
       publicationRevision: revision.token, receipt: input.result.receipt }, retryAvailable, true);

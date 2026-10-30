@@ -69,7 +69,7 @@ it.each(['published', 'pending', 'no-worker', 'binding-write-fails', 'publicatio
     } else {
       const revision = publications.getRevision(scope)!;
       expect(revision.slug).toBe('stable'); expect(revision.token).not.toBe(previous?.token);
-      expect(publications.listFacts(scope)).toEqual([{ scope, publicationRevision: revision, publicFilePath: 'index.html', reopened: false }]);
+      expect(publications.listFacts(scope)).toEqual([{ scope, publicationRevision: revision, publicFilePath: 'index.html', reopened: false, receipt: { resourceId: 'r', versionId: receipt.versionId } }]);
       expect(db.prepare('SELECT * FROM test_comment_intents').all()).toEqual([]);
       if (mode === 'published') expect(outbox.list()).toEqual([]);
       else expect(outbox.list()).toEqual([{ ...scope, resourceId: 'r', receipt, publicationRevision: revision.token, id: expect.any(Number), failureCount: 1 }].map(({ filePath: _filePath, ...task }) => task));

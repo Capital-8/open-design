@@ -313,14 +313,14 @@ it.each([false, true])(
             expect(body).toMatchObject({ status: "published", receipt: { slug: fixtureShareSlug } });
             expect(queue.count()).toBe(0);
             const reconciler = createPublishedCommentBackfillReconciler(db, { listFacts: subject => store.listFacts(subject) });
-            reconciler.prepare(scope);
+            await reconciler.prepare(scope);
             if (fail) {
                 expect(queue.count()).toBe(0);
                 const failed = await (await fetch(`http://127.0.0.1:${address.port}/api/projects/p/comment-sync-state?filePath=pages%2Flocal.html`, { headers: { "x-od-workspace-id": "w", "x-od-workspace-member-id": "owner" } })).json();
                 expect(failed).toMatchObject({ backfill: { state: "failed", retryable: true, code: "BACKFILL_ENQUEUE_FAILED" } });
                 expect(store.get(scope)).toMatchObject({ slug: fixtureShareSlug });
                 db.exec("DROP TRIGGER fail_second");
-                reconciler.prepare(scope, { retryFailed: true });
+                await reconciler.prepare(scope, { retryFailed: true });
                 expect(publicationCommands.map(args => args.slice(0, 2))).toEqual([
                     ["team-projects", "register-resource"], ["resource", "push"], ["share", "publish"],
                 ]);
@@ -516,7 +516,7 @@ it.each([false, true])(
 					receipt: body.receipt,
 				});
 				expect(queue.count()).toBe(0);
-                reconciler.prepare(scope);
+                await reconciler.prepare(scope);
 				// Only the remotely verified stop→resume path may label this revision reopened.
 				expect(await readSync()).toMatchObject({ backfill: { state: "pending", reopened: true } });
 				expect(
@@ -606,7 +606,7 @@ it.each([false, true])(
 					["share", "resume-existing"],
 				]);
                 expect(queue.count()).toBe(0);
-                reconciler.prepare(scope);
+                await reconciler.prepare(scope);
 				rows = queue.listDue(Date.now());
 				revision = store.getRevision(scope);
 				expect(revision?.token).not.toBe(originalRows[0]?.publication?.token);

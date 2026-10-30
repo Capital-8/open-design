@@ -36,7 +36,7 @@ describe('SQLite public file publication store', () => {
     const first = createSqlitePublicFilePublicationStore(
       openDatabase(tempDir, { dataDir: tempDir }),
     );
-    first.set(scope, publication, { publicFilePath: 'index.html', reopened: true });
+    first.set(scope, publication, { publicFilePath: 'index.html', reopened: true, receipt: { resourceId: 'resource-1', versionId: 'version-1' } });
     const revision = first.getRevision(scope);
 
     closeDatabase();
@@ -45,7 +45,7 @@ describe('SQLite public file publication store', () => {
     );
 
     expect(reopened.get(scope)).toEqual(publication);
-    expect(reopened.listFacts(scope)).toEqual([{ scope, publicationRevision: revision, publicFilePath: 'index.html', reopened: true }]);
+    expect(reopened.listFacts(scope)).toEqual([{ scope, publicationRevision: revision, publicFilePath: 'index.html', reopened: true, receipt: { resourceId: 'resource-1', versionId: 'version-1' } }]);
     expect(reopened.get({ ...scope, ownerMemberId: 'member-2' })).toBeNull();
     reopened.delete(scope);
     expect(reopened.get(scope)).toBeNull();

@@ -93,7 +93,7 @@ it('publishing a private team-workspace project preserves personal visibility an
     expect(body.madeTeamVisible).toBeUndefined();
     expect(getWorkspaceProjectByProjectId(db, 'p')).toMatchObject({ visibility: 'personal', createdByWorkspaceMemberId: 'owner' });
     expect(queue.count()).toBe(0);
-    createPublishedCommentBackfillReconciler(db, { listFacts: subject => store.listFacts(subject) }).prepare({ resourceTeamId: 'w', ownerMemberId: 'owner', projectId: 'p', filePath: FILE });
+    await createPublishedCommentBackfillReconciler(db, { listFacts: subject => store.listFacts(subject) }).prepare({ resourceTeamId: 'w', ownerMemberId: 'owner', projectId: 'p', filePath: FILE });
     expect(queue.listDue(Date.now()).map(row => [row.comment.id, row.relayScope])).toEqual([['first', 'personal'], ['second', 'personal']]);
 
     const delivered: Array<{ id: string; seq: number }> = [];
@@ -162,7 +162,7 @@ it('a personal backfill queued in a team workspace is delivered without changing
     createPublicFilePublicationRecorder(db, store)(
       scope, { slug: 'stable', url: 'https://viewer.example.test/s', fileName: FILE }, [{ sourcePath: FILE, publishedPath: 'index.html' }]);
     expect(queue.count()).toBe(0);
-    createPublishedCommentBackfillReconciler(db, { listFacts: subject => store.listFacts(subject) }).prepare(scope);
+    await createPublishedCommentBackfillReconciler(db, { listFacts: subject => store.listFacts(subject) }).prepare(scope);
     expect(queue.listDue(Date.now()).map(row => row.relayScope)).toEqual(['personal', 'personal']);
 
     const delivered: string[] = [];
@@ -218,7 +218,7 @@ it('a stopped private-in-team publication is cancelled without waiting for team 
       { sourceFileId: ensureWorkspaceArtifactForPath(db, { projectId: 'p', path: FILE, kind: 'html' }).id, resourceTeamId: 'w', ownerMemberId: 'owner', projectId: 'p', filePath: FILE },
       { slug: 'stable', url: 'https://viewer.example.test/s', fileName: FILE }, [{ sourcePath: FILE, publishedPath: 'index.html' }]);
     expect(queue.count()).toBe(0);
-    createPublishedCommentBackfillReconciler(db, { listFacts: subject => store.listFacts(subject) }).prepare({ resourceTeamId: 'w', ownerMemberId: 'owner', projectId: 'p', filePath: FILE });
+    await createPublishedCommentBackfillReconciler(db, { listFacts: subject => store.listFacts(subject) }).prepare({ resourceTeamId: 'w', ownerMemberId: 'owner', projectId: 'p', filePath: FILE });
     expect(queue.count()).toBe(1);
     // The publication witness, not workspace type or catalog promotion, owns
     // cancellation. A stopped file must never regain eligibility from retries.

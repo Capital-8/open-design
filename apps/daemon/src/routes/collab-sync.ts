@@ -267,7 +267,6 @@ export interface RegisterCollabSyncRoutesDeps {
   sharePublishing?: {
     ensureProject?(scope: PublicFilePublicationScope, principal: ResourceHubPrincipal, run: typeof runVelaCommand): Promise<TeamProject>;
     sourceFileId?(scope: PublicFilePublicationScope, project?: TeamProject | null): string;
-    admitFileReceipt?(scope: PublicFilePublicationScope, resourceId: string, versionId: string, entryPath: string, run: typeof runVelaCommand): Promise<void>;
     reservations: ReturnType<typeof createShareAliasReservations>;
     outbox: ShareBindingOutbox;
     complete: ReturnType<typeof createSharePublicationCompletion>;
@@ -1429,7 +1428,7 @@ export function registerCollabSyncRoutes(
         let outcome: ReturnType<typeof publisher.complete>;
         try {
           // Entry path is Vela's saved generation, never a plan from current
-          // local bytes. This also queues existing local comments atomically.
+          // local bytes. Comment preparation consumes the committed facts separately.
           outcome = publisher.complete({ scope, resourceId: publicFileResourceIdFor(scope), publication,
             mapping: [{ sourcePath: filePath, publishedPath: receipt.entryPath }],
             result: { status: 'published', receipt }, reopened: true });
@@ -1572,10 +1571,12 @@ export function registerCollabSyncRoutes(
         createHash('sha256').update(JSON.stringify([scope, publicFilePublicationStore.getRevision(scope)?.token ?? null, fingerprintSharePayload(sharePlan.files)])).digest('hex'),
         '--metadata-json',
         JSON.stringify(metadata),
+        ...(scope.sourceFileId ? ['--source-identity-json', JSON.stringify({
+          projectId, sourceFileId: scope.sourceFileId, sourceFilePath: filePath,
+        })] : []),
         '--json',
       ]);
       const versionId = parseVelaPushVersionId(pushOutput);
-      await publisher.admitFileReceipt?.(scope, resourceId, versionId, sharePlan.entryPath, prepared.run);
       stage = 'snapshot';
       const result = await publishReservedVelaShareVersion({
         scope, resourceId, versionId, entryPath: sharePlan.entryPath,
