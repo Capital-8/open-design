@@ -182,6 +182,16 @@ describe('bake-plugin-previews capture navigation', () => {
       .rejects.toThrow(`status ${status}`);
   });
 
+  it('[P1] accepts a revalidated browser cache response', async () => {
+    const { resetDeckForCapture } = await loadReset();
+    const page = {
+      evaluate: vi.fn().mockResolvedValue(undefined),
+      goto: vi.fn().mockResolvedValue({ ok: () => false, status: () => 304 }),
+    };
+    await expect(resetDeckForCapture(page, 'http://localhost/api/plugins/deck/preview'))
+      .resolves.toBeUndefined();
+  });
+
   it('[P1] propagates navigation failure instead of baking the previous document', async () => {
     const { resetDeckForCapture } = await loadReset();
     const page = {

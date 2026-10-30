@@ -420,7 +420,8 @@ export async function resetDeckForCapture(page, previewUrl) {
   // through the injected <base>. Navigate back to the known entry instead.
   const response = await page.goto(previewUrl,
     { waitUntil: 'domcontentloaded', timeout: 25000 });
-  if (!response || !response.ok()) {
+  // Chromium may report the origin's 304 while rendering the cached HTML.
+  if (!response || (!response.ok() && response.status() !== 304)) {
     throw new Error(`deck entry status ${response ? response.status() : 'none'}: ${previewUrl}`);
   }
 }
