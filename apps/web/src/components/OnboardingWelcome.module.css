@@ -15,6 +15,28 @@
   opacity: 0.65;
 }
 
+.cancel {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 24px;
+  height: 24px;
+  min-height: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cancel:hover:not(:disabled) { color: var(--text); }
+.cancel:disabled { opacity: 0.6; cursor: default; }
+
 .creditCorner {
   position: absolute;
   inset: 0;
@@ -112,8 +134,8 @@
 }
 .welcome :global(.onboarding-cloud__footer) {
   position: static;
-  align-items: center;
-  text-align: center;
+  align-items: flex-start;
+  text-align: left;
   width: min(440px, 100%);
   margin: 32px auto 0;
 }
@@ -136,19 +158,8 @@
   font-size: 13px;
 }
 .loginStatus p { margin: 4px 0; }
-.signing {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  border-radius: 24px;
-  background: #333;
-  color: #39ff14;
-  font-weight: 600;
-}
 @media (max-height: 700px) {
   .welcome:has(.loginStatus) > :global(.onboarding-cloud__pane) { padding-bottom: 160px; }
 }
 
-.welcome :global(.onboarding-cloud__footer .lang-menu-wrap) { align-self: center; position: relative; inset: auto; width: fit-content; margin: 0; }
+.welcome :global(.onboarding-cloud__footer .lang-menu-wrap) { align-self: flex-start; position: relative; inset: auto; width: fit-content; margin: 0; }

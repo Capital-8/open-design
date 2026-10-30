@@ -419,7 +419,7 @@ export const en: Dict = {
   'settings.onboardingConnectBody': '',
   'settings.onboardingCloudTitle': 'Welcome to OpenDesign',
   'settings.onboardingCloudBody': 'Turn your ideas into designs.',
-  'settings.onboardingCloudSignIn': 'Sign in / Sign up',
+  'settings.onboardingCloudSignIn': 'Sign up / Log in',
   'settings.onboardingFreeCredits': 'Free Credits',
   'settings.onboardingFreeCreditsHint': 'New users get free starter credits to try DeepSeek V4.1 Flash.',
   'settings.onboardingOwnAi': 'Or use your own AI',

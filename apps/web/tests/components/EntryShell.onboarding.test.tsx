@@ -289,7 +289,7 @@ async function clickCloudSignIn() {
 }
 
 async function findCloudSignInButton() {
-  return screen.findByRole('button', { name: /Sign in \/ Sign up/i });
+  return screen.findByRole('button', { name: /Sign up \/ Log in/i });
 }
 
 async function openLocalRuntimeSetup() {
@@ -1676,8 +1676,10 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
         sourceDetail: 'onboarding_amr_card',
       },
     });
-    expect(screen.getByTestId('onboarding-login-status').textContent).toContain('Signing in…');
-    expect(screen.getByTestId('onboarding-login-status').contains(screen.getByRole('button', { name: /Cancel sign-in/i }))).toBe(true);
+    // Design: the primary button itself reports progress and Cancel sits right below it.
+    expect(signIn.textContent).toContain('Signing in…');
+    expect(screen.queryByTestId('onboarding-login-status')).toBeNull();
+    expect(signIn.parentElement?.contains(screen.getByRole('button', { name: /Cancel sign-in/i }))).toBe(true);
     expect(screen.queryByText('Not signed in')).toBeNull();
     expect(signIn.hasAttribute('disabled')).toBe(true);
     await vi.advanceTimersByTimeAsync(2000);
@@ -1790,8 +1792,9 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
     await act(async () => {});
     expect(screen.getByText('Signing in…')).toBeTruthy();
     expect(signIn.hasAttribute('disabled')).toBe(true);
-    expect((screen.getByRole('button', { name: /Local AI/i }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: /API Key/i }) as HTMLButtonElement).disabled).toBe(true);
+    // Design: the own-AI paths stay available while the browser sign-in is pending.
+    expect((screen.getByRole('button', { name: /Local AI/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: /API Key/i }) as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: /Cancel sign-in/i }));
     await act(async () => {});
@@ -1799,7 +1802,7 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
     expect(screen.queryByText('Signing in…')).toBeNull();
     // The landing CTA returns to its signed-out copy and is enabled again.
     const cloudButton = await screen.findByRole('button', {
-      name: /Sign in \/ Sign up/i,
+      name: /Sign up \/ Log in/i,
     });
     expect(cloudButton.hasAttribute('disabled')).toBe(false);
     expect(
@@ -1980,7 +1983,7 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
     expect(screen.queryByText('Signing in…')).toBeNull();
     expect(
       screen
-        .getByRole('button', { name: /Sign in \/ Sign up/i })
+        .getByRole('button', { name: /Sign up \/ Log in/i })
         .hasAttribute('disabled'),
     ).toBe(false);
     expect(props.onCompleteOnboarding).not.toHaveBeenCalled();
@@ -2516,7 +2519,7 @@ describe('EntryShell onboarding OpenDesign AMR runtime', () => {
     });
 
     expect(
-      await screen.findByRole('button', { name: /Sign in \/ Sign up/i }),
+      await screen.findByRole('button', { name: /Sign up \/ Log in/i }),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /OpenDesign AMR/i })).toBeNull();
     expect(document.querySelector('.onboarding-view__card--skeleton')).toBeNull();

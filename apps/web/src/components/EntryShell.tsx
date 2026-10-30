@@ -3795,11 +3795,23 @@ function OnboardingView({
                 <span>
                   {amrStatusResolving
                       ? t('common.loading')
-                      : amrSignedIn
+                      : cloudBusy
+                        ? t('settings.amrSigningIn')
+                        : amrSignedIn
                         ? t('settings.onboardingCloudContinue')
                         : t('settings.onboardingCloudSignIn')}
                 </span>
               </button>
+              {cloudBusy && !amrLoginError ? (
+                <button
+                  type="button"
+                  className={onboardingWelcomeStyles.cancel}
+                  onClick={handleCancelAmrLogin}
+                  disabled={amrLoginCancelPending}
+                >
+                  {t('settings.amrCancelSignIn')}
+                </button>
+              ) : null}
             </div>
             <div className={onboardingWelcomeStyles.belowAction}>
               <div
@@ -3813,7 +3825,7 @@ function OnboardingView({
                     <Button
                       variant="subtle"
                       className="onboarding-cloud__alt-btn"
-                      disabled={cloudBusy || amrLoginCancelPending}
+                      disabled={amrLoginCancelPending}
                       onClick={() => {
                         emitOnboardingClick('local_coding_agent', 'select_runtime', {
                           runtime_type: 'local_cli',
@@ -3829,7 +3841,7 @@ function OnboardingView({
                     <Button
                       variant="subtle"
                       className="onboarding-cloud__alt-btn"
-                      disabled={cloudBusy || amrLoginCancelPending}
+                      disabled={amrLoginCancelPending}
                       onClick={() => {
                         emitOnboardingClick('byok', 'select_runtime', { runtime_type: 'byok' });
                         setRuntime('byok');
@@ -3851,7 +3863,10 @@ function OnboardingView({
             </span>
           </footer>
         </div>
-        {cloudBusy || amrLoginError ? (
+        {amrLoginError ||
+        (cloudBusy &&
+          amrStatus?.activationUrl &&
+          (activationHintDue || amrStatus.browserOpenFailed)) ? (
           <aside className={onboardingWelcomeStyles.loginStatus} aria-live="polite" data-testid="onboarding-login-status">
             {amrLoginError ? (
               <>
@@ -3861,20 +3876,9 @@ function OnboardingView({
                 </Button>
               </>
             ) : (
-              <>
-                <div className={onboardingWelcomeStyles.signing} role="status">
-                  <Icon name="log-in" size={18} />
-                  {t('settings.amrSigningIn')}
-                </div>
-                {amrStatus?.activationUrl && (activationHintDue || amrStatus.browserOpenFailed) ? (
-                  <Button variant="ghost" onClick={() => void reopenCloudSignIn()}>
-                    {t('settings.onboardingActivationReopen')}
-                  </Button>
-                ) : null}
-                <Button variant="ghost" onClick={handleCancelAmrLogin} disabled={amrLoginCancelPending}>
-                  {t('settings.amrCancelSignIn')}
-                </Button>
-              </>
+              <Button variant="ghost" onClick={() => void reopenCloudSignIn()}>
+                {t('settings.onboardingActivationReopen')}
+              </Button>
             )}
           </aside>
         ) : null}
