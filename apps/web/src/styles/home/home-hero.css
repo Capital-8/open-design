@@ -2093,18 +2093,9 @@
   position: relative;
   align-self: center;
 }
-.home-hero__working-dir-picker [data-testid='working-dir-panel'] {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 90;
-}
-/* Bottom composers: flip the panel above the trigger. The module's own
-   `panelUp` cannot do it alone — the rule above is what actually positions
-   this panel on the Home surfaces, and it out-ranks the module class, so the
-   bottom layouts must restate the anchor. The card's `overflow: hidden` already lifts
-   while this panel is open (see the `:has()` rule further down), so hanging it
-   upward is free. */
+/* Let WorkingDirPicker own its panel positioning so placement="up" also
+   works in the chat dock, which reuses this wrapper class. Only the Home
+   layouts below override the default direction for their bottom anchors. */
 .home-hero--dock .home-hero__working-dir-picker [data-testid='working-dir-panel'],
 .entry-main__view-home .home-hero__working-dir-picker [data-testid='working-dir-panel'] {
   top: auto;
